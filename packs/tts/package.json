@@ -1,0 +1,17 @@
+{
+  "name": "@barry-packs/tts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@barry/tools": "workspace:*",
+    "@barry/logger": "workspace:*",
+    "ioredis": "5.4.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  }
+}

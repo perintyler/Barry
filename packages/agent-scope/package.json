@@ -1,0 +1,23 @@
+{
+  "name": "@barry/agent-scope",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "description": "Permission model for AI agent steps — traits, scopes, namespaces",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "dependencies": {
+    "zod": "3.25.76"
+  }
+}

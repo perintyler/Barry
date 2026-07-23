@@ -1,0 +1,41 @@
+# Barry Public Hosting Configuration
+# Generated automatically - do not edit manually
+
+barry.works {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+        resolvers 1.1.1.1 8.8.8.8
+    }
+    log
+
+    @static path /assets/* /vendor/* /fonts/* /icon.svg /favicon.png /icon-192.png /manifest.json
+    header @static Cache-Control "public, max-age=31536000, immutable"
+
+    handle {
+        encode gzip
+        reverse_proxy localhost:9429
+    }
+}
+
+
+https://barry.lan {
+    tls internal
+
+    @static path /assets/* /vendor/* /fonts/* /icon.svg /favicon.png /icon-192.png /manifest.json
+    header @static Cache-Control "public, max-age=31536000, immutable"
+
+    handle {
+        encode gzip
+        reverse_proxy localhost:9429
+    }
+}
+
+http://barry.lan {
+    @static path /assets/* /vendor/* /fonts/* /icon.svg /favicon.png /icon-192.png /manifest.json
+    header @static Cache-Control "public, max-age=31536000, immutable"
+
+    handle {
+        encode gzip
+        reverse_proxy localhost:9429
+    }
+}

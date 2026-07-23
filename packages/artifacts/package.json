@@ -1,0 +1,21 @@
+{
+  "name": "@barry/artifacts",
+  "version": "1.0.0",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@barry/db": "workspace:*",
+    "@barry/uploads": "workspace:*",
+    "mime-types": "3.0.1"
+  },
+  "devDependencies": {
+    "@types/mime-types": "2.1.4",
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3"
+  }
+}

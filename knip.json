@@ -1,0 +1,73 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["eslint.config.js", "scripts/**/*.{js,mjs,ts}"],
+  "include": ["files", "dependencies", "devDependencies", "unlisted", "unresolved"],
+  "ignoreDependencies": [
+    "@anthropic-ai/sdk",
+    "@cloudflare/workers-oauth-provider",
+    "@inquirer/prompts",
+    "@slack/web-api",
+    "cloudflare"
+  ],
+  "ignoreUnresolved": ["^cloudflare:"],
+  "ignoreFiles": [
+    "**/public/vendor/**",
+    "**/*.generated.*",
+    "**/generated/**",
+    "apps/web/barry.works/src/lib/tool-cards/components/index.js",
+    "packages/ui/src/index.d.ts",
+    "packages/ui/dist/css.d.ts",
+    "sdks/links/dist/css.d.ts",
+    "sdks/links/dist/browser-inline.d.ts",
+    "packages/db/src/config.ts",
+    "scripts/audit-profile.ts",
+    "scripts/generate-caddy-config.ts",
+    "scripts/generate-firewall-config.ts"
+  ],
+  "workspaces": {
+    "apps/web/barry.works": {
+      "entry": ["src/main.js", "src/instrument.ts", "src/server/index.ts", "tests/**/*.{js,ts}"]
+    },
+    "apps/web/red-marker": {
+      "entry": ["src/cli.ts", "src/worker.ts", "src/mcp/index.ts", "src/overlay.js", "qa/**/*.{js,mjs,ts}"],
+      "ignoreDependencies": ["tsx"]
+    },
+    "cli": {
+      "ignoreDependencies": ["@barry/hook-change-tracker", "@barry/hook-session-tracker"]
+    },
+    "packages/agent-runtime": {
+      "entry": ["src/index.ts"]
+    },
+    "packages/logger": {
+      "ignoreDependencies": ["express"]
+    },
+    "packages/github": {
+      "entry": ["src/index.ts", "qa/fixtures/**/src/server.js"]
+    },
+    "packages/google-images": {
+      "entry": ["src/index.ts", "qa/*.{mjs,mts}"]
+    },
+    "packages/packs": {
+      "entry": ["src/index.ts", "qa/mock-pack-server/server.ts"]
+    },
+    "packages/qa-guidelines": {
+      "entry": ["src/index.ts", "examples/**/*.{js,ts}", "qa/**/*.js"]
+    },
+    "packages/syntax": {
+      "ignore": ["src/__tests__/fixtures/**"]
+    },
+    "packs/*": {
+      "entry": ["tools.ts", "skills/**/scripts/**/*.{js,mjs,ts}"],
+      "ignoreDependencies": ["tsx"]
+    },
+    "sdks/artifacts": {
+      "entry": ["src/index.ts", "src/worker/**/*.ts", "src/mcp-app/viewer-entry.js", "src/mcp-app/vite.config.ts"]
+    },
+    "servers/api": {
+      "entry": ["src/index.ts", "qa/**/*.{js,cjs,mjs,ts}"]
+    },
+    "servers/mcp": {
+      "ignoreDependencies": ["better-sqlite3"]
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@barry/hook-change-tracker",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "barry-hook-change-tracker": "./src/index.ts"
+  },
+  "dependencies": {
+    "dotenv": "16.4.5"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

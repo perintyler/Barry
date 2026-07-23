@@ -1,0 +1,18 @@
+{
+  "name": "@barry-packs/slack",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@barry/slack": "workspace:*",
+    "@barry/tools": "workspace:*",
+    "@barry/md-to-slack-blocks": "workspace:*",
+    "@slack/web-api": "7.8.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  }
+}

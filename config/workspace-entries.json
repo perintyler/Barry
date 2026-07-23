@@ -1,0 +1,306 @@
+{
+  "apps/web/barry.rocks": {
+    "name": "barry-rocks",
+    "class": "runtime-edge",
+    "mode": "wrangler"
+  },
+  "apps/web/barry.works": {
+    "name": "barry-works",
+    "class": "runtime-edge",
+    "mode": "source-start"
+  },
+  "apps/web/github": {
+    "name": "github-app",
+    "class": "runtime-edge",
+    "mode": "source-start"
+  },
+  "apps/web/red-marker": {
+    "name": "@barry/red-marker",
+    "class": "runtime-edge",
+    "mode": "wrangler"
+  },
+  "apps/web/vault": {
+    "name": "@barry/vault-server",
+    "class": "runtime-edge",
+    "mode": "container"
+  },
+  "cli": {
+    "name": "barry",
+    "class": "runtime-edge",
+    "mode": "source-bin"
+  },
+  "hooks/change-tracker": {
+    "name": "@barry/hook-change-tracker",
+    "class": "runtime-edge",
+    "mode": "source-bin"
+  },
+  "hooks/session-tracker": {
+    "name": "@barry/hook-session-tracker",
+    "class": "runtime-edge",
+    "mode": "source-bin"
+  },
+  "packages/agent-scope": {
+    "name": "@barry/agent-scope",
+    "class": "internal-package"
+  },
+  "packages/agent-runtime": {
+    "name": "@barry/agent-runtime",
+    "class": "internal-package"
+  },
+  "packages/artifacts": {
+    "name": "@barry/artifacts",
+    "class": "internal-package"
+  },
+  "packages/auth": {
+    "name": "@barry/auth",
+    "class": "internal-package"
+  },
+  "packages/cloudflare": {
+    "name": "@barry/cloudflare",
+    "class": "internal-package"
+  },
+  "packages/colors": {
+    "name": "@barry/colors",
+    "class": "internal-package"
+  },
+  "packages/contracts": {
+    "name": "@barry/contracts",
+    "class": "internal-package"
+  },
+  "packages/datadog": {
+    "name": "@barry/datadog",
+    "class": "internal-package"
+  },
+  "packages/db": {
+    "name": "@barry/db",
+    "class": "internal-package"
+  },
+  "packages/email": {
+    "name": "@barry/email",
+    "class": "internal-package"
+  },
+  "packages/env": {
+    "name": "@barry/env",
+    "class": "internal-package"
+  },
+  "packages/file-tracker": {
+    "name": "@barry/file-tracker",
+    "class": "internal-package"
+  },
+  "packages/gifs": {
+    "name": "@barry/gifs",
+    "class": "internal-package"
+  },
+  "packages/github": {
+    "name": "@barry/github",
+    "class": "internal-package"
+  },
+  "packages/google-auth": {
+    "name": "@barry/google-auth",
+    "class": "internal-package"
+  },
+  "packages/google-images": {
+    "name": "@barry/google-images",
+    "class": "internal-package"
+  },
+  "packages/logger": {
+    "name": "@barry/logger",
+    "class": "internal-package"
+  },
+  "packages/md-to-ansi": {
+    "name": "@barry/md-to-ansi",
+    "class": "internal-package"
+  },
+  "packages/md-to-slack-blocks": {
+    "name": "@barry/md-to-slack-blocks",
+    "class": "internal-package"
+  },
+  "packages/packs": {
+    "name": "@barry/packs",
+    "class": "internal-package"
+  },
+  "packages/qa-guidelines": {
+    "name": "@barry/qa-guidelines",
+    "class": "runtime-edge",
+    "mode": "source-bin"
+  },
+  "packages/secrets": {
+    "name": "@barry/secrets",
+    "class": "internal-package"
+  },
+  "packages/sentry": {
+    "name": "@barry/sentry",
+    "class": "internal-package"
+  },
+  "packages/sessions": {
+    "name": "@barry/sessions",
+    "class": "internal-package"
+  },
+  "packages/stop-robots": {
+    "name": "@barry/stop-robots",
+    "class": "internal-package"
+  },
+  "packages/slack": {
+    "name": "@barry/slack",
+    "class": "internal-package"
+  },
+  "packages/spunk": {
+    "name": "@barry/spunk",
+    "class": "internal-package"
+  },
+  "packages/syntax": {
+    "name": "@barry/syntax",
+    "class": "internal-package"
+  },
+  "packages/themes": {
+    "name": "@barry/themes",
+    "class": "internal-package"
+  },
+  "packages/tools": {
+    "name": "@barry/tools",
+    "class": "internal-package"
+  },
+  "packages/ui": {
+    "name": "@barry/ui",
+    "class": "publishable-candidate"
+  },
+  "packages/uploads": {
+    "name": "@barry/uploads",
+    "class": "internal-package"
+  },
+  "packages/vault": {
+    "name": "@barry/vault",
+    "class": "internal-package"
+  },
+  "packs/artifacts": {
+    "name": "@barry-packs/artifacts",
+    "class": "pack"
+  },
+  "packs/axiom": {
+    "name": "@barry-packs/axiom",
+    "class": "pack"
+  },
+  "packs/calendar": {
+    "name": "@barry-packs/calendar",
+    "class": "pack"
+  },
+  "packs/bdiff": {
+    "name": "@barry-packs/bdiff",
+    "class": "pack"
+  },
+  "packs/colors": {
+    "name": "@barry-packs/colors",
+    "class": "pack"
+  },
+  "packs/core": {
+    "name": "@barry-packs/core",
+    "class": "pack"
+  },
+  "packs/datadog": {
+    "name": "@barry-packs/datadog",
+    "class": "pack"
+  },
+  "packs/resend": {
+    "name": "@barry-packs/resend",
+    "class": "pack"
+  },
+  "packs/error": {
+    "name": "@barry-packs/error",
+    "class": "pack"
+  },
+  "packs/filesystem": {
+    "name": "@barry-packs/filesystem",
+    "class": "pack"
+  },
+  "packs/git": {
+    "name": "@barry-packs/git",
+    "class": "pack"
+  },
+  "packs/google-images": {
+    "name": "@barry-packs/google-images",
+    "class": "pack"
+  },
+  "packs/keychain": {
+    "name": "@barry-packs/keychain",
+    "class": "pack"
+  },
+  "packs/markdown": {
+    "name": "@barry-packs/markdown",
+    "class": "pack"
+  },
+  "packs/media": {
+    "name": "@barry-packs/media",
+    "class": "pack"
+  },
+  "packs/playwright": {
+    "name": "@barry-packs/playwright",
+    "class": "pack"
+  },
+  "packs/qa": {
+    "name": "@barry-packs/qa",
+    "class": "pack"
+  },
+  "packs/screen-recorder": {
+    "name": "@barry-packs/screen-recorder",
+    "class": "pack"
+  },
+  "packs/slack": {
+    "name": "@barry-packs/slack",
+    "class": "pack"
+  },
+  "packs/selfping": {
+    "name": "@barry-packs/selfping",
+    "class": "pack"
+  },
+  "packs/temporal": {
+    "name": "@barry-packs/temporal",
+    "class": "pack"
+  },
+  "packs/linear": {
+    "name": "@barry-packs/linear",
+    "class": "pack"
+  },
+  "packs/tts": {
+    "name": "@barry-packs/tts",
+    "class": "pack"
+  },
+  "packs/typescript": {
+    "name": "@barry-packs/typescript",
+    "class": "pack"
+  },
+  "sdks/artifacts": {
+    "name": "@barry-sdks/artifacts",
+    "class": "runtime-edge",
+    "mode": "wrangler"
+  },
+  "sdks/links": {
+    "name": "@barry-sdks/links",
+    "class": "runtime-edge",
+    "mode": "wrangler"
+  },
+  "sdks/notes": {
+    "name": "@barry-sdks/notes",
+    "class": "runtime-edge",
+    "mode": "wrangler"
+  },
+  "servers/api": {
+    "name": "barry-server",
+    "class": "runtime-edge",
+    "mode": "source-start"
+  },
+  "servers/bdiff": {
+    "name": "bdiff-server",
+    "class": "runtime-edge",
+    "mode": "source-start"
+  },
+  "servers/mcp": {
+    "name": "@barry/mcp-server",
+    "class": "runtime-edge",
+    "mode": "bundle-source"
+  },
+  "servers/whisperflow": {
+    "name": "whisperflow-server",
+    "class": "runtime-edge",
+    "mode": "source-start"
+  }
+}

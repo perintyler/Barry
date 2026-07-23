@@ -1,0 +1,23 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // account_id sourced from CLOUDFLARE_ACCOUNT_ID env var
+  "name": "barry-notes",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-03-01",
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "NOTES",
+        "class_name": "NotesObject"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["NotesObject"]
+    }
+  ]
+}

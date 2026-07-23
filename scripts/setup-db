@@ -1,0 +1,17 @@
+#!/bin/bash
+# Setup Barry databases (role, databases, migrations, seed)
+# Usage: ./scripts/setup-db [env...]
+#
+# Examples:
+#   ./scripts/setup-db          # set up all environments (dev, staging, prod)
+#   ./scripts/setup-db dev      # set up dev only
+#   ./scripts/setup-db prod     # set up prod only
+#   ./scripts/setup-db --reset dev  # drop and recreate dev
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BARRY_DIR="$(dirname "$SCRIPT_DIR")"
+
+echo "Setting up Barry databases..."
+exec npx tsx "$BARRY_DIR/packages/db/scripts/setup.ts" "$@"

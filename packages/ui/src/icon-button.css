@@ -1,0 +1,94 @@
+/* ========================================
+   @barry/ui - Icon Button
+   Compact button with only an icon inside.
+   ======================================== */
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.4));
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+  border-color: var(--border, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+}
+
+.icon-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Variants */
+.icon-btn-subtle {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+}
+
+.icon-btn-subtle:hover:not(:disabled) {
+  color: var(--text-primary, rgba(255, 255, 255, 0.9));
+}
+
+.icon-btn-danger {
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.4));
+}
+
+.icon-btn-danger:hover:not(:disabled) {
+  color: var(--error, #ef4444);
+  background: var(--error-dim, rgba(239, 68, 68, 0.1));
+  border-color: transparent;
+}
+
+/* Sizes */
+.icon-btn-sm {
+  width: 28px;
+  height: 28px;
+}
+
+.icon-btn-sm svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Button icon inside regular buttons */
+.btn-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* Small buttons */
+.btn-sm {
+  padding: var(--space-1, 4px) var(--space-3, 12px);
+  font-size: var(--text-xs, 11px);
+}
+
+/* Large buttons */
+.btn-lg {
+  padding: var(--space-4, 16px) var(--space-6, 24px);
+  font-size: var(--text-base, 15px);
+}
+
+/* Danger button */
+.btn-danger {
+  background: transparent;
+  color: var(--error, #ef4444);
+  border: 1px solid transparent;
+}
+
+.btn-danger:hover {
+  background: var(--error-dim, rgba(239, 68, 68, 0.1));
+}

@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+info() {
+  printf "[info] %s\n" "$1"
+}
+
+warn() {
+  printf "[warn] %s\n" "$1"
+}
+
+fail() {
+  printf "[fail] %s\n" "$1"
+}
+
+need_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    fail "Missing required command: $1"
+    exit 1
+  fi
+}
+
+source_env_if_present() {
+  local env_file="$ROOT_DIR/.env.staging"
+  if [[ ! -f "$env_file" ]]; then
+    env_file="$ROOT_DIR/.env"
+  fi
+
+  if [[ -f "$env_file" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$env_file"
+    set +a
+  fi
+}
+
+check_caddy_generation() {
+  local before_hash after_hash
+  before_hash="$(shasum -a 256 "$ROOT_DIR/config/Caddyfile" 2>/dev/null | awk '{print $1}')"
+
+  info "Regenerating Caddy config"
+  (
+    cd "$ROOT_DIR"
+    pnpm tsx scripts/generate-caddy-config.ts public >/tmp/barry-caddy-generate.log 2>&1
+  )
+
+  after_hash="$(shasum -a 256 "$ROOT_DIR/config/Caddyfile" 2>/dev/null | awk '{print $1}')"
+
+  if [[ "$before_hash" != "$after_hash" ]]; then
+    fail "Caddy config drift detected after regeneration"
+    echo ""
+    echo "The generated Caddyfile changed during this check."
+    echo ""
+    echo "Review with:"
+    echo "  git -C \"$ROOT_DIR\" diff -- config/Caddyfile"
+    return 1
+  fi
+
+  info "Caddy config is in sync"
+  return 0
+}
+
+terraform_plan_check() {
+  local module_dir="$1"
+  local module_name="$2"
+
+  if [[ ! -f "$module_dir/terraform.tfvars" ]]; then
+    warn "$module_name: terraform.tfvars missing, skipping drift check"
+    return 0
+  fi
+
+  if [[ ! -d "$module_dir/.terraform" ]]; then
+    info "$module_name: initializing Terraform"
+    terraform -chdir="$module_dir" init -input=false -no-color >/tmp/barry-tf-init-"$module_name".log 2>&1
+  fi
+
+  info "$module_name: running terraform plan -detailed-exitcode"
+  set +e
+  terraform -chdir="$module_dir" plan -detailed-exitcode -input=false -no-color >/tmp/barry-tf-plan-"$module_name".log 2>&1
+  local code=$?
+  set -e
+
+  if [[ $code -eq 0 ]]; then
+    info "$module_name: no drift"
+    return 0
+  fi
+
+  if [[ $code -eq 2 ]]; then
+    fail "$module_name: drift detected"
+    echo ""
+    echo "Inspect with:"
+    echo "  terraform -chdir=$module_dir plan"
+    return 1
+  fi
+
+  fail "$module_name: terraform plan failed (exit $code)"
+  echo ""
+  echo "Last plan output:"
+  tail -n 30 "/tmp/barry-tf-plan-$module_name.log" || true
+  return 1
+}
+
+check_claude_pin() {
+  # The Claude Code CLI is version-pinned (Brewfile + infra/homebrew/).
+  # Verify the binary on PATH matches the pinned cask so upgrades stay deliberate.
+  local pinned_cask
+  pinned_cask=$(ls "$ROOT_DIR"/infra/homebrew/claude-code@*.rb 2>/dev/null | head -1)
+  if [[ -z "$pinned_cask" ]]; then
+    warn "No pinned claude-code cask found in infra/homebrew/ — skipping Claude CLI pin check"
+    return 0
+  fi
+
+  local pinned_version
+  pinned_version=$(sed -n 's/^  version "\(.*\)"$/\1/p' "$pinned_cask" | head -1)
+  if [[ -z "$pinned_version" ]]; then
+    fail "Could not parse version from $pinned_cask"
+    return 1
+  fi
+
+  if ! command -v claude >/dev/null 2>&1; then
+    warn "claude not found on PATH — skipping Claude CLI pin check (run ./install)"
+    return 0
+  fi
+
+  local installed_version
+  installed_version=$(claude --version 2>/dev/null | awk '{print $1}')
+  if [[ "$installed_version" != "$pinned_version" ]]; then
+    fail "Claude CLI version drift: installed $installed_version, pinned $pinned_version ($(basename "$pinned_cask")) — re-run ./install"
+    return 1
+  fi
+
+  info "Claude CLI matches pin ($pinned_version)"
+  return 0
+}
+
+usage() {
+  cat <<EOF
+Check infrastructure/config drift for Barry.
+
+Usage:
+  $0 [--skip-terraform]
+
+Options:
+  --skip-terraform   Skip terraform plan drift checks
+EOF
+}
+
+main() {
+  local skip_terraform=false
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --skip-terraform) skip_terraform=true; shift ;;
+      -h|--help|help) usage; exit 0 ;;
+      *) fail "Unknown argument: $1"; usage; exit 1 ;;
+    esac
+  done
+
+  need_cmd git
+  need_cmd jq
+  need_cmd rg
+  need_cmd pnpm
+  if [[ "$skip_terraform" == false ]]; then
+    need_cmd terraform
+  fi
+
+  source_env_if_present
+
+  local failures=0
+
+  check_caddy_generation || failures=$((failures + 1))
+  check_claude_pin || failures=$((failures + 1))
+
+  if [[ "$skip_terraform" == false ]]; then
+    terraform_plan_check "$ROOT_DIR/infra/tailscale" "tailscale" || failures=$((failures + 1))
+    terraform_plan_check "$ROOT_DIR/infra/cloudflare" "cloudflare" || failures=$((failures + 1))
+  else
+    warn "Skipping terraform drift checks"
+  fi
+
+  echo ""
+  if [[ $failures -eq 0 ]]; then
+    info "No drift detected"
+    return 0
+  fi
+
+  fail "Drift checks failed ($failures)"
+  return 1
+}
+
+main "$@"

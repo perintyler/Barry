@@ -1,0 +1,7 @@
+# Required
+core_hostname   = "barry-core"
+
+# Optional (usually keep defaults)
+# core_tag                  = "tag:barry-core"
+# device_lookup_wait        = "60s"
+# overwrite_existing_policy = false

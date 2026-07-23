@@ -1,0 +1,62 @@
+{
+  "name": "barry",
+  "private": true,
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "build": "pnpm -r build",
+    "build:apps": "pnpm --dir packages/ui build && pnpm --dir apps/web/barry.works build",
+    "build:projects": "pnpm exec tsc -b tsconfig.projects.json",
+    "build:projects:dry": "pnpm exec tsc -b tsconfig.projects.json --dry",
+    "check:monorepo": "node scripts/check/monorepo-policy.mjs",
+    "contracts:generate": "pnpm --dir packages/contracts generate",
+    "contracts:check": "pnpm --dir packages/contracts check:generated && node scripts/ci/check-generated-clients.mjs",
+    "health:ci": "bash scripts/health-check.sh --skip-build",
+    "test:ci:unit": "node scripts/ci/run-unit-tests.mjs",
+    "test:ci:integration": "pnpm --dir cli test",
+    "test:ci:e2e:web": "pnpm --dir apps/web/barry.works test:smoke",
+    "test:ci:targeted": "pnpm test:ci:unit",
+    "test:ci": "pnpm test:ci:unit && pnpm test:ci:integration",
+    "ci:verify:static": "pnpm check:monorepo && pnpm contracts:check && pnpm knip && pnpm security:dependencies && pnpm security:licenses && pnpm security:secrets && pnpm run build:projects && pnpm run build:apps",
+    "ci:verify": "pnpm run ci:verify:static && pnpm test:ci:unit",
+    "dev": "pnpm -r --parallel dev",
+    "clean": "pnpm -r exec rm -rf node_modules dist",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm lint:eslint && pnpm lint:swift",
+    "lint:eslint": "eslint . --cache --cache-location node_modules/.cache/eslint --cache-strategy content --max-warnings=0",
+    "lint:eslint:ci": "eslint . --max-warnings=0 && node --test scripts/check/lint-config.test.mjs",
+    "lint:swift": "swiftlint lint --strict --config .swiftlint.yml",
+    "knip": "knip --reporter compact",
+    "lint:fix": "eslint . --fix && swiftlint --fix --config .swiftlint.yml && pnpm lint",
+    "security:network": "./scripts/security/network/run.sh",
+    "security:dependencies": "node scripts/check/security-audit.mjs",
+    "security:licenses": "node scripts/check/license-audit.mjs",
+    "security:secrets": "node scripts/check/credential-audit.mjs",
+    "security:network:quick": "./scripts/security/network/check-core.sh",
+    "security:firewall": "./scripts/firewall/verify.sh"
+  },
+  "engines": {
+    "node": "26.x",
+    "pnpm": "10.x"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.39.0",
+    "@cloudflare/workers-oauth-provider": "^0.8.2",
+    "@inquirer/prompts": "8.2.0",
+    "@slack/web-api": "7.13.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "@playwright/test": "1.58.2",
+    "eslint": "9.39.4",
+    "eslint-plugin-svelte": "3.20.0",
+    "globals": "17.4.0",
+    "knip": "^6.27.0",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.63.0",
+    "vitest": "4.1.0",
+    "yaml": "2.8.3"
+  }
+}

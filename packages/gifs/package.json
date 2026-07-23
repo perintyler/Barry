@@ -1,0 +1,24 @@
+{
+  "name": "@barry/gifs",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "search": "tsx src/cli.ts search",
+    "trending": "tsx src/cli.ts trending",
+    "get": "tsx src/cli.ts get",
+    "random": "tsx src/cli.ts random"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

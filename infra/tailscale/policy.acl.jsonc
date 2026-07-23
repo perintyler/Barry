@@ -1,0 +1,24 @@
+// Tailscale ACL Policy
+// Paste this into https://login.tailscale.com/admin/acls
+//
+// Policy:
+// - Tyler/admins get full access.
+// - Core Barry node remains isolated from non-admin users.
+{
+  "groups": {
+    "group:barry-admins": ["your-email@example.com"]
+  },
+
+  "tagOwners": {
+    "tag:barry-core": ["group:barry-admins"]
+  },
+
+  "acls": [
+    // Admin users and core admin node: full access to all devices and ports.
+    {
+      "action": "accept",
+      "src": ["group:barry-admins", "tag:barry-core"],
+      "dst": ["*:*"]
+    }
+  ]
+}

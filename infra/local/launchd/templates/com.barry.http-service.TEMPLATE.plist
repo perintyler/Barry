@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.barry.__SERVICE_NAME__</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PNPM_PATH__</string>
+        <string>__SERVICE_START_SCRIPT__</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- Without this, launchd runs the agent at background QoS and the tsx
+         TypeScript startup compile crawls on efficiency cores (~54s vs ~2s) -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+    <key>StandardOutPath</key>
+    <string>__BARRY_DIR__/__SERVICE_PATH__/logs/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__BARRY_DIR__/__SERVICE_PATH__/logs/stderr.log</string>
+    <key>WorkingDirectory</key>
+    <string>__BARRY_DIR__/__SERVICE_PATH__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__NODE_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>BARRY_SECRET</key>
+        <string>__BARRY_SECRET__</string>
+        <key>NODE_ENV</key>
+        <string>production</string>
+        <key>BARRY_ENV</key>
+        <string>__BARRY_ENV__</string>
+        <key>PORT</key>
+        <string>__SERVICE_PORT__</string>
+        <key>ENABLE_LOCAL_LOGS</key>
+        <string>true</string>
+        <key>ENABLE_AXIOM_LOGS</key>
+        <string>true</string>
+__SERVICE_ENV_VARS__
+    </dict>
+</dict>
+</plist>

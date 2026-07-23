@@ -1,0 +1,30 @@
+{
+  "name": "whisperflow-server",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx --watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "start:prod": "node --import tsx src/index.ts"
+  },
+  "dependencies": {
+    "@barry/auth": "workspace:*",
+    "@barry/env": "workspace:*",
+    "@barry/logger": "workspace:*",
+    "@barry/sentry": "workspace:*",
+    "@deepgram/sdk": "4.11.2",
+    "cors": "2.8.5",
+    "dotenv": "16.4.7",
+    "express": "4.22.1",
+    "ws": "8.21.0"
+  },
+  "devDependencies": {
+    "@types/cors": "2.8.17",
+    "@types/express": "4.17.21",
+    "@types/node": "22.15.0",
+    "@types/ws": "8.5.13",
+    "typescript": "5.9.3"
+  }
+}

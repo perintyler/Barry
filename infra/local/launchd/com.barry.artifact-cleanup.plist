@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.barry.artifact-cleanup</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__BARRY_DIR__/cli/src/index.ts</string>
+        <string>artifact</string>
+        <string>cleanup</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>__BARRY_DIR__</string>
+    <key>StandardOutPath</key>
+    <string>__HOME__/.barry/logs/artifact-cleanup.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.barry/logs/artifact-cleanup.log</string>
+</dict>
+</plist>

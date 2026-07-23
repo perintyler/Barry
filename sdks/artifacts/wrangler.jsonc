@@ -1,0 +1,43 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // account_id sourced from CLOUDFLARE_ACCOUNT_ID env var
+  "name": "barry-artifacts",
+  "main": "src/worker/barry-entry.ts",
+  "compatibility_date": "2026-03-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "r2_buckets": [
+    {
+      "binding": "ARTIFACTS_STORAGE",
+      "bucket_name": "barry-artifacts-storage"
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ARTIFACTS",
+        "class_name": "ArtifactsObject"
+      },
+      {
+        "name": "ADMIN",
+        "class_name": "AdminObject"
+      }
+    ]
+  },
+
+  "browser": {
+    "binding": "BROWSER"
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ArtifactsObject"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["AdminObject"]
+    }
+  ]
+}
