@@ -1,0 +1,244 @@
+/* ========================================
+   @barry/ui - Barry Avatar
+   Cosmic animated avatar illustration.
+   App-level component, not generic UI.
+   ======================================== */
+
+.barry-omnipresent {
+  position: relative;
+  width: 340px;
+  height: 340px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.barry-cosmic-backdrop {
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 30% 30%,
+    var(--orange-600-18) 0%,
+    var(--orange-700-10) 30%,
+    var(--orange-800-6) 60%,
+    transparent 85%
+  );
+  animation: cosmic-breathe 8s ease-in-out infinite;
+}
+
+.barry-orbital-system {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.barry-orbit {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid;
+  opacity: 0.3;
+}
+
+.barry-orbit-1 {
+  inset: 30px;
+  border-color: var(--orange-600-60);
+  animation: orbit-rotate 40s linear infinite;
+}
+
+.barry-orbit-2 {
+  inset: 15px;
+  border-color: var(--orange-700-40);
+  animation: orbit-rotate 60s linear infinite reverse;
+}
+
+.barry-orbit-3 {
+  inset: 0px;
+  border-color: var(--orange-800-30);
+  animation: orbit-rotate 80s linear infinite;
+}
+
+.barry-sacred-geometry {
+  position: absolute;
+  inset: 50px;
+  pointer-events: none;
+}
+
+.barry-hex {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border: 1px solid var(--orange-800-20);
+  transform: rotate(30deg);
+  clip-path: polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 0% 50%);
+}
+
+.barry-hex-1 {
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%) rotate(30deg);
+  animation: sacred-pulse 6s ease-in-out infinite;
+}
+
+.barry-hex-2 {
+  bottom: -30px;
+  left: 25%;
+  animation: sacred-pulse 6s ease-in-out infinite 2s;
+}
+
+.barry-hex-3 {
+  bottom: -30px;
+  right: 25%;
+  animation: sacred-pulse 6s ease-in-out infinite 4s;
+}
+
+.barry-avatar-container {
+  position: absolute;
+  inset: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center;
+  animation: divine-float 12s ease-in-out infinite;
+}
+
+.barry-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter:
+    drop-shadow(0 0 20px var(--orange-600-15))
+    drop-shadow(0 0 40px var(--orange-700-30));
+  transition: filter var(--duration-slow) ease;
+  animation: divine-presence 10s ease-in-out infinite;
+  -webkit-mask-image: radial-gradient(
+    ellipse 70% 70% at center,
+    black 40%,
+    transparent 72%
+  );
+  mask-image: radial-gradient(ellipse 70% 70% at center, black 40%, transparent 72%);
+}
+
+.barry-light-rays {
+  position: absolute;
+  inset: -15px;
+  pointer-events: none;
+}
+
+.barry-ray {
+  position: absolute;
+  width: 2px;
+  height: 40px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--orange-500-60) 50%,
+    transparent 100%
+  );
+  transform-origin: bottom center;
+  opacity: 0;
+  animation: ray-shine 8s ease-in-out infinite;
+}
+
+.barry-ray-1 { top: -20px; left: 50%; transform: translateX(-50%) rotate(0deg); animation-delay: 0s; }
+.barry-ray-2 { top: -15px; right: -5px; transform: rotate(45deg); animation-delay: 1.3s; }
+.barry-ray-3 { bottom: -15px; right: -5px; transform: rotate(135deg); animation-delay: 2.6s; }
+.barry-ray-4 { bottom: -20px; left: 50%; transform: translateX(-50%) rotate(180deg); animation-delay: 3.9s; }
+.barry-ray-5 { bottom: -15px; left: -5px; transform: rotate(225deg); animation-delay: 5.2s; }
+.barry-ray-6 { top: -15px; left: -5px; transform: rotate(315deg); animation-delay: 6.5s; }
+
+.barry-particle-field {
+  position: absolute;
+  inset: -40px;
+  pointer-events: none;
+}
+
+.barry-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--orange-500-80), transparent);
+  animation: particle-drift 15s linear infinite;
+}
+
+.barry-particle-1 { top: 20%; left: 10%; animation-delay: 0s; }
+.barry-particle-2 { top: 30%; right: 15%; animation-delay: 2.5s; }
+.barry-particle-3 { bottom: 25%; left: 20%; animation-delay: 5s; }
+.barry-particle-4 { top: 60%; right: 10%; animation-delay: 7.5s; }
+.barry-particle-5 { bottom: 40%; right: 25%; animation-delay: 10s; }
+.barry-particle-6 { top: 15%; left: 30%; animation-delay: 12.5s; }
+
+.barry-energy-field {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--orange-600-10) 90deg,
+    transparent 180deg,
+    var(--orange-700-80) 270deg,
+    transparent 360deg
+  );
+  animation: energy-rotation 20s linear infinite;
+  opacity: 0.7;
+}
+
+/* ---- Avatar Keyframes ---- */
+@keyframes cosmic-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+@keyframes orbit-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes sacred-pulse {
+  0%, 100% { opacity: 0.2; transform: translateX(-50%) rotate(30deg) scale(1); }
+  50% { opacity: 0.6; transform: translateX(-50%) rotate(30deg) scale(1.1); }
+}
+
+@keyframes divine-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  25% { transform: translateY(-8px) rotate(2deg); }
+  50% { transform: translateY(-4px) rotate(0deg); }
+  75% { transform: translateY(-12px) rotate(-2deg); }
+}
+
+@keyframes divine-presence {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+@keyframes ray-shine {
+  0%, 90%, 100% { opacity: 0; transform: translateX(-50%) scaleY(0); }
+  10%, 80% { opacity: 1; transform: translateX(-50%) scaleY(1); }
+}
+
+@keyframes particle-drift {
+  0% { transform: translateY(0px) translateX(0px); opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.8; }
+  100% { transform: translateY(-30px) translateX(10px); opacity: 0; }
+}
+
+@keyframes energy-rotation {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ---- Reduced Motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .barry-cosmic-backdrop,
+  .barry-orbit,
+  .barry-hex,
+  .barry-avatar-container,
+  .barry-avatar-img,
+  .barry-ray,
+  .barry-particle,
+  .barry-energy-field {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,3 @@
+*.local.yaml
+*.local.json
+mcp-servers.yaml

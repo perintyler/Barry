@@ -1,0 +1,23 @@
+{
+  "name": "@barry/qa-guidelines",
+  "version": "0.1.0",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
+  "description": "QA orchestrator that uses AI agents to verify software works by running through QA.md checklists",
+  "bin": {
+    "qa": "./bin/qa"
+  },
+  "files": [
+    "bin/",
+    "agent/",
+    "install.sh",
+    "examples/"
+  ],
+  "keywords": [
+    "qa",
+    "testing",
+    "ai",
+    "claude",
+    "agent"
+  ]
+}

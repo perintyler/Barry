@@ -1,0 +1,4 @@
+axiom_api_token = "xaat-your-token-here"
+
+# Or set via env:
+# export TF_VAR_axiom_api_token=$(plutil -extract EnvironmentVariables.AXIOM_TOKEN raw ~/Library/LaunchAgents/com.barry.api.plist)

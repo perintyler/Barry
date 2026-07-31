@@ -1,0 +1,177 @@
+#!/bin/bash
+# Barry Health Monitor
+# Checks critical services and alerts on state transitions.
+# Runs every 5 minutes via launchd (com.barry.job.health-check).
+#
+# Checks: API, MCP Barry, PostgreSQL (liveness)
+#          Caddy (security — internal ports not publicly exposed)
+#
+# Alerts: on transition only (down/recovered), not on every check.
+#         SMS escalation when 3+ services fail simultaneously.
+
+set -euo pipefail
+source "$(dirname "$0")/lib.sh"
+load_env
+
+# ── Service definitions ──────────────────────────────────────────────────────
+
+# Ports are prod (base + 1000 offset), baked at plist install time.
+API_PORT="${BARRY_API_PORT:-4854}"
+MCP_PORT="${BARRY_MCP_BARRY_PORT:-4901}"
+PG_PORT="${BARRY_PG_PORT:-5433}"
+
+CRITICAL_SERVICES=(api mcp-barry postgres)
+
+# ── Check functions ──────────────────────────────────────────────────────────
+
+check_api() {
+    local response
+    response=$(curl -sf --max-time 5 "http://localhost:${API_PORT}/health" 2>/dev/null) || return 1
+    [[ "$response" == *'"ok":true'* ]] || return 1
+}
+
+check_mcp_barry() {
+    local response
+    response=$(curl -sf --max-time 5 "http://localhost:${MCP_PORT}/health" 2>/dev/null) || return 1
+    [[ "$response" == *"ok"* ]] || return 1
+}
+
+check_postgres() {
+    if command -v pg_isready &>/dev/null; then
+        pg_isready -h localhost -p "$PG_PORT" -q -t 3 2>/dev/null
+        return $?
+    fi
+    # Fallback: check if Docker container is running
+    docker exec barry-postgres pg_isready -q -t 3 2>/dev/null
+}
+
+check_service() {
+    local name="$1"
+    case "$name" in
+        api) check_api ;;
+        mcp-barry) check_mcp_barry ;;
+        postgres) check_postgres ;;
+        *) return 1 ;;
+    esac
+}
+
+# ── Caddy security smoke check ──────────────────────────────────────────────
+# Verify internal service ports aren't accidentally exposed on public-facing
+# interfaces (0.0.0.0 instead of 127.0.0.1).
+
+check_caddy_security() {
+    local issues=()
+
+    for port in "$API_PORT" "$MCP_PORT"; do
+        local listen
+        listen=$(lsof -i :"$port" -P -n 2>/dev/null | grep LISTEN | head -1 || true)
+        if [[ -n "$listen" ]]; then
+            local addr
+            addr=$(echo "$listen" | awk '{print $9}')
+            # Flag if bound to all interfaces (*: or 0.0.0.0:)
+            if [[ "$addr" == "*:$port" || "$addr" == "0.0.0.0:$port" ]]; then
+                issues+=("port $port bound to $addr (should be 127.0.0.1)")
+            fi
+        fi
+    done
+
+    if (( ${#issues[@]} > 0 )); then
+        echo "${issues[*]}"
+        return 1
+    fi
+    return 0
+}
+
+# ── Main loop ────────────────────────────────────────────────────────────────
+
+failed=()
+recovered=()
+still_down=()
+timestamp=$(now_iso)
+
+for svc in "${CRITICAL_SERVICES[@]}"; do
+    state_key="health-check.$svc"
+    prev_state=$(read_state "$state_key")
+    [[ -z "$prev_state" ]] && prev_state="healthy"
+
+    if check_service "$svc"; then
+        write_state "$state_key" "healthy"
+        if [[ "$prev_state" == "unhealthy" ]]; then
+            recovered+=("$svc")
+        fi
+    else
+        write_state "$state_key" "unhealthy"
+        if [[ "$prev_state" == "healthy" ]]; then
+            failed+=("$svc")
+        else
+            still_down+=("$svc")
+        fi
+    fi
+done
+
+# Caddy security check
+caddy_state_key="health-check.caddy-security"
+caddy_prev=$(read_state "$caddy_state_key")
+[[ -z "$caddy_prev" ]] && caddy_prev="healthy"
+caddy_issues=""
+
+if caddy_issues=$(check_caddy_security); then
+    write_state "$caddy_state_key" "healthy"
+    if [[ "$caddy_prev" == "unhealthy" ]]; then
+        recovered+=("caddy-security")
+    fi
+else
+    write_state "$caddy_state_key" "unhealthy"
+    if [[ "$caddy_prev" == "healthy" ]]; then
+        failed+=("caddy-security")
+    fi
+fi
+
+# ── Alerting ─────────────────────────────────────────────────────────────────
+
+if (( ${#failed[@]} > 0 )); then
+    svc_list=$(printf ", %s" "${failed[@]}")
+    svc_list="${svc_list:2}"
+
+    msg=":rotating_light: *Barry Health Alert*"
+    msg+="\n${#failed[@]} check(s) just failed: *${svc_list}*"
+
+    # Include caddy security details if relevant
+    if [[ -n "$caddy_issues" ]] && [[ " ${failed[*]} " == *" caddy-security "* ]]; then
+        msg+="\nSecurity: ${caddy_issues}"
+    fi
+
+    if (( ${#still_down[@]} > 0 )); then
+        down_list=$(printf ", %s" "${still_down[@]}")
+        down_list="${down_list:2}"
+        msg+="\nAlso still down: ${down_list}"
+    fi
+
+    msg+="\nTime: ${timestamp}"
+
+    notify "$msg" "" "system_alert" "error"
+
+    # SMS escalation: 3+ total failures is likely systemic
+    total_down=$(( ${#failed[@]} + ${#still_down[@]} ))
+    if (( total_down >= 3 )); then
+        notify_sms "Barry: ${total_down} services down (${svc_list}). Check immediately."
+    fi
+
+    echo "[$timestamp] ALERT: ${svc_list} went down"
+fi
+
+if (( ${#recovered[@]} > 0 )); then
+    svc_list=$(printf ", %s" "${recovered[@]}")
+    svc_list="${svc_list:2}"
+
+    msg=":white_check_mark: *Barry Recovery*"
+    msg+="\n${#recovered[@]} check(s) recovered: *${svc_list}*"
+    msg+="\nTime: ${timestamp}"
+
+    notify "$msg" "" "system_alert" "success"
+    echo "[$timestamp] RECOVERED: ${svc_list}"
+fi
+
+if (( ${#failed[@]} == 0 && ${#recovered[@]} == 0 )); then
+    echo "[$timestamp] OK: all checks passed"
+fi

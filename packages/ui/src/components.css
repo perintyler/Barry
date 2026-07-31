@@ -1,0 +1,249 @@
+/* ========================================
+   @barry/ui - Component Patterns
+   Generic, reusable UI components.
+   ======================================== */
+
+/* ---- Glass Card ---- */
+.glass-card {
+  position: relative;
+  padding: var(--card-padding);
+  border-radius: var(--card-radius);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.glass-card:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--border-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme="light"] .glass-card {
+  background: var(--white-70);
+}
+
+[data-theme="light"] .glass-card:hover {
+  background: var(--white-90);
+}
+
+/* ---- Button ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--btn-padding-y) var(--btn-padding-x);
+  font-size: var(--btn-font-size);
+  font-weight: var(--btn-font-weight);
+  border-radius: var(--btn-radius);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ---- Nav Card (clickable card with glow) ---- */
+.nav-card-wrapper {
+  position: relative;
+  border-radius: var(--radius-lg);
+}
+
+.nav-card-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(var(--radius-lg) + 2px);
+  padding: 2px;
+  background: linear-gradient(
+    135deg,
+    var(--glow-1),
+    var(--glow-2),
+    var(--glow-3)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity var(--duration-slow) var(--ease-out);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.nav-card-wrapper:hover .nav-card-glow {
+  opacity: 1;
+}
+
+/* Ambient glow */
+.nav-card-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: calc(var(--radius-lg) + 4px);
+  background: linear-gradient(
+    135deg,
+    var(--glow-1-ambient),
+    var(--glow-2-ambient),
+    var(--glow-3-ambient)
+  );
+  opacity: 0;
+  transition: opacity var(--duration-slow) var(--ease-out);
+  pointer-events: none;
+  filter: blur(8px);
+  z-index: -1;
+}
+
+.nav-card-wrapper:hover::after {
+  opacity: 1;
+}
+
+.nav-card {
+  cursor: pointer;
+}
+
+/* ---- Input ---- */
+.input {
+  width: 100%;
+  padding: var(--input-padding-y) var(--input-padding-x);
+  font-size: var(--text-base);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--input-radius);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.input:hover {
+  border-color: var(--border-hover);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+/* ---- Badge ---- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--badge-padding-y) var(--badge-padding-x);
+  font-size: var(--badge-font-size);
+  font-weight: var(--font-medium);
+  border-radius: var(--badge-radius);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.badge-success {
+  background: var(--success-dim);
+  color: var(--success);
+}
+
+.badge-warning {
+  background: var(--warning-dim);
+  color: var(--warning);
+}
+
+.badge-error {
+  background: var(--error-dim);
+  color: var(--error);
+}
+
+/* ---- Container ---- */
+.container {
+  width: 100%;
+  max-width: var(--max-width-lg);
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+}
+
+.container-sm { max-width: var(--max-width-sm); }
+.container-md { max-width: var(--max-width-md); }
+.container-xl { max-width: var(--max-width-xl); }
+
+/* ---- Spotlight Search ---- */
+.spotlight-search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  background: var(--glass-bg);
+  border: 1px solid var(--border);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.spotlight-search-container:focus-within {
+  border-color: var(--accent);
+  background: var(--glass-bg-hover);
+  box-shadow:
+    0 0 0 3px var(--accent-dim),
+    var(--shadow-md);
+}
+
+.spotlight-search-icon {
+  font-size: var(--text-lg);
+  opacity: 0.5;
+}
+
+.spotlight-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  font-size: var(--text-base);
+  outline: none;
+  color: var(--text-primary);
+}
+
+.spotlight-search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.spotlight-search-shortcut {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-tertiary);
+}

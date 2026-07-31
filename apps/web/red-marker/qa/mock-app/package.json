@@ -1,0 +1,9 @@
+{
+  "name": "red-marker-mock-app",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

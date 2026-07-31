@@ -1,0 +1,6 @@
+*.o
+*.d
+*.swiftdeps
+*.swiftdeps~
+.build/
+.swiftpm/

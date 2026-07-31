@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Resolve through symlinks so this works when called via npx
+SOURCE="$0"
+while [[ -L "$SOURCE" ]]; do
+  DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+QA_GUIDELINES_REPO_PATH="$(cd "$(dirname "$SOURCE")/.." && pwd)"
+
+if [[ "${1:-}" == "install" ]]; then
+  exec bash "$QA_GUIDELINES_REPO_PATH/install.sh"
+fi
+
+exec bash "$QA_GUIDELINES_REPO_PATH/agent/qa.sh" "$@"

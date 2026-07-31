@@ -1,0 +1,30 @@
+{
+  "name": "@barry-sdks/notes",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "description": "Single scratchpad notes component with persistent storage",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./styles": "./src/styles.css",
+    "./css": "./dist/css.js",
+    "./browser": "./dist/browser.js",
+    "./browser-inline": "./dist/browser-inline.js",
+    "./worker": "./src/worker/index.ts"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260111.0",
+    "esbuild": "0.27.0",
+    "typescript": "5.9.3"
+  }
+}

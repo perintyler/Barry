@@ -1,0 +1,20 @@
+{
+  "name": "@barry/slack",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./commands": "./src/commands.ts",
+    "./service": "./src/slack-service.ts",
+    "./messaging-service": "./src/slack-messaging-service.ts",
+    "./relevance-service": "./src/relevance-service.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.78.0",
+    "@barry/agent-runtime": "workspace:*",
+    "@barry/env": "workspace:*",
+    "@slack/web-api": "7.8.0"
+  }
+}

@@ -1,0 +1,60 @@
+/* ========================================
+   @barry/ui - Shared Animations
+   Reusable keyframes and transition helpers.
+   Component-specific animations stay with
+   their component file.
+   ======================================== */
+
+/* ---- Enter / Exit ---- */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes scale-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+/* ---- Utility classes ---- */
+.enter-card {
+  opacity: 0;
+  transform: translateY(12px);
+  animation: card-enter 0.4s var(--ease-out) forwards;
+}
+
+.enter-scale {
+  opacity: 0;
+  transform: scale(0.95);
+  animation: scale-in var(--duration-normal) var(--ease-out) forwards;
+}
+
+/* ---- Stagger helpers ---- */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.10s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.20s; }
+.stagger-5 { animation-delay: 0.25s; }

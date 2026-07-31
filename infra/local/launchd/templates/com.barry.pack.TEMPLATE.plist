@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.barry.pack.__PACK_NAME__.__SERVICE_NAME__</string>
+    <key>ProgramArguments</key>
+    <array>
+__SERVICE_PROGRAM_ARGS__
+    </array>
+__SERVICE_RUN_AT_LOAD__
+__SERVICE_KEEP_ALIVE__
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+    <key>StandardOutPath</key>
+    <string>__HOME__/.barry/logs/pack-__PACK_NAME__-__SERVICE_NAME__-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.barry/logs/pack-__PACK_NAME__-__SERVICE_NAME__-stderr.log</string>
+__SERVICE_WORKING_DIR__
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__NODE_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+__SERVICE_ENV_VARS__
+    </dict>
+</dict>
+</plist>

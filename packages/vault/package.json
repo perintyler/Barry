@@ -1,0 +1,20 @@
+{
+  "name": "@barry/vault",
+  "version": "1.0.0",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./crypto": "./src/crypto.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "vitest": "4.1.0"
+  }
+}
