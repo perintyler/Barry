@@ -1,0 +1,13 @@
+{
+  "name": "@barry/google-auth",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "description": "Shared Google OAuth for Cloudflare Workers",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

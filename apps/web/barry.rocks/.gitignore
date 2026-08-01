@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+dist/
+assets/voice/
+.DS_Store
+.playwright-mcp/

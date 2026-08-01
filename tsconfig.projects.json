@@ -1,0 +1,65 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/auth"
+    },
+    {
+      "path": "./packages/agent-runtime"
+    },
+    {
+      "path": "./packages/contracts"
+    },
+    {
+      "path": "./packages/db"
+    },
+    {
+      "path": "./packages/email"
+    },
+    {
+      "path": "./packages/env"
+    },
+    {
+      "path": "./packages/github"
+    },
+    {
+      "path": "./hooks/change-tracker"
+    },
+    {
+      "path": "./hooks/session-tracker"
+    },
+    {
+      "path": "./packages/logger"
+    },
+    {
+      "path": "./packages/secrets"
+    },
+    {
+      "path": "./packages/md-to-ansi"
+    },
+    {
+      "path": "./packages/sentry"
+    },
+    {
+      "path": "./packages/sessions"
+    },
+    {
+      "path": "./cli"
+    },
+    {
+      "path": "./servers/github"
+    },
+    {
+      "path": "./apps/web/barry.works/tsconfig.server.json"
+    },
+    {
+      "path": "./servers/api"
+    },
+    {
+      "path": "./servers/whisperflow"
+    },
+    {
+      "path": "./servers/mcp"
+    }
+  ]
+}

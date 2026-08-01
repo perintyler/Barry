@@ -1,0 +1,809 @@
+/* Karaoke Studio - Premium Glassmorphism Design System */
+
+/* Advanced Design Tokens */
+:root {
+  /* Premium Glassmorphism Palette */
+  --karaoke-glass-primary: rgba(139, 92, 246, 0.15);
+  --karaoke-glass-secondary: rgba(96, 165, 250, 0.1);
+  --karaoke-glass-accent: rgba(244, 114, 182, 0.12);
+  --karaoke-glass-success: rgba(34, 197, 94, 0.12);
+  --karaoke-glass-warning: rgba(251, 191, 36, 0.12);
+  --karaoke-glass-error: rgba(239, 68, 68, 0.12);
+
+  /* Dynamic Background System */
+  --karaoke-bg-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --karaoke-bg-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --karaoke-bg-accent: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  --karaoke-bg-overlay: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(96, 165, 250, 0.05) 100%);
+
+  /* Solid Colors for High Contrast */
+  --karaoke-primary: #8B5CF6;
+  --karaoke-primary-hover: #7C3AED;
+  --karaoke-primary-light: #A78BFA;
+  --karaoke-secondary: #60A5FA;
+  --karaoke-accent: #F472B6;
+  --karaoke-success: #10B981;
+  --karaoke-warning: #F59E0B;
+  --karaoke-error: #EF4444;
+
+  /* Text Colors with Depth */
+  --karaoke-text-primary: rgba(255, 255, 255, 0.95);
+  --karaoke-text-secondary: rgba(255, 255, 255, 0.75);
+  --karaoke-text-tertiary: rgba(255, 255, 255, 0.6);
+  --karaoke-text-muted: rgba(255, 255, 255, 0.45);
+
+  /* Advanced Border Radius */
+  --karaoke-radius-sm: 12px;
+  --karaoke-radius-base: 16px;
+  --karaoke-radius-lg: 20px;
+  --karaoke-radius-xl: 28px;
+  --karaoke-radius-2xl: 36px;
+  --karaoke-radius-full: 9999px;
+
+  /* Premium Glass Shadows */
+  --karaoke-shadow-glass:
+    0 8px 32px rgba(0, 0, 0, 0.12),
+    0 2px 16px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --karaoke-shadow-glass-hover:
+    0 20px 40px rgba(0, 0, 0, 0.15),
+    0 8px 24px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  --karaoke-shadow-glow:
+    0 0 20px rgba(139, 92, 246, 0.3),
+    0 0 40px rgba(139, 92, 246, 0.15);
+
+  /* Fluid Animations */
+  --karaoke-easing-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --karaoke-easing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --karaoke-easing-elastic: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+  --karaoke-transition-instant: 100ms var(--karaoke-easing-smooth);
+  --karaoke-transition-fast: 200ms var(--karaoke-easing-smooth);
+  --karaoke-transition-base: 300ms var(--karaoke-easing-smooth);
+  --karaoke-transition-slow: 500ms var(--karaoke-easing-smooth);
+  --karaoke-transition-bounce: 400ms var(--karaoke-easing-bounce);
+
+  /* Golden Ratio Spacing System */
+  --karaoke-space-xs: 4px;
+  --karaoke-space-sm: 8px;
+  --karaoke-space-base: 16px;
+  --karaoke-space-lg: 24px;
+  --karaoke-space-xl: 32px;
+  --karaoke-space-2xl: 48px;
+  --karaoke-space-3xl: 64px;
+  --karaoke-space-4xl: 96px;
+
+  /* Premium Typography */
+  --karaoke-font-display: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --karaoke-font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --karaoke-font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+  --karaoke-font-weight-light: 300;
+  --karaoke-font-weight-normal: 400;
+  --karaoke-font-weight-medium: 500;
+  --karaoke-font-weight-semibold: 600;
+  --karaoke-font-weight-bold: 700;
+}
+
+/* Animated Background with Glassmorphism */
+.karaoke-container {
+  position: relative;
+  min-height: 100vh;
+  padding: var(--karaoke-space-lg);
+  font-family: var(--karaoke-font-body);
+  color: var(--karaoke-text-primary);
+  line-height: 1.6;
+  overflow-x: hidden;
+
+  /* Dynamic Gradient Background */
+  background: var(--karaoke-bg-primary);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+
+  /* Floating Particles Background */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at 25% 25%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 75% 75%, rgba(96, 165, 250, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 50% 0%, rgba(244, 114, 182, 0.06) 0%, transparent 50%);
+    animation: particleFloat 20s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+
+  /* Mesh Gradient Overlay */
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--karaoke-bg-overlay);
+    backdrop-filter: blur(100px);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+/* Gradient Animation */
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  25% { background-position: 100% 50%; }
+  50% { background-position: 100% 100%; }
+  75% { background-position: 0% 100%; }
+}
+
+/* Floating Particle Animation */
+@keyframes particleFloat {
+  0% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-20px) rotate(120deg); }
+  66% { transform: translateY(10px) rotate(240deg); }
+  100% { transform: translateY(-30px) rotate(360deg); }
+}
+
+/* Premium Glassmorphism Studio */
+.karaoke-studio {
+  position: relative;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--karaoke-space-3xl);
+  z-index: 10;
+
+  /* Advanced Glassmorphism */
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-radius: var(--karaoke-radius-2xl);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+
+  /* Premium Shadow System */
+  box-shadow: var(--karaoke-shadow-glass);
+
+  /* Hover Enhancement */
+  transition: all var(--karaoke-transition-slow);
+  animation: studioIntro 0.8s var(--karaoke-easing-bounce) forwards;
+
+  /* Inner Glow Effect */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border-radius: calc(var(--karaoke-radius-2xl) - 1px);
+    padding: 1px;
+    background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0.1) 100%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Floating Animation */
+  &:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--karaoke-shadow-glass-hover), var(--karaoke-shadow-glow);
+  }
+}
+
+/* Studio Intro Animation */
+@keyframes studioIntro {
+  0% {
+    opacity: 0;
+    transform: translateY(40px) scale(0.96);
+    filter: blur(10px);
+  }
+  60% {
+    transform: translateY(-8px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* Spectacular Studio Header */
+.karaoke-studio-header {
+  text-align: center;
+  margin-bottom: var(--karaoke-space-3xl);
+  position: relative;
+  z-index: 2;
+}
+
+.karaoke-studio-title {
+  font-family: var(--karaoke-font-display);
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: var(--karaoke-font-weight-bold);
+  margin: 0 0 var(--karaoke-space-lg) 0;
+
+  /* Spectacular Gradient Text */
+  background: linear-gradient(135deg,
+    #8B5CF6 0%,
+    #60A5FA 25%,
+    #F472B6 50%,
+    #A78BFA 75%,
+    #8B5CF6 100%);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+
+  /* Animated Gradient */
+  animation: titleGradientFlow 3s ease-in-out infinite;
+
+  /* Text Shadow for Depth */
+  filter: drop-shadow(0 4px 12px rgba(139, 92, 246, 0.3));
+
+  /* Entrance Animation */
+  animation: titleEntrance 1s var(--karaoke-easing-bounce) 0.2s both,
+             titleGradientFlow 3s ease-in-out infinite 1s;
+}
+
+.karaoke-studio-subtitle {
+  font-size: 1.25rem;
+  font-weight: var(--karaoke-font-weight-medium);
+  color: var(--karaoke-text-secondary);
+  margin: 0;
+  opacity: 0;
+  animation: subtitleFade 0.8s ease-out 0.8s forwards;
+
+  /* Subtle Glow */
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+/* Title Animations */
+@keyframes titleGradientFlow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes titleEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.8);
+    filter: drop-shadow(0 4px 12px rgba(139, 92, 246, 0)) blur(10px);
+  }
+  70% {
+    transform: translateY(5px) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 4px 12px rgba(139, 92, 246, 0.3)) blur(0);
+  }
+}
+
+@keyframes subtitleFade {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* YouTube URL Input */
+.youtube-input-container {
+  position: relative;
+  margin-bottom: var(--karaoke-space-lg);
+}
+
+.youtube-input {
+  width: 100%;
+  padding: var(--karaoke-space-base) var(--karaoke-space-lg);
+  border: 2px solid var(--karaoke-primary-soft);
+  border-radius: var(--karaoke-radius-lg);
+  font-size: 1rem;
+  font-weight: var(--karaoke-font-weight-normal);
+  background: var(--karaoke-secondary-soft);
+  color: var(--karaoke-text-soft);
+  transition: all var(--karaoke-transition-base);
+  box-sizing: border-box;
+}
+
+.youtube-input:focus {
+  outline: none;
+  border-color: var(--karaoke-primary);
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1), var(--karaoke-shadow-soft);
+  transform: translateY(-1px);
+}
+
+.youtube-input::placeholder {
+  color: var(--karaoke-text-soft);
+  opacity: 0.6;
+}
+
+.youtube-input.error {
+  border-color: #FF6B6B;
+  background: var(--karaoke-error-soft);
+}
+
+.youtube-input.valid {
+  border-color: #00CDA3;
+  background: var(--karaoke-success-gentle);
+}
+
+/* Input Validation Message */
+.input-validation {
+  margin-top: var(--karaoke-space-sm);
+  padding: var(--karaoke-space-sm) var(--karaoke-space-base);
+  border-radius: var(--karaoke-radius-base);
+  font-size: 0.875rem;
+  transition: all var(--karaoke-transition-base);
+}
+
+.input-validation.error {
+  background: var(--karaoke-error-soft);
+  color: #D73502;
+  border-left: 4px solid #FF6B6B;
+}
+
+.input-validation.valid {
+  background: var(--karaoke-success-gentle);
+  color: #047857;
+  border-left: 4px solid #00CDA3;
+}
+
+/* Generate Button */
+.generate-button {
+  width: 100%;
+  padding: var(--karaoke-space-base) var(--karaoke-space-lg);
+  background: linear-gradient(135deg, var(--karaoke-primary), var(--karaoke-primary-light));
+  color: white;
+  border: none;
+  border-radius: var(--karaoke-radius-lg);
+  font-size: 1.1rem;
+  font-weight: var(--karaoke-font-weight-medium);
+  cursor: pointer;
+  transition: all var(--karaoke-transition-base);
+  box-shadow: var(--karaoke-shadow-soft);
+  position: relative;
+  overflow: hidden;
+}
+
+.generate-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--karaoke-shadow-large);
+}
+
+.generate-button:active {
+  transform: translateY(0);
+}
+
+.generate-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.generate-button:disabled::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: loading-shimmer 1.5s infinite;
+}
+
+@keyframes loading-shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Job Cards */
+.jobs-list {
+  margin-top: var(--karaoke-space-2xl);
+}
+
+.job-card {
+  background: white;
+  border: 1px solid var(--karaoke-primary-soft);
+  border-radius: var(--karaoke-radius-lg);
+  padding: var(--karaoke-space-lg);
+  margin-bottom: var(--karaoke-space-base);
+  transition: all var(--karaoke-transition-base);
+  box-shadow: var(--karaoke-shadow-soft);
+}
+
+.job-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--karaoke-shadow-medium);
+  border-color: var(--karaoke-primary-light);
+}
+
+.job-card.completed {
+  border-color: #00CDA3;
+  background: linear-gradient(135deg, white, var(--karaoke-success-gentle));
+}
+
+.job-card.failed {
+  border-color: #FF6B6B;
+  background: linear-gradient(135deg, white, var(--karaoke-error-soft));
+}
+
+/* Job Card Header */
+.job-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: var(--karaoke-space-base);
+}
+
+.job-title {
+  font-size: 1.1rem;
+  font-weight: var(--karaoke-font-weight-medium);
+  color: var(--karaoke-text-soft);
+  margin: 0 0 var(--karaoke-space-xs) 0;
+}
+
+.job-artist {
+  font-size: 0.9rem;
+  color: var(--karaoke-text-soft);
+  opacity: 0.7;
+  margin: 0;
+}
+
+.job-status {
+  padding: var(--karaoke-space-xs) var(--karaoke-space-base);
+  border-radius: var(--karaoke-radius-base);
+  font-size: 0.8rem;
+  font-weight: var(--karaoke-font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.job-status.queued { background: var(--karaoke-warning-soft); color: #92400E; }
+.job-status.extracting_audio { background: var(--karaoke-primary-soft); color: var(--karaoke-primary); }
+.job-status.fetching_lyrics { background: var(--karaoke-accent-gentle); color: #BE185D; }
+.job-status.generating_video { background: var(--karaoke-secondary-soft); color: #1E40AF; }
+.job-status.completed { background: var(--karaoke-success-gentle); color: #047857; }
+.job-status.failed { background: var(--karaoke-error-soft); color: #DC2626; }
+
+/* Progress Bar */
+.progress-container {
+  margin: var(--karaoke-space-base) 0;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--karaoke-primary-soft);
+  border-radius: var(--karaoke-radius-base);
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--karaoke-primary), var(--karaoke-primary-light));
+  border-radius: var(--karaoke-radius-base);
+  transition: width var(--karaoke-transition-slow);
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: progress-shine 2s infinite;
+}
+
+@keyframes progress-shine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.progress-text {
+  font-size: 0.9rem;
+  color: var(--karaoke-text-soft);
+  margin-top: var(--karaoke-space-sm);
+  text-align: center;
+}
+
+/* Action Buttons */
+.job-actions {
+  display: flex;
+  gap: var(--karaoke-space-sm);
+  margin-top: var(--karaoke-space-base);
+  padding-top: var(--karaoke-space-base);
+  border-top: 1px solid var(--karaoke-primary-soft);
+}
+
+.action-button {
+  padding: var(--karaoke-space-sm) var(--karaoke-space-base);
+  border-radius: var(--karaoke-radius-base);
+  font-size: 0.9rem;
+  font-weight: var(--karaoke-font-weight-medium);
+  border: none;
+  cursor: pointer;
+  transition: all var(--karaoke-transition-fast);
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.action-button.primary {
+  background: var(--karaoke-primary);
+  color: white;
+}
+
+.action-button.primary:hover {
+  background: var(--karaoke-primary-hover);
+  transform: translateY(-1px);
+}
+
+.action-button.secondary {
+  background: var(--karaoke-secondary-soft);
+  color: var(--karaoke-primary);
+  border: 1px solid var(--karaoke-primary-soft);
+}
+
+.action-button.secondary:hover {
+  background: var(--karaoke-primary-soft);
+  transform: translateY(-1px);
+}
+
+/* Preferences Panel */
+.preferences-panel {
+  background: var(--karaoke-secondary-soft);
+  border-radius: var(--karaoke-radius-lg);
+  padding: var(--karaoke-space-lg);
+  margin-bottom: var(--karaoke-space-lg);
+  border: 1px solid var(--karaoke-primary-soft);
+}
+
+.preferences-title {
+  font-size: 1rem;
+  font-weight: var(--karaoke-font-weight-medium);
+  color: var(--karaoke-text-soft);
+  margin: 0 0 var(--karaoke-space-base) 0;
+}
+
+.preference-group {
+  margin-bottom: var(--karaoke-space-base);
+}
+
+.preference-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: var(--karaoke-font-weight-medium);
+  color: var(--karaoke-text-soft);
+  margin-bottom: var(--karaoke-space-xs);
+}
+
+.preference-select {
+  width: 100%;
+  padding: var(--karaoke-space-sm) var(--karaoke-space-base);
+  border: 1px solid var(--karaoke-primary-soft);
+  border-radius: var(--karaoke-radius-base);
+  background: white;
+  color: var(--karaoke-text-soft);
+  font-size: 0.9rem;
+  transition: all var(--karaoke-transition-base);
+}
+
+.preference-select:focus {
+  outline: none;
+  border-color: var(--karaoke-primary);
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.1);
+}
+
+/* Loading States */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.loading * {
+  cursor: wait !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .karaoke-container {
+    padding: var(--karaoke-space-base);
+  }
+
+  .karaoke-studio {
+    padding: var(--karaoke-space-lg);
+    border-radius: var(--karaoke-radius-lg);
+  }
+
+  .karaoke-studio-title {
+    font-size: 2rem;
+  }
+
+  .job-actions {
+    flex-direction: column;
+  }
+
+  .action-button {
+    width: 100%;
+  }
+}
+
+/* Accessibility */
+.karaoke-studio:focus-within {
+  outline: 2px solid var(--karaoke-primary);
+  outline-offset: 4px;
+}
+
+.job-card[role="button"]:focus,
+.action-button:focus,
+.generate-button:focus,
+.youtube-input:focus {
+  outline: 2px solid var(--karaoke-primary);
+  outline-offset: 2px;
+}
+
+/* Dark mode support */
+:root[data-theme="dark"] {
+  --karaoke-background: #1a1a1a;
+  --karaoke-text-soft: #e0e0e0;
+  --karaoke-secondary-soft: rgba(240, 248, 255, 0.05);
+}
+
+:root[data-theme="dark"] .karaoke-studio {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="dark"] .youtube-input {
+  background: rgba(240, 248, 255, 0.1);
+  border-color: rgba(232, 229, 255, 0.3);
+  color: var(--karaoke-text-soft);
+}/* Additional Premium Karaoke Styles - Complete Update */
+
+/* No Jobs Empty State with Animation */
+.no-jobs {
+  text-align: center;
+  padding: var(--karaoke-space-4xl) var(--karaoke-space-lg);
+  opacity: 0;
+  animation: fadeInUp 0.8s ease-out 1.2s forwards;
+}
+
+.no-jobs-icon {
+  font-size: 4rem;
+  margin-bottom: var(--karaoke-space-lg);
+  animation: float 3s ease-in-out infinite;
+}
+
+.no-jobs p {
+  color: var(--karaoke-text-secondary);
+  font-size: 1.1rem;
+  margin: 0;
+  opacity: 0.8;
+}
+
+/* Job Cards with Advanced Glassmorphism */
+.karaoke-job-card {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--karaoke-radius-lg);
+  padding: var(--karaoke-space-lg);
+  margin-bottom: var(--karaoke-space-lg);
+  transition: all var(--karaoke-transition-base);
+  animation: slideIn 0.6s var(--karaoke-easing-bounce) both;
+}
+
+.karaoke-job-card:hover {
+  transform: translateY(-4px);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: var(--karaoke-shadow-glass-hover);
+}
+
+/* Processing Section with Pulsing Animation */
+.processing-section {
+  margin: var(--karaoke-space-xl) 0;
+  padding: var(--karaoke-space-lg);
+  background: var(--karaoke-glass-primary);
+  border-radius: var(--karaoke-radius-lg);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  animation: processingPulse 2s ease-in-out infinite;
+}
+
+@keyframes processingPulse {
+  0%, 100% {
+    background: var(--karaoke-glass-primary);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
+  }
+  50% {
+    background: rgba(139, 92, 246, 0.2);
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.2);
+  }
+}
+
+/* Jobs List with Staggered Animation */
+.jobs-list {
+  margin-top: var(--karaoke-space-2xl);
+}
+
+.jobs-list .karaoke-job-card:nth-child(1) { animation-delay: 0s; }
+.jobs-list .karaoke-job-card:nth-child(2) { animation-delay: 0.1s; }
+.jobs-list .karaoke-job-card:nth-child(3) { animation-delay: 0.2s; }
+.jobs-list .karaoke-job-card:nth-child(4) { animation-delay: 0.3s; }
+.jobs-list .karaoke-job-card:nth-child(5) { animation-delay: 0.4s; }
+
+/* Additional Animations */
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes slideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Dark Mode Support */
+:root[data-theme="dark"] {
+  --karaoke-bg-primary: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+  --karaoke-bg-secondary: linear-gradient(135deg, #581c87 0%, #7c2d12 100%);
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  .karaoke-studio {
+    margin: var(--karaoke-space-base);
+    padding: var(--karaoke-space-xl);
+  }
+
+  .karaoke-studio-title {
+    font-size: 2.5rem;
+  }
+
+  .karaoke-container {
+    padding: var(--karaoke-space-base);
+  }
+}
+
+/* High Performance Mode */
+@media (prefers-reduced-motion: reduce) {
+  .karaoke-container,
+  .karaoke-studio,
+  .karaoke-studio-title,
+  .processing-section,
+  .karaoke-job-card {
+    animation: none !important;
+  }
+
+  .karaoke-container::before,
+  .karaoke-container::after {
+    animation: none !important;
+  }
+}

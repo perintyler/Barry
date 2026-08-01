@@ -1,0 +1,225 @@
+{
+  "metadata": {
+    "title": "Notable UFO Cases",
+    "description": "Famous and well-documented UFO sightings and encounters throughout history",
+    "total_cases": 25
+  },
+  "cases": [
+    {
+      "name": "Roswell Incident",
+      "date": "July 1947",
+      "location": "Roswell, New Mexico, USA",
+      "summary": "A rancher discovered mysterious debris on his property. The US Army initially announced recovery of a 'flying disc' before retracting the statement, claiming it was a weather balloon. Decades later, the Air Force admitted it was a Project Mogul balloon monitoring Soviet nuclear tests.",
+      "witnesses": "Mac Brazel, Jesse Marcel, numerous military personnel",
+      "classification": "Crash retrieval",
+      "notability": "Most famous UFO incident in history, sparked decades of conspiracy theories"
+    },
+    {
+      "name": "Kenneth Arnold Sighting",
+      "date": "June 24, 1947",
+      "location": "Mount Rainier, Washington, USA",
+      "summary": "Private pilot Kenneth Arnold reported seeing nine unusual objects flying in formation near Mount Rainier at an estimated 1,200 mph. His description of their movement 'like saucers skipping on water' coined the term 'flying saucer.'",
+      "witnesses": "Kenneth Arnold",
+      "classification": "Aerial sighting",
+      "notability": "Launched the modern UFO era and coined 'flying saucer' terminology"
+    },
+    {
+      "name": "Phoenix Lights",
+      "date": "March 13, 1997",
+      "location": "Phoenix, Arizona, USA",
+      "summary": "Thousands of witnesses reported a massive V-shaped craft with lights spanning up to a mile, silently gliding over Phoenix. Governor Fife Symington initially mocked the sighting but later admitted he too saw the craft and couldn't explain it.",
+      "witnesses": "Thousands including Governor Fife Symington",
+      "classification": "Mass sighting",
+      "notability": "One of the largest mass UFO sightings in history"
+    },
+    {
+      "name": "Rendlesham Forest Incident",
+      "date": "December 26-28, 1980",
+      "location": "Suffolk, England",
+      "summary": "US Air Force personnel stationed at RAF Woodbridge reported encountering a triangular craft in Rendlesham Forest. Deputy Base Commander Lt. Col. Charles Halt recorded observations on audio tape and documented radiation readings at the landing site.",
+      "witnesses": "Lt. Col. Charles Halt, Sgt. Jim Penniston, Airman John Burroughs",
+      "classification": "Close encounter",
+      "notability": "Often called 'Britain's Roswell' - one of best-documented military UFO encounters"
+    },
+    {
+      "name": "USS Nimitz Encounter (Tic Tac)",
+      "date": "November 14, 2004",
+      "location": "Pacific Ocean, off San Diego",
+      "summary": "Navy pilots from USS Nimitz encountered a white, Tic Tac-shaped object exhibiting extraordinary flight characteristics - no visible propulsion, sudden acceleration, and the ability to descend from 80,000 feet to sea level in seconds. Confirmed by Pentagon in 2017.",
+      "witnesses": "Commander David Fravor, Lt. Cmdr. Alex Dietrich, radar operators",
+      "classification": "Military encounter",
+      "notability": "First UFO videos officially released and confirmed by US Government"
+    },
+    {
+      "name": "Belgian UFO Wave",
+      "date": "November 1989 - April 1990",
+      "location": "Belgium",
+      "summary": "Over 13,500 people reported sightings of large, triangular UFOs with lights. Belgian Air Force scrambled F-16s which tracked the objects on radar. The objects demonstrated impossible acceleration - 0 to over 1,000 mph almost instantly.",
+      "witnesses": "13,500+ civilians, police officers, military personnel",
+      "classification": "Mass sighting wave",
+      "notability": "Most thoroughly investigated UFO wave by a national military"
+    },
+    {
+      "name": "Ariel School Encounter",
+      "date": "September 16, 1994",
+      "location": "Ruwa, Zimbabwe",
+      "summary": "62 schoolchildren reported seeing a silver craft land near their school and humanoid beings emerge. The children, interviewed separately, gave remarkably consistent accounts. Harvard psychiatrist John Mack investigated and found the children credible.",
+      "witnesses": "62 schoolchildren, staff members",
+      "classification": "Close encounter of the third kind",
+      "notability": "Mass child witness event investigated by Harvard psychiatrist"
+    },
+    {
+      "name": "Tehran UFO Incident",
+      "date": "September 19, 1976",
+      "location": "Tehran, Iran",
+      "summary": "Iranian Air Force jets were scrambled to intercept a brilliant object. When pilots attempted to fire, their weapons systems jammed. A smaller object detached and pursued one jet. Systems returned to normal when pilots disengaged.",
+      "witnesses": "Multiple Iranian Air Force pilots, ground control",
+      "classification": "Military intercept",
+      "notability": "Documented in US DIA report as 'classic case' meeting criteria for valid study"
+    },
+    {
+      "name": "O'Hare Airport Sighting",
+      "date": "November 7, 2006",
+      "location": "Chicago O'Hare International Airport",
+      "summary": "United Airlines employees observed a dark grey, metallic, disc-shaped object hovering over Gate C17. The object suddenly shot upward through the overcast clouds, leaving a visible hole. FAA declined to investigate, citing lack of radar evidence.",
+      "witnesses": "Pilots, mechanics, United Airlines employees",
+      "classification": "Airport sighting",
+      "notability": "Major airport sighting with multiple credible aviation witnesses"
+    },
+    {
+      "name": "Westall UFO Encounter",
+      "date": "April 6, 1966",
+      "location": "Melbourne, Australia",
+      "summary": "Over 200 students and teachers at Westall High School witnessed a grey saucer-shaped object descend into a nearby field, then ascend and fly away. Some students claimed to see it land briefly. Military personnel allegedly arrived and warned witnesses not to discuss the event.",
+      "witnesses": "200+ students and teachers",
+      "classification": "Mass sighting",
+      "notability": "One of the largest mass school sightings in history"
+    },
+    {
+      "name": "Lonnie Zamora Incident",
+      "date": "April 24, 1964",
+      "location": "Socorro, New Mexico, USA",
+      "summary": "Police officer Lonnie Zamora witnessed an egg-shaped craft with two small beings in white coveralls near it. The craft had a red insignia and left behind burned brush and landing impressions. Project Blue Book classified it as 'unknown.'",
+      "witnesses": "Police Officer Lonnie Zamora",
+      "classification": "Close encounter of the third kind",
+      "notability": "One of best-documented single-witness cases, investigated by Project Blue Book"
+    },
+    {
+      "name": "Washington D.C. UFO Incident",
+      "date": "July 1952",
+      "location": "Washington D.C., USA",
+      "summary": "Over two consecutive weekends, UFOs were tracked on radar over the nation's capital. Air Force jets were scrambled but couldn't intercept the objects. The sightings prompted the largest Pentagon press conference since WWII.",
+      "witnesses": "Radar operators, pilots, civilians",
+      "classification": "Radar-visual",
+      "notability": "UFOs over the White House prompted national security concerns"
+    },
+    {
+      "name": "Gimbal Video",
+      "date": "January 2015",
+      "location": "East Coast, USA",
+      "summary": "Navy pilots recorded a rotating object traveling against 120-knot winds with no visible means of propulsion. Pilots exclaimed 'There's a whole fleet of them!' as multiple objects appeared on sensors. Released by Pentagon in 2017.",
+      "witnesses": "Navy pilots, weapons systems operators",
+      "classification": "Military encounter",
+      "notability": "One of three official Pentagon-released UAP videos"
+    },
+    {
+      "name": "Stephenville Sightings",
+      "date": "January 8, 2008",
+      "location": "Stephenville, Texas, USA",
+      "summary": "Dozens of witnesses including pilots and police officers reported a massive silent object with bright lights. Radar data later obtained through FOIA showed unknown objects in restricted airspace near President Bush's ranch.",
+      "witnesses": "Pilots, police officers, dozens of civilians",
+      "classification": "Mass sighting",
+      "notability": "Radar data confirmed unknown objects in presidential restricted airspace"
+    },
+    {
+      "name": "Travis Walton Abduction",
+      "date": "November 5, 1975",
+      "location": "Apache-Sitgreaves National Forest, Arizona, USA",
+      "summary": "Logger Travis Walton allegedly approached a hovering disc and was struck by a beam of light. He disappeared for five days while six coworkers, who all passed polygraph tests, reported the event to authorities.",
+      "witnesses": "Travis Walton, six coworkers (all passed polygraphs)",
+      "classification": "Alleged abduction",
+      "notability": "Most famous alleged abduction case with multiple witnesses who passed polygraphs"
+    },
+    {
+      "name": "Falcon Lake Incident",
+      "date": "May 20, 1967",
+      "location": "Falcon Lake, Manitoba, Canada",
+      "summary": "Stefan Michalak approached a landed disc-shaped craft. When it departed, an exhaust vent burned a grid pattern into his chest. He suffered radiation sickness symptoms. The burn pattern matched the alleged vent configuration.",
+      "witnesses": "Stefan Michalak",
+      "classification": "Close encounter with physical effects",
+      "notability": "Physical evidence case - burns and radiation sickness documented by doctors"
+    },
+    {
+      "name": "Japan Airlines Flight 1628",
+      "date": "November 17, 1986",
+      "location": "Alaska, USA",
+      "summary": "Captain Kenju Terauchi and crew of a Boeing 747 cargo flight reported a massive walnut-shaped object twice the size of an aircraft carrier shadowing their plane for 50 minutes. FAA radar confirmed an object in the vicinity.",
+      "witnesses": "Captain Kenju Terauchi and crew",
+      "classification": "Commercial aviation encounter",
+      "notability": "Well-documented pilot case with FAA radar confirmation"
+    },
+    {
+      "name": "Colares UFO Flap",
+      "date": "1977",
+      "location": "Colares Island, Brazil",
+      "summary": "Residents reported being attacked by beams of light from UFOs, leaving burn marks and puncture wounds. Brazilian Air Force launched Operation Saucer to investigate. Hundreds of photos and hours of film were allegedly collected.",
+      "witnesses": "Hundreds of residents, Brazilian Air Force personnel",
+      "classification": "UFO flap with alleged injuries",
+      "notability": "Official military investigation with alleged physical effects on witnesses"
+    },
+    {
+      "name": "Kecksburg Incident",
+      "date": "December 9, 1965",
+      "location": "Kecksburg, Pennsylvania, USA",
+      "summary": "Witnesses reported a fireball streaking across the sky and a bronze acorn-shaped object crashing in the woods. Military personnel allegedly arrived and removed the object on a flatbed truck. Officials claimed nothing was found.",
+      "witnesses": "Multiple local residents",
+      "classification": "Crash retrieval",
+      "notability": "Often called 'Pennsylvania's Roswell'"
+    },
+    {
+      "name": "Levelland Case",
+      "date": "November 2-3, 1957",
+      "location": "Levelland, Texas, USA",
+      "summary": "Over 15 separate witnesses reported a glowing egg-shaped object that caused their vehicle engines and headlights to fail when it approached. Systems returned to normal after the object departed.",
+      "witnesses": "15+ separate witnesses",
+      "classification": "Vehicle interference",
+      "notability": "Multiple independent witnesses reporting identical electromagnetic effects"
+    },
+    {
+      "name": "Shag Harbour Incident",
+      "date": "October 4, 1967",
+      "location": "Shag Harbour, Nova Scotia, Canada",
+      "summary": "Multiple witnesses including RCMP officers saw a large lit object crash into the harbour. Coast Guard and divers found only yellow foam on the surface. Canadian government documents confirm the search operation.",
+      "witnesses": "RCMP officers, Coast Guard, civilians",
+      "classification": "Crash into water",
+      "notability": "Only UFO case officially documented by Canadian government"
+    },
+    {
+      "name": "Pascagoula Abduction",
+      "date": "October 11, 1973",
+      "location": "Pascagoula, Mississippi, USA",
+      "summary": "Charles Hickson and Calvin Parker claimed they were taken aboard a craft by robotic beings while fishing. When left alone by investigators with hidden recorders, they continued discussing the terrifying experience consistently.",
+      "witnesses": "Charles Hickson, Calvin Parker",
+      "classification": "Alleged abduction",
+      "notability": "Secret recording showed witnesses maintained story when alone"
+    },
+    {
+      "name": "Cash-Landrum Incident",
+      "date": "December 29, 1980",
+      "location": "Huffman, Texas, USA",
+      "summary": "Betty Cash, Vickie Landrum, and Colby Landrum encountered a diamond-shaped object surrounded by military helicopters. All three developed symptoms consistent with radiation exposure. Betty Cash was hospitalized and later died of cancer.",
+      "witnesses": "Betty Cash, Vickie Landrum, Colby Landrum",
+      "classification": "Close encounter with physical effects",
+      "notability": "Medical documentation of radiation-like symptoms after UFO encounter"
+    },
+    {
+      "name": "USS Roosevelt Encounters",
+      "date": "2014-2015",
+      "location": "East Coast, USA",
+      "summary": "Navy pilots from USS Theodore Roosevelt reported near-daily encounters with unidentified objects over several months. Objects demonstrated advanced flight characteristics and appeared on multiple sensor systems. Led to new Navy UAP reporting guidelines.",
+      "witnesses": "Multiple Navy pilots including Lt. Ryan Graves",
+      "classification": "Multiple military encounters",
+      "notability": "Led to Congressional hearings and new UAP reporting procedures"
+    }
+  ]
+}

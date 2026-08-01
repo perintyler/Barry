@@ -1,0 +1,45 @@
+{
+  "name": "barry",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "description": "Barry - personal AI coding agent CLI",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "barry": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@barry/agent-runtime": "workspace:*",
+    "@barry/agent-scope": "workspace:*",
+    "@barry/db": "workspace:*",
+    "@barry/env": "workspace:*",
+    "@barry/file-tracker": "workspace:*",
+    "@barry/hook-change-tracker": "workspace:*",
+    "@barry/hook-session-tracker": "workspace:*",
+    "@barry/md-to-ansi": "workspace:*",
+    "@barry/packs": "workspace:*",
+    "@barry/skills": "workspace:*",
+    "@barry/secrets": "workspace:*",
+    "@barry/tools": "workspace:*",
+    "@barry/stop-robots": "workspace:*",
+    "@barry/vault": "workspace:*",
+    "@inquirer/core": "11.1.1",
+    "@inquirer/figures": "2.0.3",
+    "@inquirer/prompts": "8.2.0",
+    "commander": "12.0.0",
+    "dotenv": "16.0.0",
+    "ws": "8.21.0",
+    "yaml": "2.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "@types/ws": "8.18.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

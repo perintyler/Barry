@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.barry.mcp.__MCP_NAME__</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__NODE_PATH__</string>
+        <string>__MCP_DIST_PATH__</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- Without this, launchd runs the agent at background QoS — slow startup
+         on efficiency cores (see http-service template) -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <!-- A long-running server has no reason to exit on its own, so restart it
+         however it stops. The previous `SuccessfulExit: false` restarted only
+         on a NON-zero exit, which meant a clean SIGTERM shutdown (exit 0) left
+         the service down until someone noticed. -->
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+    <key>WorkingDirectory</key>
+    <string>__MCP_WORKING_DIR__</string>
+    <key>StandardOutPath</key>
+    <string>__MCP_WORKING_DIR__/logs/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__MCP_WORKING_DIR__/logs/stderr.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__NODE_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>BARRY_DATABASE_URL</key>
+        <string>__DATABASE_URL__</string>
+        <key>AXIOM_TOKEN</key>
+        <string>__AXIOM_TOKEN__</string>
+        <key>BARRY_ENV</key>
+        <string>prod</string>
+        <key>ENABLE_LOCAL_LOGS</key>
+        <string>true</string>
+        <key>ENABLE_AXIOM_LOGS</key>
+        <string>true</string>
+__MCP_ENV_VARS__
+    </dict>
+</dict>
+</plist>

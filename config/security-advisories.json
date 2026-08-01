@@ -1,0 +1,158 @@
+{
+  "allow": [
+    {
+      "id": "GHSA-w5hq-g745-h8pq",
+      "packages": ["uuid"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive consumers still span uuid 8, 9, and 11. Barry does not call the affected buffer-writing APIs; upgrade or replace those consumers before expiry."
+    },
+    {
+      "id": "GHSA-hcpx-6fm6-wx23",
+      "packages": ["axios"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of @slack/web-api; no upstream fix available yet."
+    },
+    {
+      "id": "GHSA-jqh4-m9w3-8hp9",
+      "packages": ["axios"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of @slack/web-api; no upstream fix available yet."
+    },
+    {
+      "id": "GHSA-mmx7-hfxf-jppx",
+      "packages": ["axios"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of @slack/web-api; no upstream fix available yet."
+    },
+    {
+      "id": "GHSA-mwf2-3pr3-8698",
+      "packages": ["axios"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of @slack/web-api; no upstream fix available yet."
+    },
+    {
+      "id": "GHSA-pmv8-rq9r-6j72",
+      "packages": ["axios"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of @slack/web-api; no upstream fix available yet."
+    },
+    {
+      "id": "GHSA-xj6q-8x83-jv6g",
+      "packages": ["axios"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of @slack/web-api; no upstream fix available yet."
+    },
+    {
+      "id": "GHSA-42h9-826w-cgv3",
+      "packages": ["axios"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of @slack/web-api; no upstream fix available yet."
+    },
+    {
+      "id": "GHSA-7q8q-rj6j-mhjq",
+      "packages": ["axios"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of @slack/web-api; no upstream fix available yet."
+    },
+    {
+      "id": "GHSA-f4gw-2p7v-4548",
+      "packages": ["axios"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of @slack/web-api; no upstream fix available yet."
+    },
+    {
+      "id": "GHSA-gcfj-64vw-6mp9",
+      "packages": ["axios"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of @slack/web-api; no upstream fix available yet."
+    },
+    {
+      "id": "GHSA-frvp-7c67-39w9",
+      "packages": ["@hono/node-server"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of Cloudflare workers toolchain; no fix available."
+    },
+    {
+      "id": "GHSA-3jxr-9vmj-r5cp",
+      "packages": ["brace-expansion"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of eslint/typescript-eslint; dev-only, no fix available."
+    },
+    {
+      "id": "GHSA-mh99-v99m-4gvg",
+      "packages": ["brace-expansion"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of eslint/minimatch; dev-only, no fix available."
+    },
+    {
+      "id": "GHSA-4c8g-83qw-93j6",
+      "packages": ["fast-uri"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep; no fix available at current version."
+    },
+    {
+      "id": "GHSA-v2hh-gcrm-f6hx",
+      "packages": ["fast-uri"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep; no fix available at current version."
+    },
+    {
+      "id": "GHSA-hvrm-45r6-mjfj",
+      "packages": ["hono"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of Cloudflare workers toolchain; no fix available."
+    },
+    {
+      "id": "GHSA-w62v-xxxg-mg59",
+      "packages": ["hono"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of Cloudflare workers toolchain; no fix available."
+    },
+    {
+      "id": "GHSA-xgm2-5f3f-mvvc",
+      "packages": ["hono"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of Cloudflare workers toolchain; no fix available."
+    },
+    {
+      "id": "GHSA-52cp-r559-cp3m",
+      "packages": ["js-yaml"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of eslint; dev-only, no fix available."
+    },
+    {
+      "id": "GHSA-v245-v573-v5vm",
+      "packages": ["linkify-it"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep; no fix available at current version."
+    },
+    {
+      "id": "GHSA-f88m-g3jw-g9cj",
+      "packages": ["sharp"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep; no fix available at 0.34.x."
+    }
+  ]
+}

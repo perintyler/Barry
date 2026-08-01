@@ -1,0 +1,116 @@
+#!/bin/bash
+# Nightly `barry db backup` — Postgres, file-tracker, and the vault.
+#
+# The vault is the reason this job exists: it holds every API token in a Docker
+# volume that nothing else backs up, and losing it means reissuing all of them.
+
+set -euo pipefail
+
+source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-r2.sh"
+load_env
+
+RETAIN_DAYS="${BARRY_BACKUP_RETAIN_DAYS:-14}"
+BACKUP_ROOT="$HOME/.barry/backups"
+
+if ! command -v tsx &>/dev/null; then
+    notify "Backup job: tsx not found, cannot run barry db backup" "" "alert" "error"
+    exit 1
+fi
+
+before=$(date +%s)
+output=$(tsx "$BARRY_DIR/cli/src/index.ts" db backup 2>&1) || {
+    notify "Backup FAILED: $(echo "$output" | tail -3)" "" "alert" "error"
+    exit 1
+}
+elapsed=$(( $(date +%s) - before ))
+
+# `barry db backup` reports the vault on its own line and degrades to SKIPPED
+# rather than failing the run, so a silent vault loss would otherwise look
+# like success. Escalate that case instead of letting it pass unnoticed.
+vault_line=$(echo "$output" | grep -E "^\s+vault\.db" || true)
+if echo "$vault_line" | grep -q "SKIPPED"; then
+    notify "Backup completed but VAULT WAS SKIPPED —${vault_line#*SKIPPED}" "" "alert" "warning"
+fi
+
+# Prune old backups. Vault snapshots are small; Postgres dumps dominate.
+deleted=0
+if [[ -d "$BACKUP_ROOT" ]]; then
+    while IFS= read -r old; do
+        rm -rf "$old"
+        deleted=$((deleted + 1))
+    done < <(find "$BACKUP_ROOT" -maxdepth 1 -type d -name 'database-*' -mtime "+$RETAIN_DAYS" 2>/dev/null)
+fi
+
+# Terraform state. It lives as a single gitignored file per infra dir with no
+# remote backend, so losing it means re-importing every resource by hand — and
+# state holds values the API will not return again.
+tf_saved=0
+tf_dir="$BACKUP_ROOT/terraform-$(date +%Y%m%d-%H%M%S)"
+while IFS= read -r state; do
+    rel="${state#"$BARRY_DIR"/}"
+    dest="$tf_dir/$rel"
+    mkdir -p "$(dirname "$dest")"
+    cp "$state" "$dest" && tf_saved=$((tf_saved + 1))
+done < <(find "$BARRY_DIR/infra" -name 'terraform.tfstate' -not -path '*/.terraform/*' 2>/dev/null)
+
+if [[ $tf_saved -eq 0 ]]; then
+    notify "Backup: no terraform state files found — expected at least infra/cloudflare" "" "alert" "warning"
+fi
+
+if [[ -d "$BACKUP_ROOT" ]]; then
+    while IFS= read -r old; do
+        rm -rf "$old"
+        deleted=$((deleted + 1))
+    done < <(find "$BACKUP_ROOT" -maxdepth 1 -type d -name 'terraform-*' -mtime "+$RETAIN_DAYS" 2>/dev/null)
+fi
+
+# Off-machine copy. A backup that only exists on the disk it protects against is
+# not a backup.
+#
+# The whole payload is encrypted into one age archive before upload. Only the
+# vault snapshot is encrypted at rest; the Postgres dump carries profile auth
+# tokens and inline env values, and tfstate can hold credentials the API will
+# not return again. Uploading those raw would hand plaintext secrets to a third
+# party, so nothing leaves unwrapped — and if it cannot be wrapped, nothing
+# leaves at all.
+r2_status="not configured"
+if r2_configured; then
+    if [[ -z "${BARRY_VAULT_AGE_RECIPIENT:-}" ]]; then
+        r2_status="SKIPPED — no age recipient"
+        notify "Backup: R2 configured but BARRY_VAULT_AGE_RECIPIENT unset; refusing to upload plaintext" "" "alert" "warning"
+    elif ! command -v age &>/dev/null; then
+        r2_status="SKIPPED — age not installed"
+        notify "Backup: R2 configured but age is missing; refusing to upload plaintext" "" "alert" "warning"
+    else
+        latest=$(find "$BACKUP_ROOT" -maxdepth 1 -type d -name 'database-*' 2>/dev/null | sort | tail -1)
+        if [[ -n "$latest" ]]; then
+            stamp=$(basename "$latest")
+            staging=$(mktemp -d)
+            archive="$staging/${stamp}.tar.age"
+            tar_args=("$stamp")
+            [[ $tf_saved -gt 0 ]] && tar_args+=("$(basename "$tf_dir")")
+
+            if tar czf - -C "$BACKUP_ROOT" "${tar_args[@]}" 2>/dev/null |
+                age -r "$BARRY_VAULT_AGE_RECIPIENT" -o "$archive" 2>/dev/null && [[ -s "$archive" ]]; then
+                if err=$(r2_sync_dir "$staging" "$stamp"); then
+                    r2_status="uploaded ${stamp}.tar.age ($(du -h "$archive" | cut -f1 | tr -d ' '))"
+                    pruned_remote=$(r2_prune "$RETAIN_DAYS" 2>/dev/null || echo 0)
+                    [[ "${pruned_remote:-0}" -gt 0 ]] && r2_status="$r2_status, pruned $pruned_remote remote"
+                else
+                    r2_status="UPLOAD FAILED"
+                    notify "Backup R2 upload FAILED: ${err:-unknown error}" "" "alert" "error"
+                fi
+            else
+                r2_status="ENCRYPT FAILED"
+                notify "Backup: failed to encrypt archive for R2 — nothing uploaded" "" "alert" "error"
+            fi
+            rm -rf "$staging"
+        fi
+    fi
+fi
+
+write_state "backup-last-run" "$(now_iso)"
+
+summary="${vault_line#"${vault_line%%[![:space:]]*}"}"
+echo "[backup] ok in ${elapsed}s — ${summary:-no vault line}; tfstate x$tf_saved; pruned $deleted old; r2: $r2_status"

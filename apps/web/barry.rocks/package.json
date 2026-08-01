@@ -1,0 +1,26 @@
+{
+  "name": "barry-rocks",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@barry-sdks/links": "workspace:*",
+    "@barry/google-auth": "workspace:*",
+    "@barry/spunk": "workspace:*",
+    "@barry/ui": "workspace:*",
+    "postal-mime": "^1.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "wrangler": "^4.113.0"
+  }
+}

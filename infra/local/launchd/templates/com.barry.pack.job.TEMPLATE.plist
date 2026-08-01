@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.barry.pack.job.__PACK_NAME__.__JOB_NAME__</string>
+    <key>ProgramArguments</key>
+    <array>
+__JOB_PROGRAM_ARGS__
+    </array>
+__JOB_SCHEDULE__
+    <!-- Without this, launchd runs the job at background QoS and anything that
+         shells into node/tsx compiles on efficiency cores (~54s vs ~2s). An
+         agent job pays it on every run — measured at 4min vs well under 1. -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>StandardOutPath</key>
+    <string>__HOME__/.barry/logs/pack-job-__PACK_NAME__-__JOB_NAME__.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.barry/logs/pack-job-__PACK_NAME__-__JOB_NAME__.log</string>
+__JOB_WORKING_DIR__
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__NODE_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+__JOB_ENV_VARS__
+    </dict>
+</dict>
+</plist>

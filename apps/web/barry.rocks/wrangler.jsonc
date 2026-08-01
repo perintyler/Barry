@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // account_id sourced from CLOUDFLARE_ACCOUNT_ID env var
+  "name": "barry-rocks",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-03-01",
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [
+    { "pattern": "barry.rocks", "custom_domain": true },
+    { "pattern": "www.barry.rocks", "custom_domain": true }
+  ],
+  // Worker URLs configured as secrets via: wrangler secret put ARTIFACTS_WORKER_URL / LINKS_WORKER_URL
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "5fcf660a79b54546a755d052e2548dcd"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "EMAIL_DB",
+      "database_name": "barry-rocks-email",
+      "database_id": "6a7ad816-39f0-495b-bcc2-c8365844bff6"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "EMAIL_BODIES",
+      "bucket_name": "barry-rocks-email-bodies"
+    }
+  ]
+  // Secrets (set once via: wrangler secret put <NAME>)
+  //   SELFPING_API_KEY       — from selfping.com dashboard
+  //   RESEND_API_KEY         — from resend.com dashboard
+  //   BARRY_NOTIFY_EMAIL     — comma-separated email(s) for auth and notifications
+}

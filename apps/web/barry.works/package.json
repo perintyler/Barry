@@ -1,0 +1,49 @@
+{
+  "name": "barry-works",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "description": "Web interface for Barry - view and interact with local Claude sessions",
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf dist public/assets ../tsconfig.server.tsbuildinfo",
+    "prebuild": "pnpm --filter @barry/ui build",
+    "build": "pnpm clean && vite build && tsc -p tsconfig.server.json && find dist/client -name '*.map' -delete",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start": "NODE_ENV=production tsx src/server/index.ts",
+    "start:prod": "NODE_ENV=production node --import tsx dist/index.js",
+    "dev": "tsx --watch src/server/index.ts",
+    "dev:svelte": "vite",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "generate:api": "openapi-typescript ../../../packages/contracts/generated/openapi.json -o src/lib/generated/api.d.ts"
+  },
+  "dependencies": {
+    "@barry-sdks/notes": "workspace:*",
+    "@barry/env": "workspace:*",
+    "@barry/logger": "workspace:*",
+    "@barry/sentry": "workspace:*",
+    "@barry/ui": "workspace:*",
+    "@sentry/svelte": "10.44.0",
+    "@sentry/vite-plugin": "3.5.0",
+    "@sveltejs/vite-plugin-svelte": "7.2.0",
+    "compression": "1.8.1",
+    "diff": "8.0.3",
+    "diff2html": "3.4.56",
+    "express": "4.22.1",
+    "http-proxy": "1.18.1",
+    "http-proxy-middleware": "3.0.7",
+    "openapi-fetch": "0.17.0",
+    "svelte": "5.55.7",
+    "vite": "8.0.16",
+    "yaml": "2.8.3"
+  },
+  "devDependencies": {
+    "@types/compression": "1.8.1",
+    "@types/express": "4.17.21",
+    "@types/http-proxy": "1.17.17",
+    "@types/node": "22.15.0",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}
