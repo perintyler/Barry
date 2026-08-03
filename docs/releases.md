@@ -5,7 +5,7 @@ Barry develops in a private repo and publishes to a public GitHub mirror. Every 
 
 ## Mental Model
 
-The staging directory is a full copy of the repo with local-only content removed. It gets a fresh `git init` and is force-pushed to the public mirror as a single commit. There is no shared git history between the private and public repos.
+The staging directory is a full copy of the repo with local-only content removed. It clones the existing public mirror (depth 1), replaces all content, and force-pushes a new commit on top. This preserves a parent commit so GitHub Actions `push` events fire correctly. On the first sync (empty remote), it falls back to `git init`.
 
 ## How It Works
 
@@ -15,7 +15,7 @@ The staging directory is a full copy of the repo with local-only content removed
 4. **Filter `tsconfig.projects.json`** — references to packages absent from the staged tree are dropped so `tsc -b` works on the published copy. Gitignored in-development apps are never copied.
 5. **Apply sync overlays** — each `sync.overlays` entry in `releases.yaml` is copied over its target.
 6. **Regenerate `pnpm-lock.yaml`** — `pnpm install --lockfile-only` so `pnpm install --frozen-lockfile` succeeds on the published copy. Existing resolutions are kept.
-9. **Force push** — `git init`, commit everything, force-push to `HEAD:master` on the target repo via SSH.
+9. **Force push** — shallow-clone the existing remote, replace all content, commit on top, and force-push `HEAD:master` via SSH. The parent commit lets GitHub compute a push diff so CI workflows trigger.
 
 The staging directory is cleaned up after a successful push.
 

@@ -471,21 +471,48 @@ export function releaseSyncCommand(target: string | undefined, opts: SyncOptions
     return;
   }
 
-  // 8. Init git, commit, force-push
-  // Use HEAD's commit message and author so the public repo reflects the release commit.
+  // 8. Commit on top of existing remote history and force-push.
+  //
+  // We clone the existing remote (depth 1) so the new commit has a parent.
+  // GitHub Actions only fires `push` events when it can compute a diff between
+  // the old and new HEAD — a root commit from `git init` produces no diff, so
+  // CI workflows never trigger. Cloning first gives GitHub a before/after pair.
+  //
+  // If the remote is empty (first sync), fall back to `git init`.
   const commitMsg = opts.message ?? (execSync("git log -1 --format=%s", { encoding: "utf-8" }).trim() || "release");
   const headAuthor = execSync("git log -1 --format=%an", { encoding: "utf-8" }).trim();
   const headEmail = execSync("git log -1 --format=%ae", { encoding: "utf-8" }).trim();
-  run("git", ["init"], { cwd: tmpDir, label: "git init" });
+
+  const targetRepo = getTargetRepo(syncTarget);
+  const remoteUrl = `git@github.com:${targetRepo}.git`;
+
+  // Try to clone the existing remote into a temporary git directory, then move
+  // the .git folder into the staging tree. This replaces all tracked content
+  // with the staged release while keeping the commit parent.
+  const gitTmp = `${tmpDir}__git`;
+  const cloneResult = run("git", [
+    "clone", "--depth=1", "--branch=master", "--single-branch",
+    remoteUrl, gitTmp,
+  ], { label: "Clone existing remote (depth 1)", stdio: "pipe", okCodes: [0, 128] });
+
+  if (cloneResult.ok) {
+    // Move the cloned .git into the staging tree
+    run("mv", [`${gitTmp}/.git`, `${tmpDir}/.git`], { label: "Attach remote history" });
+    rmSync(gitTmp, { recursive: true, force: true });
+  } else {
+    // Empty remote — fall back to git init
+    run("git", ["init"], { cwd: tmpDir, label: "git init (first sync)" });
+    rmSync(gitTmp, { recursive: true, force: true });
+  }
+
   run("git", ["config", "user.name", headAuthor], { cwd: tmpDir, label: "git config user.name" });
   run("git", ["config", "user.email", headEmail], { cwd: tmpDir, label: "git config user.email" });
   run("git", ["add", "-A"], { cwd: tmpDir, label: "git add" });
   run("git", ["commit", "-m", commitMsg], { cwd: tmpDir, label: "git commit" });
 
-  const targetRepo = getTargetRepo(syncTarget);
   const pushResult = run("git", [
     "push", "--force",
-    `git@github.com:${targetRepo}.git`,
+    remoteUrl,
     "HEAD:master",
   ], { cwd: tmpDir, label: `Force push to ${targetRepo}` });
 
