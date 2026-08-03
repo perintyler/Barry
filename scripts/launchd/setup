@@ -1,0 +1,1454 @@
+#!/bin/bash
+# Setup barry launchd services
+# Creates log directories, generates BARRY_SECRET if needed, and installs plist files
+# Supports both HTTP servers and MCP servers (Streamable HTTP)
+#
+# NOTE: Env vars from .env are baked into plist files at generation time.
+# After rotating secrets, re-run this script (or `barry promote`) to regenerate plists.
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BARRY_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+LAUNCHD_DIR="$BARRY_DIR/infra/local/launchd"
+TEMPLATE_DIR="$LAUNCHD_DIR/templates"
+CONFIG_DIR="$BARRY_DIR/config"
+LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
+USER_DOMAIN="gui/$(id -u)"
+
+svc_stop() {
+    local label="$1"
+    launchctl bootout "$USER_DOMAIN/$label" 2>/dev/null || true
+}
+
+svc_start() {
+    local plist="$1"
+    local label
+    label="$(basename "$plist" .plist)"
+    launchctl enable "$USER_DOMAIN/$label" 2>/dev/null || true
+    # bootstrap loads a new service; kickstart restarts one already loaded
+    if ! launchctl bootstrap "$USER_DOMAIN" "$plist" 2>/dev/null; then
+        launchctl kickstart -k "$USER_DOMAIN/$label" 2>/dev/null || true
+    fi
+}
+DEPLOYMENTS_FILE="$CONFIG_DIR/deployments.yaml"
+MCP_REGISTRY="$BARRY_DIR/builtins/mcp-servers.yaml"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+upsert_env_var() {
+    local key="$1"
+    local value="$2"
+    local escaped="$value"
+    escaped="${escaped//\\/\\\\}"
+    escaped="${escaped//\"/\\\"}"
+
+    if [[ -f "$ENV_FILE" ]] && grep -q "^${key}=" "$ENV_FILE"; then
+        local tmp
+        tmp="$(mktemp)"
+        awk -v k="$key" -v v="$escaped" '
+            BEGIN { replaced = 0 }
+            $0 ~ ("^" k "=") {
+                if (replaced == 0) {
+                    print k "=\"" v "\""
+                    replaced = 1
+                }
+                next
+            }
+            { print }
+            END {
+                if (replaced == 0) {
+                    print k "=\"" v "\""
+                }
+            }
+        ' "$ENV_FILE" > "$tmp"
+        mv "$tmp" "$ENV_FILE"
+    else
+        echo "${key}=\"${escaped}\"" >> "$ENV_FILE"
+    fi
+}
+
+read_deployment_value() {
+    local env_name="$1"
+    local key="$2"
+
+    if [[ ! -f "$DEPLOYMENTS_FILE" ]]; then
+        return 0
+    fi
+
+    awk -v env_name="$env_name" -v key="$key" '
+        $0 ~ "^  " env_name ":" { in_env=1; next }
+        in_env && $0 ~ "^  [a-zA-Z]" { in_env=0 }
+        in_env && $0 ~ "^    " key ":" {
+            sub("^    " key ": ", "", $0)
+            print $0
+            exit
+        }
+    ' "$DEPLOYMENTS_FILE"
+}
+
+read_env_value() {
+    local env_path="$1"
+    local key="$2"
+
+    [[ -f "$env_path" ]] || return 0
+
+    awk -F= -v key="$key" '
+        $1 == key {
+            value = substr($0, index($0, "=") + 1)
+            gsub(/^"/, "", value)
+            gsub(/"$/, "", value)
+            print value
+            exit
+        }
+    ' "$env_path"
+}
+
+echo "Barry launchd setup"
+echo "==================="
+echo ""
+
+# Detect python3 path
+PYTHON_PATH=$(which python3 2>/dev/null || true)
+PYTHON_BIN_DIR=""
+if [[ -n "$PYTHON_PATH" ]]; then
+    PYTHON_BIN_DIR=$(dirname "$PYTHON_PATH")
+fi
+
+# Detect pnpm path
+PNPM_PATH=$(which pnpm 2>/dev/null || true)
+if [[ -z "$PNPM_PATH" ]]; then
+    echo -e "${RED}Error: pnpm not found in PATH${NC}"
+    echo "Install pnpm: npm install -g pnpm"
+    exit 1
+fi
+
+# Resolve node via .node-version
+source "$BARRY_DIR/scripts/resolve-node.sh"
+
+echo "pnpm path: $PNPM_PATH"
+echo "Node bin dir: $NODE_BIN_DIR"
+echo "Barry dir: $BARRY_DIR"
+echo ""
+
+DEPLOY_ENV="${BARRY_ENV:-prod}"
+if [[ "$DEPLOY_ENV" != "prod" ]]; then
+    echo -e "${YELLOW}Warning: launchd setup only targets prod; ignoring BARRY_ENV='$DEPLOY_ENV'${NC}"
+    DEPLOY_ENV="prod"
+fi
+SERVICE_START_SCRIPT="start:prod"
+ENV_FILE="$BARRY_DIR/.env"
+
+DEV_PATH="$(read_deployment_value "dev" "path")"
+DEV_PATH="${DEV_PATH/#\~/$HOME}"
+PROD_ENV_FILE="$ENV_FILE"
+
+# Load environment file
+if [[ -f "$ENV_FILE" ]]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
+    echo -e "${GREEN}Loaded environment from ${ENV_FILE##$BARRY_DIR/}${NC}"
+fi
+
+# Generate BARRY_SECRET if not set
+if [[ -z "$BARRY_SECRET" ]]; then
+    BARRY_SECRET=$(node -e "const crypto = require('crypto'); console.log('barry_' + crypto.randomBytes(24).toString('base64url'))")
+    echo "BARRY_SECRET=$BARRY_SECRET" >> "$ENV_FILE"
+    echo -e "${GREEN}Generated new BARRY_SECRET and saved to ${ENV_FILE##$BARRY_DIR/}${NC}"
+fi
+
+# BARRY_SESSION_SECRET and BARRY_WEB_PASSWORD used to be generated/prompted here.
+# Both were orphaned when Cloudflare Access replaced Google OAuth (e5fc9890): no
+# code reads either, so they only added a password prompt and a live-looking
+# secret in the web/api plists that gated nothing. Login is handled at the edge —
+# see docs/runtimes.md "Who can log into barry.works".
+
+echo ""
+
+# ============================================================================
+# HTTP SERVERS (driven by config/services.yaml)
+# ============================================================================
+
+HTTP_REGISTRY="$CONFIG_DIR/services.yaml"
+HTTP_TEMPLATE="$TEMPLATE_DIR/com.barry.http-service.TEMPLATE.plist"
+
+# Track which services actually need reloading
+NEEDS_LOAD_HTTP=""
+NEEDS_LOAD_CADDY=""
+NEEDS_LOAD_MCP=""
+
+echo -e "${BLUE}Setting up HTTP servers...${NC}"
+
+if [[ ! -f "$HTTP_REGISTRY" ]]; then
+    echo -e "${RED}Error: Services registry not found at $HTTP_REGISTRY${NC}"
+    exit 1
+fi
+
+# Parse services from services.yaml
+http_servers=$(awk '
+    /^services:/{in_services=1; next}
+    /^[a-zA-Z]/{in_services=0}
+    in_services && /^  [a-zA-Z0-9_-]+:/{gsub(":","",$1); print $1}
+' "$HTTP_REGISTRY")
+
+echo "Installing HTTP server plist files..."
+
+# These services were consolidated into the API and CLI. Remove generated
+# launchd state so upgrading an existing installation cannot keep them alive.
+for retired_label in com.barry.admin com.barry.git-server com.barry.slack-app; do
+    retired_plist="$LAUNCH_AGENTS_DIR/$retired_label.plist"
+    if [[ -f "$retired_plist" ]] || launchctl list "$retired_label" &>/dev/null; then
+        svc_stop "$retired_label"
+        rm -f "$retired_plist"
+        echo -e "  ${YELLOW}⚠${NC} $retired_label: removed retired service state"
+    fi
+done
+
+# Map service names to their env var for port
+get_port_var() {
+    case "$1" in
+        web) echo "BARRY_WEB_PORT" ;;
+        api) echo "BARRY_API_PORT" ;;
+        whisperflow) echo "BARRY_WHISPERFLOW_PORT" ;;
+        bdiff-review) echo "BARRY_BDIFF_REVIEW_PORT" ;;
+        slack) echo "BARRY_SLACK_PORT" ;;
+        github-app) echo "BARRY_GITHUB_APP_PORT" ;;
+        *) echo "" ;;
+    esac
+}
+
+for server in $http_servers; do
+    # Check enabled flag (default true for backwards compat)
+    enabled=$(grep -A5 "^  $server:" "$HTTP_REGISTRY" | grep "enabled:" | head -1 | sed 's/.*enabled: *//; s/ *#.*//')
+    service_path=$(grep -A5 "^  $server:" "$HTTP_REGISTRY" | grep "path:" | head -1 | sed 's/.*path: *//')
+
+    # Get port from env var
+    port_var="$(get_port_var "$server")"
+    service_port="${!port_var:-}"
+    if [[ -z "$service_port" ]]; then
+        echo -e "  ${YELLOW}⚠${NC} com.barry.$server: no port configured (set $port_var in .env), skipping"
+        continue
+    fi
+
+    PLIST_TARGET="$LAUNCH_AGENTS_DIR/com.barry.$server.plist"
+
+    # Skip disabled services and clean up stale plists
+    if [[ "$enabled" == "false" ]]; then
+        if [[ -f "$PLIST_TARGET" ]]; then
+            svc_stop "com.barry.$server"
+            rm -f "$PLIST_TARGET"
+            echo -e "  ${YELLOW}⚠${NC} com.barry.$server: disabled, removed stale plist"
+        else
+            echo -e "  ${YELLOW}⚠${NC} com.barry.$server: disabled, skipping"
+        fi
+        continue
+    fi
+
+    if [[ ! -f "$HTTP_TEMPLATE" || -z "$service_path" || -z "$service_port" ]]; then
+        echo -e "  ${YELLOW}⚠${NC} com.barry.$server: missing template or path/port, skipping"
+        continue
+    fi
+
+    # Create log directory
+    mkdir -p "$BARRY_DIR/$service_path/logs"
+
+    # Build env vars XML from the env: list in services.yaml
+    # Supports "VAR" (resolved from environment) and "VAR=value" (hardcoded)
+    env_xml=""
+    env_section=$(awk -v srv="$server" '
+        $0 ~ ("^  " srv ":") {found=1; next}
+        found && /^  [a-zA-Z]/ {exit}
+        found && /^    env:/ {in_env=1; next}
+        found && in_env {
+            if (/^      - /) {sub(/^      - /,""); print}
+            else if (!/^[[:space:]]*$/) {in_env=0}
+        }
+    ' "$HTTP_REGISTRY")
+    # Track keys already in template to avoid duplicate plist keys
+    seen_keys="|BARRY_SECRET|NODE_ENV|BARRY_ENV|PORT|ENABLE_LOCAL_LOGS|ENABLE_AXIOM_LOGS|PATH|"
+    for entry in $env_section; do
+        if [[ "$entry" == *"="* ]]; then
+            key="${entry%%=*}"
+            val="${entry#*=}"
+            # Expand $HOME in values
+            val="${val/\$HOME/$HOME}"
+        else
+            key="$entry"
+            val="${!key}"
+        fi
+        if [[ -n "$val" && "$seen_keys" != *"|${key}|"* ]]; then
+            # XML-escape — unescaped <>& in values produces an invalid plist
+            # that launchd silently refuses to load
+            val="${val//&/&amp;}"; val="${val//</&lt;}"; val="${val//>/&gt;}"
+            env_xml+="        <key>$key</key>\n        <string>$val</string>\n"
+            seen_keys+="|${key}|"
+        fi
+    done
+
+    # Generate plist from template
+    PLIST_GENERATED=$(sed -e "s|__SERVICE_NAME__|$server|g" \
+        -e "s|__SERVICE_PATH__|$service_path|g" \
+        -e "s|__SERVICE_PORT__|$service_port|g" \
+        -e "s|__PNPM_PATH__|$PNPM_PATH|g" \
+        -e "s|__SERVICE_START_SCRIPT__|$SERVICE_START_SCRIPT|g" \
+        -e "s|__NODE_PATH__|$NODE_PATH|g" \
+        -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
+        -e "s|__BARRY_DIR__|$BARRY_DIR|g" \
+        -e "s|__BARRY_SECRET__|$BARRY_SECRET|g" \
+        -e "s|__BARRY_ENV__|$DEPLOY_ENV|g" \
+        "$HTTP_TEMPLATE")
+
+    # Inject env vars (replace __SERVICE_ENV_VARS__ placeholder)
+    PLIST_GENERATED=$(echo "$PLIST_GENERATED" | awk -v env_vars="$env_xml" '{
+        gsub(/__SERVICE_ENV_VARS__/, env_vars);
+        gsub(/\\n/, "\n");
+        print;
+    }')
+
+    # Only install and reload if the plist actually changed
+    if [[ -f "$PLIST_TARGET" ]] && echo "$PLIST_GENERATED" | diff -q - "$PLIST_TARGET" > /dev/null 2>&1; then
+        if ! launchctl list "com.barry.$server" &>/dev/null; then
+            NEEDS_LOAD_HTTP="$NEEDS_LOAD_HTTP $server"
+            echo -e "  ${GREEN}✓${NC} com.barry.$server (unchanged, reloading)"
+        else
+            echo -e "  ${GREEN}✓${NC} com.barry.$server (unchanged)"
+        fi
+    else
+        svc_stop "com.barry.$server"
+        echo "$PLIST_GENERATED" > "$PLIST_TARGET"
+        NEEDS_LOAD_HTTP="$NEEDS_LOAD_HTTP $server"
+        echo -e "  ${GREEN}✓${NC} com.barry.$server (updated)"
+    fi
+done
+
+# Ensure caddy binary exists (gitignored — copy from dev checkout if missing)
+CADDY_BIN="$BARRY_DIR/bin/caddy"
+if [[ ! -x "$CADDY_BIN" ]]; then
+    DEV_CADDY="$DEV_PATH/bin/caddy"
+    if [[ -n "$DEV_PATH" && -x "$DEV_CADDY" && "$BARRY_DIR" != "$DEV_PATH" ]]; then
+        mkdir -p "$BARRY_DIR/bin"
+        cp "$DEV_CADDY" "$CADDY_BIN"
+        echo -e "  ${GREEN}✓${NC} Copied caddy binary from dev checkout"
+    else
+        echo -e "  ${YELLOW}⚠${NC} caddy binary missing at $CADDY_BIN"
+        echo -e "    Run ${BLUE}./scripts/setup-caddy${NC} to build it"
+    fi
+fi
+
+# Install Caddy plist (hand-written template — not a pnpm service)
+CADDY_TEMPLATE="$LAUNCHD_DIR/com.barry.caddy.plist"
+CADDY_TARGET="$LAUNCH_AGENTS_DIR/com.barry.caddy.plist"
+
+if [[ -f "$CADDY_TEMPLATE" && -x "$CADDY_BIN" ]]; then
+    mkdir -p "$HOME/.barry/logs"
+
+    PLIST_GENERATED=$(sed -e "s|__BARRY_DIR__|$BARRY_DIR|g" \
+        -e "s|__HOME__|$HOME|g" \
+        -e "s|__CLOUDFLARE_API_TOKEN__|$CLOUDFLARE_API_TOKEN|g" \
+        "$CADDY_TEMPLATE")
+
+    if [[ -f "$CADDY_TARGET" ]] && echo "$PLIST_GENERATED" | diff -q - "$CADDY_TARGET" > /dev/null 2>&1; then
+        # Ensure loaded even if plist unchanged
+        if ! launchctl list com.barry.caddy &>/dev/null; then
+            NEEDS_LOAD_CADDY=true
+            echo -e "  ${GREEN}✓${NC} com.barry.caddy (unchanged, reloading)"
+        else
+            echo -e "  ${GREEN}✓${NC} com.barry.caddy (unchanged)"
+        fi
+    else
+        svc_stop "com.barry.caddy"
+        echo "$PLIST_GENERATED" > "$CADDY_TARGET"
+        NEEDS_LOAD_CADDY=true
+        echo -e "  ${GREEN}✓${NC} com.barry.caddy (updated)"
+    fi
+fi
+
+# Install cloudflared plist (prod edge tunnel)
+CLOUDFLARED_TEMPLATE="$LAUNCHD_DIR/com.barry.cloudflared.plist"
+CLOUDFLARED_TARGET="$LAUNCH_AGENTS_DIR/com.barry.cloudflared.plist"
+CLOUDFLARED_PATH="$(which cloudflared 2>/dev/null || true)"
+CLOUDFLARE_TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN:-}"
+if [[ -z "$CLOUDFLARE_TUNNEL_TOKEN" && -f "$ENV_FILE" ]]; then
+    CLOUDFLARE_TUNNEL_TOKEN="$(read_env_value "$ENV_FILE" "CLOUDFLARE_TUNNEL_TOKEN")"
+fi
+
+if [[ -f "$CLOUDFLARED_TEMPLATE" && -n "$CLOUDFLARED_PATH" && -n "$CLOUDFLARE_TUNNEL_TOKEN" ]]; then
+    mkdir -p "$HOME/.barry/logs"
+
+    PLIST_GENERATED=$(sed -e "s|__HOME__|$HOME|g" \
+        -e "s|__CLOUDFLARED_PATH__|$CLOUDFLARED_PATH|g" \
+        -e "s|__CLOUDFLARE_TUNNEL_TOKEN__|$CLOUDFLARE_TUNNEL_TOKEN|g" \
+        "$CLOUDFLARED_TEMPLATE")
+
+    if [[ -f "$CLOUDFLARED_TARGET" ]] && echo "$PLIST_GENERATED" | diff -q - "$CLOUDFLARED_TARGET" > /dev/null 2>&1; then
+        if ! launchctl list com.barry.cloudflared &>/dev/null; then
+            NEEDS_LOAD_CADDY=true
+            echo -e "  ${GREEN}✓${NC} com.barry.cloudflared (unchanged, reloading)"
+        else
+            echo -e "  ${GREEN}✓${NC} com.barry.cloudflared (unchanged)"
+        fi
+    else
+        svc_stop "com.barry.cloudflared"
+        echo "$PLIST_GENERATED" > "$CLOUDFLARED_TARGET"
+        NEEDS_LOAD_CADDY=true
+        echo -e "  ${GREEN}✓${NC} com.barry.cloudflared (updated)"
+    fi
+fi
+
+# Migrate old-style maintenance plists to the jobs framework (com.barry.job.*)
+# These were previously managed via ad-hoc plist templates; now driven by config/jobs.yaml.
+for retired_job_label in com.barry.log-maintenance com.barry.artifact-cleanup; do
+    retired_plist="$LAUNCH_AGENTS_DIR/$retired_job_label.plist"
+    if [[ -f "$retired_plist" ]] || launchctl list "$retired_job_label" &>/dev/null; then
+        svc_stop "$retired_job_label"
+        rm -f "$retired_plist"
+        echo -e "  ${YELLOW}⚠${NC} $retired_job_label: migrated to jobs framework, removed old plist"
+    fi
+done
+
+# ============================================================================
+# JOBS (PERIODIC TASKS — driven by config/jobs.yaml)
+# ============================================================================
+
+JOBS_REGISTRY="$CONFIG_DIR/jobs.yaml"
+JOB_TEMPLATE="$TEMPLATE_DIR/com.barry.job.TEMPLATE.plist"
+
+if [[ -f "$JOBS_REGISTRY" && -f "$JOB_TEMPLATE" ]]; then
+    echo ""
+    echo -e "${BLUE}Setting up periodic jobs...${NC}"
+
+    mkdir -p "$HOME/.barry/logs"
+    mkdir -p "$HOME/.barry/state/jobs"
+
+    # Parse job names from jobs.yaml
+    job_names=$(awk '
+        /^jobs:/{in_jobs=1; next}
+        /^[a-zA-Z]/{in_jobs=0}
+        in_jobs && /^  [a-zA-Z0-9_-]+:/{gsub(":","",$1); print $1}
+    ' "$JOBS_REGISTRY")
+
+    for job_name in $job_names; do
+        # Check enabled flag
+        enabled=$(grep -A5 "^  $job_name:" "$JOBS_REGISTRY" | grep "enabled:" | head -1 | sed 's/.*enabled: *//; s/ *#.*//')
+        JOB_PLIST_TARGET="$LAUNCH_AGENTS_DIR/com.barry.job.$job_name.plist"
+
+        if [[ "$enabled" == "false" ]]; then
+            if [[ -f "$JOB_PLIST_TARGET" ]]; then
+                svc_stop "com.barry.job.$job_name"
+                rm -f "$JOB_PLIST_TARGET"
+                echo -e "  ${YELLOW}⚠${NC} com.barry.job.$job_name: disabled, removed"
+            else
+                echo -e "  ${YELLOW}⚠${NC} com.barry.job.$job_name: disabled, skipping"
+            fi
+            continue
+        fi
+
+        # Check script exists
+        JOB_SCRIPT="$BARRY_DIR/scripts/jobs/$job_name"
+        if [[ ! -f "$JOB_SCRIPT" ]]; then
+            echo -e "  ${YELLOW}⚠${NC} com.barry.job.$job_name: script not found at scripts/jobs/$job_name, skipping"
+            continue
+        fi
+
+        # Determine schedule type: interval or calendar
+        interval=$(grep -A8 "^  $job_name:" "$JOBS_REGISTRY" | grep "interval:" | head -1 | sed 's/.*interval: *//; s/ *#.*//')
+        sched_hour=$(awk -v job="$job_name" '
+            $0 ~ ("^  " job ":") {found=1; next}
+            found && /^  [a-zA-Z]/ && !/^    / {exit}
+            found && /schedule:/ {in_sched=1; next}
+            found && in_sched && /hour:/ {sub(/.*hour: */, ""); sub(/ *#.*/, ""); print; exit}
+        ' "$JOBS_REGISTRY")
+        sched_min=$(awk -v job="$job_name" '
+            $0 ~ ("^  " job ":") {found=1; next}
+            found && /^  [a-zA-Z]/ && !/^    / {exit}
+            found && /schedule:/ {in_sched=1; next}
+            found && in_sched && /minute:/ {sub(/.*minute: */, ""); sub(/ *#.*/, ""); print; exit}
+        ' "$JOBS_REGISTRY")
+
+        schedule_xml=""
+        if [[ -n "$interval" ]]; then
+            schedule_xml="    <key>StartInterval</key>\n    <integer>$interval</integer>"
+        elif [[ -n "$sched_hour" || -n "$sched_min" ]]; then
+            schedule_xml="    <key>StartCalendarInterval</key>\n    <dict>"
+            [[ -n "$sched_hour" ]] && schedule_xml+="\n        <key>Hour</key>\n        <integer>$sched_hour</integer>"
+            [[ -n "$sched_min" ]] && schedule_xml+="\n        <key>Minute</key>\n        <integer>$sched_min</integer>"
+            schedule_xml+="\n    </dict>"
+        else
+            echo -e "  ${YELLOW}⚠${NC} com.barry.job.$job_name: no interval or schedule, skipping"
+            continue
+        fi
+
+        # Build env vars XML from the env: list
+        env_xml=""
+        env_section=$(awk -v job="$job_name" '
+            $0 ~ ("^  " job ":") {found=1; next}
+            found && /^  [a-zA-Z]/ && !/^    / {exit}
+            found && /^    env:/ {in_env=1; next}
+            found && in_env {
+                if ($0 ~ /^    [a-zA-Z]/ || $0 ~ /^  [a-zA-Z]/) exit
+                gsub(/^      - /, ""); gsub(/^      -/, "")
+                gsub(/^ +/, ""); gsub(/ +$/, "")
+                # Skip YAML comments — otherwise the comment text reaches the
+                # ${!env_key} lookup below and bash aborts on an invalid
+                # variable name, taking the rest of setup with it.
+                if ($0 ~ /^#/) next
+                if (length($0) > 0) print
+            }
+        ' "$JOBS_REGISTRY")
+
+        while IFS= read -r env_entry; do
+            [[ -z "$env_entry" ]] && continue
+            if [[ "$env_entry" == *"="* ]]; then
+                # Hardcoded value: KEY=value
+                env_key="${env_entry%%=*}"
+                env_val="${env_entry#*=}"
+                env_val="${env_val/#\$HOME/$HOME}"
+            else
+                # Resolve from environment
+                env_key="$env_entry"
+                env_val="${!env_key:-}"
+            fi
+            if [[ -n "$env_val" ]]; then
+                env_xml+="        <key>$env_key</key>\n        <string>$env_val</string>\n"
+            fi
+        done <<< "$env_section"
+
+        # Generate plist: simple placeholders via sed, multi-line via bash substitution
+        PLIST_GENERATED=$(sed \
+            -e "s|__JOB_NAME__|$job_name|g" \
+            -e "s|__BARRY_DIR__|$BARRY_DIR|g" \
+            -e "s|__HOME__|$HOME|g" \
+            -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
+            "$JOB_TEMPLATE")
+
+        # Multi-line replacements (sed can't handle newlines in substitution)
+        rendered_schedule=$(echo -e "$schedule_xml")
+        rendered_env=$(echo -e "$env_xml")
+        PLIST_GENERATED="${PLIST_GENERATED/__JOB_SCHEDULE__/$rendered_schedule}"
+        PLIST_GENERATED="${PLIST_GENERATED/__JOB_ENV_VARS__/$rendered_env}"
+
+        # Install: diff and reload
+        if [[ -f "$JOB_PLIST_TARGET" ]] && echo "$PLIST_GENERATED" | diff -q - "$JOB_PLIST_TARGET" > /dev/null 2>&1; then
+            if ! launchctl list "com.barry.job.$job_name" &>/dev/null; then
+                echo "$PLIST_GENERATED" > "$JOB_PLIST_TARGET"
+                svc_start "$JOB_PLIST_TARGET"
+                echo -e "  ${GREEN}✓${NC} com.barry.job.$job_name (unchanged, reloading)"
+            else
+                echo -e "  ${GREEN}✓${NC} com.barry.job.$job_name (unchanged)"
+            fi
+        else
+            svc_stop "com.barry.job.$job_name"
+            echo "$PLIST_GENERATED" > "$JOB_PLIST_TARGET"
+            svc_start "$JOB_PLIST_TARGET"
+            echo -e "  ${GREEN}✓${NC} com.barry.job.$job_name ($([ -f "$JOB_PLIST_TARGET" ] && echo 'updated' || echo 'installed'))"
+        fi
+    done
+fi
+
+
+# launchd resolves ProgramArguments[0] against ITS OWN PATH
+# (/usr/bin:/bin:/usr/sbin:/sbin), not the PATH in EnvironmentVariables — so a
+# bare command like `tsx` or `barry` fails to spawn with exit 78 (EX_CONFIG),
+# an empty log and no other signal. Resolve it here instead.
+resolve_program() {
+    local cmd="$1"
+    if [[ "$cmd" == /* ]]; then
+        printf '%s' "$cmd"
+        return
+    fi
+    local found
+    found=$(PATH="$NODE_BIN_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" command -v "$cmd" 2>/dev/null || true)
+    if [[ -n "$found" ]]; then
+        printf '%s' "$found"
+    else
+        printf '%s' "$cmd"
+    fi
+}
+
+# ============================================================================
+# BLOCK SERVICES & JOBS (driven by barry-block.yaml in registered blocks)
+# ============================================================================
+
+BLOCK_SVC_TEMPLATE="$TEMPLATE_DIR/com.barry.block.TEMPLATE.plist"
+BLOCK_JOB_TEMPLATE="$TEMPLATE_DIR/com.barry.block.job.TEMPLATE.plist"
+
+# Emit JSON for all block services/jobs via the blocks loader (avoids re-parsing YAML in awk).
+# Output: one JSON line per service/job:
+#   {"type":"service","block":"name","name":"svc","command":"cmd","args":["a"],"env":["E"],"workingDirectory":"/p","runAtLoad":true,"keepAlive":true}
+#   {"type":"job","block":"name","name":"j","command":"cmd","args":[],"env":[],"workingDirectory":"/p","interval":600}
+#
+# The emitter lives under cli/ and runs under tsx: @barry/blocks is TypeScript
+# source that plain node cannot import, and pnpm links a workspace package only
+# into the members that depend on it — resolution follows the script's own
+# location, so it has to sit inside a member that declares @barry/blocks.
+#
+# Errors are surfaced rather than swallowed: a failure here means every block
+# service and job silently never installs, which looks exactly like "no block
+# declares any". That is what shipped originally, via an import of a package
+# name that does not exist.
+BLOCK_ITEMS_SCRIPT="$BARRY_DIR/cli/scripts/block-items.mts"
+
+block_items=""
+# Whether the emitter ran successfully. Distinct from "$block_items is empty":
+# an empty list is legitimately "no block declares any", while a failure means we
+# know nothing — and the prune below must not act on the second case.
+block_items_ok="false"
+if [[ -f "$BLOCK_SVC_TEMPLATE" && -f "$BLOCK_JOB_TEMPLATE" && -f "$BLOCK_ITEMS_SCRIPT" ]]; then
+    block_items_err=$(mktemp)
+    if block_items=$(cd "$BARRY_DIR/cli" && pnpm exec tsx "$BLOCK_ITEMS_SCRIPT" 2>"$block_items_err"); then
+        block_items_ok="true"
+        # The emitter also reports items it refused (e.g. a path escaping the
+        # block). Those are warnings, not failures, so print them on success too
+        # — dropping them here would be the same silent-skip bug as before.
+        if [[ -s "$block_items_err" ]]; then
+            while IFS= read -r warn_line; do
+                [[ -z "$warn_line" ]] && continue
+                echo -e "  ${YELLOW}⚠${NC} $warn_line"
+            done < "$block_items_err"
+        fi
+    else
+        echo -e "  ${YELLOW}⚠${NC} could not read block services/jobs:"
+        sed 's/^/      /' "$block_items_err" | head -5
+    fi
+    rm -f "$block_items_err"
+fi
+
+block_desired_labels=""
+
+if [[ -n "$block_items" ]]; then
+    echo ""
+    echo -e "${BLUE}Setting up block services & jobs...${NC}"
+    mkdir -p "$HOME/.barry/logs"
+
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        item_type=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).type)")
+        block_name=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).block)")
+        item_name=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).name)")
+        item_cmd=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).command)")
+        item_args=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(d.args||[]))")
+        item_env=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(d.env||[]))")
+        item_workdir=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).workingDirectory||'')")
+
+        if [[ "$item_type" == "service" ]]; then
+            label="com.barry.block.$block_name.$item_name"
+            block_desired_labels+=" $label"
+            PLIST_TARGET="$LAUNCH_AGENTS_DIR/$label.plist"
+
+            run_at_load=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.runAtLoad||false))")
+            keep_alive=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.keepAlive||false))")
+
+            # Build ProgramArguments XML
+            prog_args_xml="        <string>$(resolve_program "$item_cmd")</string>"
+            # Read line-by-line rather than `for arg in $(...)`: unquoted word
+            # splitting broke every argument containing a space, which is fatal
+            # for an agent prompt.
+            while IFS= read -r arg; do
+                [[ -z "$arg" ]] && continue
+                prog_args_xml+="\n        <string>$arg</string>"
+            done < <(echo "$item_args" | node -e "JSON.parse(require('fs').readFileSync(0,'utf8')).forEach(a=>process.stdout.write(a+'\n'))")
+
+            # RunAtLoad
+            run_at_load_xml=""
+            if [[ "$run_at_load" == "true" ]]; then
+                run_at_load_xml="    <key>RunAtLoad</key>\n    <true/>"
+            fi
+
+            # KeepAlive
+            keep_alive_xml=""
+            if [[ "$keep_alive" == "true" ]]; then
+                keep_alive_xml="    <key>KeepAlive</key>\n    <dict>\n        <key>SuccessfulExit</key>\n        <false/>\n    </dict>"
+            fi
+
+            # WorkingDirectory
+            workdir_xml=""
+            if [[ -n "$item_workdir" ]]; then
+                resolved_workdir="${item_workdir/#\~/$HOME}"
+                workdir_xml="    <key>WorkingDirectory</key>\n    <string>$resolved_workdir</string>"
+            fi
+
+            # Env vars
+            env_xml=""
+            for env_entry in $(echo "$item_env" | node -e "JSON.parse(require('fs').readFileSync(0,'utf8')).forEach(e=>process.stdout.write(e+'\n'))"); do
+                [[ -z "$env_entry" ]] && continue
+                if [[ "$env_entry" == *"="* ]]; then
+                    env_key="${env_entry%%=*}"
+                    env_val="${env_entry#*=}"
+                    env_val="${env_val/#\$HOME/$HOME}"
+                else
+                    env_key="$env_entry"
+                    env_val="${!env_key:-}"
+                fi
+                if [[ -n "$env_val" ]]; then
+                    env_xml+="        <key>$env_key</key>\n        <string>$env_val</string>\n"
+                fi
+            done
+
+            # Generate plist
+            PLIST_GENERATED=$(sed \
+                -e "s|__BLOCK_NAME__|$block_name|g" \
+                -e "s|__SERVICE_NAME__|$item_name|g" \
+                -e "s|__HOME__|$HOME|g" \
+                -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
+                "$BLOCK_SVC_TEMPLATE")
+
+            rendered_prog=$(echo -e "$prog_args_xml")
+            rendered_run=$(echo -e "$run_at_load_xml")
+            rendered_keep=$(echo -e "$keep_alive_xml")
+            rendered_workdir=$(echo -e "$workdir_xml")
+            rendered_env=$(echo -e "$env_xml")
+            PLIST_GENERATED="${PLIST_GENERATED/__SERVICE_PROGRAM_ARGS__/$rendered_prog}"
+            PLIST_GENERATED="${PLIST_GENERATED/__SERVICE_RUN_AT_LOAD__/$rendered_run}"
+            PLIST_GENERATED="${PLIST_GENERATED/__SERVICE_KEEP_ALIVE__/$rendered_keep}"
+            PLIST_GENERATED="${PLIST_GENERATED/__SERVICE_WORKING_DIR__/$rendered_workdir}"
+            PLIST_GENERATED="${PLIST_GENERATED/__SERVICE_ENV_VARS__/$rendered_env}"
+
+            # Install: diff and reload
+            if [[ -f "$PLIST_TARGET" ]] && echo "$PLIST_GENERATED" | diff -q - "$PLIST_TARGET" > /dev/null 2>&1; then
+                if ! launchctl list "$label" &>/dev/null; then
+                    echo "$PLIST_GENERATED" > "$PLIST_TARGET"
+                    svc_start "$PLIST_TARGET"
+                    echo -e "  ${GREEN}✓${NC} $label (unchanged, reloading)"
+                else
+                    echo -e "  ${GREEN}✓${NC} $label (unchanged)"
+                fi
+            else
+                svc_stop "$label"
+                echo "$PLIST_GENERATED" > "$PLIST_TARGET"
+                svc_start "$PLIST_TARGET"
+                echo -e "  ${GREEN}✓${NC} $label ($([ -f "$PLIST_TARGET" ] && echo 'updated' || echo 'installed'))"
+            fi
+
+        elif [[ "$item_type" == "job" ]]; then
+            label="com.barry.block.job.$block_name.$item_name"
+            block_desired_labels+=" $label"
+            PLIST_TARGET="$LAUNCH_AGENTS_DIR/$label.plist"
+
+            item_interval=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.interval||''))")
+            sched_hour=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.schedule?.hour ?? ''))")
+            sched_min=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.schedule?.minute ?? ''))")
+            sched_wday=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.schedule?.weekday ?? ''))")
+
+            # Build ProgramArguments XML
+            prog_args_xml="        <string>$(resolve_program "$item_cmd")</string>"
+            # Read line-by-line rather than `for arg in $(...)`: unquoted word
+            # splitting broke every argument containing a space, which is fatal
+            # for an agent prompt.
+            while IFS= read -r arg; do
+                [[ -z "$arg" ]] && continue
+                prog_args_xml+="\n        <string>$arg</string>"
+            done < <(echo "$item_args" | node -e "JSON.parse(require('fs').readFileSync(0,'utf8')).forEach(a=>process.stdout.write(a+'\n'))")
+
+            # Schedule
+            schedule_xml=""
+            if [[ -n "$item_interval" ]]; then
+                schedule_xml="    <key>StartInterval</key>\n    <integer>$item_interval</integer>"
+            elif [[ -n "$sched_hour" || -n "$sched_min" || -n "$sched_wday" ]]; then
+                schedule_xml="    <key>StartCalendarInterval</key>\n    <dict>"
+                [[ -n "$sched_hour" ]] && schedule_xml+="\n        <key>Hour</key>\n        <integer>$sched_hour</integer>"
+                [[ -n "$sched_min" ]] && schedule_xml+="\n        <key>Minute</key>\n        <integer>$sched_min</integer>"
+                # Omitting Weekday means "every day"; setting it is what makes a
+                # weekly schedule expressible at all.
+                [[ -n "$sched_wday" ]] && schedule_xml+="\n        <key>Weekday</key>\n        <integer>$sched_wday</integer>"
+                schedule_xml+="\n    </dict>"
+            else
+                echo -e "  ${YELLOW}⚠${NC} $label: no interval or schedule, skipping"
+                continue
+            fi
+
+            # WorkingDirectory
+            workdir_xml=""
+            if [[ -n "$item_workdir" ]]; then
+                resolved_workdir="${item_workdir/#\~/$HOME}"
+                workdir_xml="    <key>WorkingDirectory</key>\n    <string>$resolved_workdir</string>"
+            fi
+
+            # Env vars
+            env_xml=""
+            for env_entry in $(echo "$item_env" | node -e "JSON.parse(require('fs').readFileSync(0,'utf8')).forEach(e=>process.stdout.write(e+'\n'))"); do
+                [[ -z "$env_entry" ]] && continue
+                if [[ "$env_entry" == *"="* ]]; then
+                    env_key="${env_entry%%=*}"
+                    env_val="${env_entry#*=}"
+                    env_val="${env_val/#\$HOME/$HOME}"
+                else
+                    env_key="$env_entry"
+                    env_val="${!env_key:-}"
+                fi
+                if [[ -n "$env_val" ]]; then
+                    env_xml+="        <key>$env_key</key>\n        <string>$env_val</string>\n"
+                fi
+            done
+
+            # Generate plist
+            PLIST_GENERATED=$(sed \
+                -e "s|__BLOCK_NAME__|$block_name|g" \
+                -e "s|__JOB_NAME__|$item_name|g" \
+                -e "s|__HOME__|$HOME|g" \
+                -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
+                "$BLOCK_JOB_TEMPLATE")
+
+            rendered_prog=$(echo -e "$prog_args_xml")
+            rendered_sched=$(echo -e "$schedule_xml")
+            rendered_workdir=$(echo -e "$workdir_xml")
+            rendered_env=$(echo -e "$env_xml")
+            PLIST_GENERATED="${PLIST_GENERATED/__JOB_PROGRAM_ARGS__/$rendered_prog}"
+            PLIST_GENERATED="${PLIST_GENERATED/__JOB_SCHEDULE__/$rendered_sched}"
+            PLIST_GENERATED="${PLIST_GENERATED/__JOB_WORKING_DIR__/$rendered_workdir}"
+            PLIST_GENERATED="${PLIST_GENERATED/__JOB_ENV_VARS__/$rendered_env}"
+
+            # Install: diff and reload
+            if [[ -f "$PLIST_TARGET" ]] && echo "$PLIST_GENERATED" | diff -q - "$PLIST_TARGET" > /dev/null 2>&1; then
+                if ! launchctl list "$label" &>/dev/null; then
+                    echo "$PLIST_GENERATED" > "$PLIST_TARGET"
+                    svc_start "$PLIST_TARGET"
+                    echo -e "  ${GREEN}✓${NC} $label (unchanged, reloading)"
+                else
+                    echo -e "  ${GREEN}✓${NC} $label (unchanged)"
+                fi
+            else
+                svc_stop "$label"
+                echo "$PLIST_GENERATED" > "$PLIST_TARGET"
+                svc_start "$PLIST_TARGET"
+                echo -e "  ${GREEN}✓${NC} $label ($([ -f "$PLIST_TARGET" ] && echo 'updated' || echo 'installed'))"
+            fi
+        fi
+    done <<< "$block_items"
+fi
+
+# Retract agents no block declares anymore — an uninstalled block, a disabled one,
+# or a renamed service. Runs outside the block above so that removing the last
+# block still prunes: with no items there is nothing to iterate, but the stale
+# agents are still loaded and would otherwise run forever with nothing on disk
+# describing them.
+#
+# Only prunes when the emitter succeeded. It exits non-zero on failure, but an
+# empty result is also legitimately "no block declares any", and the two must not
+# be conflated — treating a loader error as "prune everything" would silently
+# tear down every block agent on the machine.
+#
+# Skipped entirely when BARRY_BLOCKS_CONFIG points somewhere else. The desired
+# set is then only what that registry declares, so pruning against it retracts
+# agents belonging to the real one — which is exactly what happened while
+# testing a block against an isolated registry.
+if [[ -n "${BARRY_BLOCKS_CONFIG:-}" ]]; then
+    echo -e "  ${YELLOW}⚠${NC} BARRY_BLOCKS_CONFIG is set — skipping block agent prune"
+elif [[ "$block_items_ok" == "true" ]]; then
+    for plist in "$LAUNCH_AGENTS_DIR"/com.barry.block.*.plist; do
+        [[ -f "$plist" ]] || continue
+        stale_label="$(basename "$plist" .plist)"
+        # Word-boundary match against the accumulated list.
+        if [[ " $block_desired_labels " != *" $stale_label "* ]]; then
+            svc_stop "$stale_label"
+            rm -f "$plist"
+            echo -e "  ${YELLOW}⚠${NC} $stale_label: no longer declared, removed"
+        fi
+    done
+fi
+
+# ============================================================================
+# MACOS MENU BAR APPS (Swift)
+# ============================================================================
+
+echo -e "${BLUE}Setting up macOS menu bar apps...${NC}"
+
+NEEDS_LOAD_APPS=""
+APP_TEMPLATE="$TEMPLATE_DIR/com.barry.app.TEMPLATE.plist"
+APPS_DIR="$HOME/.barry/apps"
+mkdir -p "$APPS_DIR"
+mkdir -p "$HOME/.barry/logs"
+
+for app_id in sessions profiles bdiff events services; do
+    case "$app_id" in
+        sessions) app_src="$BARRY_DIR/apps/macos/BarrySessions"; app_name="BarrySessions" ;;
+        profiles) app_src="$BARRY_DIR/apps/macos/BarryProfiles"; app_name="BarryProfiles" ;;
+        bdiff) app_src="$BARRY_DIR/apps/macos/BDiff"; app_name="BDiff" ;;
+        events) app_src="$BARRY_DIR/apps/macos/BarryEvents"; app_name="BarryEvents" ;;
+        services) app_src="$BARRY_DIR/apps/macos/BarryServices"; app_name="BarryServices" ;;
+    esac
+
+    build_binary="$app_src/.build/debug/$app_name"
+    app_bundle="$APPS_DIR/$app_name.app"
+    app_binary="$app_bundle/Contents/MacOS/$app_name"
+    plist_name="com.barry.$app_id"
+    plist_target="$LAUNCH_AGENTS_DIR/$plist_name.plist"
+
+    if [[ ! -f "$build_binary" ]]; then
+        echo -e "  ${YELLOW}⚠${NC} $app_name: not built (run build.sh first), skipping"
+        continue
+    fi
+
+    # Skip copy when the installed binary is already identical — avoids
+    # unnecessary quit/restart cycles on repeated ./install runs.
+    app_needs_restart=false
+    if [[ -f "$app_binary" ]] && cmp -s "$build_binary" "$app_binary"; then
+        echo -e "  ${GREEN}✓${NC} $app_name binary (unchanged)"
+    else
+        # Quit the running app before overwriting — cp over a live binary
+        # causes SIGKILL (Code Signature Invalid) because macOS detects the
+        # mapped code pages no longer match the signed hash.
+        if pgrep -x "$app_name" >/dev/null 2>&1; then
+            echo -e "  ${YELLOW}↻${NC} Quitting $app_name before update..."
+            osascript -e "tell application \"$app_name\" to quit" 2>/dev/null || true
+            sleep 1
+            pkill -x "$app_name" 2>/dev/null || true
+            app_needs_restart=true
+        fi
+
+        # Install app bundle
+        mkdir -p "$app_bundle/Contents/MacOS"
+        cp "$build_binary" "$app_binary"
+        echo -e "  ${GREEN}✓${NC} $app_name binary (updated)"
+    fi
+
+    if [[ -f "$app_src/Resources/Info.plist" ]]; then
+        mkdir -p "$app_bundle/Contents"
+        cp "$app_src/Resources/Info.plist" "$app_bundle/Contents/Info.plist"
+    fi
+    if [[ -f "$app_src/Resources/AppIcon.icns" ]]; then
+        mkdir -p "$app_bundle/Contents/Resources"
+        cp "$app_src/Resources/AppIcon.icns" "$app_bundle/Contents/Resources/AppIcon.icns"
+    fi
+    # Copy bundled fonts — registerBundledFonts() looks here first, and without
+    # them the app silently falls back to system fonts.
+    if [[ -d "$app_src/Resources/Fonts" ]]; then
+        mkdir -p "$app_bundle/Contents/Resources/Fonts"
+        cp "$app_src/Resources/Fonts/"*.ttf "$app_bundle/Contents/Resources/Fonts/" 2>/dev/null || true
+    fi
+    # Copy bundled web resources (e.g. BDiff's Monaco editor)
+    if [[ -f "$app_src/Sources/Resources/monaco-diff.html" ]]; then
+        mkdir -p "$app_bundle/Contents/Resources"
+        cp "$app_src/Sources/Resources/monaco-diff.html" "$app_bundle/Contents/Resources/monaco-diff.html"
+    fi
+
+    # Generate plist
+    if [[ -f "$APP_TEMPLATE" ]]; then
+        PLIST_GENERATED=$(sed \
+            -e "s|__APP_ID__|$app_id|g" \
+            -e "s|__APP_PATH__|$app_binary|g" \
+            -e "s|__HOME__|$HOME|g" \
+            "$APP_TEMPLATE")
+
+        if [[ -f "$plist_target" ]] && echo "$PLIST_GENERATED" | diff -q - "$plist_target" > /dev/null 2>&1; then
+            if ! launchctl list "$plist_name" &>/dev/null; then
+                NEEDS_LOAD_APPS="$NEEDS_LOAD_APPS $plist_target"
+                echo -e "  ${GREEN}✓${NC} $plist_name (unchanged, reloading)"
+            else
+                echo -e "  ${GREEN}✓${NC} $plist_name (unchanged)"
+            fi
+        else
+            svc_stop "$plist_name"
+            echo "$PLIST_GENERATED" > "$plist_target"
+            NEEDS_LOAD_APPS="$NEEDS_LOAD_APPS $plist_target"
+            echo -e "  ${GREEN}✓${NC} $plist_name (updated)"
+        fi
+    fi
+
+    # Restart the app if we quit it for a binary update but the plist didn't
+    # change (plist-change path already handles restart via NEEDS_LOAD_APPS).
+    if [[ "$app_needs_restart" == true ]] && launchctl list "$plist_name" &>/dev/null; then
+        launchctl kickstart -k "$USER_DOMAIN/$plist_name" 2>/dev/null || true
+        echo -e "  ${GREEN}↻${NC} Restarted $app_name"
+    fi
+done
+
+echo ""
+
+# ============================================================================
+# MCP SERVERS (STREAMABLE HTTP)
+# ============================================================================
+
+echo -e "${BLUE}Setting up MCP servers (Streamable HTTP)...${NC}"
+
+# Check if MCP registry exists
+if [[ ! -f "$MCP_REGISTRY" ]]; then
+    echo -e "${YELLOW}Warning: MCP registry not found at $MCP_REGISTRY${NC}"
+    echo "Skipping MCP server setup"
+fi
+
+# Read MCP template
+MCP_TEMPLATE="$TEMPLATE_DIR/com.barry.mcp.TEMPLATE.plist"
+if [[ ! -f "$MCP_TEMPLATE" ]]; then
+    echo -e "${YELLOW}Warning: MCP template not found at $MCP_TEMPLATE${NC}"
+    echo "Skipping MCP server setup"
+fi
+
+# Process MCP servers if both registry and template exist
+if [[ -f "$MCP_REGISTRY" && -f "$MCP_TEMPLATE" ]]; then
+    # Simple approach: extract and process each server
+
+    # Clean up stale MCP plists from old per-server setup
+    echo "Cleaning up stale MCP plists..."
+    for plist in "$LAUNCH_AGENTS_DIR"/com.barry.mcp.*.plist; do
+        [[ -f "$plist" ]] || continue
+        plist_name=$(basename "$plist" .plist | sed 's/com.barry.mcp.//')
+        # Check if this server still exists in the YAML (servers or external section)
+        if ! grep -q "^  $plist_name:" "$MCP_REGISTRY"; then
+            svc_stop "$(basename "$plist" .plist)"
+            rm -f "$plist"
+            echo -e "  ${YELLOW}⚠${NC} Removed stale plist: com.barry.mcp.$plist_name"
+        fi
+    done
+
+    # Local MCP servers
+    echo "Installing local MCP server plists..."
+    local_servers=$(awk '
+        /^servers:/{in_servers=1; next}
+        /^[a-zA-Z0-9_-]+:/{in_servers=0}
+        in_servers && /^  [a-zA-Z0-9_-]+:/{gsub(":","",$1); print $1}
+    ' "$MCP_REGISTRY")
+
+    # Fail early if any local MCP server directories are missing
+    missing_servers=()
+    for server in $local_servers; do
+        # Skip if it's under external section
+        if grep -A100 "^external:" "$MCP_REGISTRY" | grep -q "^  $server:"; then
+            continue
+        fi
+
+        # Check for path override
+        custom_path=$(grep -A5 "^  $server:" "$MCP_REGISTRY" | grep "path:" | head -1 | sed 's/.*path: *//')
+        if [[ -n "$custom_path" ]]; then
+            working_dir="$BARRY_DIR/$custom_path"
+        else
+            working_dir="$BARRY_DIR/servers/mcp/$server"
+        fi
+        if [[ ! -d "$working_dir" ]]; then
+            missing_servers+=("$server:$working_dir")
+        fi
+    done
+
+    if (( ${#missing_servers[@]} > 0 )); then
+        echo -e "${RED}Error: missing local MCP server directories:${NC}"
+        for entry in "${missing_servers[@]}"; do
+            echo "  - $entry"
+        done
+        echo "Fix by creating the directory or removing the server from $MCP_REGISTRY"
+        exit 1
+    fi
+
+    for server in $local_servers; do
+        # Skip if it's under external section
+        if grep -A100 "^external:" "$MCP_REGISTRY" | grep -q "^  $server:"; then
+            continue
+        fi
+
+        # Skip if disabled
+        if grep -A5 "^  $server:" "$MCP_REGISTRY" | grep -q "disabled: true"; then
+            echo -e "  ${YELLOW}⚠${NC} $server: disabled, skipping"
+            # Remove stale plist if it exists
+            stale_plist="$LAUNCH_AGENTS_DIR/com.barry.mcp.$server.plist"
+            if [[ -f "$stale_plist" ]]; then
+                svc_stop "$(basename "$stale_plist" .plist)"
+                rm -f "$stale_plist"
+                echo -e "  ${YELLOW}⚠${NC} $server: removed stale plist"
+            fi
+            continue
+        fi
+
+        # Get port for this server (base + 1000 for prod display/verification)
+        port=$(grep -A5 "^  $server:" "$MCP_REGISTRY" | grep "port:" | head -1 | sed 's/.*port: *//')
+        port=$((port + 1000))
+        # Note: port is only used for display — the server resolves its own port via BARRY_ENV
+
+        if [[ -n "$port" ]]; then
+            # Check for path override
+            custom_path=$(grep -A5 "^  $server:" "$MCP_REGISTRY" | grep "path:" | head -1 | sed 's/.*path: *//')
+            if [[ -n "$custom_path" ]]; then
+                working_dir="$BARRY_DIR/$custom_path"
+            else
+                working_dir="$BARRY_DIR/servers/mcp/$server"
+            fi
+            # Determine dist entry point
+            dist_entry=$(grep -A10 "^  $server:" "$MCP_REGISTRY" | grep "dist_entry:" | head -1 | sed 's/.*dist_entry: *//')
+            if [[ -n "$dist_entry" ]]; then
+                dist_path="$working_dir/$dist_entry"
+            else
+                dist_path="$working_dir/dist/index.js"
+            fi
+
+            if [[ -d "$working_dir" ]]; then
+                bundle_changed=false
+                if [[ "$dist_entry" == "dist/bundle.cjs" && -f "$working_dir/scripts/build-bundle.mjs" ]]; then
+                    echo "  Building launchd bundle for $server..."
+                    bundle_checksum_before=""
+                    if [[ -f "$dist_path" ]]; then
+                        bundle_checksum_before=$(cksum "$dist_path")
+                    fi
+                    "$NODE_PATH" "$working_dir/scripts/build-bundle.mjs"
+                    bundle_checksum_after=$(cksum "$dist_path")
+                    if [[ "$bundle_checksum_before" != "$bundle_checksum_after" ]]; then
+                        bundle_changed=true
+                    fi
+                fi
+
+                plist_name="com.barry.mcp.$server"
+                plist_target="$LAUNCH_AGENTS_DIR/$plist_name.plist"
+
+                mkdir -p "$working_dir/logs"
+
+                # Get env vars for this server
+                env_xml=""
+                env_section=$("$NODE_PATH" -e "
+                  const fs = require('fs');
+                  const lines = fs.readFileSync(process.argv[1], 'utf8').split('\n');
+                  let inServer = false, inEnv = false;
+                  const envs = [];
+                  for (const line of lines) {
+                    if (line.match(new RegExp('^  ' + process.argv[2] + ':'))) { inServer = true; continue; }
+                    if (inServer && /^  [a-z]/.test(line)) break;
+                    if (inServer && /^\s+env:/.test(line)) { inEnv = true; continue; }
+                    if (inEnv && /^\s*#/.test(line)) continue;
+                    if (inEnv && /^\s+- ([A-Z_]+)/.test(line)) envs.push(line.match(/- ([A-Z_]+)/)[1]);
+                    else if (inEnv && !/^\s*$/.test(line)) inEnv = false;
+                  }
+                  process.stdout.write(envs.join(' '));
+                " "$MCP_REGISTRY" "$server")
+                for var in $env_section; do
+                    val="${!var}"
+                    if [[ -n "$val" ]]; then
+                        env_xml+="        <key>$var</key>\n        <string>$val</string>\n"
+                    fi
+                done
+
+                # Generate plist content
+                PLIST_GENERATED=$(awk -v name="$server" \
+                    -v port="$port" \
+                    -v working_dir="$working_dir" \
+                    -v dist_path="$dist_path" \
+                    -v node_bin_dir="$NODE_BIN_DIR" \
+                    -v node_path="$NODE_PATH" \
+                    -v db_url="$BARRY_DATABASE_URL" \
+                    -v axiom_token="$AXIOM_TOKEN" \
+                    -v env_vars="$env_xml" \
+                    '{
+                        gsub(/__MCP_NAME__/, name);
+                        gsub(/__MCP_PORT__/, port);
+                        gsub(/__MCP_WORKING_DIR__/, working_dir);
+                        gsub(/__MCP_DIST_PATH__/, dist_path);
+                        gsub(/__NODE_BIN_DIR__/, node_bin_dir);
+                        gsub(/__NODE_PATH__/, node_path);
+                        gsub(/__DATABASE_URL__/, db_url);
+                        gsub(/__AXIOM_TOKEN__/, axiom_token);
+                        gsub(/__MCP_ENV_VARS__/, env_vars);
+                        gsub(/\\n/, "\n");
+                        print;
+                    }' "$MCP_TEMPLATE")
+
+                # Only install and reload if the plist actually changed
+                if [[ -f "$plist_target" ]] && echo "$PLIST_GENERATED" | diff -q - "$plist_target" > /dev/null 2>&1; then
+                    if $bundle_changed; then
+                        svc_stop "$plist_name"
+                        NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
+                        echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (bundle updated, reloading)"
+                    elif ! launchctl list "$plist_name" &>/dev/null; then
+                        NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
+                        echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (unchanged, reloading)"
+                    else
+                        echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (unchanged)"
+                    fi
+                else
+                    svc_stop "$plist_name"
+                    echo "$PLIST_GENERATED" > "$plist_target"
+                    NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
+                    echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (updated)"
+                fi
+            else
+                echo -e "  ${YELLOW}⚠${NC} $server: directory not found at $working_dir"
+            fi
+        fi
+    done
+
+    # External MCP servers
+    echo ""
+    echo "Installing external MCP server plists..."
+    external_servers=$(grep -A100 "^external:" "$MCP_REGISTRY" | grep -E '^  [a-z]' | grep -v 'port:' | grep -v 'path:' | grep -v 'env:' | grep -v '^ *-' | sed 's/://g' | tr -d ' ')
+
+    for server in $external_servers; do
+        # Skip if disabled
+        if grep -A100 "^external:" "$MCP_REGISTRY" | grep -A5 "^  $server:" | grep -q "disabled: true"; then
+            echo -e "  ${YELLOW}⚠${NC} $server: disabled, skipping"
+            # Remove stale plist if it exists
+            stale_plist="$LAUNCH_AGENTS_DIR/com.barry.mcp.$server.plist"
+            if [[ -f "$stale_plist" ]]; then
+                svc_stop "$(basename "$stale_plist" .plist)"
+                rm -f "$stale_plist"
+                echo -e "  ${YELLOW}⚠${NC} $server: removed stale plist"
+            fi
+            continue
+        fi
+
+        port=$(grep -A100 "^external:" "$MCP_REGISTRY" | grep -A5 "^  $server:" | grep "port:" | head -1 | sed 's/.*port: *//')
+        path=$(grep -A100 "^external:" "$MCP_REGISTRY" | grep -A5 "^  $server:" | grep "path:" | head -1 | sed 's/.*path: *//')
+
+        if [[ -n "$port" && -n "$path" ]]; then
+            # Expand ~ in path
+            working_dir="${path/#\~/$HOME}"
+            dist_path="$working_dir/dist/index.js"
+
+            if [[ -d "$working_dir" ]]; then
+                plist_name="com.barry.mcp.$server"
+                plist_target="$LAUNCH_AGENTS_DIR/$plist_name.plist"
+
+                mkdir -p "$working_dir/logs"
+
+                # Get env vars
+                env_xml=""
+                env_section=$(grep -A100 "^external:" "$MCP_REGISTRY" | grep -A20 "^  $server:" | grep -E "^      - [A-Z]" | sed 's/.*- //')
+                for var in $env_section; do
+                    val="${!var}"
+                    if [[ -n "$val" ]]; then
+                        env_xml+="        <key>$var</key>\n        <string>$val</string>\n"
+                    fi
+                done
+
+                # Generate plist content
+                PLIST_GENERATED=$(awk -v name="$server" \
+                    -v port="$port" \
+                    -v working_dir="$working_dir" \
+                    -v dist_path="$dist_path" \
+                    -v node_bin_dir="$NODE_BIN_DIR" \
+                    -v node_path="$NODE_PATH" \
+                    -v db_url="$BARRY_DATABASE_URL" \
+                    -v axiom_token="$AXIOM_TOKEN" \
+                    -v env_vars="$env_xml" \
+                    '{
+                        gsub(/__MCP_NAME__/, name);
+                        gsub(/__MCP_PORT__/, port);
+                        gsub(/__MCP_WORKING_DIR__/, working_dir);
+                        gsub(/__MCP_DIST_PATH__/, dist_path);
+                        gsub(/__NODE_BIN_DIR__/, node_bin_dir);
+                        gsub(/__NODE_PATH__/, node_path);
+                        gsub(/__DATABASE_URL__/, db_url);
+                        gsub(/__AXIOM_TOKEN__/, axiom_token);
+                        gsub(/__MCP_ENV_VARS__/, env_vars);
+                        gsub(/\\n/, "\n");
+                        print;
+                    }' "$MCP_TEMPLATE")
+
+                # Only install and reload if the plist actually changed
+                if [[ -f "$plist_target" ]] && echo "$PLIST_GENERATED" | diff -q - "$plist_target" > /dev/null 2>&1; then
+                    if ! launchctl list "$plist_name" &>/dev/null; then
+                        NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
+                        echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (unchanged, reloading)"
+                    else
+                        echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (unchanged)"
+                    fi
+                else
+                    svc_stop "$plist_name"
+                    echo "$PLIST_GENERATED" > "$plist_target"
+                    NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
+                    echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (updated)"
+                fi
+            else
+                echo -e "  ${YELLOW}⚠${NC} $server: directory not found at $working_dir"
+            fi
+        fi
+    done
+fi
+
+echo ""
+
+# ============================================================================
+# LOAD CHANGED SERVICES
+# ============================================================================
+
+echo -e "${BLUE}Loading services...${NC}"
+
+# Load macOS menu bar apps that changed
+for plist in $NEEDS_LOAD_APPS; do
+    if [[ -f "$plist" ]]; then
+        svc_start "$plist"
+        name=$(basename "$plist" .plist)
+        echo -e "  ${GREEN}✓${NC} $name"
+    fi
+done
+
+# Load HTTP servers that changed
+for server in $NEEDS_LOAD_HTTP; do
+    PLIST_TARGET="$LAUNCH_AGENTS_DIR/com.barry.$server.plist"
+    if [[ -f "$PLIST_TARGET" ]]; then
+        svc_start "$PLIST_TARGET"
+        echo -e "  ${GREEN}✓${NC} com.barry.$server"
+    fi
+done
+
+# Verify HTTP services started successfully (retry once if needed)
+if [[ -n "$NEEDS_LOAD_HTTP" ]]; then
+    sleep 3
+    for server in $NEEDS_LOAD_HTTP; do
+        label="com.barry.$server"
+        pid=$(launchctl list "$label" 2>/dev/null | grep '"PID"' | grep -o '[0-9]*' || true)
+        if [[ -z "$pid" ]]; then
+            echo -e "  ${YELLOW}⚠${NC} $label failed to start — retrying in 5s..."
+            sleep 5
+            svc_start "$LAUNCH_AGENTS_DIR/$label.plist"
+            sleep 3
+            pid=$(launchctl list "$label" 2>/dev/null | grep '"PID"' | grep -o '[0-9]*' || true)
+            if [[ -z "$pid" ]]; then
+                echo -e "  ${RED}✗${NC} $label still not running after retry"
+            else
+                echo -e "  ${GREEN}✓${NC} $label started on retry (PID $pid)"
+            fi
+        else
+            echo -e "  ${GREEN}✓${NC} $label running (PID $pid)"
+        fi
+    done
+fi
+
+if [[ "$NEEDS_LOAD_CADDY" == true && -f "$CADDY_TARGET" ]]; then
+    svc_start "$CADDY_TARGET"
+    echo -e "  ${GREEN}✓${NC} com.barry.caddy"
+fi
+if [[ "$NEEDS_LOAD_CADDY" == true && -f "$CLOUDFLARED_TARGET" ]]; then
+    svc_start "$CLOUDFLARED_TARGET"
+    echo -e "  ${GREEN}✓${NC} com.barry.cloudflared"
+fi
+
+# Load MCP servers that changed
+for plist in $NEEDS_LOAD_MCP; do
+    if [[ -f "$plist" ]]; then
+        svc_start "$plist"
+        name=$(basename "$plist" .plist)
+        echo -e "  ${GREEN}✓${NC} $name"
+    fi
+done
+
+# Verify MCP services started successfully (retry once if needed)
+if [[ -n "$NEEDS_LOAD_MCP" ]]; then
+    sleep 3
+    for plist in $NEEDS_LOAD_MCP; do
+        if [[ ! -f "$plist" ]]; then continue; fi
+        label=$(basename "$plist" .plist)
+        pid=$(launchctl list "$label" 2>/dev/null | grep '"PID"' | grep -o '[0-9]*' || true)
+        if [[ -z "$pid" ]]; then
+            echo -e "  ${YELLOW}⚠${NC} $label failed to start — retrying in 5s..."
+            sleep 5
+            svc_start "$plist"
+            sleep 3
+            pid=$(launchctl list "$label" 2>/dev/null | grep '"PID"' | grep -o '[0-9]*' || true)
+            if [[ -z "$pid" ]]; then
+                echo -e "  ${RED}✗${NC} $label still not running after retry"
+            else
+                echo -e "  ${GREEN}✓${NC} $label started on retry (PID $pid)"
+            fi
+        else
+            echo -e "  ${GREEN}✓${NC} $label running (PID $pid)"
+        fi
+    done
+fi
+
+if [[ -z "$NEEDS_LOAD_APPS" && -z "$NEEDS_LOAD_HTTP" && -z "$NEEDS_LOAD_CADDY" && -z "$NEEDS_LOAD_MCP" ]]; then
+    echo -e "  ${GREEN}All plists unchanged, no services reloaded${NC}"
+fi
+
+echo ""
+
+# Only repoint symlinks when running from the primary dev checkout
+if [[ "$BARRY_DIR" == "$DEV_PATH" ]]; then
+    "$BARRY_DIR/scripts/setup-symlinks"
+else
+    echo -e "${YELLOW}Skipping symlink setup (non-dev checkout)${NC}"
+fi
+
+echo ""
+
+# ============================================================================
+# VERIFY SERVICES
+# ============================================================================
+
+echo -e "${BLUE}Verifying services...${NC}"
+sleep 6
+
+# Verify enabled HTTP services from yaml
+echo "HTTP Servers:"
+ALL_OK=true
+for server in $http_servers; do
+    enabled=$(grep -A5 "^  $server:" "$HTTP_REGISTRY" | grep "enabled:" | head -1 | sed 's/.*enabled: *//; s/ *#.*//')
+    [[ "$enabled" == "false" ]] && continue
+
+    # Skip services that opt out of verification (e.g. on-demand services)
+    verify=$(grep -A8 "^  $server:" "$HTTP_REGISTRY" | grep "verify:" | head -1 | sed 's/.*verify: *//; s/ *#.*//')
+    if [[ "$verify" == "false" ]]; then
+        echo -e "  ${YELLOW}⚠${NC} $server (verify: false, skipped)"
+        continue
+    fi
+
+    port_var="$(get_port_var "$server")"
+    port="${!port_var:-}"
+    [[ -z "$port" ]] && continue
+
+    ok=false
+    for attempt in 1 2 3; do
+        # Try JSON health endpoint first, then fall back to any HTTP response
+        if curl -sf --max-time 3 "http://localhost:$port/health" | grep -q '"ok":true'; then
+            ok=true
+            break
+        elif curl -sf --max-time 3 -o /dev/null "http://localhost:$port/"; then
+            ok=true
+            break
+        fi
+        sleep 2
+    done
+    if $ok; then
+        echo -e "  ${GREEN}✓${NC} $server (:$port)"
+    else
+        echo -e "  ${RED}✗${NC} $server (:$port)"
+        ALL_OK=false
+    fi
+done
+
+# MCP servers (check health endpoints from YAML ports)
+echo ""
+echo "MCP Servers (via Supergateway):"
+MCP_OK=0
+mcp_base_ports=$(awk '/^servers:/{section=1; next} /^[a-zA-Z]/{section=0} section && /port:/{sub(/.*port: */, ""); print}' "$MCP_REGISTRY")
+external_base_ports=$(awk '/^external:/{section=1; next} /^[a-zA-Z]/{section=0} section && /port:/{sub(/.*port: */, ""); print}' "$MCP_REGISTRY")
+for base_port in $mcp_base_ports $external_base_ports; do
+    port=$((base_port + 1000))
+    response=$(curl -sf -H "Authorization: Bearer ${BARRY_SECRET}" "http://localhost:$port/health" 2>/dev/null || true)
+    if [[ "$response" == "ok" ]]; then
+        name=$(awk -v target="$base_port" '
+            /^servers:|^external:/{section=1; next}
+            /^[a-zA-Z]/{section=0}
+            section && /^  [a-zA-Z0-9_-]+:/{name=$1; sub(/:$/, "", name)}
+            section && /port:/ && $2 == target {print name; exit}
+        ' "$MCP_REGISTRY")
+        echo -e "  ${GREEN}✓${NC} ${name:-unknown} (:$port)"
+        ((MCP_OK++)) || true
+    else
+        echo -e "  ${RED}✗${NC} :$port"
+        ALL_OK=false
+    fi
+done
+if [[ $MCP_OK -eq 0 ]]; then
+    echo -e "  ${YELLOW}(servers may still be starting - try again in a few seconds)${NC}"
+fi
+
+echo ""
+
+if $ALL_OK; then
+    echo -e "${GREEN}All HTTP services running!${NC}"
+else
+    echo -e "${YELLOW}Some services failed to start. Check logs in the respective service directories${NC}"
+fi
+
+echo ""
+echo "BARRY_SECRET is stored in: $ENV_FILE"
+echo "Load it through Barry's environment tooling; its value is intentionally not printed."
+echo ""
+echo -e "${GREEN}Setup complete!${NC}"
+echo "To verify MCP servers individually: curl http://localhost:PORT/health"
+echo "To test MCP tools: curl -X POST http://localhost:PORT/mcp"
+echo ""
+echo "Tailscale policy: tag nodes + apply ACL template"
+echo "  ./infra/tailscale/apply-acl.sh"
+echo ""
+echo "Security: install tailnet-only firewall (macOS pf)"
+echo "  ./scripts/firewall/install-pf.sh"

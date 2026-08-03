@@ -1,0 +1,23 @@
+{
+  "name": "github-app",
+  "version": "0.1.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "description": "Barry's GitHub App - receives webhook events from GitHub",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "start:prod": "tsx src/index.ts",
+    "dev": "tsx --watch src/index.ts"
+  },
+  "dependencies": {
+    "@barry/env": "workspace:*",
+    "@barry/github": "workspace:*",
+    "@barry/logger": "workspace:*",
+    "express": "4.22.1"
+  },
+  "devDependencies": {
+    "@types/express": "4.17.21",
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3"
+  }
+}

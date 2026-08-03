@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Barry Permissions Setup
+# =============================================================================
+# Guides through granting macOS TCC permissions for the Homebrew node binary.
+#
+# On personal (non-MDM) Macs, TCC profiles are not supported. Permissions are
+# granted by triggering native macOS prompts or manual System Settings grants.
+#
+# Permissions granted via prompt:
+#   - Automation → Mail.app     (ios-mailer MCP)
+#   - Automation → System Events (system-display MCP)
+#   - Microphone                 (whisperflow / web voice input)
+#
+# Permissions requiring manual grant:
+#   - Full Disk Access           (system MCP shell executor)
+#   - Screen Recording           (playwright-recorder MCP)
+#
+# Usage:
+#   ./scripts/setup-permissions          # Walk through all permissions
+#   ./scripts/setup-permissions --check  # Check current permission status only
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BARRY_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+green()  { printf "${GREEN}✓${NC} %s\n" "$1"; }
+yellow() { printf "${YELLOW}⚠${NC} %s\n" "$1"; }
+red()    { printf "${RED}✗${NC} %s\n" "$1"; }
+section() { printf "\n${BOLD}── %s ──${NC}\n\n" "$1"; }
+
+# ─── Resolve node binary ─────────────────────────────────────────────────────
+
+if [[ -x "/opt/homebrew/bin/node" ]]; then
+    NODE_BIN="/opt/homebrew/bin/node"
+    NODE_REAL="$(readlink -f /opt/homebrew/bin/node)"
+elif [[ -x "/usr/local/bin/node" ]]; then
+    NODE_BIN="/usr/local/bin/node"
+    NODE_REAL="$(readlink -f /usr/local/bin/node)"
+else
+    echo -e "${RED}Error: Homebrew node not found.${NC}"
+    echo "Barry recommends Homebrew node for stable TCC grants:"
+    echo "  brew install node"
+    exit 1
+fi
+
+# ─── Parse args ──────────────────────────────────────────────────────────────
+
+CHECK_ONLY=false
+for arg in "$@"; do
+    case "$arg" in
+        --check)  CHECK_ONLY=true ;;
+        --help|-h)
+            echo "Usage: ./scripts/setup-permissions [--check]"
+            exit 0 ;;
+    esac
+done
+
+# ─── Check mode ──────────────────────────────────────────────────────────────
+
+check_permissions() {
+    section "Permission Status"
+
+    echo "  Node binary: $NODE_BIN"
+    if [[ -n "$NODE_REAL" && "$NODE_REAL" != "$NODE_BIN" ]]; then
+        echo "  Resolves to: $NODE_REAL"
+    fi
+    echo ""
+
+    # Automation → Mail
+    if osascript -e 'tell application "Mail" to return name' &>/dev/null; then
+        green "Automation → Mail"
+    else
+        red "Automation → Mail — not granted"
+    fi
+
+    # Automation → System Events
+    if osascript -e 'tell application "System Events" to return name' &>/dev/null; then
+        green "Automation → System Events"
+    else
+        red "Automation → System Events — not granted"
+    fi
+
+    # Full Disk Access — check via node, not the shell
+    _fda_result=$($NODE_BIN -e "
+        const fs = require('fs');
+        const paths = [
+            process.env.HOME + '/Library/Safari/History.db',
+            process.env.HOME + '/Library/Mail/V10/MailData/Accounts.plist',
+            process.env.HOME + '/Library/Cookies/Cookies.binarycookies',
+        ];
+        for (const p of paths) {
+            try { fs.readFileSync(p); console.log('OK'); process.exit(0); } catch {}
+        }
+        console.log('FAIL');
+    " 2>/dev/null || echo "FAIL")
+
+    if [[ "$_fda_result" == "OK" ]]; then
+        green "Full Disk Access"
+    else
+        red "Full Disk Access — not granted for node"
+        echo "     Add $NODE_BIN in System Settings → Full Disk Access"
+    fi
+
+    # Screen Recording — check via node using CGWindowListCopyWindowInfo isn't
+    # possible from node directly. Use the check-permissions --test approach instead.
+    # For a quick check, see if screencapture run by node produces output.
+    yellow "Screen Recording — verify with: ./scripts/check/permissions --test"
+
+    # Microphone
+    yellow "Microphone — will prompt on first use"
+
+    echo ""
+}
+
+if $CHECK_ONLY; then
+    check_permissions
+    exit 0
+fi
+
+# ─── Main setup ──────────────────────────────────────────────────────────────
+
+echo ""
+echo -e "${BOLD}Barry Permissions Setup${NC}"
+echo "========================"
+echo ""
+echo "Node binary: $NODE_BIN"
+echo ""
+echo "On personal Macs, permissions are granted through native macOS prompts"
+echo "or manual System Settings grants. No MDM or configuration profile needed."
+
+# ─── Automation → Mail ───────────────────────────────────────────────────────
+
+section "Automation → Mail (ios-mailer MCP)"
+
+if osascript -e 'tell application "Mail" to return name' &>/dev/null; then
+    green "Already granted"
+else
+    echo "Triggering permission prompt via node..."
+    $NODE_BIN -e "require('child_process').execSync('osascript -e \'tell application \"Mail\" to return name\'')" &>/dev/null 2>&1 || true
+    sleep 1
+    if osascript -e 'tell application "Mail" to return name' &>/dev/null; then
+        green "Granted"
+    else
+        yellow "Not yet granted — macOS will prompt on first use"
+    fi
+fi
+
+# ─── Automation → System Events ──────────────────────────────────────────────
+
+section "Automation → System Events (system-display MCP)"
+
+if osascript -e 'tell application "System Events" to return name' &>/dev/null; then
+    green "Already granted"
+else
+    echo "Triggering permission prompt via node..."
+    $NODE_BIN -e "require('child_process').execSync('osascript -e \'tell application \"System Events\" to return name\'')" &>/dev/null 2>&1 || true
+    sleep 1
+    if osascript -e 'tell application "System Events" to return name' &>/dev/null; then
+        green "Granted"
+    else
+        yellow "Not yet granted — macOS will prompt on first use"
+    fi
+fi
+
+# ─── Full Disk Access ────────────────────────────────────────────────────────
+
+section "Full Disk Access (system MCP shell executor)"
+
+_fda_ok=false
+_fda_check=$($NODE_BIN -e "
+    const fs = require('fs');
+    const paths = [
+        process.env.HOME + '/Library/Safari/History.db',
+        process.env.HOME + '/Library/Mail/V10/MailData/Accounts.plist',
+        process.env.HOME + '/Library/Cookies/Cookies.binarycookies',
+    ];
+    for (const p of paths) {
+        try { fs.readFileSync(p); console.log('OK'); process.exit(0); } catch {}
+    }
+    console.log('FAIL');
+" 2>/dev/null || echo "FAIL")
+[[ "$_fda_check" == "OK" ]] && _fda_ok=true
+
+if $_fda_ok; then
+    green "Already granted"
+else
+    echo "FDA must be granted manually in System Settings."
+    echo ""
+    echo -e "  ${BOLD}Steps:${NC}"
+    echo "  1. System Settings → Privacy & Security → Full Disk Access"
+    echo "  2. Click '+'"
+    echo "  3. Press ⌘⇧G (Go to Folder)"
+    echo "  4. Paste: $NODE_BIN"
+    echo "  5. Click Open, then toggle ON"
+    echo ""
+    echo -e "  ${YELLOW}Note:${NC} FDA changes may require a logout/login or reboot to take effect."
+    echo ""
+    echo "  Path copied to clipboard."
+    echo "$NODE_BIN" | pbcopy
+    printf "Press Enter to open System Settings (or Ctrl+C to skip)... "
+    read -r _
+    open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles" 2>/dev/null || true
+    echo ""
+    printf "Press Enter once you've added it... "
+    read -r _
+fi
+
+# ─── Screen Recording ────────────────────────────────────────────────────────
+
+section "Screen Recording (playwright-recorder MCP)"
+
+echo "Screen Recording is used by Playwright for screenshots."
+echo "Grant it to the Chromium/Chrome browser Playwright uses."
+echo ""
+echo "This will be prompted automatically the first time Playwright"
+echo "takes a screenshot. You can also grant it manually:"
+echo "  System Settings → Privacy & Security → Screen Recording"
+echo ""
+printf "Press Enter to open System Settings (or Ctrl+C to skip)... "
+read -r _
+open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture" 2>/dev/null || true
+
+# ─── Microphone ──────────────────────────────────────────────────────────────
+
+section "Microphone (whisperflow)"
+
+yellow "Will prompt automatically on first use — no action needed"
+
+# ─── Verify ──────────────────────────────────────────────────────────────────
+
+section "Verifying"
+check_permissions
+
+echo ""
+echo -e "${BOLD}Next steps:${NC}"
+echo ""
+echo "  - Restart Barry services for permissions to take effect:"
+echo "    ./scripts/restart/barry.sh"
+echo ""
+echo "  - Check permission status anytime:"
+echo "    ./scripts/setup-permissions --check"
+echo ""

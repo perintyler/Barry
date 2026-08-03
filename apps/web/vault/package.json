@@ -1,0 +1,27 @@
+{
+  "name": "@barry/vault-server",
+  "version": "1.0.0",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@barry/vault": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.27.1",
+    "better-sqlite3": "12.10.0",
+    "cors": "2.8.5",
+    "express": "4.22.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/cors": "2.8.17",
+    "@types/express": "5.0.2",
+    "esbuild": "0.25.4",
+    "tsx": "4.19.4",
+    "typescript": "5.9.3"
+  }
+}

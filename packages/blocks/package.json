@@ -1,0 +1,26 @@
+{
+  "name": "@barry/blocks",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@barry/env": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.27.1",
+    "esbuild": "0.27.3",
+    "yaml": "2.8.3",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

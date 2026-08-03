@@ -1,0 +1,48 @@
+{
+  "name": "@barry/ui",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "description": "Barry design system - tokens, styles, and components",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./css": "./dist/css.js",
+    "./styles": "./src/index.css",
+    "./primitives": "./src/primitives.css",
+    "./tokens": "./src/tokens.css",
+    "./reset": "./src/reset.css",
+    "./components": "./src/components.css",
+    "./modal": "./src/modal.css",
+    "./select": "./src/select.css",
+    "./segmented-control": "./src/segmented-control.css",
+    "./animations": "./src/animations.css",
+    "./homepage": "./src/homepage.css",
+    "./avatar": "./src/avatar.css",
+    "./skeleton": "./src/skeleton.css",
+    "./sidebar": "./src/sidebar.css",
+    "./icon-button": "./src/icon-button.css",
+    "./toast": "./src/toast.css",
+    "./toolbar": "./src/toolbar.css",
+    "./code-viewer": "./src/code-viewer.css",
+    "./utils": "./src/utils.css",
+    "./templates/*": "./src/templates/*.js",
+    "./behaviors/*": "./src/behaviors/*.js"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "build": "node scripts/build-tokens.js && node scripts/build-css.js",
+    "watch": "node scripts/watch-css.js",
+    "test": "node --test src/**/*.test.js"
+  },
+  "dependencies": {
+    "@barry/themes": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "jsdom": "25.0.0"
+  }
+}

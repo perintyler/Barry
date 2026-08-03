@@ -1,0 +1,41 @@
+{
+  "name": "@barry/db",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./profile-blocks": "./src/profile-blocks.ts",
+    "./qa": "./src/qa.ts",
+    "./migrate": "./src/migrate.ts",
+    "./seed": "./scripts/seed.ts",
+    "./test-db-url": "./src/test-db-url.ts",
+    "./profile-files": "./src/profile-files.ts"
+  },
+  "scripts": {
+    "setup": "tsx scripts/setup.ts",
+    "migrate": "tsx src/migrate.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "qa:setup": "tsx scripts/setup-qa.ts",
+    "qa:seed": "tsx scripts/setup-qa.ts"
+  },
+  "dependencies": {
+    "@barry/agent-scope": "workspace:*",
+    "@barry/env": "workspace:*",
+    "@barry/blocks": "workspace:*",
+    "kysely": "0.28.17",
+    "kysely-postgres-js": "2.0.0",
+    "nanoid": "5.0.9",
+    "postgres": "3.4.8",
+    "yaml": "2.8.3"
+  },
+  "devDependencies": {
+    "@barry/agent-runtime": "workspace:*",
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

@@ -1,0 +1,70 @@
+/* ========================================
+   @barry/notes - Styles
+   Depends on @barry/ui/tokens
+   ======================================== */
+
+.notes-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.notes-app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.notes-app-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.notes-app-status {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  transition: color 0.15s ease;
+}
+
+.notes-app-status--unsaved {
+  color: var(--warning);
+}
+
+.notes-app-status--saved {
+  color: var(--success);
+}
+
+.notes-app-status--error {
+  color: var(--error);
+}
+
+.notes-app-editor {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  resize: none;
+  padding: var(--space-5);
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+.notes-app-editor::placeholder {
+  color: var(--text-tertiary);
+}

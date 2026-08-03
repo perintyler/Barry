@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "types": ["node"]
+  },
+  "include": [
+    "apps/web/barry.works/src/**/*.d.ts",
+    "apps/web/barry.works/src/server/**/*.ts",
+    "apps/web/barry.works/tests/**/*.ts",
+    "cli/test/**/*.ts",
+    "cli/src/**/*.test.ts",
+    "packages/**/*.test.ts",
+    "packages/**/tests/**/*.ts",
+    "blocks/**/*.test.ts",
+    "blocks/**/tests/**/*.ts",
+    "sdks/**/*.test.ts",
+    "sdks/**/tests/**/*.ts",
+    "servers/**/*.test.ts",
+    "hooks/**/*.test.ts",
+    "hooks/**/test/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "build", "generated"]
+}

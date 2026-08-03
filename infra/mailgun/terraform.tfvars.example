@@ -1,0 +1,3 @@
+domain        = "barry.rocks"
+forward_email = "your-email@example.com"
+webhook_url   = "https://barry.rocks/webhooks/mailgun/incoming"

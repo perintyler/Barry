@@ -1,0 +1,1431 @@
+/* ========================================
+   Barry Web - App Styles
+   Tokens provided by @barry/ui
+   ======================================== */
+
+/* CSS Reset & Base */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* App-specific layout tokens */
+:root {
+  --header-height: 56px;
+  --tabs-height: 52px;
+  --input-height: 72px;
+  --max-width: 900px;
+}
+
+/* Base Styles */
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: var(--leading-normal);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+#app {
+  height: 100%;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes md-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========================================
+   Markdown Content - Polished Prose
+   ======================================== */
+.markdown-content > * {
+  animation: md-fade-in 0.25s var(--ease-out) both;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.markdown-content h1 { font-size: 1.375rem; margin: 1.75em 0 0.75em; }
+.markdown-content h2 { font-size: 1.2rem; margin: 1.5em 0 0.625em; }
+.markdown-content h3 { font-size: 1.05rem; margin: 1.25em 0 0.5em; }
+
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  font-size: var(--text-sm);
+  margin: 1em 0 0.375em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+
+.markdown-content :is(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0;
+}
+
+.markdown-content p { margin: 0.625em 0; }
+.markdown-content p:first-child { margin-top: 0; }
+.markdown-content p:last-child { margin-bottom: 0; }
+
+.markdown-content :not(pre) > code {
+  background: var(--bg-tertiary);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: #e8ab6a;
+  border: 1px solid var(--border);
+}
+
+.markdown-content pre {
+  background: #0d0d0f;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  margin: var(--space-5) 0;
+  overflow-x: auto;
+  position: relative;
+}
+
+.markdown-content pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  tab-size: 2;
+}
+
+.markdown-content pre > code[class]::before {
+  content: attr(class);
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  text-transform: lowercase;
+  pointer-events: none;
+}
+
+.markdown-content ul,
+.markdown-content ol { margin: 0.625em 0; padding-left: 1.5em; }
+.markdown-content ul { list-style-type: disc; }
+.markdown-content ul ul { list-style-type: circle; }
+.markdown-content ol { list-style-type: decimal; }
+.markdown-content li { margin: 0.3em 0; padding-left: 0.25em; }
+.markdown-content li > p { margin: 0.25em 0; }
+
+.markdown-content blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 0.75em 0;
+  padding: var(--space-2) var(--space-4);
+  color: var(--text-secondary);
+  background: var(--accent-dim);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.markdown-content blockquote p:first-child { margin-top: 0; }
+.markdown-content blockquote p:last-child { margin-bottom: 0; }
+
+.markdown-content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+.markdown-content a:hover { border-bottom-color: var(--accent); }
+
+.markdown-content strong { font-weight: 600; color: var(--text-primary); }
+.markdown-content em { font-style: italic; color: var(--text-secondary); }
+
+.markdown-content hr {
+  border: none;
+  height: 1px;
+  background: var(--border);
+  margin: 1.5em 0;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-5) 0;
+  font-size: var(--text-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.markdown-content thead { background: var(--bg-tertiary); }
+
+.markdown-content th {
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown-content td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.markdown-content tbody tr:last-child td { border-bottom: none; }
+.markdown-content tbody tr:hover { background: var(--bg-hover); }
+
+.markdown-content img {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  margin: var(--space-4) 0;
+}
+
+.markdown-content input[type="checkbox"] {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 3px;
+  vertical-align: middle;
+  margin-right: 0.4em;
+  position: relative;
+  cursor: default;
+}
+
+.markdown-content input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.markdown-content input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0.5px;
+  width: 5px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/* ========================================
+   diff2html - Dark Theme Overrides
+   ======================================== */
+
+/* Container */
+.d2h-wrapper {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.d2h-file-wrapper {
+  border: none;
+  border-radius: 0;
+  margin-bottom: 0;
+  background: transparent;
+}
+
+.d2h-file-header {
+  display: none !important;
+}
+
+.d2h-file-collapse {
+  display: none !important;
+}
+
+/* Line numbers — statically positioned table cell (the base stylesheet
+   absolutely positions it and pads code lines 8em to clear it; we use a
+   compact 12px padding instead, which requires normal table flow) */
+.d2h-code-linenumber {
+  position: static;
+  width: 64px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+  border-color: var(--border);
+  padding: 0 8px;
+  font-size: 11px;
+  min-width: 36px;
+  text-align: right;
+  user-select: none;
+}
+
+/* Code lines */
+.d2h-code-line {
+  padding: 0 12px;
+  width: auto;
+}
+
+.d2h-code-line-ctn {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-secondary);
+}
+
+.d2h-code-line-prefix {
+  user-select: none;
+  color: var(--text-muted);
+}
+
+/* Diff table */
+.d2h-diff-table {
+  font-family: var(--font-mono);
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.d2h-diff-tbody tr {
+  border: none;
+}
+
+/* Deletion (red) */
+.d2h-del {
+  background: rgba(248, 81, 73, 0.1);
+  border-color: transparent;
+}
+
+.d2h-code-linenumber.d2h-del {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.d2h-del .d2h-code-line-prefix {
+  color: #f85149;
+}
+
+.d2h-code-line-ctn .d2h-change {
+  border-radius: 3px;
+  padding: 1px 0;
+}
+
+.d2h-code-line-ctn del {
+  background: rgba(248, 81, 73, 0.35);
+  text-decoration: none;
+}
+
+/* Addition (green) */
+.d2h-ins {
+  background: rgba(63, 185, 80, 0.1);
+  border-color: transparent;
+}
+
+.d2h-code-linenumber.d2h-ins {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.d2h-ins .d2h-code-line-prefix {
+  color: #3fb950;
+}
+
+.d2h-code-line-ctn ins {
+  background: rgba(63, 185, 80, 0.35);
+  text-decoration: none;
+}
+
+/* Rows with word-level changes get .d2h-change on the cell too — the base
+   stylesheet paints those light yellow/green via `.d2h-file-diff .d2h-del.d2h-change`,
+   which beats the .d2h-del/.d2h-ins overrides on specificity. Re-assert dark. */
+.d2h-file-diff .d2h-del.d2h-change {
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.d2h-file-diff .d2h-ins.d2h-change {
+  background: rgba(63, 185, 80, 0.1);
+}
+
+.d2h-file-diff .d2h-code-linenumber.d2h-del.d2h-change {
+  background: rgba(248, 81, 73, 0.15);
+}
+
+.d2h-file-diff .d2h-code-linenumber.d2h-ins.d2h-change {
+  background: rgba(63, 185, 80, 0.15);
+}
+
+/* Context (unchanged) lines */
+.d2h-cntx {
+  background: transparent;
+  border-color: transparent;
+}
+
+.d2h-code-linenumber.d2h-cntx {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+
+/* Info line (@@ ... @@) */
+.d2h-info {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: transparent;
+  color: var(--text-muted);
+}
+
+.d2h-code-linenumber.d2h-info {
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.d2h-info .d2h-code-line {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* Emptyplaceholder */
+.d2h-emptyplaceholder,
+.d2h-code-side-emptyplaceholder {
+  background: var(--bg-tertiary);
+  border-color: transparent;
+}
+
+/* Side-by-side specific */
+.d2h-file-side-diff {
+  width: 50%;
+  margin: 0;
+}
+
+/* Remove file list */
+.d2h-file-list-wrapper {
+  display: none;
+}
+
+/* Rich body adjustments */
+.tool-card__body--rich .d2h-wrapper {
+  overflow-x: auto;
+}
+
+/* ========================================
+   Shared Component - File Header
+   ======================================== */
+
+.file-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.file-icon {
+  flex-shrink: 0;
+}
+
+.file-action {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.file-name {
+  color: var(--text-primary);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.file-path {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  margin-left: auto;
+}
+
+/* ========================================
+   Tool Body - Bash Terminal
+   ======================================== */
+
+.tool-body-bash {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  padding: var(--space-3);
+}
+
+.bash-file-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.bash-file-icon {
+  flex-shrink: 0;
+}
+
+.bash-file-action {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.bash-file-name {
+  color: var(--text-primary);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.bash-file-info {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  margin-left: auto;
+}
+
+.tool-body-bash__command {
+  color: var(--text-primary);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-2);
+}
+
+.tool-body-bash__prompt {
+  color: var(--success);
+  margin-right: var(--space-2);
+  user-select: none;
+}
+
+.tool-body-bash__output {
+  color: var(--text-secondary);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* ========================================
+   Tool Body - Code Blocks (Read/Grep)
+   ======================================== */
+
+.tool-body-code {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0;
+  padding: var(--space-3);
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: none;
+  border: none;
+}
+
+/* ========================================
+   Tool Body - Grep/Glob Results
+   ======================================== */
+
+.tool-body-grep {
+  padding: var(--space-3);
+  font-family: var(--font-sans);
+}
+
+/* Directory grouping for file lists (Glob/Grep files mode) */
+.grep-directory {
+  margin-bottom: var(--space-4);
+}
+
+.grep-directory:last-child {
+  margin-bottom: 0;
+}
+
+.grep-directory-path {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  padding: var(--space-2);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-2);
+  font-weight: 500;
+}
+
+.grep-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: var(--space-3);
+}
+
+.grep-file-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: 4px;
+  font-size: var(--text-sm);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.grep-file-item:hover {
+  background: var(--bg-hover);
+}
+
+.grep-file-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.grep-file-name {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
+.grep-file-path {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  margin-left: auto;
+  opacity: 0.6;
+}
+
+/* Match content display (Grep content mode) */
+.grep-file-match {
+  margin-bottom: var(--space-5);
+}
+
+.grep-file-match:last-child {
+  margin-bottom: 0;
+}
+
+.grep-matches {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.grep-match-line {
+  display: flex;
+  align-items: flex-start;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  border-bottom: 1px solid var(--border);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.grep-match-line:last-child {
+  border-bottom: none;
+}
+
+.grep-match-line:hover {
+  background: var(--bg-hover);
+}
+
+.grep-match-line--match {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.grep-match-line--match:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.grep-match-line--context {
+  opacity: 0.6;
+}
+
+.grep-line-number {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-3);
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  border-right: 1px solid var(--border);
+  text-align: right;
+  min-width: 50px;
+  user-select: none;
+  font-size: 0.75rem;
+}
+
+.grep-match-line--match .grep-line-number {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.grep-line-content {
+  flex: 1;
+  padding: var(--space-1) var(--space-3);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+}
+
+.grep-match-line--match .grep-line-content {
+  color: var(--text-primary);
+}
+
+/* Light theme diff2html overrides */
+:root[data-theme="light"] .d2h-del { background: rgba(255, 129, 130, 0.1); }
+:root[data-theme="light"] .d2h-code-linenumber.d2h-del { background: rgba(255, 129, 130, 0.15); }
+:root[data-theme="light"] .d2h-del .d2h-code-line-prefix { color: #cf222e; }
+:root[data-theme="light"] .d2h-code-line-ctn del { background: rgba(255, 129, 130, 0.3); }
+:root[data-theme="light"] .d2h-ins { background: rgba(46, 160, 67, 0.1); }
+:root[data-theme="light"] .d2h-code-linenumber.d2h-ins { background: rgba(46, 160, 67, 0.15); }
+:root[data-theme="light"] .d2h-ins .d2h-code-line-prefix { color: #1a7f37; }
+:root[data-theme="light"] .d2h-code-line-ctn ins { background: rgba(46, 160, 67, 0.3); }
+:root[data-theme="light"] .d2h-code-linenumber.d2h-cntx { background: var(--bg-secondary); }
+:root[data-theme="light"] .d2h-code-line-ctn { color: var(--text-primary); }
+:root[data-theme="light"] .d2h-info { background: rgba(59, 130, 246, 0.06); }
+:root[data-theme="light"] .d2h-code-linenumber.d2h-info { background: rgba(59, 130, 246, 0.06); }
+
+/* ========================================
+   Tool Body - TodoWrite Checklist
+   ======================================== */
+
+.tool-body-todo {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px var(--space-2);
+  border-radius: 4px;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.todo-icon {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-size: 11px;
+}
+
+.todo-icon--completed { color: var(--success); }
+.todo-icon--active { color: var(--accent); }
+.todo-icon--pending { color: var(--text-muted); }
+
+.todo-item--completed .todo-label { color: var(--text-tertiary); text-decoration: line-through; }
+.todo-item--in_progress .todo-label { color: var(--text-primary); }
+.todo-item--pending .todo-label { color: var(--text-secondary); }
+
+/* ========================================
+   Tool Body - Screenshot
+   ======================================== */
+
+.tool-body-screenshot {
+  padding: var(--space-3);
+}
+
+/* Remove max-height on tool bodies containing screenshots */
+.tool-card__body--rich:has(.tool-body-screenshot) {
+  max-height: none;
+}
+
+.screenshot-img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.screenshot-img:hover {
+  opacity: 0.85;
+}
+
+.screenshot-text {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin: var(--space-2) 0 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* ========================================
+   Screenshot Lightbox
+   ======================================== */
+
+.screenshot-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  cursor: zoom-out;
+}
+
+.screenshot-lightbox--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.screenshot-lightbox__img {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  object-fit: contain;
+}
+
+/* ========================================
+   Tool Body - Session (Subagent)
+   ======================================== */
+
+.tool-body-session {
+  padding: var(--space-3);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.session-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.session-desc {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.session-agent-badge {
+  font-size: var(--text-xs);
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+}
+
+.session-prompt {
+  margin-bottom: var(--space-2);
+}
+
+.session-prompt summary {
+  cursor: pointer;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  user-select: none;
+}
+
+.session-prompt summary:hover {
+  color: var(--text-secondary);
+}
+
+.session-prompt-body {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.session-response {
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+/* ========================================
+   Tool Body - WebSearch
+   ======================================== */
+
+.tool-body-websearch {
+  padding: 0;
+}
+
+.tool-body-websearch .tool-body-code {
+  margin: 0;
+}
+
+/* ========================================
+   Tool Body - WebFetch
+   ======================================== */
+
+.tool-body-webfetch {
+  padding: var(--space-3);
+}
+
+.webfetch-url {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.webfetch-url a {
+  color: var(--accent);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.webfetch-url a:hover {
+  text-decoration: underline;
+}
+
+.webfetch-content {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* ========================================
+   Tool Body - Browser Evaluate
+   ======================================== */
+
+.tool-body-evaluate {
+  padding: var(--space-3);
+}
+
+.evaluate-code {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-2);
+}
+
+.evaluate-result {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-2);
+}
+
+.evaluate-result-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+.evaluate-result-value {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* ========================================
+   Tool Body - Playwright Actions
+   ======================================== */
+
+.tool-body-playwright {
+  padding: var(--space-3);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.playwright-action {
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
+}
+
+.playwright-result {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: var(--space-2) 0 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* ========================================
+   Tool Body - Open (File Preview)
+   ======================================== */
+
+.tool-body-open {
+  padding: var(--space-3);
+}
+
+.open-file-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.open-file-icon {
+  flex-shrink: 0;
+}
+
+.open-file-name {
+  color: var(--text-primary);
+  font-weight: 500;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+a.open-file-name:hover {
+  text-decoration: underline;
+  color: var(--accent);
+}
+
+.open-file-app {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
+.open-pdf-embed {
+  width: 100%;
+  height: 600px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+/* Remove max-height on tool bodies containing PDF embeds */
+.tool-card__body--rich:has(.open-pdf-embed) {
+  max-height: none;
+}
+
+/* Remove max-height on tool bodies containing open images */
+.tool-card__body--rich:has(.tool-body-open .screenshot-img) {
+  max-height: none;
+}
+
+/* ========================================
+   Tool Body - Read Image
+   ======================================== */
+
+.tool-body-read-image {
+  padding: var(--space-3);
+}
+
+.tool-body-read {
+  padding: var(--space-3);
+}
+
+.read-file-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.read-file-icon {
+  flex-shrink: 0;
+}
+
+.read-file-name {
+  color: var(--text-primary);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.read-file-info {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
+/* Remove max-height on tool bodies containing read images */
+.tool-card__body--rich:has(.tool-body-read-image .screenshot-img) {
+  max-height: none;
+}
+
+/* ========================================
+   Tool Body - Diff / Patch views
+   ======================================== */
+
+.tool-body-diff {
+  padding: var(--space-3);
+}
+
+.tool-body-diff .file-header {
+  margin-bottom: var(--space-2);
+}
+
+/* Commit metadata shown above the patch (git show / git log -p) */
+.tool-body-diff__preamble {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+/* Diff view nested inside a bash card sits below the command line */
+.tool-body-bash .tool-body-diff {
+  padding: var(--space-2) 0 0;
+}
+
+/* Diff views inside markdown: undo the prose table styling (padding,
+   row borders, hover) that .markdown-content applies to all tables */
+.markdown-diff table {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+.markdown-diff td {
+  padding: 0;
+  border-bottom: none;
+}
+
+.markdown-diff tbody tr:hover {
+  background: none;
+}
+
+/* d2h file headers are hidden globally (Edit/Write cards are single-file and
+   have their own header), but multi-file patches need per-file names */
+.tool-body-diff .d2h-file-header,
+.markdown-diff .d2h-file-header {
+  display: flex !important;
+  align-items: center;
+  background: var(--bg-secondary);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 4px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tool-body-diff .d2h-file-wrapper,
+.markdown-diff .d2h-file-wrapper {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: var(--space-2);
+}
+
+/* ========================================
+   Tool Body - Write File Header
+   ======================================== */
+
+.write-file-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.write-file-icon {
+  flex-shrink: 0;
+}
+
+.write-file-action {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.write-file-name {
+  color: var(--text-primary);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.write-file-info {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  margin-left: auto;
+}
+
+/* ========================================
+   Tool Body - Plan Mode
+   ======================================== */
+
+.tool-body-planmode {
+  padding: var(--space-2) var(--space-3);
+}
+
+.planmode-badge {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* ========================================
+   Media Viewer Styles
+   ======================================== */
+.tool-body-media-viewer {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.media-viewer-img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  display: block;
+}
+
+.media-viewer-img--small {
+  max-width: 300px;
+  margin-bottom: 8px;
+}
+
+.media-viewer-img:hover {
+  transform: scale(1.02);
+}
+
+.media-viewer-video {
+  max-width: 100%;
+  max-height: 500px;
+  border-radius: 6px;
+  display: block;
+}
+
+.media-audio-wrapper {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.media-audio-name {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.media-audio-wrapper audio {
+  width: 100%;
+}
+
+.media-thumbnail--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  font-size: 2rem;
+  cursor: default;
+}
+
+.media-viewer-text {
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: auto;
+  margin-top: 12px;
+}
+
+.media-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.media-gallery-item {
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  transition: all 0.2s ease;
+}
+
+.media-gallery-item:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-2px);
+}
+
+.media-thumbnail {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.media-thumbnail:hover {
+  transform: scale(1.05);
+}
+
+.media-item-info {
+  padding: 12px;
+}
+
+.media-item-name {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.media-item-type {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ========================================
+   Responsive
+   ======================================== */
+@media (max-width: 640px) {
+  :root {
+    --header-height: 52px;
+    --tabs-height: 48px;
+    --space-5: 1rem;
+  }
+}
+
+/* Safe Areas for Notched Devices */
+@supports (padding: env(safe-area-inset-top)) {
+  :root {
+    --safe-top: env(safe-area-inset-top);
+    --safe-bottom: env(safe-area-inset-bottom);
+    --safe-left: env(safe-area-inset-left);
+    --safe-right: env(safe-area-inset-right);
+  }
+}

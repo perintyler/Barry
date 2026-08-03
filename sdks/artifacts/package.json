@@ -1,0 +1,65 @@
+{
+  "name": "@barry-sdks/artifacts",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "description": "Artifact list and file viewer components",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./styles": "./src/styles-bundle.css",
+    "./styles-bundle.css": "./src/styles-bundle.css",
+    "./styles/sdk-only": "./src/styles.css",
+    "./css": "./dist/css.js",
+    "./browser": "./dist/browser.js",
+    "./browser-inline": "./dist/browser-inline.js",
+    "./worker": "./src/worker/index.ts",
+    "./utils": "./src/worker/file-utils.ts",
+    "./mcp": "./src/mcp/index.ts",
+    "./mcp/client": "./src/mcp/client.ts",
+    "./mcp/cloudflare": "./src/mcp/cloudflare.ts",
+    "./mcp-app-viewer": "./dist/mcp-app-viewer.js"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@barry/syntax": "workspace:*",
+    "@barry/themes": "workspace:*",
+    "@barry/ui": "workspace:*",
+    "@cloudflare/puppeteer": "^1.1.0",
+    "@cloudflare/workers-oauth-provider": "^0.0.11",
+    "@modelcontextprotocol/ext-apps": "^1.7.4",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@taga3s/highlightjs-terraform": "^1.0.7",
+    "agents": "^0.13.3",
+    "highlight.js": "11.11.1",
+    "highlightjs-zig": "^1.0.2",
+    "hono": "4.12.25",
+    "markdown-it": "14.2.0",
+    "oauth4webapi": "^3.8.6",
+    "zod": "4.3.6"
+  },
+  "optionalDependencies": {
+    "express": "4.22.1",
+    "jose": "6.2.3"
+  },
+  "devDependencies": {
+    "@barry/logger": "workspace:*",
+    "@cloudflare/workers-types": "4.20260111.0",
+    "@types/express": "5.0.6",
+    "@types/node": "22.15.0",
+    "esbuild": "0.27.0",
+    "jsdom": "25.0.0",
+    "typescript": "5.9.3",
+    "vite": "^8.1.5",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "4.1.0"
+  }
+}

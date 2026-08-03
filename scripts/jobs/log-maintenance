@@ -1,0 +1,8 @@
+#!/bin/bash
+# Truncate service logs exceeding 10MB.
+# Wrapper for the existing truncate-logs script.
+
+set -euo pipefail
+
+BARRY_DIR="${BARRY_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+exec "$BARRY_DIR/scripts/launchd/truncate-logs"

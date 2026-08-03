@@ -1,0 +1,21 @@
+{
+  "name": "@barry/syntax",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "description": "Language detection and syntax highlighting",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme": "./src/theme.css"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

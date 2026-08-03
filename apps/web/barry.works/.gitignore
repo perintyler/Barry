@@ -1,0 +1,9 @@
+# Build output
+dist/
+
+# Vite cache
+node_modules/
+.vite/
+
+# Prevent stale assets in public (Vite outputs to dist/client/assets/)
+public/assets/
