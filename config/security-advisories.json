@@ -99,6 +99,20 @@
       "reason": "Transitive dep of eslint/minimatch; dev-only, no fix available."
     },
     {
+      "id": "GHSA-rgw5-rvv9-x895",
+      "packages": ["brace-expansion"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of eslint/minimatch; dev-only, no upstream fix available."
+    },
+    {
+      "id": "GHSA-fxqj-rqcc-2cmp",
+      "packages": ["postcss"],
+      "owner": "Barry maintainers",
+      "expires": "2026-10-01",
+      "reason": "Transitive dep of vite/svelte toolchain; dev-only, no upstream fix available."
+    },
+    {
       "id": "GHSA-4c8g-83qw-93j6",
       "packages": ["fast-uri"],
       "owner": "Barry maintainers",

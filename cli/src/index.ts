@@ -109,7 +109,7 @@ import { withCleanup } from "./lib/with-cleanup.js";
 import { closeConnection } from "@barry/db";
 import { envAuditCommand, envMigrateCommand } from "./commands/env.js";
 import { eventsListCommand, eventsReadCommand, eventsCountCommand, eventsEmitCommand } from "./commands/events.js";
-import { DEVOPS_COMMANDS, checkBoundary } from "./commands/devops.js";
+import { checkBoundary } from "./commands/devops.js";
 import { heirCommand, switchCommand, installCommand } from "./commands/heir.js";
 
 program

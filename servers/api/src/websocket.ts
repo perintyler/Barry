@@ -10,7 +10,7 @@ import { createLogger } from "@barry/logger";
 import { isAuthenticatedWs } from "@barry/auth";
 import { getHostingConfig } from "@barry/env";
 import { validateRepoPath } from "./repo-paths.js";
-import { subscribeTopic, unsubscribeTopic, clearTopics, publishToTopic } from "./bus-registry.js";
+import { subscribeTopic, unsubscribeTopic, clearTopics } from "./bus-registry.js";
 
 const log = createLogger("barry-ws");
 

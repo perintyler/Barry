@@ -251,20 +251,20 @@ export async function setProfileMetadataField(
   key: string,
   value: unknown,
 ): Promise<void> {
-  const result = value === undefined
-    ? await db
-        .updateTable("profiles")
-        .set({ metadata: sql`metadata - ${key}` })
-        .where("id", "=", id)
-        .executeTakeFirst()
-    : await db
-        .updateTable("profiles")
-        // See updateProfileMetadata for why ::text::jsonb is required.
-        .set({ metadata: sql`metadata || ${JSON.stringify({ [key]: value })}::text::jsonb` })
-        .where("id", "=", id)
-        .executeTakeFirst();
-
-
+  if (value === undefined) {
+    await db
+      .updateTable("profiles")
+      .set({ metadata: sql`metadata - ${key}` })
+      .where("id", "=", id)
+      .executeTakeFirst();
+  } else {
+    await db
+      .updateTable("profiles")
+      // See updateProfileMetadata for why ::text::jsonb is required.
+      .set({ metadata: sql`metadata || ${JSON.stringify({ [key]: value })}::text::jsonb` })
+      .where("id", "=", id)
+      .executeTakeFirst();
+  }
 }
 
 export async function touchProfileLastUsed(id: number): Promise<void> {
@@ -415,12 +415,11 @@ export async function setProfileParent(
   id: number,
   parentId: number | null,
 ): Promise<void> {
-  const result = await db
+  await db
     .updateTable("profiles")
     .set({ parent_id: parentId })
     .where("id", "=", id)
     .executeTakeFirst();
-
 }
 
 export const Profiles = {
