@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, readdirSync } from "fs";
-import { join, extname, basename } from "path";
+import { join, extname } from "path";
 
 // Split to avoid self-injection/stamping
 const CANARY_PREFIX = "BARRY-CANARY";
