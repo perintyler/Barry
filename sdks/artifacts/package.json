@@ -28,7 +28,7 @@
     "build": "node scripts/build.js",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "pretest": "node scripts/build.js",
+    "pretest": "pnpm --filter @barry/ui... build && node scripts/build.js",
     "test": "vitest run"
   },
   "dependencies": {
