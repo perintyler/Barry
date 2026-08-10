@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "fs"
 import { tmpdir } from "os";
 import { join, dirname } from "path";
 import { injectCanaries, stampCanaries, CANARY_PLACEHOLDER } from "../src/stamp.js";
-import { parseLatestVersion } from "../src/version.js";
+import { parseVersionFromMessage } from "../src/version.js";
 
 let fixtureDir: string;
 
@@ -179,37 +179,24 @@ describe("stampCanaries", () => {
   });
 });
 
-describe("parseLatestVersion", () => {
-  it("extracts version from staging releases file", () => {
-    write("RELEASES.staging.md", [
-      "# Staging Releases",
-      "",
-      "## 0.1.0-rc.3 (staging) — 2026-07-10",
-      "",
-      "Some notes.",
-    ].join("\n"));
-
-    expect(parseLatestVersion(join(fixtureDir, "RELEASES.staging.md"))).toBe("0.1.0-rc.3");
+describe("parseVersionFromMessage", () => {
+  it("extracts a prod version", () => {
+    expect(parseVersionFromMessage("1.2.1")).toBe("1.2.1");
   });
 
-  it("extracts version from prod releases file", () => {
-    write("RELEASES.md", [
-      "# Releases",
-      "",
-      "## 1.0.0 — 2026-08-01",
-      "",
-      "First release.",
-    ].join("\n"));
-
-    expect(parseLatestVersion(join(fixtureDir, "RELEASES.md"))).toBe("1.0.0");
+  it("keeps the -rc suffix on a staging version", () => {
+    expect(parseVersionFromMessage("0.3.0-rc.2")).toBe("0.3.0-rc.2");
   });
 
-  it("returns 'unreleased' when no version heading found", () => {
-    write("RELEASES.md", "# Releases\n\n_No prod releases yet._\n");
-    expect(parseLatestVersion(join(fixtureDir, "RELEASES.md"))).toBe("unreleased");
+  it("extracts a version embedded in a descriptive message", () => {
+    expect(parseVersionFromMessage("1.2.1 — auth fixes")).toBe("1.2.1");
   });
 
-  it("returns 'unreleased' when file does not exist", () => {
-    expect(parseLatestVersion(join(fixtureDir, "nope.md"))).toBe("unreleased");
+  it("returns 'unreleased' when no message is passed", () => {
+    expect(parseVersionFromMessage(undefined)).toBe("unreleased");
+  });
+
+  it("returns 'unreleased' for the HEAD-subject fallback", () => {
+    expect(parseVersionFromMessage("release")).toBe("unreleased");
   });
 });

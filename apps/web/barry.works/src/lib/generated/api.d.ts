@@ -102,30 +102,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/profiles": {
+    "/identities": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["listProfiles"];
+        get: operations["listIdentities"];
         put?: never;
-        post: operations["createProfile"];
+        post: operations["createIdentity"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/profiles/effective": {
+    "/identities/effective": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["getEffectiveProfile"];
+        get: operations["getEffectiveIdentity"];
         put?: never;
         post?: never;
         delete?: never;
@@ -134,7 +134,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/profiles/blocks/available": {
+    "/identities/blocks/available": {
         parameters: {
             query?: never;
             header?: never;
@@ -198,25 +198,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/profiles/{profileId}": {
+    "/identities/{identityId}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                profileId: number;
+                identityId: number;
             };
             cookie?: never;
         };
-        get: operations["getProfile"];
+        get: operations["getIdentity"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch: operations["updateProfile"];
+        patch: operations["updateIdentity"];
         trace?: never;
     };
-    "/profiles/{profileId}/set-default": {
+    "/identities/{identityId}/set-default": {
         parameters: {
             query?: never;
             header?: never;
@@ -225,7 +225,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["setDefaultProfile"];
+        post: operations["setActiveIdentity"];
         delete?: never;
         options?: never;
         head?: never;
@@ -776,7 +776,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/profiles/blocks/status": {
+    "/identities/blocks/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -792,7 +792,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/profiles/blocks/{blockName}/retry": {
+    "/identities/blocks/{blockName}/retry": {
         parameters: {
             query?: never;
             header?: never;
@@ -808,7 +808,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/profiles/blocks/{blockName}/auth": {
+    "/identities/blocks/{blockName}/auth": {
         parameters: {
             query?: never;
             header?: never;
@@ -824,7 +824,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/profiles/blocks/{blockName}/auth/status": {
+    "/identities/blocks/{blockName}/auth/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -1099,8 +1099,8 @@ export interface components {
             systemPrompt: string | null;
             summary: string | null;
             repoPath: string | null;
-            profileId: number | null;
-            profileSource: ("explicit" | "repo" | "default" | "file") | null;
+            identityId: number | null;
+            identitySource: ("explicit" | "repo" | "default" | "file") | null;
             /** @enum {string} */
             status: "pending" | "planning" | "running" | "completed" | "failed" | "cancelled";
             traits: string[];
@@ -1113,7 +1113,7 @@ export interface components {
             worktreePath: string | null;
             baseRepoPath: string | null;
             source: string | null;
-            provider: ("claude" | "codex" | "opencode" | "cursor") | null;
+            provider: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
             model: string | null;
             messageCount?: number;
             lastMessageAt?: string | null;
@@ -1126,59 +1126,71 @@ export interface components {
             createdAt: string;
             startedAt: string | null;
         };
-        Profile: {
+        Identity: {
             id: number;
             token: string;
             name: string;
-            parentId: number | null;
-            parentName: string | null;
+            displayName: string | null;
             blocks: string[];
             traits: string[];
             scopeId: number | null;
-            defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor") | null;
+            defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
             defaultModel: string | null;
             envKeys: string[];
             vaultEmail: string | null;
             isDefault: boolean;
             createdAt: string | null;
             lastUsedAt: string | null;
+            /** @enum {string} */
+            source?: "db" | "file";
+            scope?: {
+                [key: string]: unknown;
+            } | null;
         };
-        ProfileListResponse: {
-            profiles: {
+        IdentityListResponse: {
+            identities: {
                 id: number;
                 token: string;
                 name: string;
-                parentId: number | null;
-                parentName: string | null;
+                displayName: string | null;
                 blocks: string[];
                 traits: string[];
                 scopeId: number | null;
-                defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor") | null;
+                defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
                 defaultModel: string | null;
                 envKeys: string[];
                 vaultEmail: string | null;
                 isDefault: boolean;
                 createdAt: string | null;
                 lastUsedAt: string | null;
+                /** @enum {string} */
+                source?: "db" | "file";
+                scope?: {
+                    [key: string]: unknown;
+                } | null;
             }[];
         };
-        ProfileResponse: {
-            profile: {
+        IdentityResponse: {
+            identity: {
                 id: number;
                 token: string;
                 name: string;
-                parentId: number | null;
-                parentName: string | null;
+                displayName: string | null;
                 blocks: string[];
                 traits: string[];
                 scopeId: number | null;
-                defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor") | null;
+                defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
                 defaultModel: string | null;
                 envKeys: string[];
                 vaultEmail: string | null;
                 isDefault: boolean;
                 createdAt: string | null;
                 lastUsedAt: string | null;
+                /** @enum {string} */
+                source?: "db" | "file";
+                scope?: {
+                    [key: string]: unknown;
+                } | null;
             };
             warnings?: {
                 kind: string;
@@ -1187,23 +1199,27 @@ export interface components {
                 hint?: string;
             }[];
         };
-        EffectiveProfileResponse: {
-            profile: {
+        EffectiveIdentityResponse: {
+            identity: {
                 id: number;
                 token: string;
                 name: string;
-                parentId: number | null;
-                parentName: string | null;
+                displayName: string | null;
                 blocks: string[];
                 traits: string[];
                 scopeId: number | null;
-                defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor") | null;
+                defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
                 defaultModel: string | null;
                 envKeys: string[];
                 vaultEmail: string | null;
                 isDefault: boolean;
                 createdAt: string | null;
                 lastUsedAt: string | null;
+                /** @enum {string} */
+                source?: "db" | "file";
+                scope?: {
+                    [key: string]: unknown;
+                } | null;
             };
             /** @enum {string} */
             source: "explicit" | "repo" | "default" | "file";
@@ -1223,10 +1239,10 @@ export interface components {
             name?: string;
             /** @default [] */
             traits: string[];
-            profileId?: number | null;
+            identityId?: number | null;
             useWorktree?: boolean;
             /** @enum {string} */
-            provider?: "claude" | "codex" | "opencode" | "cursor";
+            provider?: "claude" | "codex" | "opencode" | "cursor" | "zai";
             model?: string;
             scopeId?: number | null;
             scope?: {
@@ -1239,10 +1255,10 @@ export interface components {
             name?: string;
             /** @default [] */
             traits: string[];
-            profileId?: number | null;
+            identityId?: number | null;
             useWorktree?: boolean;
             /** @enum {string} */
-            provider?: "claude" | "codex" | "opencode" | "cursor";
+            provider?: "claude" | "codex" | "opencode" | "cursor" | "zai";
             model?: string;
             scopeId?: number | null;
             scope?: {
@@ -1263,8 +1279,8 @@ export interface components {
                 systemPrompt: string | null;
                 summary: string | null;
                 repoPath: string | null;
-                profileId: number | null;
-                profileSource: ("explicit" | "repo" | "default" | "file") | null;
+                identityId: number | null;
+                identitySource: ("explicit" | "repo" | "default" | "file") | null;
                 /** @enum {string} */
                 status: "pending" | "planning" | "running" | "completed" | "failed" | "cancelled";
                 traits: string[];
@@ -1277,7 +1293,7 @@ export interface components {
                 worktreePath: string | null;
                 baseRepoPath: string | null;
                 source: string | null;
-                provider: ("claude" | "codex" | "opencode" | "cursor") | null;
+                provider: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
                 model: string | null;
                 messageCount?: number;
                 lastMessageAt?: string | null;
@@ -1308,6 +1324,7 @@ export interface components {
                 status?: string | null;
                 taskStatus?: string | null;
                 toolUseId?: string | null;
+                parentToolUseId?: string | null;
                 /** Format: date-time */
                 createdAt: string;
             }[];
@@ -1448,23 +1465,31 @@ export interface components {
             status?: string;
         };
         ActionAck: Record<string, never>;
-        UpdateProfileRequest: {
+        UpdateIdentityRequest: {
             name?: string;
-            parentId?: number | null;
+            displayName?: string | null;
             blocks?: string[];
             traits?: string[];
             scopeId?: number | null;
-            defaultCodingAgent?: ("claude" | "codex" | "opencode" | "cursor") | null;
+            defaultCodingAgent?: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
             defaultModel?: string | null;
+            scope?: {
+                [key: string]: unknown;
+            } | null;
         };
-        CreateProfileRequest: {
+        CreateIdentityRequest: {
             name: string;
-            parentId?: number | null;
             blocks?: string[];
             traits?: string[];
             scopeId?: number | null;
-            defaultCodingAgent?: ("claude" | "codex" | "opencode" | "cursor") | null;
+            defaultCodingAgent?: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
             defaultModel?: string | null;
+            displayName?: string;
+            /** @enum {string} */
+            source?: "db" | "file";
+            scope?: {
+                [key: string]: unknown;
+            } | null;
         };
         ChangeListResponse: {
             changes: {
@@ -1494,6 +1519,7 @@ export interface components {
             input?: unknown;
             result?: unknown;
             toolUseId?: string;
+            parentToolUseId?: string;
             metadata?: {
                 [key: string]: unknown;
             };
@@ -2007,7 +2033,7 @@ export interface operations {
             };
         };
     };
-    listProfiles: {
+    listIdentities: {
         parameters: {
             query?: never;
             header?: never;
@@ -2016,13 +2042,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Profiles */
+            /** @description Identities */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProfileListResponse"];
+                    "application/json": components["schemas"]["IdentityListResponse"];
                 };
             };
             /** @description Request failed */
@@ -2036,7 +2062,7 @@ export interface operations {
             };
         };
     };
-    createProfile: {
+    createIdentity: {
         parameters: {
             query?: never;
             header?: never;
@@ -2045,17 +2071,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateProfileRequest"];
+                "application/json": components["schemas"]["CreateIdentityRequest"];
             };
         };
         responses: {
-            /** @description Created profile */
+            /** @description Created barry */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProfileResponse"];
+                    "application/json": components["schemas"]["IdentityResponse"];
                 };
             };
             /** @description Request failed */
@@ -2069,7 +2095,7 @@ export interface operations {
             };
         };
     };
-    getEffectiveProfile: {
+    getEffectiveIdentity: {
         parameters: {
             query?: {
                 repoPath?: string;
@@ -2080,13 +2106,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Effective profile */
+            /** @description Effective barry */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EffectiveProfileResponse"];
+                    "application/json": components["schemas"]["EffectiveIdentityResponse"];
                 };
             };
             /** @description Request failed */
@@ -2249,24 +2275,24 @@ export interface operations {
             };
         };
     };
-    getProfile: {
+    getIdentity: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                profileId: number;
+                identityId: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Profile */
+            /** @description Identity */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProfileResponse"];
+                    "application/json": components["schemas"]["IdentityResponse"];
                 };
             };
             /** @description Request failed */
@@ -2280,18 +2306,18 @@ export interface operations {
             };
         };
     };
-    updateProfile: {
+    updateIdentity: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                profileId: number;
+                identityId: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateProfileRequest"];
+                "application/json": components["schemas"]["UpdateIdentityRequest"];
             };
         };
         responses: {
@@ -2301,7 +2327,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ActionAck"];
+                    "application/json": components["schemas"]["IdentityResponse"];
                 };
             };
             /** @description Request failed */
@@ -2315,12 +2341,12 @@ export interface operations {
             };
         };
     };
-    setDefaultProfile: {
+    setActiveIdentity: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                profileId: number;
+                identityId: number;
             };
             cookie?: never;
         };

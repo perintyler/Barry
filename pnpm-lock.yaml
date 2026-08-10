@@ -6,6 +6,7 @@ settings:
 
 overrides:
   '@hono/node-server': 1.19.13
+  hono: 4.13.1
   '@opentelemetry/core': 2.8.0
   ajv@8.17.1: 8.18.0
   axios: 1.16.0
@@ -14,18 +15,17 @@ overrides:
   brace-expansion@2.0.2: 2.0.3
   brace-expansion@5.0.4: 5.0.6
   devalue: 5.8.1
-  fast-uri: 3.1.2
+  fast-uri: 4.1.2
   flatted: 3.4.2
   follow-redirects: 1.16.0
   form-data: 4.0.6
-  ip-address: 10.1.1
-  js-yaml: 4.2.0
+  ip-address: 10.4.0
+  js-yaml: 4.3.1
   linkify-it: 5.0.1
   markdown-it: 14.2.0
-  nanoid: 5.0.9
-  path-to-regexp: 0.1.13
+  nanoid: 6.0.1
   qs: 6.15.2
-  undici: 7.28.0
+  undici: 8.10.0
   ws: 8.21.0
   typescript: 5.9.3
   vitest: 4.1.0
@@ -287,6 +287,34 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  blocks/actions:
+    dependencies:
+      '@barry/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@barry/skills':
+        specifier: workspace:*
+        version: link:../../packages/skills
+      '@barry/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 22.15.0
+        version: 22.15.0
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.0
+        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
+
   blocks/artifacts:
     dependencies:
       '@barry-sdks/artifacts':
@@ -308,16 +336,37 @@ importers:
 
   blocks/bdiff:
     dependencies:
+      '@barry/blocks':
+        specifier: workspace:*
+        version: link:../../packages/blocks
       '@barry/env':
         specifier: workspace:*
         version: link:../../packages/env
       '@barry/tools':
         specifier: workspace:*
         version: link:../../packages/tools
+      better-sqlite3:
+        specifier: 12.10.0
+        version: 12.10.0
+      cors:
+        specifier: 2.8.5
+        version: 2.8.5
+      express:
+        specifier: 4.22.1
+        version: 4.22.1
       zod:
         specifier: 3.25.76
         version: 3.25.76
     devDependencies:
+      '@types/better-sqlite3':
+        specifier: 7.6.13
+        version: 7.6.13
+      '@types/cors':
+        specifier: 2.8.17
+        version: 2.8.17
+      '@types/express':
+        specifier: 4.17.21
+        version: 4.17.21
       '@types/node':
         specifier: 22.15.0
         version: 22.15.0
@@ -327,6 +376,9 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+      vitest:
+        specifier: 4.1.0
+        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
 
   blocks/changes:
     dependencies:
@@ -399,6 +451,9 @@ importers:
 
   blocks/git:
     dependencies:
+      '@barry/file-tracker':
+        specifier: workspace:*
+        version: link:../../packages/file-tracker
       '@barry/tools':
         specifier: workspace:*
         version: link:../../packages/tools
@@ -418,6 +473,37 @@ importers:
       vitest:
         specifier: 4.1.0
         version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
+
+  blocks/github-app:
+    dependencies:
+      '@barry/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@barry/env':
+        specifier: workspace:*
+        version: link:../../packages/env
+      '@barry/github':
+        specifier: workspace:*
+        version: link:../../packages/github
+      '@barry/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
+      '@barry/secrets':
+        specifier: workspace:*
+        version: link:../../packages/secrets
+      express:
+        specifier: 4.22.1
+        version: 4.22.1
+    devDependencies:
+      '@types/express':
+        specifier: 4.17.21
+        version: 4.17.21
+      '@types/node':
+        specifier: 22.15.0
+        version: 22.15.0
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
   blocks/keychain:
     dependencies:
@@ -642,6 +728,9 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+      vitest:
+        specifier: 4.1.0
+        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
 
   packages/agent-runtime:
     dependencies:
@@ -709,8 +798,8 @@ importers:
         specifier: workspace:*
         version: link:../env
       '@modelcontextprotocol/sdk':
-        specifier: 1.27.1
-        version: 1.27.1(@cfworker/json-schema@4.1.1)(zod@3.25.76)
+        specifier: 1.29.0
+        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       esbuild:
         specifier: 0.27.3
         version: 0.27.3
@@ -787,8 +876,8 @@ importers:
         specifier: 2.0.0
         version: 2.0.0(kysely@0.28.17)(postgres@3.4.8)
       nanoid:
-        specifier: 5.0.9
-        version: 5.0.9
+        specifier: 6.0.1
+        version: 6.0.1
       postgres:
         specifier: 3.4.8
         version: 3.4.8
@@ -919,6 +1008,12 @@ importers:
 
   packages/secrets:
     dependencies:
+      '@barry/blocks':
+        specifier: workspace:*
+        version: link:../blocks
+      '@barry/db':
+        specifier: workspace:*
+        version: link:../db
       '@barry/vault':
         specifier: workspace:*
         version: link:../vault
@@ -967,9 +1062,6 @@ importers:
       '@barry/blocks':
         specifier: workspace:*
         version: link:../blocks
-      yaml:
-        specifier: 2.8.3
-        version: 2.8.3
     devDependencies:
       '@types/node':
         specifier: 22.15.0
@@ -1035,8 +1127,8 @@ importers:
   packages/tools:
     dependencies:
       '@modelcontextprotocol/sdk':
-        specifier: 1.27.1
-        version: 1.27.1(@cfworker/json-schema@4.1.1)(zod@3.25.76)
+        specifier: 1.29.0
+        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -1091,8 +1183,8 @@ importers:
         specifier: ^0.0.11
         version: 0.0.11
       '@modelcontextprotocol/ext-apps':
-        specifier: ^1.7.4
-        version: 1.7.4(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(react@19.2.7)(zod@4.3.6)
+        specifier: 1.7.5
+        version: 1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(react@19.2.7)(zod@4.3.6)
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)
@@ -1109,8 +1201,8 @@ importers:
         specifier: ^1.0.2
         version: 1.0.2
       hono:
-        specifier: 4.12.25
-        version: 4.12.25
+        specifier: 4.13.1
+        version: 4.13.1
       markdown-it:
         specifier: 14.2.0
         version: 14.2.0
@@ -1153,8 +1245,8 @@ importers:
         version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.0)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
     optionalDependencies:
       express:
-        specifier: 4.22.1
-        version: 4.22.1
+        specifier: 5.2.1
+        version: 5.2.1
       jose:
         specifier: 6.2.3
         version: 6.2.3
@@ -1236,9 +1328,6 @@ importers:
       ws:
         specifier: 8.21.0
         version: 8.21.0
-      yaml:
-        specifier: 2.8.3
-        version: 2.8.3
       zod:
         specifier: 4.3.6
         version: 4.3.6
@@ -1258,74 +1347,6 @@ importers:
       vitest:
         specifier: 4.1.0
         version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
-
-  servers/bdiff:
-    dependencies:
-      '@barry/env':
-        specifier: workspace:*
-        version: link:../../packages/env
-      '@modelcontextprotocol/sdk':
-        specifier: 1.27.1
-        version: 1.27.1(@cfworker/json-schema@4.1.1)(zod@3.25.76)
-      better-sqlite3:
-        specifier: 12.10.0
-        version: 12.10.0
-      cors:
-        specifier: 2.8.5
-        version: 2.8.5
-      express:
-        specifier: 4.22.1
-        version: 4.22.1
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: 7.6.13
-        version: 7.6.13
-      '@types/cors':
-        specifier: 2.8.17
-        version: 2.8.17
-      '@types/express':
-        specifier: 4.17.21
-        version: 4.17.21
-      '@types/node':
-        specifier: 22.15.0
-        version: 22.15.0
-      tsx:
-        specifier: 4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
-
-  servers/github:
-    dependencies:
-      '@barry/env':
-        specifier: workspace:*
-        version: link:../../packages/env
-      '@barry/github':
-        specifier: workspace:*
-        version: link:../../packages/github
-      '@barry/logger':
-        specifier: workspace:*
-        version: link:../../packages/logger
-      express:
-        specifier: 4.22.1
-        version: 4.22.1
-    devDependencies:
-      '@types/express':
-        specifier: 4.17.21
-        version: 4.17.21
-      '@types/node':
-        specifier: 22.15.0
-        version: 22.15.0
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
 
   servers/mcp:
     dependencies:
@@ -1366,8 +1387,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/tools
       '@modelcontextprotocol/sdk':
-        specifier: 1.27.1
-        version: 1.27.1(@cfworker/json-schema@4.1.1)(zod@3.25.76)
+        specifier: 1.29.0
+        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       better-sqlite3:
         specifier: 12.10.0
         version: 12.10.0
@@ -1439,52 +1460,6 @@ importers:
       vitest:
         specifier: 4.1.0
         version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
-
-  servers/whisperflow:
-    dependencies:
-      '@barry/auth':
-        specifier: workspace:*
-        version: link:../../packages/auth
-      '@barry/env':
-        specifier: workspace:*
-        version: link:../../packages/env
-      '@barry/logger':
-        specifier: workspace:*
-        version: link:../../packages/logger
-      '@barry/sentry':
-        specifier: workspace:*
-        version: link:../../packages/sentry
-      '@deepgram/sdk':
-        specifier: 4.11.2
-        version: 4.11.2
-      cors:
-        specifier: 2.8.5
-        version: 2.8.5
-      dotenv:
-        specifier: 16.4.7
-        version: 16.4.7
-      express:
-        specifier: 4.22.1
-        version: 4.22.1
-      ws:
-        specifier: 8.21.0
-        version: 8.21.0
-    devDependencies:
-      '@types/cors':
-        specifier: 2.8.17
-        version: 2.8.17
-      '@types/express':
-        specifier: 4.17.21
-        version: 4.17.21
-      '@types/node':
-        specifier: 22.15.0
-        version: 22.15.0
-      '@types/ws':
-        specifier: 8.5.13
-        version: 8.5.13
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
 
 packages:
 
@@ -1784,14 +1759,6 @@ packages:
   '@csstools/css-tokenizer@3.0.4':
     resolution: {integrity: sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==}
     engines: {node: '>=18'}
-
-  '@deepgram/captions@1.2.0':
-    resolution: {integrity: sha512-8B1C/oTxTxyHlSFubAhNRgCbQ2SQ5wwvtlByn8sDYZvdDtdn/VE2yEPZ4BvUnrKWmsbTQY6/ooLV+9Ka2qmDSQ==}
-    engines: {node: '>=18.0.0'}
-
-  '@deepgram/sdk@4.11.2':
-    resolution: {integrity: sha512-lKGxuXxlSixC8bB0BnzmIpbVjUSgYtz17cqvrgv0ZjmazgUPkuUj9egQPj6k+fbPX8wRzWEqlhrL/DXlXqeDXA==}
-    engines: {node: '>=18.0.0'}
 
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
@@ -2485,7 +2452,7 @@ packages:
     resolution: {integrity: sha512-TsQLe4i2gvoTtrHje625ngThGBySOgSK3Xo2XRYOdqGN1teR8+I7vchQC46uLJi8OF62YTYA3AhSpumtkhsaKQ==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
-      hono: ^4
+      hono: 4.13.1
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -2826,8 +2793,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
 
-  '@modelcontextprotocol/ext-apps@1.7.4':
-    resolution: {integrity: sha512-QQqysE549cf/Y0VabBmAACXhj92EhB3t8yVct2BHbkWiPTFA1S91EqTVjYXXcZEefXU0pmHcdObhsNMcomJIOQ==}
+  '@modelcontextprotocol/ext-apps@1.7.5':
+    resolution: {integrity: sha512-TjPH2S2y5UEGKhmI6+XGFuqfqOV4ppe1x6DA3txnUaEWkgtA4G5vo14jGKFZmegdkZ1H4QMLyujLvoU1BEdnAg==}
     engines: {node: '>=20'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.29.0
@@ -4526,9 +4493,6 @@ packages:
     resolution: {integrity: sha512-BoZaseYGXOo5j5HUwTaegIog3JJbuH4BbrY9A1ArLjXpy+RWb3mV28F/9Gv1dDA7E2L8kngWva4NWisnLTyfgQ==}
     engines: {node: '>=20'}
 
-  cross-fetch@3.2.0:
-    resolution: {integrity: sha512-Q+xVJLoGOeIMXZmbUK4HYk+69cQH6LudR0Vu/pRm2YlU/hDV9CiS0gKUMaWY5f2NeUH9C1nV3bsTlCo0FsTV1Q==}
-
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
@@ -4549,9 +4513,6 @@ packages:
   data-urls@5.0.0:
     resolution: {integrity: sha512-ZYP5VBHshaDAiVZxjbRVcFJpc+4xGgT0bK3vzy1HLN8jTO975HEbuYzZJcHoQEY5K1a0z8YayJkyVETa08eNTg==}
     engines: {node: '>=18'}
-
-  dayjs@1.11.21:
-    resolution: {integrity: sha512-98IT+HOahAisibz/yjKbzuOBwYcjJ7BCLPzARyHiyEBmRz4fatF+KPJszEHXsGYjUG234aH/cOjW1wwTbKUZlA==}
 
   debug@2.6.9:
     resolution: {integrity: sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA==}
@@ -4628,10 +4589,6 @@ packages:
 
   dotenv@16.4.5:
     resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}
-    engines: {node: '>=12'}
-
-  dotenv@16.4.7:
-    resolution: {integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==}
     engines: {node: '>=12'}
 
   dotenv@16.6.1:
@@ -4825,10 +4782,6 @@ packages:
   events-universal@1.0.1:
     resolution: {integrity: sha512-LUd5euvbMLpwOF8m6ivPCbhQeSiYVNb8Vs0fQ8QjXo0JTkEHpz8pxdQf0gStltaPpw0Cca8b39KxvK9cfKRiAw==}
 
-  events@3.3.0:
-    resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
-    engines: {node: '>=0.8.x'}
-
   eventsource-parser@3.1.0:
     resolution: {integrity: sha512-kJezFj9YFAMLeORyi7aCLxLbD5/qWMQnoMVlVPyHIll7lgRJCc3JVln9Vgl9nwQi0YkMnhdGTMNn7CkRRAptMg==}
     engines: {node: '>=18.0.0'}
@@ -4896,8 +4849,8 @@ packages:
   fast-string-width@3.0.2:
     resolution: {integrity: sha512-gX8LrtNEI5hq8DVUfRQMbr5lpaS4nMIWV+7XEbXk2b8kiQIizgnlr12B4dA3ZEx3308ze0O4Q1R+cHts8kyUJg==}
 
-  fast-uri@3.1.2:
-    resolution: {integrity: sha512-rVjf7ArG3LTk+FS6Yw81V1DLuZl1bRbNrev6Tmd/9RaroeeRRJhAt7jg/6YFxbvAQXUCavSoZhPPj6oOx+5KjQ==}
+  fast-uri@4.1.2:
+    resolution: {integrity: sha512-TyGmBcbDTZXcb2cj5MV89DrF42DKvb3y5DDUNh95iO+IMeAzMkVSxK1PZRrRIpc9yg8U2GhGdbofNa0LS/a4Bw==}
 
   fast-wrap-ansi@0.2.2:
     resolution: {integrity: sha512-7F2Fl+TjRSenLqlU3UjSH0iyqopqoZIu7eZVpEirP2g1GtWa2G/ecEmBdgz31+Mxr+ELclgg6sokpSFIQiZ02Q==}
@@ -5098,12 +5051,8 @@ packages:
   highlightjs-zig@1.0.2:
     resolution: {integrity: sha512-ZPSQfyiUMmux685sTNzTXuvXAXH6Gqzc+WSRzhYiknCRELjma1FOdTJ/zs8L9KutmX+YOtdlkmS+NypOxInpqA==}
 
-  hono@4.12.25:
-    resolution: {integrity: sha512-2NFaIyNVgJmBs/ecmtGzlmluTFs5cHEWGTdu0t1HBwYzoGXOL5nUQBRMXsXWla5i4KkG//QMzVP88m1+I3fdAQ==}
-    engines: {node: '>=16.9.0'}
-
-  hono@4.12.31:
-    resolution: {integrity: sha512-zJIHFrl6bq3RDd2YusFNCDlM8qUprxKswyi/OPzPyzKDdyBXDqWx8bZlZ7R+saTdSTatUmb3O7K4SspGPaEOQg==}
+  hono@4.13.1:
+    resolution: {integrity: sha512-kdJoFVv2xmayw6cY09H7AbMJMt8Jn5jdlEdXsP7AGBdF2DIptVlKlOLKXP41yPip4/a3yQPv9gVcJYI8YY04dw==}
     engines: {node: '>=16.9.0'}
 
   html-encoding-sniffer@4.0.0:
@@ -5185,8 +5134,8 @@ packages:
   ini@1.3.8:
     resolution: {integrity: sha512-JV/yugV2uzW5iMRSiZAyDtQd+nxtUnjeLt0acNdw98kKLrvuRVyB80tsREOE7yvGVgalhZ6RNXCmEHkUKBKxew==}
 
-  ip-address@10.1.1:
-    resolution: {integrity: sha512-1FMu8/N15Ck1BL551Jf42NYIoin2unWjLQ2Fze/DXryJRl5twqtwNHlO39qERGbIOcKYWHdgRryhOC+NG4eaLw==}
+  ip-address@10.4.0:
+    resolution: {integrity: sha512-oSK96Grm3aP6OrS263xVxbNDGVL7rzBtYdpGqlDG8iQdoenDoTs/nkki+DflYbAEE8Xl6o5YxhxlrKvI3nqKXQ==}
     engines: {node: '>= 12'}
 
   ipaddr.js@1.9.1:
@@ -5256,8 +5205,8 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  js-yaml@4.2.0:
-    resolution: {integrity: sha512-ePWsvanv0DWuDRsW8dnt+R4jQ31SCRCQ7hhNcPXZPsoBZiemuZNYGf7adZdqX2D86j6rvKp3RpCxVTSb8WQlOw==}
+  js-yaml@4.3.1:
+    resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
     hasBin: true
 
   jsdom@25.0.0:
@@ -5597,9 +5546,9 @@ packages:
     resolution: {integrity: sha512-dkEJPVvun4FryqBmZ5KhDo0K9iDXAwn08tMLDinNdRBNPcYEDiWYysLcc6k3mjTMlbP9KyylvRpd4wFtwrT9rw==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
-  nanoid@5.0.9:
-    resolution: {integrity: sha512-Aooyr6MXU6HpvvWXKoVoXwKMs/KyVakWwg7xQfv5/S/RIgJMy0Ifa45H9qqYy7pTCszrHzP21Uk4PZq2HpEM8Q==}
-    engines: {node: ^18 || >=20}
+  nanoid@6.0.1:
+    resolution: {integrity: sha512-3wVS3i51pE2pi1k5FFL/95BGfVS0kSsvDVuGXHOtxox/TywUmtgq+3qiTOTbs9J7KfHaXPiN171k/A6dBnaXFw==}
+    engines: {node: ^22 || ^24 || >=26}
     hasBin: true
 
   napi-build-utils@2.0.0:
@@ -5784,6 +5733,12 @@ packages:
 
   path-to-regexp@0.1.13:
     resolution: {integrity: sha512-A/AGNMFN3c8bOlvV9RreMdrv7jsmF9XIfDeCd87+I8RNg6s78BhJxMu69NEMHBSJFxKidViTEdruRwEk/WIKqA==}
+
+  path-to-regexp@6.3.0:
+    resolution: {integrity: sha512-Yhpw4T9C6hPpgPeA28us07OJeqZ5EzQTkbfwuhsUg0c237RomFoETJgmp2sa3F/41gfLE6G5cqcYwznmeEeOlQ==}
+
+  path-to-regexp@8.4.2:
+    resolution: {integrity: sha512-qRcuIdP69NPm4qbACK+aDogI5CBDMi1jKe0ry5rSQJz8JVLsC7jV8XpiJjGRLLol3N+R5ihGYcrPLTno6pAdBA==}
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
@@ -6361,9 +6316,9 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
-  undici@7.28.0:
-    resolution: {integrity: sha512-cRZYrTDwWznlnRiPjggAGxZXanty6M8RV1ff8Wm4LWXBp7/IG8v5DnOm74DtUBp9OONpK75YlPnIjQqX0dBDtA==}
-    engines: {node: '>=20.18.1'}
+  undici@8.10.0:
+    resolution: {integrity: sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==}
+    engines: {node: '>=22.19.0'}
 
   unenv@2.0.0-rc.24:
     resolution: {integrity: sha512-i7qRCmY42zmCwnYlh9H2SvLEypEFGye5iRmEMKjcGi7zk9UquigRjFtTLz0TYqr0ZGLZhaMHl/foy1bZR+Cwlw==}
@@ -7062,23 +7017,6 @@ snapshots:
 
   '@csstools/css-tokenizer@3.0.4': {}
 
-  '@deepgram/captions@1.2.0':
-    dependencies:
-      dayjs: 1.11.21
-
-  '@deepgram/sdk@4.11.2':
-    dependencies:
-      '@deepgram/captions': 1.2.0
-      '@types/node': 22.15.0
-      cross-fetch: 3.2.0
-      deepmerge: 4.3.1
-      events: 3.3.0
-      ws: 8.21.0
-    transitivePeerDependencies:
-      - bufferutil
-      - encoding
-      - utf-8-validate
-
   '@emnapi/core@1.10.0':
     dependencies:
       '@emnapi/wasi-threads': 1.2.1
@@ -7467,7 +7405,7 @@ snapshots:
       globals: 14.0.0
       ignore: 5.3.2
       import-fresh: 3.3.1
-      js-yaml: 4.2.0
+      js-yaml: 4.3.1
       minimatch: 3.1.5
       strip-json-comments: 3.1.1
     transitivePeerDependencies:
@@ -7492,13 +7430,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@hono/node-server@1.19.13(hono@4.12.25)':
+  '@hono/node-server@1.19.13(hono@4.13.1)':
     dependencies:
-      hono: 4.12.25
-
-  '@hono/node-server@1.19.13(hono@4.12.31)':
-    dependencies:
-      hono: 4.12.31
+      hono: 4.13.1
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -7769,7 +7703,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@modelcontextprotocol/ext-apps@1.7.4(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(react@19.2.7)(zod@4.3.6)':
+  '@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(react@19.2.7)(zod@4.3.6)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)
       '@standard-schema/spec': 1.1.0
@@ -7779,7 +7713,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.27.1(@cfworker/json-schema@4.1.1)(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.13(hono@4.12.31)
+      '@hono/node-server': 1.19.13(hono@4.13.1)
       ajv: 8.18.0
       ajv-formats: 3.0.1(ajv@8.18.0)
       content-type: 1.0.5
@@ -7789,7 +7723,7 @@ snapshots:
       eventsource-parser: 3.1.0
       express: 5.2.1
       express-rate-limit: 8.6.0(express@5.2.1)
-      hono: 4.12.31
+      hono: 4.13.1
       jose: 6.2.4
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -7801,25 +7735,49 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)':
+  '@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.13(hono@4.12.25)
+      '@hono/node-server': 1.19.13(hono@4.13.1)
       ajv: 8.18.0
       ajv-formats: 3.0.1(ajv@8.18.0)
       content-type: 1.0.5
-      cors: 2.8.6
+      cors: 2.8.5
       cross-spawn: 7.0.6
       eventsource: 3.0.7
       eventsource-parser: 3.1.0
       express: 5.2.1
-      express-rate-limit: 8.6.0(express@5.2.1)
-      hono: 4.12.25
+      express-rate-limit: 8.2.2(express@5.2.1)
+      hono: 4.13.1
+      jose: 6.2.3
+      json-schema-typed: 8.0.2
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.1(zod@3.25.76)
+    optionalDependencies:
+      '@cfworker/json-schema': 4.1.1
+    transitivePeerDependencies:
+      - supports-color
+
+  '@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)':
+    dependencies:
+      '@hono/node-server': 1.19.13(hono@4.13.1)
+      ajv: 8.18.0
+      ajv-formats: 3.0.1(ajv@8.18.0)
+      content-type: 1.0.5
+      cors: 2.8.5
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.1.0
+      express: 5.2.1
+      express-rate-limit: 8.2.2(express@5.2.1)
+      hono: 4.13.1
       jose: 6.2.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
       zod: 4.3.6
-      zod-to-json-schema: 3.25.2(zod@4.3.6)
+      zod-to-json-schema: 3.25.1(zod@4.3.6)
     optionalDependencies:
       '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
@@ -8336,7 +8294,7 @@ snapshots:
       colorette: 1.4.0
       https-proxy-agent: 7.0.6(supports-color@10.2.2)
       js-levenshtein: 1.1.6
-      js-yaml: 4.2.0
+      js-yaml: 4.3.1
       minimatch: 5.1.9
       pluralize: 8.0.0
       yaml-ast-parser: 0.0.43
@@ -9102,7 +9060,7 @@ snapshots:
       ai: 6.0.218(zod@4.3.6)
       cron-schedule: 6.0.0
       mimetext: 3.0.28
-      nanoid: 5.0.9
+      nanoid: 6.0.1
       partyserver: 0.5.8(@cloudflare/workers-types@4.20260111.0)
       partysocket: 1.1.19(react@19.2.7)
       react: 19.2.7
@@ -9140,7 +9098,7 @@ snapshots:
   ajv@8.18.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.2
+      fast-uri: 4.1.2
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -9439,12 +9397,6 @@ snapshots:
 
   cron-schedule@6.0.0: {}
 
-  cross-fetch@3.2.0:
-    dependencies:
-      node-fetch: 2.7.0
-    transitivePeerDependencies:
-      - encoding
-
   cross-spawn@7.0.6:
     dependencies:
       path-key: 3.1.1
@@ -9464,8 +9416,6 @@ snapshots:
     dependencies:
       whatwg-mimetype: 4.0.0
       whatwg-url: 14.2.0
-
-  dayjs@1.11.21: {}
 
   debug@2.6.9:
     dependencies:
@@ -9519,8 +9469,6 @@ snapshots:
   dotenv@16.0.0: {}
 
   dotenv@16.4.5: {}
-
-  dotenv@16.4.7: {}
 
   dotenv@16.6.1: {}
 
@@ -9818,8 +9766,6 @@ snapshots:
     transitivePeerDependencies:
       - bare-abort-controller
 
-  events@3.3.0: {}
-
   eventsource-parser@3.1.0: {}
 
   eventsource@3.0.7:
@@ -9835,13 +9781,18 @@ snapshots:
   express-rate-limit@8.2.2(express@4.22.1):
     dependencies:
       express: 4.22.1
-      ip-address: 10.1.1
+      ip-address: 10.4.0
+
+  express-rate-limit@8.2.2(express@5.2.1):
+    dependencies:
+      express: 5.2.1
+      ip-address: 10.4.0
 
   express-rate-limit@8.6.0(express@5.2.1):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       express: 5.2.1
-      ip-address: 10.1.1
+      ip-address: 10.4.0
     transitivePeerDependencies:
       - supports-color
 
@@ -9974,7 +9925,7 @@ snapshots:
     dependencies:
       fast-string-truncated-width: 3.0.3
 
-  fast-uri@3.1.2: {}
+  fast-uri@4.1.2: {}
 
   fast-wrap-ansi@0.2.2:
     dependencies:
@@ -10165,9 +10116,7 @@ snapshots:
 
   highlightjs-zig@1.0.2: {}
 
-  hono@4.12.25: {}
-
-  hono@4.12.31: {}
+  hono@4.13.1: {}
 
   html-encoding-sniffer@4.0.0:
     dependencies:
@@ -10269,7 +10218,7 @@ snapshots:
 
   ini@1.3.8: {}
 
-  ip-address@10.1.1: {}
+  ip-address@10.4.0: {}
 
   ipaddr.js@1.9.1: {}
 
@@ -10315,7 +10264,7 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  js-yaml@4.2.0:
+  js-yaml@4.3.1:
     dependencies:
       argparse: 2.0.1
 
@@ -10612,7 +10561,7 @@ snapshots:
       glob-to-regexp: 0.4.1
       sharp: 0.34.5
       stoppable: 1.1.0
-      undici: 7.28.0
+      undici: 8.10.0
       workerd: 1.20260111.0
       ws: 8.21.0
       youch: 4.1.0-beta.10
@@ -10625,7 +10574,7 @@ snapshots:
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       sharp: 0.34.5
-      undici: 7.28.0
+      undici: 8.10.0
       workerd: 1.20260721.1
       ws: 8.21.0
       youch: 4.1.0-beta.10
@@ -10665,7 +10614,7 @@ snapshots:
 
   mute-stream@3.0.0: {}
 
-  nanoid@5.0.9: {}
+  nanoid@6.0.1: {}
 
   napi-build-utils@2.0.0: {}
 
@@ -10852,7 +10801,7 @@ snapshots:
   partyserver@0.5.8(@cloudflare/workers-types@4.20260111.0):
     dependencies:
       '@cloudflare/workers-types': 4.20260111.0
-      nanoid: 5.0.9
+      nanoid: 6.0.1
 
   partysocket@1.1.19(react@19.2.7):
     dependencies:
@@ -10870,6 +10819,10 @@ snapshots:
       minipass: 7.1.3
 
   path-to-regexp@0.1.13: {}
+
+  path-to-regexp@6.3.0: {}
+
+  path-to-regexp@8.4.2: {}
 
   pathe@2.0.3: {}
 
@@ -10951,7 +10904,7 @@ snapshots:
 
   postcss@8.5.21:
     dependencies:
-      nanoid: 5.0.9
+      nanoid: 6.0.1
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
@@ -11169,7 +11122,7 @@ snapshots:
       depd: 2.0.0
       is-promise: 4.0.0
       parseurl: 1.3.3
-      path-to-regexp: 0.1.13
+      path-to-regexp: 8.4.2
     transitivePeerDependencies:
       - supports-color
 
@@ -11336,7 +11289,7 @@ snapshots:
 
   socks@2.8.9:
     dependencies:
-      ip-address: 10.1.1
+      ip-address: 10.4.0
       smart-buffer: 4.2.0
 
   sonic-boom@4.2.1:
@@ -11605,7 +11558,7 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  undici@7.28.0: {}
+  undici@8.10.0: {}
 
   unenv@2.0.0-rc.24:
     dependencies:
@@ -11900,7 +11853,7 @@ snapshots:
       blake3-wasm: 2.1.5
       esbuild: 0.28.1
       miniflare: 4.20260721.0
-      path-to-regexp: 0.1.13
+      path-to-regexp: 6.3.0
       unenv: 2.0.0-rc.24
       workerd: 1.20260721.1
     optionalDependencies:
@@ -11917,7 +11870,7 @@ snapshots:
       blake3-wasm: 2.1.5
       esbuild: 0.27.0
       miniflare: 4.20260111.0
-      path-to-regexp: 0.1.13
+      path-to-regexp: 6.3.0
       unenv: 2.0.0-rc.24
       workerd: 1.20260111.0
     optionalDependencies:
@@ -12006,13 +11959,13 @@ snapshots:
     dependencies:
       zod: 3.25.76
 
+  zod-to-json-schema@3.25.1(zod@4.3.6):
+    dependencies:
+      zod: 4.3.6
+
   zod-to-json-schema@3.25.2(zod@3.25.76):
     dependencies:
       zod: 3.25.76
-
-  zod-to-json-schema@3.25.2(zod@4.3.6):
-    dependencies:
-      zod: 4.3.6
 
   zod@3.25.76: {}
 

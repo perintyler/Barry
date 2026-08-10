@@ -27,7 +27,8 @@
   "scripts": {
     "build": "node scripts/build.js",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test": "vitest run"
   },
   "dependencies": {
     "@barry/syntax": "workspace:*",
@@ -35,19 +36,19 @@
     "@barry/ui": "workspace:*",
     "@cloudflare/puppeteer": "^1.1.0",
     "@cloudflare/workers-oauth-provider": "^0.0.11",
-    "@modelcontextprotocol/ext-apps": "^1.7.4",
+    "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@taga3s/highlightjs-terraform": "^1.0.7",
     "agents": "^0.13.3",
     "highlight.js": "11.11.1",
     "highlightjs-zig": "^1.0.2",
-    "hono": "4.12.25",
+    "hono": "4.13.1",
     "markdown-it": "14.2.0",
     "oauth4webapi": "^3.8.6",
     "zod": "4.3.6"
   },
   "optionalDependencies": {
-    "express": "4.22.1",
+    "express": "5.2.1",
     "jose": "6.2.3"
   },
   "devDependencies": {

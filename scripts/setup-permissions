@@ -10,7 +10,6 @@
 # Permissions granted via prompt:
 #   - Automation → Mail.app     (ios-mailer MCP)
 #   - Automation → System Events (system-display MCP)
-#   - Microphone                 (whisperflow / web voice input)
 #
 # Permissions requiring manual grant:
 #   - Full Disk Access           (system MCP shell executor)
@@ -117,8 +116,6 @@ check_permissions() {
     # For a quick check, see if screencapture run by node produces output.
     yellow "Screen Recording — verify with: ./scripts/check/permissions --test"
 
-    # Microphone
-    yellow "Microphone — will prompt on first use"
 
     echo ""
 }
@@ -230,12 +227,6 @@ echo ""
 printf "Press Enter to open System Settings (or Ctrl+C to skip)... "
 read -r _
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture" 2>/dev/null || true
-
-# ─── Microphone ──────────────────────────────────────────────────────────────
-
-section "Microphone (whisperflow)"
-
-yellow "Will prompt automatically on first use — no action needed"
 
 # ─── Verify ──────────────────────────────────────────────────────────────────
 

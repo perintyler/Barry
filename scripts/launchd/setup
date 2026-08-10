@@ -14,11 +14,29 @@ LAUNCHD_DIR="$BARRY_DIR/infra/local/launchd"
 TEMPLATE_DIR="$LAUNCHD_DIR/templates"
 CONFIG_DIR="$BARRY_DIR/config"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
+# Hoisted above the block-items loop, which installs block-owned app
+# bundles long before the core app section further down.
+APPS_DIR="$HOME/.barry/apps"
+APP_TEMPLATE="$TEMPLATE_DIR/com.barry.app.TEMPLATE.plist"
 USER_DOMAIN="gui/$(id -u)"
 
 svc_stop() {
     local label="$1"
     launchctl bootout "$USER_DOMAIN/$label" 2>/dev/null || true
+}
+
+# Write a generated plist with owner-only permissions.
+#
+# Plists carry resolved env — BARRY_SECRET among them — baked in at generation
+# time. The default umask leaves them -rw-r--r--, so any process on the box can
+# read those credentials. Truncate and chmod *before* the content lands, so
+# there is no window where a world-readable file holds a secret.
+write_plist() {
+    local target="$1"
+    local content="$2"
+    : > "$target"
+    chmod 600 "$target"
+    printf '%s\n' "$content" > "$target"
 }
 
 svc_start() {
@@ -32,7 +50,6 @@ svc_start() {
     fi
 }
 DEPLOYMENTS_FILE="$CONFIG_DIR/deployments.yaml"
-MCP_REGISTRY="$BARRY_DIR/builtins/mcp-servers.yaml"
 
 # Colors
 RED='\033[0;31m'
@@ -171,6 +188,15 @@ fi
 
 echo ""
 
+# Plists generated before write_plist existed are still -rw-r--r-- with a
+# resolved BARRY_SECRET inside them. Unchanged plists are deliberately not
+# rewritten below, so tighten what is already installed rather than waiting for
+# the next content change to do it.
+for existing_plist in "$LAUNCH_AGENTS_DIR"/com.barry.*.plist; do
+    [[ -f "$existing_plist" ]] || continue
+    chmod 600 "$existing_plist" 2>/dev/null || true
+done
+
 # ============================================================================
 # HTTP SERVERS (driven by config/services.yaml)
 # ============================================================================
@@ -199,9 +225,12 @@ http_servers=$(awk '
 
 echo "Installing HTTP server plist files..."
 
-# These services were consolidated into the API and CLI. Remove generated
-# launchd state so upgrading an existing installation cannot keep them alive.
-for retired_label in com.barry.admin com.barry.git-server com.barry.slack-app; do
+# These services were consolidated into the API and CLI, or moved into a block
+# (github-app is now com.barry.block.github-app.webhook). Remove generated
+# launchd state so upgrading an existing installation cannot keep them alive —
+# for a service that binds a port, a surviving old agent is a second receiver
+# racing the new one for the same port.
+for retired_label in com.barry.admin com.barry.git-server com.barry.slack-app com.barry.whisperflow com.barry.github-app; do
     retired_plist="$LAUNCH_AGENTS_DIR/$retired_label.plist"
     if [[ -f "$retired_plist" ]] || launchctl list "$retired_label" &>/dev/null; then
         svc_stop "$retired_label"
@@ -215,10 +244,7 @@ get_port_var() {
     case "$1" in
         web) echo "BARRY_WEB_PORT" ;;
         api) echo "BARRY_API_PORT" ;;
-        whisperflow) echo "BARRY_WHISPERFLOW_PORT" ;;
-        bdiff-review) echo "BARRY_BDIFF_REVIEW_PORT" ;;
         slack) echo "BARRY_SLACK_PORT" ;;
-        github-app) echo "BARRY_GITHUB_APP_PORT" ;;
         *) echo "" ;;
     esac
 }
@@ -321,7 +347,7 @@ for server in $http_servers; do
         fi
     else
         svc_stop "com.barry.$server"
-        echo "$PLIST_GENERATED" > "$PLIST_TARGET"
+        write_plist "$PLIST_TARGET" "$PLIST_GENERATED"
         NEEDS_LOAD_HTTP="$NEEDS_LOAD_HTTP $server"
         echo -e "  ${GREEN}✓${NC} com.barry.$server (updated)"
     fi
@@ -363,7 +389,7 @@ if [[ -f "$CADDY_TEMPLATE" && -x "$CADDY_BIN" ]]; then
         fi
     else
         svc_stop "com.barry.caddy"
-        echo "$PLIST_GENERATED" > "$CADDY_TARGET"
+        write_plist "$CADDY_TARGET" "$PLIST_GENERATED"
         NEEDS_LOAD_CADDY=true
         echo -e "  ${GREEN}✓${NC} com.barry.caddy (updated)"
     fi
@@ -395,7 +421,7 @@ if [[ -f "$CLOUDFLARED_TEMPLATE" && -n "$CLOUDFLARED_PATH" && -n "$CLOUDFLARE_TU
         fi
     else
         svc_stop "com.barry.cloudflared"
-        echo "$PLIST_GENERATED" > "$CLOUDFLARED_TARGET"
+        write_plist "$CLOUDFLARED_TARGET" "$PLIST_GENERATED"
         NEEDS_LOAD_CADDY=true
         echo -e "  ${GREEN}✓${NC} com.barry.cloudflared (updated)"
     fi
@@ -536,7 +562,7 @@ if [[ -f "$JOBS_REGISTRY" && -f "$JOB_TEMPLATE" ]]; then
         # Install: diff and reload
         if [[ -f "$JOB_PLIST_TARGET" ]] && echo "$PLIST_GENERATED" | diff -q - "$JOB_PLIST_TARGET" > /dev/null 2>&1; then
             if ! launchctl list "com.barry.job.$job_name" &>/dev/null; then
-                echo "$PLIST_GENERATED" > "$JOB_PLIST_TARGET"
+                write_plist "$JOB_PLIST_TARGET" "$PLIST_GENERATED"
                 svc_start "$JOB_PLIST_TARGET"
                 echo -e "  ${GREEN}✓${NC} com.barry.job.$job_name (unchanged, reloading)"
             else
@@ -544,7 +570,7 @@ if [[ -f "$JOBS_REGISTRY" && -f "$JOB_TEMPLATE" ]]; then
             fi
         else
             svc_stop "com.barry.job.$job_name"
-            echo "$PLIST_GENERATED" > "$JOB_PLIST_TARGET"
+            write_plist "$JOB_PLIST_TARGET" "$PLIST_GENERATED"
             svc_start "$JOB_PLIST_TARGET"
             echo -e "  ${GREEN}✓${NC} com.barry.job.$job_name ($([ -f "$JOB_PLIST_TARGET" ] && echo 'updated' || echo 'installed'))"
         fi
@@ -623,6 +649,24 @@ block_desired_labels=""
 
 if [[ -n "$block_items" ]]; then
     echo ""
+    # Apps that moved into blocks are re-labelled under
+    # com.barry.block.<block>.app.<app>. Retire the old agent first: left in
+    # place it keeps launching at login, so two copies run at once — and for an
+    # app owning a URL scheme (bdiff://), which instance macOS routes a link to
+    # is anyone's guess.
+    #
+    # The agent goes, the bundle stays. The block install below reuses the same
+    # bundle name, so removing it here would delete what that loop installs on
+    # the very same run.
+    for retired_app_label in com.barry.bdiff com.barry.bdiff-review com.barry.my-barrys com.barry.sessions com.barry.events com.barry.services; do
+        RETIRED_APP_PLIST="$LAUNCH_AGENTS_DIR/$retired_app_label.plist"
+        if [[ -f "$RETIRED_APP_PLIST" ]]; then
+            launchctl bootout "gui/$(id -u)/$retired_app_label" 2>/dev/null || true
+            rm -f "$RETIRED_APP_PLIST"
+            echo -e "  ${GREEN}✓${NC} Retired $retired_app_label (now com.barry.block.*)"
+        fi
+    done
+
     echo -e "${BLUE}Setting up block services & jobs...${NC}"
     mkdir -p "$HOME/.barry/logs"
 
@@ -631,7 +675,10 @@ if [[ -n "$block_items" ]]; then
         item_type=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).type)")
         block_name=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).block)")
         item_name=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).name)")
-        item_cmd=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).command)")
+        # Defaulted like workingDirectory below: these fields are shared across
+        # item types, and an app carries no command — an unguarded read writes
+        # undefined to stdout and throws.
+        item_cmd=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).command||'')")
         item_args=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(d.args||[]))")
         item_env=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(d.env||[]))")
         item_workdir=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).workingDirectory||'')")
@@ -712,7 +759,7 @@ if [[ -n "$block_items" ]]; then
             # Install: diff and reload
             if [[ -f "$PLIST_TARGET" ]] && echo "$PLIST_GENERATED" | diff -q - "$PLIST_TARGET" > /dev/null 2>&1; then
                 if ! launchctl list "$label" &>/dev/null; then
-                    echo "$PLIST_GENERATED" > "$PLIST_TARGET"
+                    write_plist "$PLIST_TARGET" "$PLIST_GENERATED"
                     svc_start "$PLIST_TARGET"
                     echo -e "  ${GREEN}✓${NC} $label (unchanged, reloading)"
                 else
@@ -720,7 +767,7 @@ if [[ -n "$block_items" ]]; then
                 fi
             else
                 svc_stop "$label"
-                echo "$PLIST_GENERATED" > "$PLIST_TARGET"
+                write_plist "$PLIST_TARGET" "$PLIST_GENERATED"
                 svc_start "$PLIST_TARGET"
                 echo -e "  ${GREEN}✓${NC} $label ($([ -f "$PLIST_TARGET" ] && echo 'updated' || echo 'installed'))"
             fi
@@ -806,7 +853,7 @@ if [[ -n "$block_items" ]]; then
             # Install: diff and reload
             if [[ -f "$PLIST_TARGET" ]] && echo "$PLIST_GENERATED" | diff -q - "$PLIST_TARGET" > /dev/null 2>&1; then
                 if ! launchctl list "$label" &>/dev/null; then
-                    echo "$PLIST_GENERATED" > "$PLIST_TARGET"
+                    write_plist "$PLIST_TARGET" "$PLIST_GENERATED"
                     svc_start "$PLIST_TARGET"
                     echo -e "  ${GREEN}✓${NC} $label (unchanged, reloading)"
                 else
@@ -814,9 +861,85 @@ if [[ -n "$block_items" ]]; then
                 fi
             else
                 svc_stop "$label"
-                echo "$PLIST_GENERATED" > "$PLIST_TARGET"
+                write_plist "$PLIST_TARGET" "$PLIST_GENERATED"
                 svc_start "$PLIST_TARGET"
                 echo -e "  ${GREEN}✓${NC} $label ($([ -f "$PLIST_TARGET" ] && echo 'updated' || echo 'installed'))"
+            fi
+
+        elif [[ "$item_type" == "app" ]]; then
+            # A block app arrives as a FINISHED bundle: the block's own build
+            # produced it, icons and resources included, so this copies it
+            # wholesale and never reaches inside. That is what keeps one app's
+            # asset pipeline out of this script.
+            app_bundle_src=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).bundlePath)")
+            app_login_item=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.loginItem||false))")
+            label="com.barry.block.$block_name.app.$item_name"
+            installed_bundle="$APPS_DIR/$item_name.app"
+            installed_binary="$installed_bundle/Contents/MacOS/$item_name"
+
+            if [[ ! -d "$app_bundle_src" ]]; then
+                echo -e "  ${YELLOW}⚠${NC} $block_name.$item_name: not built (run 'barry block build --apps'), skipping"
+                continue
+            fi
+
+            app_needs_restart=false
+            if [[ -f "$installed_binary" ]] && cmp -s "$app_bundle_src/Contents/MacOS/$item_name" "$installed_binary"; then
+                echo -e "  ${GREEN}✓${NC} $item_name bundle (unchanged)"
+            else
+                # Quit before overwriting: cp over a live binary SIGKILLs the app
+                # (Code Signature Invalid) once the mapped pages stop matching.
+                if pgrep -x "$item_name" >/dev/null 2>&1; then
+                    osascript -e "tell application \"$item_name\" to quit" 2>/dev/null || true
+                    sleep 1
+                    pkill -x "$item_name" 2>/dev/null || true
+                    app_needs_restart=true
+                fi
+                # Stage beside the target and swap, rather than deleting in
+                # place: a plain rm -rf leaves the running app holding a
+                # deleted binary if anything below fails, and the app is
+                # unlaunchable until the next successful run.
+                mkdir -p "$APPS_DIR"
+                staged_bundle="$APPS_DIR/.$item_name.app.staging"
+                rm -rf "$staged_bundle"
+                if cp -R "$app_bundle_src" "$staged_bundle"; then
+                    rm -rf "$installed_bundle"
+                    mv "$staged_bundle" "$installed_bundle"
+                    echo -e "  ${GREEN}✓${NC} $item_name bundle (updated)"
+                else
+                    rm -rf "$staged_bundle"
+                    echo -e "  ${YELLOW}⚠${NC} $item_name: bundle copy failed, keeping existing install"
+                    continue
+                fi
+            fi
+
+            # login-item false means the user launches it themselves — installed
+            # and up to date, but no agent. Only declare the label when we
+            # actually install one, or the prune sweep below retracts it.
+            if [[ "$app_login_item" == "true" && -f "$APP_TEMPLATE" ]]; then
+                block_desired_labels+=" $label"
+                PLIST_TARGET="$LAUNCH_AGENTS_DIR/$label.plist"
+                PLIST_GENERATED=$(sed \
+                    -e "s|__APP_ID__|block.$block_name.app.$item_name|g" \
+                    -e "s|__APP_PATH__|$installed_binary|g" \
+                    -e "s|__HOME__|$HOME|g" \
+                    "$APP_TEMPLATE")
+
+                if [[ -f "$PLIST_TARGET" ]] && echo "$PLIST_GENERATED" | diff -q - "$PLIST_TARGET" > /dev/null 2>&1; then
+                    if ! launchctl list "$label" &>/dev/null; then
+                        svc_start "$PLIST_TARGET"
+                        echo -e "  ${GREEN}✓${NC} $label (unchanged, reloading)"
+                    elif [[ "$app_needs_restart" == true ]]; then
+                        launchctl kickstart -k "$USER_DOMAIN/$label" 2>/dev/null || true
+                        echo -e "  ${GREEN}↻${NC} Restarted $item_name"
+                    else
+                        echo -e "  ${GREEN}✓${NC} $label (unchanged)"
+                    fi
+                else
+                    svc_stop "$label"
+                    echo "$PLIST_GENERATED" > "$PLIST_TARGET"
+                    svc_start "$PLIST_TARGET"
+                    echo -e "  ${GREEN}✓${NC} $label (installed)"
+                fi
             fi
         fi
     done <<< "$block_items"
@@ -859,104 +982,19 @@ fi
 echo -e "${BLUE}Setting up macOS menu bar apps...${NC}"
 
 NEEDS_LOAD_APPS=""
-APP_TEMPLATE="$TEMPLATE_DIR/com.barry.app.TEMPLATE.plist"
-APPS_DIR="$HOME/.barry/apps"
 mkdir -p "$APPS_DIR"
 mkdir -p "$HOME/.barry/logs"
 
-for app_id in sessions profiles bdiff events services; do
-    case "$app_id" in
-        sessions) app_src="$BARRY_DIR/apps/macos/BarrySessions"; app_name="BarrySessions" ;;
-        profiles) app_src="$BARRY_DIR/apps/macos/BarryProfiles"; app_name="BarryProfiles" ;;
-        bdiff) app_src="$BARRY_DIR/apps/macos/BDiff"; app_name="BDiff" ;;
-        events) app_src="$BARRY_DIR/apps/macos/BarryEvents"; app_name="BarryEvents" ;;
-        services) app_src="$BARRY_DIR/apps/macos/BarryServices"; app_name="BarryServices" ;;
-    esac
+# BarryProfiles became My Barrys. Retire the old agent and bundle so the
+# renamed one isn't shadowed by a stale login item still running the old binary.
+OLD_PROFILES_PLIST="$LAUNCH_AGENTS_DIR/com.barry.profiles.plist"
+if [[ -f "$OLD_PROFILES_PLIST" ]]; then
+    launchctl bootout "gui/$(id -u)/com.barry.profiles" 2>/dev/null || true
+    rm -f "$OLD_PROFILES_PLIST"
+    rm -rf "$APPS_DIR/BarryProfiles.app"
+    echo -e "  ${GREEN}✓${NC} Retired com.barry.profiles (now com.barry.my-barrys)"
+fi
 
-    build_binary="$app_src/.build/debug/$app_name"
-    app_bundle="$APPS_DIR/$app_name.app"
-    app_binary="$app_bundle/Contents/MacOS/$app_name"
-    plist_name="com.barry.$app_id"
-    plist_target="$LAUNCH_AGENTS_DIR/$plist_name.plist"
-
-    if [[ ! -f "$build_binary" ]]; then
-        echo -e "  ${YELLOW}⚠${NC} $app_name: not built (run build.sh first), skipping"
-        continue
-    fi
-
-    # Skip copy when the installed binary is already identical — avoids
-    # unnecessary quit/restart cycles on repeated ./install runs.
-    app_needs_restart=false
-    if [[ -f "$app_binary" ]] && cmp -s "$build_binary" "$app_binary"; then
-        echo -e "  ${GREEN}✓${NC} $app_name binary (unchanged)"
-    else
-        # Quit the running app before overwriting — cp over a live binary
-        # causes SIGKILL (Code Signature Invalid) because macOS detects the
-        # mapped code pages no longer match the signed hash.
-        if pgrep -x "$app_name" >/dev/null 2>&1; then
-            echo -e "  ${YELLOW}↻${NC} Quitting $app_name before update..."
-            osascript -e "tell application \"$app_name\" to quit" 2>/dev/null || true
-            sleep 1
-            pkill -x "$app_name" 2>/dev/null || true
-            app_needs_restart=true
-        fi
-
-        # Install app bundle
-        mkdir -p "$app_bundle/Contents/MacOS"
-        cp "$build_binary" "$app_binary"
-        echo -e "  ${GREEN}✓${NC} $app_name binary (updated)"
-    fi
-
-    if [[ -f "$app_src/Resources/Info.plist" ]]; then
-        mkdir -p "$app_bundle/Contents"
-        cp "$app_src/Resources/Info.plist" "$app_bundle/Contents/Info.plist"
-    fi
-    if [[ -f "$app_src/Resources/AppIcon.icns" ]]; then
-        mkdir -p "$app_bundle/Contents/Resources"
-        cp "$app_src/Resources/AppIcon.icns" "$app_bundle/Contents/Resources/AppIcon.icns"
-    fi
-    # Copy bundled fonts — registerBundledFonts() looks here first, and without
-    # them the app silently falls back to system fonts.
-    if [[ -d "$app_src/Resources/Fonts" ]]; then
-        mkdir -p "$app_bundle/Contents/Resources/Fonts"
-        cp "$app_src/Resources/Fonts/"*.ttf "$app_bundle/Contents/Resources/Fonts/" 2>/dev/null || true
-    fi
-    # Copy bundled web resources (e.g. BDiff's Monaco editor)
-    if [[ -f "$app_src/Sources/Resources/monaco-diff.html" ]]; then
-        mkdir -p "$app_bundle/Contents/Resources"
-        cp "$app_src/Sources/Resources/monaco-diff.html" "$app_bundle/Contents/Resources/monaco-diff.html"
-    fi
-
-    # Generate plist
-    if [[ -f "$APP_TEMPLATE" ]]; then
-        PLIST_GENERATED=$(sed \
-            -e "s|__APP_ID__|$app_id|g" \
-            -e "s|__APP_PATH__|$app_binary|g" \
-            -e "s|__HOME__|$HOME|g" \
-            "$APP_TEMPLATE")
-
-        if [[ -f "$plist_target" ]] && echo "$PLIST_GENERATED" | diff -q - "$plist_target" > /dev/null 2>&1; then
-            if ! launchctl list "$plist_name" &>/dev/null; then
-                NEEDS_LOAD_APPS="$NEEDS_LOAD_APPS $plist_target"
-                echo -e "  ${GREEN}✓${NC} $plist_name (unchanged, reloading)"
-            else
-                echo -e "  ${GREEN}✓${NC} $plist_name (unchanged)"
-            fi
-        else
-            svc_stop "$plist_name"
-            echo "$PLIST_GENERATED" > "$plist_target"
-            NEEDS_LOAD_APPS="$NEEDS_LOAD_APPS $plist_target"
-            echo -e "  ${GREEN}✓${NC} $plist_name (updated)"
-        fi
-    fi
-
-    # Restart the app if we quit it for a binary update but the plist didn't
-    # change (plist-change path already handles restart via NEEDS_LOAD_APPS).
-    if [[ "$app_needs_restart" == true ]] && launchctl list "$plist_name" &>/dev/null; then
-        launchctl kickstart -k "$USER_DOMAIN/$plist_name" 2>/dev/null || true
-        echo -e "  ${GREEN}↻${NC} Restarted $app_name"
-    fi
-done
 
 echo ""
 
@@ -966,12 +1004,6 @@ echo ""
 
 echo -e "${BLUE}Setting up MCP servers (Streamable HTTP)...${NC}"
 
-# Check if MCP registry exists
-if [[ ! -f "$MCP_REGISTRY" ]]; then
-    echo -e "${YELLOW}Warning: MCP registry not found at $MCP_REGISTRY${NC}"
-    echo "Skipping MCP server setup"
-fi
-
 # Read MCP template
 MCP_TEMPLATE="$TEMPLATE_DIR/com.barry.mcp.TEMPLATE.plist"
 if [[ ! -f "$MCP_TEMPLATE" ]]; then
@@ -980,277 +1012,108 @@ if [[ ! -f "$MCP_TEMPLATE" ]]; then
 fi
 
 # Process MCP servers if both registry and template exist
-if [[ -f "$MCP_REGISTRY" && -f "$MCP_TEMPLATE" ]]; then
-    # Simple approach: extract and process each server
+# Barry runs exactly one MCP server holding every local tool. This used to be a
+# generic loop over builtins/mcp-servers.yaml, back when remote/external servers
+# were registered there too; those moved to the block registry, and the registry
+# collapsed to a single entry whose port was display-only. The values below are
+# the same ones cli/src/mcp-registry.ts declares.
+if [[ -f "$MCP_TEMPLATE" ]]; then
+    MCP_SERVER_NAME="barry"
+    MCP_SERVER_PATH="servers/mcp"
+    MCP_DIST_ENTRY="dist/bundle.cjs"
+    MCP_SERVER_ENV="BARRY_SECRET BARRY_DATABASE_URL SENTRY_DSN AXIOM_TOKEN BARRY_EMAIL_ADDRESS"
 
-    # Clean up stale MCP plists from old per-server setup
+    # Clean up plists from the retired per-server setup
     echo "Cleaning up stale MCP plists..."
     for plist in "$LAUNCH_AGENTS_DIR"/com.barry.mcp.*.plist; do
         [[ -f "$plist" ]] || continue
         plist_name=$(basename "$plist" .plist | sed 's/com.barry.mcp.//')
-        # Check if this server still exists in the YAML (servers or external section)
-        if ! grep -q "^  $plist_name:" "$MCP_REGISTRY"; then
+        if [[ "$plist_name" != "$MCP_SERVER_NAME" ]]; then
             svc_stop "$(basename "$plist" .plist)"
             rm -f "$plist"
             echo -e "  ${YELLOW}⚠${NC} Removed stale plist: com.barry.mcp.$plist_name"
         fi
     done
 
-    # Local MCP servers
     echo "Installing local MCP server plists..."
-    local_servers=$(awk '
-        /^servers:/{in_servers=1; next}
-        /^[a-zA-Z0-9_-]+:/{in_servers=0}
-        in_servers && /^  [a-zA-Z0-9_-]+:/{gsub(":","",$1); print $1}
-    ' "$MCP_REGISTRY")
-
-    # Fail early if any local MCP server directories are missing
-    missing_servers=()
-    for server in $local_servers; do
-        # Skip if it's under external section
-        if grep -A100 "^external:" "$MCP_REGISTRY" | grep -q "^  $server:"; then
-            continue
-        fi
-
-        # Check for path override
-        custom_path=$(grep -A5 "^  $server:" "$MCP_REGISTRY" | grep "path:" | head -1 | sed 's/.*path: *//')
-        if [[ -n "$custom_path" ]]; then
-            working_dir="$BARRY_DIR/$custom_path"
-        else
-            working_dir="$BARRY_DIR/servers/mcp/$server"
-        fi
-        if [[ ! -d "$working_dir" ]]; then
-            missing_servers+=("$server:$working_dir")
-        fi
-    done
-
-    if (( ${#missing_servers[@]} > 0 )); then
-        echo -e "${RED}Error: missing local MCP server directories:${NC}"
-        for entry in "${missing_servers[@]}"; do
-            echo "  - $entry"
-        done
-        echo "Fix by creating the directory or removing the server from $MCP_REGISTRY"
+    working_dir="$BARRY_DIR/$MCP_SERVER_PATH"
+    if [[ ! -d "$working_dir" ]]; then
+        echo -e "${RED}Error: MCP server directory not found: $working_dir${NC}"
         exit 1
     fi
 
-    for server in $local_servers; do
-        # Skip if it's under external section
-        if grep -A100 "^external:" "$MCP_REGISTRY" | grep -q "^  $server:"; then
-            continue
+    dist_path="$working_dir/$MCP_DIST_ENTRY"
+    # Display only — the server resolves its own port from BARRY_ENV.
+    port=$((3901 + 1000))
+
+    bundle_changed=false
+    if [[ -f "$working_dir/scripts/build-bundle.mjs" ]]; then
+        echo "  Building launchd bundle for $MCP_SERVER_NAME..."
+        bundle_checksum_before=""
+        if [[ -f "$dist_path" ]]; then
+            bundle_checksum_before=$(cksum "$dist_path")
         fi
-
-        # Skip if disabled
-        if grep -A5 "^  $server:" "$MCP_REGISTRY" | grep -q "disabled: true"; then
-            echo -e "  ${YELLOW}⚠${NC} $server: disabled, skipping"
-            # Remove stale plist if it exists
-            stale_plist="$LAUNCH_AGENTS_DIR/com.barry.mcp.$server.plist"
-            if [[ -f "$stale_plist" ]]; then
-                svc_stop "$(basename "$stale_plist" .plist)"
-                rm -f "$stale_plist"
-                echo -e "  ${YELLOW}⚠${NC} $server: removed stale plist"
-            fi
-            continue
+        "$NODE_PATH" "$working_dir/scripts/build-bundle.mjs"
+        bundle_checksum_after=$(cksum "$dist_path")
+        if [[ "$bundle_checksum_before" != "$bundle_checksum_after" ]]; then
+            bundle_changed=true
         fi
+    fi
 
-        # Get port for this server (base + 1000 for prod display/verification)
-        port=$(grep -A5 "^  $server:" "$MCP_REGISTRY" | grep "port:" | head -1 | sed 's/.*port: *//')
-        port=$((port + 1000))
-        # Note: port is only used for display — the server resolves its own port via BARRY_ENV
+    plist_name="com.barry.mcp.$MCP_SERVER_NAME"
+    plist_target="$LAUNCH_AGENTS_DIR/$plist_name.plist"
 
-        if [[ -n "$port" ]]; then
-            # Check for path override
-            custom_path=$(grep -A5 "^  $server:" "$MCP_REGISTRY" | grep "path:" | head -1 | sed 's/.*path: *//')
-            if [[ -n "$custom_path" ]]; then
-                working_dir="$BARRY_DIR/$custom_path"
-            else
-                working_dir="$BARRY_DIR/servers/mcp/$server"
-            fi
-            # Determine dist entry point
-            dist_entry=$(grep -A10 "^  $server:" "$MCP_REGISTRY" | grep "dist_entry:" | head -1 | sed 's/.*dist_entry: *//')
-            if [[ -n "$dist_entry" ]]; then
-                dist_path="$working_dir/$dist_entry"
-            else
-                dist_path="$working_dir/dist/index.js"
-            fi
+    mkdir -p "$working_dir/logs"
 
-            if [[ -d "$working_dir" ]]; then
-                bundle_changed=false
-                if [[ "$dist_entry" == "dist/bundle.cjs" && -f "$working_dir/scripts/build-bundle.mjs" ]]; then
-                    echo "  Building launchd bundle for $server..."
-                    bundle_checksum_before=""
-                    if [[ -f "$dist_path" ]]; then
-                        bundle_checksum_before=$(cksum "$dist_path")
-                    fi
-                    "$NODE_PATH" "$working_dir/scripts/build-bundle.mjs"
-                    bundle_checksum_after=$(cksum "$dist_path")
-                    if [[ "$bundle_checksum_before" != "$bundle_checksum_after" ]]; then
-                        bundle_changed=true
-                    fi
-                fi
-
-                plist_name="com.barry.mcp.$server"
-                plist_target="$LAUNCH_AGENTS_DIR/$plist_name.plist"
-
-                mkdir -p "$working_dir/logs"
-
-                # Get env vars for this server
-                env_xml=""
-                env_section=$("$NODE_PATH" -e "
-                  const fs = require('fs');
-                  const lines = fs.readFileSync(process.argv[1], 'utf8').split('\n');
-                  let inServer = false, inEnv = false;
-                  const envs = [];
-                  for (const line of lines) {
-                    if (line.match(new RegExp('^  ' + process.argv[2] + ':'))) { inServer = true; continue; }
-                    if (inServer && /^  [a-z]/.test(line)) break;
-                    if (inServer && /^\s+env:/.test(line)) { inEnv = true; continue; }
-                    if (inEnv && /^\s*#/.test(line)) continue;
-                    if (inEnv && /^\s+- ([A-Z_]+)/.test(line)) envs.push(line.match(/- ([A-Z_]+)/)[1]);
-                    else if (inEnv && !/^\s*$/.test(line)) inEnv = false;
-                  }
-                  process.stdout.write(envs.join(' '));
-                " "$MCP_REGISTRY" "$server")
-                for var in $env_section; do
-                    val="${!var}"
-                    if [[ -n "$val" ]]; then
-                        env_xml+="        <key>$var</key>\n        <string>$val</string>\n"
-                    fi
-                done
-
-                # Generate plist content
-                PLIST_GENERATED=$(awk -v name="$server" \
-                    -v port="$port" \
-                    -v working_dir="$working_dir" \
-                    -v dist_path="$dist_path" \
-                    -v node_bin_dir="$NODE_BIN_DIR" \
-                    -v node_path="$NODE_PATH" \
-                    -v db_url="$BARRY_DATABASE_URL" \
-                    -v axiom_token="$AXIOM_TOKEN" \
-                    -v env_vars="$env_xml" \
-                    '{
-                        gsub(/__MCP_NAME__/, name);
-                        gsub(/__MCP_PORT__/, port);
-                        gsub(/__MCP_WORKING_DIR__/, working_dir);
-                        gsub(/__MCP_DIST_PATH__/, dist_path);
-                        gsub(/__NODE_BIN_DIR__/, node_bin_dir);
-                        gsub(/__NODE_PATH__/, node_path);
-                        gsub(/__DATABASE_URL__/, db_url);
-                        gsub(/__AXIOM_TOKEN__/, axiom_token);
-                        gsub(/__MCP_ENV_VARS__/, env_vars);
-                        gsub(/\\n/, "\n");
-                        print;
-                    }' "$MCP_TEMPLATE")
-
-                # Only install and reload if the plist actually changed
-                if [[ -f "$plist_target" ]] && echo "$PLIST_GENERATED" | diff -q - "$plist_target" > /dev/null 2>&1; then
-                    if $bundle_changed; then
-                        svc_stop "$plist_name"
-                        NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
-                        echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (bundle updated, reloading)"
-                    elif ! launchctl list "$plist_name" &>/dev/null; then
-                        NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
-                        echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (unchanged, reloading)"
-                    else
-                        echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (unchanged)"
-                    fi
-                else
-                    svc_stop "$plist_name"
-                    echo "$PLIST_GENERATED" > "$plist_target"
-                    NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
-                    echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (updated)"
-                fi
-            else
-                echo -e "  ${YELLOW}⚠${NC} $server: directory not found at $working_dir"
-            fi
+    env_xml=""
+    for var in $MCP_SERVER_ENV; do
+        val="${!var}"
+        if [[ -n "$val" ]]; then
+            env_xml+="        <key>$var</key>\n        <string>$val</string>\n"
         fi
     done
 
-    # External MCP servers
-    echo ""
-    echo "Installing external MCP server plists..."
-    external_servers=$(grep -A100 "^external:" "$MCP_REGISTRY" | grep -E '^  [a-z]' | grep -v 'port:' | grep -v 'path:' | grep -v 'env:' | grep -v '^ *-' | sed 's/://g' | tr -d ' ')
+    PLIST_GENERATED=$(awk -v name="$MCP_SERVER_NAME" \
+        -v port="$port" \
+        -v working_dir="$working_dir" \
+        -v dist_path="$dist_path" \
+        -v node_bin_dir="$NODE_BIN_DIR" \
+        -v node_path="$NODE_PATH" \
+        -v db_url="$BARRY_DATABASE_URL" \
+        -v axiom_token="$AXIOM_TOKEN" \
+        -v env_vars="$env_xml" \
+        '{
+            gsub(/__MCP_NAME__/, name);
+            gsub(/__MCP_PORT__/, port);
+            gsub(/__MCP_WORKING_DIR__/, working_dir);
+            gsub(/__MCP_DIST_PATH__/, dist_path);
+            gsub(/__NODE_BIN_DIR__/, node_bin_dir);
+            gsub(/__NODE_PATH__/, node_path);
+            gsub(/__DATABASE_URL__/, db_url);
+            gsub(/__AXIOM_TOKEN__/, axiom_token);
+            gsub(/__MCP_ENV_VARS__/, env_vars);
+            gsub(/\\n/, "\n");
+            print;
+        }' "$MCP_TEMPLATE")
 
-    for server in $external_servers; do
-        # Skip if disabled
-        if grep -A100 "^external:" "$MCP_REGISTRY" | grep -A5 "^  $server:" | grep -q "disabled: true"; then
-            echo -e "  ${YELLOW}⚠${NC} $server: disabled, skipping"
-            # Remove stale plist if it exists
-            stale_plist="$LAUNCH_AGENTS_DIR/com.barry.mcp.$server.plist"
-            if [[ -f "$stale_plist" ]]; then
-                svc_stop "$(basename "$stale_plist" .plist)"
-                rm -f "$stale_plist"
-                echo -e "  ${YELLOW}⚠${NC} $server: removed stale plist"
-            fi
-            continue
+    # Only install and reload if the plist actually changed
+    if [[ -f "$plist_target" ]] && echo "$PLIST_GENERATED" | diff -q - "$plist_target" > /dev/null 2>&1; then
+        if $bundle_changed; then
+            svc_stop "$plist_name"
+            NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
+            echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (bundle updated, reloading)"
+        elif ! launchctl list "$plist_name" &>/dev/null; then
+            NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
+            echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (unchanged, reloading)"
+        else
+            echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (unchanged)"
         fi
-
-        port=$(grep -A100 "^external:" "$MCP_REGISTRY" | grep -A5 "^  $server:" | grep "port:" | head -1 | sed 's/.*port: *//')
-        path=$(grep -A100 "^external:" "$MCP_REGISTRY" | grep -A5 "^  $server:" | grep "path:" | head -1 | sed 's/.*path: *//')
-
-        if [[ -n "$port" && -n "$path" ]]; then
-            # Expand ~ in path
-            working_dir="${path/#\~/$HOME}"
-            dist_path="$working_dir/dist/index.js"
-
-            if [[ -d "$working_dir" ]]; then
-                plist_name="com.barry.mcp.$server"
-                plist_target="$LAUNCH_AGENTS_DIR/$plist_name.plist"
-
-                mkdir -p "$working_dir/logs"
-
-                # Get env vars
-                env_xml=""
-                env_section=$(grep -A100 "^external:" "$MCP_REGISTRY" | grep -A20 "^  $server:" | grep -E "^      - [A-Z]" | sed 's/.*- //')
-                for var in $env_section; do
-                    val="${!var}"
-                    if [[ -n "$val" ]]; then
-                        env_xml+="        <key>$var</key>\n        <string>$val</string>\n"
-                    fi
-                done
-
-                # Generate plist content
-                PLIST_GENERATED=$(awk -v name="$server" \
-                    -v port="$port" \
-                    -v working_dir="$working_dir" \
-                    -v dist_path="$dist_path" \
-                    -v node_bin_dir="$NODE_BIN_DIR" \
-                    -v node_path="$NODE_PATH" \
-                    -v db_url="$BARRY_DATABASE_URL" \
-                    -v axiom_token="$AXIOM_TOKEN" \
-                    -v env_vars="$env_xml" \
-                    '{
-                        gsub(/__MCP_NAME__/, name);
-                        gsub(/__MCP_PORT__/, port);
-                        gsub(/__MCP_WORKING_DIR__/, working_dir);
-                        gsub(/__MCP_DIST_PATH__/, dist_path);
-                        gsub(/__NODE_BIN_DIR__/, node_bin_dir);
-                        gsub(/__NODE_PATH__/, node_path);
-                        gsub(/__DATABASE_URL__/, db_url);
-                        gsub(/__AXIOM_TOKEN__/, axiom_token);
-                        gsub(/__MCP_ENV_VARS__/, env_vars);
-                        gsub(/\\n/, "\n");
-                        print;
-                    }' "$MCP_TEMPLATE")
-
-                # Only install and reload if the plist actually changed
-                if [[ -f "$plist_target" ]] && echo "$PLIST_GENERATED" | diff -q - "$plist_target" > /dev/null 2>&1; then
-                    if ! launchctl list "$plist_name" &>/dev/null; then
-                        NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
-                        echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (unchanged, reloading)"
-                    else
-                        echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (unchanged)"
-                    fi
-                else
-                    svc_stop "$plist_name"
-                    echo "$PLIST_GENERATED" > "$plist_target"
-                    NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
-                    echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (updated)"
-                fi
-            else
-                echo -e "  ${YELLOW}⚠${NC} $server: directory not found at $working_dir"
-            fi
-        fi
-    done
+    else
+        svc_stop "$plist_name"
+        write_plist "$plist_target" "$PLIST_GENERATED"
+        NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
+        echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (updated)"
+    fi
 fi
 
 echo ""
@@ -1408,25 +1271,15 @@ done
 echo ""
 echo "MCP Servers (via Supergateway):"
 MCP_OK=0
-mcp_base_ports=$(awk '/^servers:/{section=1; next} /^[a-zA-Z]/{section=0} section && /port:/{sub(/.*port: */, ""); print}' "$MCP_REGISTRY")
-external_base_ports=$(awk '/^external:/{section=1; next} /^[a-zA-Z]/{section=0} section && /port:/{sub(/.*port: */, ""); print}' "$MCP_REGISTRY")
-for base_port in $mcp_base_ports $external_base_ports; do
-    port=$((base_port + 1000))
-    response=$(curl -sf -H "Authorization: Bearer ${BARRY_SECRET}" "http://localhost:$port/health" 2>/dev/null || true)
-    if [[ "$response" == "ok" ]]; then
-        name=$(awk -v target="$base_port" '
-            /^servers:|^external:/{section=1; next}
-            /^[a-zA-Z]/{section=0}
-            section && /^  [a-zA-Z0-9_-]+:/{name=$1; sub(/:$/, "", name)}
-            section && /port:/ && $2 == target {print name; exit}
-        ' "$MCP_REGISTRY")
-        echo -e "  ${GREEN}✓${NC} ${name:-unknown} (:$port)"
-        ((MCP_OK++)) || true
-    else
-        echo -e "  ${RED}✗${NC} :$port"
-        ALL_OK=false
-    fi
-done
+port=$((3901 + 1000))
+response=$(curl -sf -H "Authorization: Bearer ${BARRY_SECRET}" "http://localhost:$port/health" 2>/dev/null || true)
+if [[ "$response" == "ok" ]]; then
+    echo -e "  ${GREEN}✓${NC} barry (:$port)"
+    ((MCP_OK++)) || true
+else
+    echo -e "  ${RED}✗${NC} barry (:$port)"
+    ALL_OK=false
+fi
 if [[ $MCP_OK -eq 0 ]]; then
     echo -e "  ${YELLOW}(servers may still be starting - try again in a few seconds)${NC}"
 fi

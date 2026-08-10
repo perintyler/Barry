@@ -32,7 +32,7 @@
     "sdks/links/dist/css.d.ts",
     "sdks/links/dist/browser-inline.d.ts",
     "packages/db/src/config.ts",
-    "scripts/audit-profile.ts",
+    "scripts/audit-identity.ts",
     "scripts/generate-caddy-config.ts",
     "scripts/generate-firewall-config.ts"
   ],

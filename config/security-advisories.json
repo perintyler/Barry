@@ -113,48 +113,6 @@
       "reason": "Transitive dep of vite/svelte toolchain; dev-only, no upstream fix available."
     },
     {
-      "id": "GHSA-4c8g-83qw-93j6",
-      "packages": ["fast-uri"],
-      "owner": "Barry maintainers",
-      "expires": "2026-10-01",
-      "reason": "Transitive dep; no fix available at current version."
-    },
-    {
-      "id": "GHSA-v2hh-gcrm-f6hx",
-      "packages": ["fast-uri"],
-      "owner": "Barry maintainers",
-      "expires": "2026-10-01",
-      "reason": "Transitive dep; no fix available at current version."
-    },
-    {
-      "id": "GHSA-hvrm-45r6-mjfj",
-      "packages": ["hono"],
-      "owner": "Barry maintainers",
-      "expires": "2026-10-01",
-      "reason": "Transitive dep of Cloudflare workers toolchain; no fix available."
-    },
-    {
-      "id": "GHSA-w62v-xxxg-mg59",
-      "packages": ["hono"],
-      "owner": "Barry maintainers",
-      "expires": "2026-10-01",
-      "reason": "Transitive dep of Cloudflare workers toolchain; no fix available."
-    },
-    {
-      "id": "GHSA-xgm2-5f3f-mvvc",
-      "packages": ["hono"],
-      "owner": "Barry maintainers",
-      "expires": "2026-10-01",
-      "reason": "Transitive dep of Cloudflare workers toolchain; no fix available."
-    },
-    {
-      "id": "GHSA-52cp-r559-cp3m",
-      "packages": ["js-yaml"],
-      "owner": "Barry maintainers",
-      "expires": "2026-10-01",
-      "reason": "Transitive dep of eslint; dev-only, no fix available."
-    },
-    {
       "id": "GHSA-v245-v573-v5vm",
       "packages": ["linkify-it"],
       "owner": "Barry maintainers",

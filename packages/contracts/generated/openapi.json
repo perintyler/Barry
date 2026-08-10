@@ -344,16 +344,16 @@
         }
       }
     },
-    "/profiles": {
+    "/identities": {
       "get": {
-        "operationId": "listProfiles",
+        "operationId": "listIdentities",
         "responses": {
           "200": {
-            "description": "Profiles",
+            "description": "Identities",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileListResponse"
+                  "$ref": "#/components/schemas/IdentityListResponse"
                 }
               }
             }
@@ -371,24 +371,24 @@
         }
       },
       "post": {
-        "operationId": "createProfile",
+        "operationId": "createIdentity",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateProfileRequest"
+                "$ref": "#/components/schemas/CreateIdentityRequest"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": "Created profile",
+            "description": "Created barry",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileResponse"
+                  "$ref": "#/components/schemas/IdentityResponse"
                 }
               }
             }
@@ -406,9 +406,9 @@
         }
       }
     },
-    "/profiles/effective": {
+    "/identities/effective": {
       "get": {
-        "operationId": "getEffectiveProfile",
+        "operationId": "getEffectiveIdentity",
         "parameters": [
           {
             "name": "repoPath",
@@ -420,11 +420,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Effective profile",
+            "description": "Effective barry",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EffectiveProfileResponse"
+                  "$ref": "#/components/schemas/EffectiveIdentityResponse"
                 }
               }
             }
@@ -442,7 +442,7 @@
         }
       }
     },
-    "/profiles/blocks/available": {
+    "/identities/blocks/available": {
       "get": {
         "operationId": "listAvailableBlocks",
         "responses": {
@@ -585,10 +585,10 @@
         }
       }
     },
-    "/profiles/{profileId}": {
+    "/identities/{identityId}": {
       "parameters": [
         {
-          "name": "profileId",
+          "name": "identityId",
           "in": "path",
           "required": true,
           "schema": {
@@ -597,14 +597,14 @@
         }
       ],
       "get": {
-        "operationId": "getProfile",
+        "operationId": "getIdentity",
         "responses": {
           "200": {
-            "description": "Profile",
+            "description": "Identity",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileResponse"
+                  "$ref": "#/components/schemas/IdentityResponse"
                 }
               }
             }
@@ -622,13 +622,13 @@
         }
       },
       "patch": {
-        "operationId": "updateProfile",
+        "operationId": "updateIdentity",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateProfileRequest"
+                "$ref": "#/components/schemas/UpdateIdentityRequest"
               }
             }
           }
@@ -639,7 +639,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ActionAck"
+                  "$ref": "#/components/schemas/IdentityResponse"
                 }
               }
             }
@@ -657,12 +657,12 @@
         }
       }
     },
-    "/profiles/{profileId}/set-default": {
+    "/identities/{identityId}/set-default": {
       "post": {
-        "operationId": "setDefaultProfile",
+        "operationId": "setActiveIdentity",
         "parameters": [
           {
-            "name": "profileId",
+            "name": "identityId",
             "in": "path",
             "required": true,
             "schema": {
@@ -2027,7 +2027,7 @@
         }
       }
     },
-    "/profiles/blocks/status": {
+    "/identities/blocks/status": {
       "get": {
         "operationId": "getBlockStatus",
         "responses": {
@@ -2054,7 +2054,7 @@
         }
       }
     },
-    "/profiles/blocks/{blockName}/retry": {
+    "/identities/blocks/{blockName}/retry": {
       "post": {
         "operationId": "retryBlock",
         "parameters": [
@@ -2091,7 +2091,7 @@
         }
       }
     },
-    "/profiles/blocks/{blockName}/auth": {
+    "/identities/blocks/{blockName}/auth": {
       "post": {
         "operationId": "authorizeBlock",
         "parameters": [
@@ -2128,7 +2128,7 @@
         }
       }
     },
-    "/profiles/blocks/{blockName}/auth/status": {
+    "/identities/blocks/{blockName}/auth/status": {
       "get": {
         "operationId": "getBlockAuthStatus",
         "parameters": [
@@ -3035,7 +3035,7 @@
               }
             ]
           },
-          "profileId": {
+          "identityId": {
             "anyOf": [
               {
                 "type": "integer",
@@ -3047,7 +3047,7 @@
               }
             ]
           },
-          "profileSource": {
+          "identitySource": {
             "anyOf": [
               {
                 "type": "string",
@@ -3148,7 +3148,8 @@
                   "claude",
                   "codex",
                   "opencode",
-                  "cursor"
+                  "cursor",
+                  "zai"
                 ]
               },
               {
@@ -3257,8 +3258,8 @@
           "systemPrompt",
           "summary",
           "repoPath",
-          "profileId",
-          "profileSource",
+          "identityId",
+          "identitySource",
           "status",
           "traits",
           "scope",
@@ -3275,7 +3276,7 @@
         ],
         "additionalProperties": false
       },
-      "Profile": {
+      "Identity": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
@@ -3290,19 +3291,7 @@
           "name": {
             "type": "string"
           },
-          "parentId": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "parentName": {
+          "displayName": {
             "anyOf": [
               {
                 "type": "string"
@@ -3344,7 +3333,8 @@
                   "claude",
                   "codex",
                   "opencode",
-                  "cursor"
+                  "cursor",
+                  "zai"
                 ]
               },
               {
@@ -3404,14 +3394,34 @@
                 "type": "null"
               }
             ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "db",
+              "file"
+            ]
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "id",
           "token",
           "name",
-          "parentId",
-          "parentName",
+          "displayName",
           "blocks",
           "traits",
           "scopeId",
@@ -3425,11 +3435,11 @@
         ],
         "additionalProperties": false
       },
-      "ProfileListResponse": {
+      "IdentityListResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "profiles": {
+          "identities": {
             "type": "array",
             "items": {
               "type": "object",
@@ -3445,19 +3455,7 @@
                 "name": {
                   "type": "string"
                 },
-                "parentId": {
-                  "anyOf": [
-                    {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "parentName": {
+                "displayName": {
                   "anyOf": [
                     {
                       "type": "string"
@@ -3499,7 +3497,8 @@
                         "claude",
                         "codex",
                         "opencode",
-                        "cursor"
+                        "cursor",
+                        "zai"
                       ]
                     },
                     {
@@ -3559,14 +3558,34 @@
                       "type": "null"
                     }
                   ]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "db",
+                    "file"
+                  ]
+                },
+                "scope": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [
                 "id",
                 "token",
                 "name",
-                "parentId",
-                "parentName",
+                "displayName",
                 "blocks",
                 "traits",
                 "scopeId",
@@ -3583,15 +3602,15 @@
           }
         },
         "required": [
-          "profiles"
+          "identities"
         ],
         "additionalProperties": false
       },
-      "ProfileResponse": {
+      "IdentityResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "profile": {
+          "identity": {
             "type": "object",
             "properties": {
               "id": {
@@ -3605,19 +3624,7 @@
               "name": {
                 "type": "string"
               },
-              "parentId": {
-                "anyOf": [
-                  {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "parentName": {
+              "displayName": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -3659,7 +3666,8 @@
                       "claude",
                       "codex",
                       "opencode",
-                      "cursor"
+                      "cursor",
+                      "zai"
                     ]
                   },
                   {
@@ -3719,14 +3727,34 @@
                     "type": "null"
                   }
                 ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "db",
+                  "file"
+                ]
+              },
+              "scope": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
               "id",
               "token",
               "name",
-              "parentId",
-              "parentName",
+              "displayName",
               "blocks",
               "traits",
               "scopeId",
@@ -3767,15 +3795,15 @@
           }
         },
         "required": [
-          "profile"
+          "identity"
         ],
         "additionalProperties": false
       },
-      "EffectiveProfileResponse": {
+      "EffectiveIdentityResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "profile": {
+          "identity": {
             "type": "object",
             "properties": {
               "id": {
@@ -3789,19 +3817,7 @@
               "name": {
                 "type": "string"
               },
-              "parentId": {
-                "anyOf": [
-                  {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "parentName": {
+              "displayName": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -3843,7 +3859,8 @@
                       "claude",
                       "codex",
                       "opencode",
-                      "cursor"
+                      "cursor",
+                      "zai"
                     ]
                   },
                   {
@@ -3903,14 +3920,34 @@
                     "type": "null"
                   }
                 ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "db",
+                  "file"
+                ]
+              },
+              "scope": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
               "id",
               "token",
               "name",
-              "parentId",
-              "parentName",
+              "displayName",
               "blocks",
               "traits",
               "scopeId",
@@ -3945,7 +3982,7 @@
           }
         },
         "required": [
-          "profile",
+          "identity",
           "source",
           "repoRoot"
         ],
@@ -4019,7 +4056,7 @@
               "type": "string"
             }
           },
-          "profileId": {
+          "identityId": {
             "anyOf": [
               {
                 "type": "integer",
@@ -4040,7 +4077,8 @@
               "claude",
               "codex",
               "opencode",
-              "cursor"
+              "cursor",
+              "zai"
             ]
           },
           "model": {
@@ -4103,7 +4141,7 @@
               "type": "string"
             }
           },
-          "profileId": {
+          "identityId": {
             "anyOf": [
               {
                 "type": "integer",
@@ -4124,7 +4162,8 @@
               "claude",
               "codex",
               "opencode",
-              "cursor"
+              "cursor",
+              "zai"
             ]
           },
           "model": {
@@ -4238,7 +4277,7 @@
                     }
                   ]
                 },
-                "profileId": {
+                "identityId": {
                   "anyOf": [
                     {
                       "type": "integer",
@@ -4250,7 +4289,7 @@
                     }
                   ]
                 },
-                "profileSource": {
+                "identitySource": {
                   "anyOf": [
                     {
                       "type": "string",
@@ -4351,7 +4390,8 @@
                         "claude",
                         "codex",
                         "opencode",
-                        "cursor"
+                        "cursor",
+                        "zai"
                       ]
                     },
                     {
@@ -4460,8 +4500,8 @@
                 "systemPrompt",
                 "summary",
                 "repoPath",
-                "profileId",
-                "profileSource",
+                "identityId",
+                "identitySource",
                 "status",
                 "traits",
                 "scope",
@@ -4609,6 +4649,16 @@
                   ]
                 },
                 "toolUseId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "parentToolUseId": {
                   "anyOf": [
                     {
                       "type": "string"
@@ -5331,7 +5381,7 @@
         "properties": {},
         "additionalProperties": false
       },
-      "UpdateProfileRequest": {
+      "UpdateIdentityRequest": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
@@ -5339,12 +5389,10 @@
             "type": "string",
             "minLength": 1
           },
-          "parentId": {
+          "displayName": {
             "anyOf": [
               {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
+                "type": "string"
               },
               {
                 "type": "null"
@@ -5383,7 +5431,8 @@
                   "claude",
                   "codex",
                   "opencode",
-                  "cursor"
+                  "cursor",
+                  "zai"
                 ]
               },
               {
@@ -5395,6 +5444,20 @@
             "anyOf": [
               {
                 "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
               },
               {
                 "type": "null"
@@ -5404,7 +5467,7 @@
         },
         "additionalProperties": false
       },
-      "CreateProfileRequest": {
+      "CreateIdentityRequest": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
@@ -5412,18 +5475,6 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 100
-          },
-          "parentId": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "blocks": {
             "type": "array",
@@ -5457,7 +5508,8 @@
                   "claude",
                   "codex",
                   "opencode",
-                  "cursor"
+                  "cursor",
+                  "zai"
                 ]
               },
               {
@@ -5469,6 +5521,30 @@
             "anyOf": [
               {
                 "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "db",
+              "file"
+            ]
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
               },
               {
                 "type": "null"
@@ -5580,6 +5656,9 @@
           "input": {},
           "result": {},
           "toolUseId": {
+            "type": "string"
+          },
+          "parentToolUseId": {
             "type": "string"
           },
           "metadata": {

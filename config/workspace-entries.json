@@ -143,6 +143,10 @@
     "name": "@barry/vault",
     "class": "internal-package"
   },
+  "blocks/actions": {
+    "name": "@barry-blocks/actions",
+    "class": "block"
+  },
   "blocks/artifacts": {
     "name": "@barry-blocks/artifacts",
     "class": "block"
@@ -161,6 +165,10 @@
   },
   "blocks/filesystem": {
     "name": "@barry-blocks/filesystem",
+    "class": "block"
+  },
+  "blocks/github-app": {
+    "name": "@barry-blocks/github-app",
     "class": "block"
   },
   "blocks/git": {
@@ -207,16 +215,6 @@
     "class": "runtime-edge",
     "mode": "source-start"
   },
-  "servers/bdiff": {
-    "name": "bdiff-server",
-    "class": "runtime-edge",
-    "mode": "source-start"
-  },
-  "servers/github": {
-    "name": "github-app",
-    "class": "runtime-edge",
-    "mode": "source-start"
-  },
   "servers/mcp": {
     "name": "@barry/mcp-server",
     "class": "runtime-edge",
@@ -224,11 +222,6 @@
   },
   "servers/slack": {
     "name": "slack-server",
-    "class": "runtime-edge",
-    "mode": "source-start"
-  },
-  "servers/whisperflow": {
-    "name": "whisperflow-server",
     "class": "runtime-edge",
     "mode": "source-start"
   }

@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@barry/env": "workspace:*",
-    "@modelcontextprotocol/sdk": "1.27.1",
+    "@modelcontextprotocol/sdk": "1.29.0",
     "esbuild": "0.27.3",
     "yaml": "2.8.3",
     "zod": "3.25.76"

@@ -10,6 +10,7 @@
     "build:projects": "pnpm exec tsc -b tsconfig.projects.json",
     "build:projects:dry": "pnpm exec tsc -b tsconfig.projects.json --dry",
     "check:monorepo": "node scripts/check/monorepo-policy.mjs",
+    "check:identity-residue": "node scripts/check/identity-residue.mjs",
     "contracts:generate": "pnpm --dir packages/contracts generate",
     "contracts:check": "pnpm --dir packages/contracts check:generated && node scripts/ci/check-generated-clients.mjs",
     "health:ci": "bash scripts/health-check.sh --skip-build",

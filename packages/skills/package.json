@@ -7,15 +7,18 @@
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./skill-catalog": "./src/skill-catalog.ts"
+    "./skill-catalog": "./src/skill-catalog.ts",
+    "./action-catalog": "./src/action-catalog.ts",
+    "./action-index": "./src/action-index.ts",
+    "./instruction-catalog": "./src/instruction-catalog.ts",
+    "./instruction-index": "./src/instruction-index.ts"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@barry/blocks": "workspace:*",
-    "yaml": "2.8.3"
+    "@barry/blocks": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.15.0",

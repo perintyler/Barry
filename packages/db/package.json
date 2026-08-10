@@ -6,12 +6,12 @@
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./profile-blocks": "./src/profile-blocks.ts",
+    "./identity-blocks": "./src/identity-blocks.ts",
     "./qa": "./src/qa.ts",
     "./migrate": "./src/migrate.ts",
     "./seed": "./scripts/seed.ts",
     "./test-db-url": "./src/test-db-url.ts",
-    "./profile-files": "./src/profile-files.ts"
+    "./identity-files": "./src/identity-files.ts"
   },
   "scripts": {
     "setup": "tsx scripts/setup.ts",
@@ -20,7 +20,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "qa:setup": "tsx scripts/setup-qa.ts",
-    "qa:seed": "tsx scripts/setup-qa.ts"
+    "qa:seed": "tsx scripts/setup-qa.ts",
+    "backfill:provider-sessions": "tsx scripts/backfill-provider-sessions.ts"
   },
   "dependencies": {
     "@barry/agent-scope": "workspace:*",
