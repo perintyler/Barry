@@ -1,9 +1,4 @@
 {
-  "apps/web/artifacts": {
-    "name": "barry-artifacts-app",
-    "class": "runtime-edge",
-    "mode": "wrangler"
-  },
   "apps/web/barry.rocks": {
     "name": "barry-rocks",
     "class": "runtime-edge",
@@ -24,18 +19,64 @@
     "class": "runtime-edge",
     "mode": "container"
   },
+  "bags/actions": {
+    "name": "@barry-bags/actions",
+    "class": "bag"
+  },
+  "bags/artifacts": {
+    "name": "@barry-bags/artifacts",
+    "class": "bag"
+  },
+  "bags/bdiff": {
+    "name": "@barry-bags/bdiff",
+    "class": "bag"
+  },
+  "bags/changes": {
+    "name": "@barry-bags/changes",
+    "class": "bag"
+  },
+  "bags/events": {
+    "name": "@barry-bags/events",
+    "class": "bag"
+  },
+  "bags/filesystem": {
+    "name": "@barry-bags/filesystem",
+    "class": "bag"
+  },
+  "bags/git": {
+    "name": "@barry-bags/git",
+    "class": "bag"
+  },
+  "bags/github-app": {
+    "name": "@barry-bags/github-app",
+    "class": "bag"
+  },
+  "bags/keychain": {
+    "name": "@barry-bags/keychain",
+    "class": "bag"
+  },
+  "bags/locks": {
+    "name": "@barry-bags/locks",
+    "class": "bag"
+  },
+  "bags/reminders": {
+    "name": "@barry-bags/reminders",
+    "class": "bag"
+  },
+  "bags/session": {
+    "name": "@barry-bags/session",
+    "class": "bag"
+  },
+  "bags/slack-app": {
+    "name": "@barry-bags/slack-app",
+    "class": "bag"
+  },
+  "bags/system": {
+    "name": "@barry-bags/system",
+    "class": "bag"
+  },
   "cli": {
     "name": "barry",
-    "class": "runtime-edge",
-    "mode": "source-bin"
-  },
-  "hooks/change-tracker": {
-    "name": "@barry/hook-change-tracker",
-    "class": "runtime-edge",
-    "mode": "source-bin"
-  },
-  "hooks/session-tracker": {
-    "name": "@barry/hook-session-tracker",
     "class": "runtime-edge",
     "mode": "source-bin"
   },
@@ -50,6 +91,14 @@
   "packages/auth": {
     "name": "@barry/auth",
     "class": "internal-package"
+  },
+  "packages/bags": {
+    "name": "@barry/bags",
+    "class": "internal-package"
+  },
+  "packages/bags-sdk": {
+    "name": "@barry-sdk/bags-sdk",
+    "class": "npm-published"
   },
   "packages/contracts": {
     "name": "@barry/contracts",
@@ -87,20 +136,16 @@
     "name": "@barry/md-to-ansi",
     "class": "internal-package"
   },
-  "packages/blocks": {
-    "name": "@barry/blocks",
-    "class": "internal-package"
-  },
-  "packages/blocks-sdk": {
-    "name": "@barry-sdk/blocks-sdk",
-    "class": "npm-published"
-  },
   "packages/secrets": {
     "name": "@barry/secrets",
     "class": "internal-package"
   },
   "packages/sentry": {
     "name": "@barry/sentry",
+    "class": "internal-package"
+  },
+  "packages/session-client": {
+    "name": "@barry/session-client",
     "class": "internal-package"
   },
   "packages/sessions": {
@@ -143,62 +188,9 @@
     "name": "@barry/vault",
     "class": "internal-package"
   },
-  "blocks/actions": {
-    "name": "@barry-blocks/actions",
-    "class": "block"
-  },
-  "blocks/artifacts": {
-    "name": "@barry-blocks/artifacts",
-    "class": "block"
-  },
-  "blocks/bdiff": {
-    "name": "@barry-blocks/bdiff",
-    "class": "block"
-  },
-  "blocks/changes": {
-    "name": "@barry-blocks/changes",
-    "class": "block"
-  },
-  "blocks/events": {
-    "name": "@barry-blocks/events",
-    "class": "block"
-  },
-  "blocks/filesystem": {
-    "name": "@barry-blocks/filesystem",
-    "class": "block"
-  },
-  "blocks/github-app": {
-    "name": "@barry-blocks/github-app",
-    "class": "block"
-  },
-  "blocks/git": {
-    "name": "@barry-blocks/git",
-    "class": "block"
-  },
-  "blocks/keychain": {
-    "name": "@barry-blocks/keychain",
-    "class": "block"
-  },
-  "blocks/locks": {
-    "name": "@barry-blocks/locks",
-    "class": "block"
-  },
-  "blocks/reminders": {
-    "name": "@barry-blocks/reminders",
-    "class": "block"
-  },
-  "blocks/session": {
-    "name": "@barry-blocks/session",
-    "class": "block"
-  },
-  "blocks/system": {
-    "name": "@barry-blocks/system",
-    "class": "block"
-  },
   "sdks/artifacts": {
     "name": "@barry-sdks/artifacts",
-    "class": "runtime-edge",
-    "mode": "wrangler"
+    "class": "publishable-candidate"
   },
   "sdks/links": {
     "name": "@barry-sdks/links",
@@ -219,10 +211,5 @@
     "name": "@barry/mcp-server",
     "class": "runtime-edge",
     "mode": "bundle-source"
-  },
-  "servers/slack": {
-    "name": "slack-server",
-    "class": "runtime-edge",
-    "mode": "source-start"
   }
 }

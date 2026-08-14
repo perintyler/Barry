@@ -18,7 +18,7 @@
     "test:ci:integration": "pnpm --dir cli test",
     "test:ci:targeted": "pnpm test:ci:unit",
     "test:ci": "pnpm test:ci:unit && pnpm test:ci:integration",
-    "ci:verify:static": "pnpm check:monorepo && pnpm contracts:check && pnpm knip && pnpm security:dependencies && pnpm security:licenses && pnpm security:secrets && pnpm run build:projects && pnpm run build:apps",
+    "ci:verify:static": "pnpm check:monorepo && pnpm check:firewall && pnpm check:vocabulary && pnpm contracts:check && pnpm knip && pnpm security:dependencies && pnpm security:licenses && pnpm security:secrets && pnpm run build:projects && pnpm run build:apps",
     "ci:verify": "pnpm run ci:verify:static && pnpm test:ci:unit",
     "dev": "pnpm -r --parallel dev",
     "clean": "pnpm -r exec rm -rf node_modules dist",
@@ -34,7 +34,9 @@
     "security:licenses": "node scripts/check/license-audit.mjs",
     "security:secrets": "node scripts/check/credential-audit.mjs",
     "security:network:quick": "./scripts/security/network/check-core.sh",
-    "security:firewall": "./scripts/firewall/verify.sh"
+    "security:firewall": "./scripts/firewall/verify.sh",
+    "check:firewall": "tsx scripts/generate-firewall-config.ts --check",
+    "check:vocabulary": "bash scripts/check/bag-vocabulary.sh"
   },
   "engines": {
     "node": "26.x",

@@ -61,10 +61,6 @@
       "entry": [
         "src/index.ts",
         "scripts/**/*.{js,mjs,mts,ts}"
-      ],
-      "ignoreDependencies": [
-        "@barry/hook-change-tracker",
-        "@barry/hook-session-tracker"
       ]
     },
     "packages/agent-runtime": {
@@ -91,10 +87,10 @@
         "qa/*.{mjs,mts}"
       ]
     },
-    "packages/blocks": {
+    "packages/bags": {
       "entry": [
         "src/index.ts",
-        "qa/mock-block-server/server.ts"
+        "qa/mock-bag-server/server.ts"
       ]
     },
     "packages/syntax": {
@@ -102,7 +98,7 @@
         "src/__tests__/fixtures/**"
       ]
     },
-    "blocks/*": {
+    "bags/*": {
       "entry": [
         "tools.ts",
         "skills/**/scripts/**/*.{js,mjs,ts}",
@@ -126,7 +122,7 @@
         "qa/**/*.{js,cjs,mjs,ts}"
       ]
     },
-    "packages/blocks-sdk": {
+    "packages/bags-sdk": {
       "ignoreDependencies": [
         "zod"
       ]

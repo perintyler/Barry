@@ -69,7 +69,7 @@ final class BarryKitTests: XCTestCase {
     func testIdentityDefaultsDecodes() throws {
         let json = """
         {"identities":[
-          {"id":1,"name":"barry","defaultModel":"claude-opus-4-6","defaultCodingAgent":null,"blocks":["git"]},
+          {"id":1,"name":"barry","defaultModel":"claude-opus-4-6","defaultCodingAgent":null,"bags":["git"]},
           {"id":3,"name":"default","defaultModel":null,"defaultCodingAgent":"codex"}
         ]}
         """

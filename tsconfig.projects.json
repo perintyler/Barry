@@ -23,10 +23,7 @@
       "path": "./packages/github"
     },
     {
-      "path": "./hooks/change-tracker"
-    },
-    {
-      "path": "./hooks/session-tracker"
+      "path": "./bags/session"
     },
     {
       "path": "./packages/logger"

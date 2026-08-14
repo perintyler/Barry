@@ -6,7 +6,7 @@
 CREATE TABLE action_runs (
   id TEXT PRIMARY KEY,
   action TEXT NOT NULL,
-  block TEXT NOT NULL,
+  bag TEXT NOT NULL,
   session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'started',
   summary TEXT,

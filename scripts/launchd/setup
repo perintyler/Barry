@@ -14,7 +14,7 @@ LAUNCHD_DIR="$BARRY_DIR/infra/local/launchd"
 TEMPLATE_DIR="$LAUNCHD_DIR/templates"
 CONFIG_DIR="$BARRY_DIR/config"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
-# Hoisted above the block-items loop, which installs block-owned app
+# Hoisted above the bag-items loop, which installs bag-owned app
 # bundles long before the core app section further down.
 APPS_DIR="$HOME/.barry/apps"
 APP_TEMPLATE="$TEMPLATE_DIR/com.barry.app.TEMPLATE.plist"
@@ -225,12 +225,12 @@ http_servers=$(awk '
 
 echo "Installing HTTP server plist files..."
 
-# These services were consolidated into the API and CLI, or moved into a block
-# (github-app is now com.barry.block.github-app.webhook). Remove generated
+# These services were consolidated into the API and CLI, or moved into a bag
+# (github-app is now com.barry.bag.github-app.webhook). Remove generated
 # launchd state so upgrading an existing installation cannot keep them alive —
 # for a service that binds a port, a surviving old agent is a second receiver
 # racing the new one for the same port.
-for retired_label in com.barry.admin com.barry.git-server com.barry.slack-app com.barry.whisperflow com.barry.github-app; do
+for retired_label in com.barry.admin com.barry.git-server com.barry.slack-app com.barry.whisperflow com.barry.github-app com.barry.slack; do
     retired_plist="$LAUNCH_AGENTS_DIR/$retired_label.plist"
     if [[ -f "$retired_plist" ]] || launchctl list "$retired_label" &>/dev/null; then
         svc_stop "$retired_label"
@@ -244,7 +244,6 @@ get_port_var() {
     case "$1" in
         web) echo "BARRY_WEB_PORT" ;;
         api) echo "BARRY_API_PORT" ;;
-        slack) echo "BARRY_SLACK_PORT" ;;
         *) echo "" ;;
     esac
 }
@@ -598,64 +597,64 @@ resolve_program() {
 }
 
 # ============================================================================
-# BLOCK SERVICES & JOBS (driven by barry-block.yaml in registered blocks)
+# BAG SERVICES & JOBS (driven by barry-bag.yaml in registered bags)
 # ============================================================================
 
-BLOCK_SVC_TEMPLATE="$TEMPLATE_DIR/com.barry.block.TEMPLATE.plist"
-BLOCK_JOB_TEMPLATE="$TEMPLATE_DIR/com.barry.block.job.TEMPLATE.plist"
+BAG_SVC_TEMPLATE="$TEMPLATE_DIR/com.barry.bag.TEMPLATE.plist"
+BAG_JOB_TEMPLATE="$TEMPLATE_DIR/com.barry.bag.job.TEMPLATE.plist"
 
-# Emit JSON for all block services/jobs via the blocks loader (avoids re-parsing YAML in awk).
+# Emit JSON for all bag services/jobs via the bags loader (avoids re-parsing YAML in awk).
 # Output: one JSON line per service/job:
-#   {"type":"service","block":"name","name":"svc","command":"cmd","args":["a"],"env":["E"],"workingDirectory":"/p","runAtLoad":true,"keepAlive":true}
-#   {"type":"job","block":"name","name":"j","command":"cmd","args":[],"env":[],"workingDirectory":"/p","interval":600}
+#   {"type":"service","bag":"name","name":"svc","command":"cmd","args":["a"],"env":["E"],"workingDirectory":"/p","runAtLoad":true,"keepAlive":true}
+#   {"type":"job","bag":"name","name":"j","command":"cmd","args":[],"env":[],"workingDirectory":"/p","interval":600}
 #
-# The emitter lives under cli/ and runs under tsx: @barry/blocks is TypeScript
+# The emitter lives under cli/ and runs under tsx: @barry/bags is TypeScript
 # source that plain node cannot import, and pnpm links a workspace package only
 # into the members that depend on it — resolution follows the script's own
-# location, so it has to sit inside a member that declares @barry/blocks.
+# location, so it has to sit inside a member that declares @barry/bags.
 #
-# Errors are surfaced rather than swallowed: a failure here means every block
-# service and job silently never installs, which looks exactly like "no block
+# Errors are surfaced rather than swallowed: a failure here means every bag
+# service and job silently never installs, which looks exactly like "no bag
 # declares any". That is what shipped originally, via an import of a package
 # name that does not exist.
-BLOCK_ITEMS_SCRIPT="$BARRY_DIR/cli/scripts/block-items.mts"
+BAG_ITEMS_SCRIPT="$BARRY_DIR/cli/scripts/bag-items.mts"
 
-block_items=""
-# Whether the emitter ran successfully. Distinct from "$block_items is empty":
-# an empty list is legitimately "no block declares any", while a failure means we
+bag_items=""
+# Whether the emitter ran successfully. Distinct from "$bag_items is empty":
+# an empty list is legitimately "no bag declares any", while a failure means we
 # know nothing — and the prune below must not act on the second case.
-block_items_ok="false"
-if [[ -f "$BLOCK_SVC_TEMPLATE" && -f "$BLOCK_JOB_TEMPLATE" && -f "$BLOCK_ITEMS_SCRIPT" ]]; then
-    block_items_err=$(mktemp)
-    if block_items=$(cd "$BARRY_DIR/cli" && pnpm exec tsx "$BLOCK_ITEMS_SCRIPT" 2>"$block_items_err"); then
-        block_items_ok="true"
+bag_items_ok="false"
+if [[ -f "$BAG_SVC_TEMPLATE" && -f "$BAG_JOB_TEMPLATE" && -f "$BAG_ITEMS_SCRIPT" ]]; then
+    bag_items_err=$(mktemp)
+    if bag_items=$(cd "$BARRY_DIR/cli" && pnpm exec tsx "$BAG_ITEMS_SCRIPT" 2>"$bag_items_err"); then
+        bag_items_ok="true"
         # The emitter also reports items it refused (e.g. a path escaping the
-        # block). Those are warnings, not failures, so print them on success too
+        # bag). Those are warnings, not failures, so print them on success too
         # — dropping them here would be the same silent-skip bug as before.
-        if [[ -s "$block_items_err" ]]; then
+        if [[ -s "$bag_items_err" ]]; then
             while IFS= read -r warn_line; do
                 [[ -z "$warn_line" ]] && continue
                 echo -e "  ${YELLOW}⚠${NC} $warn_line"
-            done < "$block_items_err"
+            done < "$bag_items_err"
         fi
     else
-        echo -e "  ${YELLOW}⚠${NC} could not read block services/jobs:"
-        sed 's/^/      /' "$block_items_err" | head -5
+        echo -e "  ${YELLOW}⚠${NC} could not read bag services/jobs:"
+        sed 's/^/      /' "$bag_items_err" | head -5
     fi
-    rm -f "$block_items_err"
+    rm -f "$bag_items_err"
 fi
 
-block_desired_labels=""
+bag_desired_labels=""
 
-if [[ -n "$block_items" ]]; then
+if [[ -n "$bag_items" ]]; then
     echo ""
-    # Apps that moved into blocks are re-labelled under
-    # com.barry.block.<block>.app.<app>. Retire the old agent first: left in
+    # Apps that moved into bags are re-labelled under
+    # com.barry.bag.<bag>.app.<app>. Retire the old agent first: left in
     # place it keeps launching at login, so two copies run at once — and for an
     # app owning a URL scheme (bdiff://), which instance macOS routes a link to
     # is anyone's guess.
     #
-    # The agent goes, the bundle stays. The block install below reuses the same
+    # The agent goes, the bundle stays. The bag install below reuses the same
     # bundle name, so removing it here would delete what that loop installs on
     # the very same run.
     for retired_app_label in com.barry.bdiff com.barry.bdiff-review com.barry.my-barrys com.barry.sessions com.barry.events com.barry.services; do
@@ -663,17 +662,30 @@ if [[ -n "$block_items" ]]; then
         if [[ -f "$RETIRED_APP_PLIST" ]]; then
             launchctl bootout "gui/$(id -u)/$retired_app_label" 2>/dev/null || true
             rm -f "$RETIRED_APP_PLIST"
-            echo -e "  ${GREEN}✓${NC} Retired $retired_app_label (now com.barry.block.*)"
+            echo -e "  ${GREEN}✓${NC} Retired $retired_app_label (now com.barry.bag.*)"
         fi
     done
 
-    echo -e "${BLUE}Setting up block services & jobs...${NC}"
+    # Blocks became Bags: every com.barry.block.* agent is superseded by the
+    # com.barry.bag.* one generated below. The prune loop at the end only walks
+    # com.barry.bag.*, so without this the old agents survive and a second copy
+    # of every bag service keeps launching at login — fighting the new one for
+    # its port. Retire the agent; bundles and ports are reused by the new label.
+    for stale_block_plist in "$LAUNCH_AGENTS_DIR"/com.barry.block.*.plist "$LAUNCH_AGENTS_DIR"/com.barry.pack.*.plist; do
+        [[ -f "$stale_block_plist" ]] || continue
+        stale_block_label="$(basename "$stale_block_plist" .plist)"
+        launchctl bootout "gui/$(id -u)/$stale_block_label" 2>/dev/null || true
+        rm -f "$stale_block_plist"
+        echo -e "  ${GREEN}✓${NC} Retired $stale_block_label (now com.barry.bag.*)"
+    done
+
+    echo -e "${BLUE}Setting up bag services & jobs...${NC}"
     mkdir -p "$HOME/.barry/logs"
 
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         item_type=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).type)")
-        block_name=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).block)")
+        bag_name=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).bag)")
         item_name=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).name)")
         # Defaulted like workingDirectory below: these fields are shared across
         # item types, and an app carries no command — an unguarded read writes
@@ -684,8 +696,8 @@ if [[ -n "$block_items" ]]; then
         item_workdir=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).workingDirectory||'')")
 
         if [[ "$item_type" == "service" ]]; then
-            label="com.barry.block.$block_name.$item_name"
-            block_desired_labels+=" $label"
+            label="com.barry.bag.$bag_name.$item_name"
+            bag_desired_labels+=" $label"
             PLIST_TARGET="$LAUNCH_AGENTS_DIR/$label.plist"
 
             run_at_load=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.runAtLoad||false))")
@@ -739,11 +751,11 @@ if [[ -n "$block_items" ]]; then
 
             # Generate plist
             PLIST_GENERATED=$(sed \
-                -e "s|__BLOCK_NAME__|$block_name|g" \
+                -e "s|__BAG_NAME__|$bag_name|g" \
                 -e "s|__SERVICE_NAME__|$item_name|g" \
                 -e "s|__HOME__|$HOME|g" \
                 -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
-                "$BLOCK_SVC_TEMPLATE")
+                "$BAG_SVC_TEMPLATE")
 
             rendered_prog=$(echo -e "$prog_args_xml")
             rendered_run=$(echo -e "$run_at_load_xml")
@@ -773,8 +785,8 @@ if [[ -n "$block_items" ]]; then
             fi
 
         elif [[ "$item_type" == "job" ]]; then
-            label="com.barry.block.job.$block_name.$item_name"
-            block_desired_labels+=" $label"
+            label="com.barry.bag.job.$bag_name.$item_name"
+            bag_desired_labels+=" $label"
             PLIST_TARGET="$LAUNCH_AGENTS_DIR/$label.plist"
 
             item_interval=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.interval||''))")
@@ -835,11 +847,11 @@ if [[ -n "$block_items" ]]; then
 
             # Generate plist
             PLIST_GENERATED=$(sed \
-                -e "s|__BLOCK_NAME__|$block_name|g" \
+                -e "s|__BAG_NAME__|$bag_name|g" \
                 -e "s|__JOB_NAME__|$item_name|g" \
                 -e "s|__HOME__|$HOME|g" \
                 -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
-                "$BLOCK_JOB_TEMPLATE")
+                "$BAG_JOB_TEMPLATE")
 
             rendered_prog=$(echo -e "$prog_args_xml")
             rendered_sched=$(echo -e "$schedule_xml")
@@ -867,18 +879,18 @@ if [[ -n "$block_items" ]]; then
             fi
 
         elif [[ "$item_type" == "app" ]]; then
-            # A block app arrives as a FINISHED bundle: the block's own build
+            # A bag app arrives as a FINISHED bundle: the bag's own build
             # produced it, icons and resources included, so this copies it
             # wholesale and never reaches inside. That is what keeps one app's
             # asset pipeline out of this script.
             app_bundle_src=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).bundlePath)")
             app_login_item=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.loginItem||false))")
-            label="com.barry.block.$block_name.app.$item_name"
+            label="com.barry.bag.$bag_name.app.$item_name"
             installed_bundle="$APPS_DIR/$item_name.app"
             installed_binary="$installed_bundle/Contents/MacOS/$item_name"
 
             if [[ ! -d "$app_bundle_src" ]]; then
-                echo -e "  ${YELLOW}⚠${NC} $block_name.$item_name: not built (run 'barry block build --apps'), skipping"
+                echo -e "  ${YELLOW}⚠${NC} $bag_name.$item_name: not built (run: pnpm --dir cli exec tsx cli/scripts/bag-apps.mts), skipping"
                 continue
             fi
 
@@ -916,10 +928,10 @@ if [[ -n "$block_items" ]]; then
             # and up to date, but no agent. Only declare the label when we
             # actually install one, or the prune sweep below retracts it.
             if [[ "$app_login_item" == "true" && -f "$APP_TEMPLATE" ]]; then
-                block_desired_labels+=" $label"
+                bag_desired_labels+=" $label"
                 PLIST_TARGET="$LAUNCH_AGENTS_DIR/$label.plist"
                 PLIST_GENERATED=$(sed \
-                    -e "s|__APP_ID__|block.$block_name.app.$item_name|g" \
+                    -e "s|__APP_ID__|bag.$bag_name.app.$item_name|g" \
                     -e "s|__APP_PATH__|$installed_binary|g" \
                     -e "s|__HOME__|$HOME|g" \
                     "$APP_TEMPLATE")
@@ -942,32 +954,32 @@ if [[ -n "$block_items" ]]; then
                 fi
             fi
         fi
-    done <<< "$block_items"
+    done <<< "$bag_items"
 fi
 
-# Retract agents no block declares anymore — an uninstalled block, a disabled one,
-# or a renamed service. Runs outside the block above so that removing the last
-# block still prunes: with no items there is nothing to iterate, but the stale
+# Retract agents no bag declares anymore — an uninstalled bag, a disabled one,
+# or a renamed service. Runs outside the bag above so that removing the last
+# bag still prunes: with no items there is nothing to iterate, but the stale
 # agents are still loaded and would otherwise run forever with nothing on disk
 # describing them.
 #
 # Only prunes when the emitter succeeded. It exits non-zero on failure, but an
-# empty result is also legitimately "no block declares any", and the two must not
+# empty result is also legitimately "no bag declares any", and the two must not
 # be conflated — treating a loader error as "prune everything" would silently
-# tear down every block agent on the machine.
+# tear down every bag agent on the machine.
 #
-# Skipped entirely when BARRY_BLOCKS_CONFIG points somewhere else. The desired
+# Skipped entirely when BARRY_BAGS_CONFIG points somewhere else. The desired
 # set is then only what that registry declares, so pruning against it retracts
 # agents belonging to the real one — which is exactly what happened while
-# testing a block against an isolated registry.
-if [[ -n "${BARRY_BLOCKS_CONFIG:-}" ]]; then
-    echo -e "  ${YELLOW}⚠${NC} BARRY_BLOCKS_CONFIG is set — skipping block agent prune"
-elif [[ "$block_items_ok" == "true" ]]; then
-    for plist in "$LAUNCH_AGENTS_DIR"/com.barry.block.*.plist; do
+# testing a bag against an isolated registry.
+if [[ -n "${BARRY_BAGS_CONFIG:-}" ]]; then
+    echo -e "  ${YELLOW}⚠${NC} BARRY_BAGS_CONFIG is set — skipping bag agent prune"
+elif [[ "$bag_items_ok" == "true" ]]; then
+    for plist in "$LAUNCH_AGENTS_DIR"/com.barry.bag.*.plist; do
         [[ -f "$plist" ]] || continue
         stale_label="$(basename "$plist" .plist)"
         # Word-boundary match against the accumulated list.
-        if [[ " $block_desired_labels " != *" $stale_label "* ]]; then
+        if [[ " $bag_desired_labels " != *" $stale_label "* ]]; then
             svc_stop "$stale_label"
             rm -f "$plist"
             echo -e "  ${YELLOW}⚠${NC} $stale_label: no longer declared, removed"
@@ -1014,7 +1026,7 @@ fi
 # Process MCP servers if both registry and template exist
 # Barry runs exactly one MCP server holding every local tool. This used to be a
 # generic loop over builtins/mcp-servers.yaml, back when remote/external servers
-# were registered there too; those moved to the block registry, and the registry
+# were registered there too; those moved to the bag registry, and the registry
 # collapsed to a single entry whose port was display-only. The values below are
 # the same ones cli/src/mcp-registry.ts declares.
 if [[ -f "$MCP_TEMPLATE" ]]; then

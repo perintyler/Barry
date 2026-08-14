@@ -7,7 +7,7 @@
 --
 --   env      shallow merge, child wins
 --   traits   union
---   blocks   union
+--   bags   union
 --   scalars  nearest-to-self value wins
 --
 -- Inline `scope` accumulated in the resolver rather than overriding, so a child
@@ -76,11 +76,11 @@ BEGIN
           (SELECT jsonb_agg(DISTINCT bl.value)
            FROM ordered o
            CROSS JOIN LATERAL jsonb_array_elements(
-             CASE WHEN jsonb_typeof(o.metadata->'blocks') = 'array'
-                  THEN o.metadata->'blocks' ELSE '[]'::jsonb END) bl
+             CASE WHEN jsonb_typeof(o.metadata->'bags') = 'array'
+                  THEN o.metadata->'bags' ELSE '[]'::jsonb END) bl
            WHERE o.leaf_id = m.leaf_id),
           '[]'::jsonb
-        ) AS blocks,
+        ) AS bags,
         (SELECT o.metadata->'vault' FROM ordered o
           WHERE o.leaf_id = m.leaf_id AND o.metadata ? 'vault'
           ORDER BY o.depth ASC LIMIT 1) AS vault,
@@ -113,7 +113,7 @@ BEGIN
     SET metadata = b.metadata
       || CASE WHEN mg.env    <> '{}'::jsonb THEN jsonb_build_object('env', mg.env)       ELSE '{}'::jsonb END
       || CASE WHEN mg.traits <> '[]'::jsonb THEN jsonb_build_object('traits', mg.traits) ELSE '{}'::jsonb END
-      || CASE WHEN mg.blocks <> '[]'::jsonb THEN jsonb_build_object('blocks', mg.blocks) ELSE '{}'::jsonb END
+      || CASE WHEN mg.bags <> '[]'::jsonb THEN jsonb_build_object('bags', mg.bags) ELSE '{}'::jsonb END
       || CASE WHEN mg.vault                IS NOT NULL THEN jsonb_build_object('vault', mg.vault)                               ELSE '{}'::jsonb END
       || CASE WHEN mg.scope_id             IS NOT NULL THEN jsonb_build_object('scope_id', mg.scope_id)                         ELSE '{}'::jsonb END
       || CASE WHEN mg.scope                IS NOT NULL THEN jsonb_build_object('scope', mg.scope)                               ELSE '{}'::jsonb END

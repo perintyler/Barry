@@ -1,0 +1,167 @@
+#!/bin/bash
+#
+# coffee supervisor — owns exactly one `caffeinate` child, and only while the
+# machine is enabled AND on AC power.
+#
+# SAFETY INVARIANTS. Do not relax these without re-reading the reasoning:
+#
+#   1. Never `caffeinate -s`. That asserts PreventSystemSleep, which blocks
+#      FORCED sleep paths including lid-close. `-d`/`-i` are *idle* assertions
+#      and are deliberately weaker: they let clamshell sleep happen, which is
+#      what stops a laptop cooking itself in a backpack.
+#
+#   2. Never `caffeinate -u`. It turns the display ON, which is actively
+#      hostile from a background daemon at 3am.
+#
+#   3. `pmset` is read-only here EXCEPT the two literal disablesleep commands,
+#      which run only when lid-awake is enabled, only on AC, and are always
+#      reverted by the EXIT trap. They are the only sudo in this bag.
+#
+#   4. Every branch that is not "enabled AND on AC" must release. Unknown or
+#      unreadable state releases rather than holds — the failure mode of a
+#      power daemon should be a sleeping machine, not a flat battery.
+#
+set -uo pipefail
+
+POLL_INTERVAL="${COFFEE_POLL_INTERVAL:-15}"
+
+# Must resolve to the SAME file as defaultConfigPath() in src/config.ts:
+# BARRY_HOME wins outright (it already names the barry dir, so no `.barry`
+# suffix), otherwise $HOME/.barry. If these two ever disagree the CLI writes a
+# config the daemon never reads, and `barry coffee on` silently does nothing.
+BARRY_DIR="${BARRY_HOME:-${HOME}/.barry}"
+CONFIG="${COFFEE_CONFIG:-${BARRY_DIR}/coffee.json}"
+
+CHILD=""
+SLEEP_DISABLED=0
+LAST_STATE=""
+
+log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+
+# Reads one boolean key out of the JSON config. plutil parses JSON fine and is
+# always present on macOS, which keeps this script free of a jq dependency.
+# Any failure (missing file, malformed JSON, absent key) prints `false`, which
+# feeds invariant 4.
+# plutil reports failures on STDOUT (not stderr) with a nonzero status, so a
+# bare `|| echo false` still emits the whole "file does not exist ..." blob as
+# this function's value. Only `true` and `false` may ever escape here —
+# anything else is normalised to false, which is invariant 4.
+cfg() {
+  local out
+  if ! out="$(/usr/bin/plutil -extract "$1" raw -o - -- "$CONFIG" 2>/dev/null)"; then
+    echo false
+    return 0
+  fi
+  case "$out" in
+    true) echo true ;;
+    *) echo false ;;
+  esac
+}
+
+# Deliberately NOT `pmset ... | grep -q`. Under `set -o pipefail`, `grep -q`
+# exits at the first match and closes the pipe, so pmset takes SIGPIPE and the
+# pipeline reports failure — meaning "on battery". It is a race, so it fires
+# intermittently: measured at 21 false battery readings out of 40 on this
+# machine. The visible symptom was the supervisor acquiring and killing
+# caffeinate every poll forever while plugged in.
+#
+# Capturing the output first removes the pipe, so pipefail stays on for the
+# failures that actually matter. An unreadable pmset yields an empty string,
+# which correctly falls through to "not on AC".
+on_ac() {
+  local out
+  out="$(/usr/bin/pmset -g batt 2>/dev/null)"
+  case "$out" in
+    *"'AC Power'"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+disable_sleep() {
+  (( SLEEP_DISABLED )) && return 0
+  if sudo -n /usr/bin/pmset -a disablesleep 1 2>/dev/null; then
+    SLEEP_DISABLED=1
+    log "lid-awake: sleep disabled"
+  else
+    # Not fatal: the caffeinate assertion still holds, we just do not get
+    # lid-closed behaviour. Log once rather than every poll.
+    log "lid-awake: WARNING could not disable sleep (missing sudoers rule?)"
+  fi
+}
+
+restore_sleep() {
+  (( SLEEP_DISABLED )) || return 0
+  if sudo -n /usr/bin/pmset -a disablesleep 0 2>/dev/null; then
+    SLEEP_DISABLED=0
+    log "lid-awake: sleep restored"
+  else
+    log "lid-awake: ERROR could not restore sleep — run: sudo pmset -a disablesleep 0"
+  fi
+}
+
+release() {
+  if [[ -n "$CHILD" ]] && kill -0 "$CHILD" 2>/dev/null; then
+    kill "$CHILD" 2>/dev/null
+    wait "$CHILD" 2>/dev/null
+    log "released assertion (was pid $CHILD)"
+  fi
+  CHILD=""
+  restore_sleep
+}
+
+acquire() {
+  # Idempotent: if the child is alive there is nothing to do. This is what
+  # makes assertion stacking impossible no matter how the loop is perturbed.
+  if [[ -n "$CHILD" ]] && kill -0 "$CHILD" 2>/dev/null; then
+    return 0
+  fi
+  caffeinate -d -i &
+  CHILD=$!
+  log "acquired assertion (pid $CHILD)"
+  [[ "$(cfg lidAwake)" == "true" ]] && disable_sleep
+  return 0
+}
+
+# The trap is the reason `launchctl bootout` can never orphan an assertion or
+# leave sleep disabled. It covers every exit path except SIGKILL, which is what
+# the reconcile service exists to clean up.
+trap 'release; exit 0' EXIT TERM INT
+
+# `autostart` seeds `enabled` at login. Doing it here rather than in the loop
+# means an explicit `coffee off` later in the session is not undone on the next
+# poll — autostart decides how the session STARTS, not what it stays.
+if [[ "$(cfg autostart)" == "true" && "$(cfg enabled)" != "true" ]]; then
+  log "autostart enabled — turning coffee on for this session"
+  # Written via the same temp+rename dance the TS store uses, so a concurrent
+  # reader never sees a partial file.
+  if tmp="$(mktemp "${CONFIG}.XXXXXX" 2>/dev/null)"; then
+    if /usr/bin/plutil -replace enabled -bool true -o "$tmp" -- "$CONFIG" 2>/dev/null; then
+      mv -f "$tmp" "$CONFIG"
+    else
+      rm -f "$tmp"
+      log "autostart: could not update config; continuing without persisting"
+    fi
+  fi
+fi
+
+log "supervisor started (poll ${POLL_INTERVAL}s, config ${CONFIG})"
+
+while true; do
+  if [[ "$(cfg enabled)" == "true" ]] && on_ac; then
+    state="on"
+    acquire
+  else
+    state="off"
+    release
+  fi
+
+  # Log transitions only. A line every 15s would bury the interesting events.
+  if [[ "$state" != "$LAST_STATE" ]]; then
+    if [[ "$state" == "off" && "$(cfg enabled)" == "true" ]]; then
+      log "on battery — standing down until AC returns"
+    fi
+    LAST_STATE="$state"
+  fi
+
+  sleep "$POLL_INTERVAL"
+done

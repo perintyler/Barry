@@ -18,7 +18,7 @@ load_env
 # Ports are prod (base + 1000 offset), baked at plist install time.
 API_PORT="${BARRY_API_PORT:-4854}"
 MCP_PORT="${BARRY_MCP_BARRY_PORT:-4901}"
-PG_PORT="${BARRY_PG_PORT:-5433}"
+PG_PORT="${BARRY_PG_PORT:-15432}"
 
 CRITICAL_SERVICES=(api mcp-barry postgres)
 

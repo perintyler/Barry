@@ -17,6 +17,7 @@
     "./utils": "./src/worker/file-utils.ts",
     "./mcp": "./src/mcp/index.ts",
     "./mcp/client": "./src/mcp/client.ts",
+    "./mcp/server": "./src/mcp/server.ts",
     "./mcp/cloudflare": "./src/mcp/cloudflare.ts",
     "./mcp-app-viewer": "./dist/mcp-app-viewer.js"
   },
@@ -26,10 +27,9 @@
   ],
   "scripts": {
     "build": "node scripts/build.js",
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "pretest": "pnpm --filter @barry/ui... build && node scripts/build.js",
-    "test": "vitest run"
+    "pretest": "pnpm --filter @barry/ui... build && node scripts/build.js && tsc --noEmit",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@barry/syntax": "workspace:*",
@@ -54,8 +54,9 @@
   },
   "devDependencies": {
     "@barry/logger": "workspace:*",
-    "@cloudflare/workers-types": "4.20260111.0",
+    "@cloudflare/workers-types": "4.20260702.1",
     "@types/express": "5.0.6",
+    "@types/markdown-it": "14.1.2",
     "@types/node": "22.15.0",
     "esbuild": "0.27.0",
     "jsdom": "25.0.0",

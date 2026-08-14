@@ -442,16 +442,16 @@
         }
       }
     },
-    "/identities/blocks/available": {
+    "/identities/bags/available": {
       "get": {
-        "operationId": "listAvailableBlocks",
+        "operationId": "listAvailableBags",
         "responses": {
           "200": {
-            "description": "Available blocks",
+            "description": "Available bags",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AvailableBlocksResponse"
+                  "$ref": "#/components/schemas/AvailableBagsResponse"
                 }
               }
             }
@@ -2027,16 +2027,16 @@
         }
       }
     },
-    "/identities/blocks/status": {
+    "/identities/bags/status": {
       "get": {
-        "operationId": "getBlockStatus",
+        "operationId": "getBagStatus",
         "responses": {
           "200": {
             "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BlockStatusResponse"
+                  "$ref": "#/components/schemas/BagStatusResponse"
                 }
               }
             }
@@ -2054,12 +2054,12 @@
         }
       }
     },
-    "/identities/blocks/{blockName}/retry": {
+    "/identities/bags/{bagName}/retry": {
       "post": {
-        "operationId": "retryBlock",
+        "operationId": "retryBag",
         "parameters": [
           {
-            "name": "blockName",
+            "name": "bagName",
             "in": "path",
             "required": true,
             "schema": {
@@ -2073,7 +2073,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BlockAuthResponse"
+                  "$ref": "#/components/schemas/BagAuthResponse"
                 }
               }
             }
@@ -2091,12 +2091,12 @@
         }
       }
     },
-    "/identities/blocks/{blockName}/auth": {
+    "/identities/bags/{bagName}/auth": {
       "post": {
-        "operationId": "authorizeBlock",
+        "operationId": "authorizeBag",
         "parameters": [
           {
-            "name": "blockName",
+            "name": "bagName",
             "in": "path",
             "required": true,
             "schema": {
@@ -2110,7 +2110,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BlockAuthResponse"
+                  "$ref": "#/components/schemas/BagAuthResponse"
                 }
               }
             }
@@ -2128,12 +2128,12 @@
         }
       }
     },
-    "/identities/blocks/{blockName}/auth/status": {
+    "/identities/bags/{bagName}/auth/status": {
       "get": {
-        "operationId": "getBlockAuthStatus",
+        "operationId": "getBagAuthStatus",
         "parameters": [
           {
-            "name": "blockName",
+            "name": "bagName",
             "in": "path",
             "required": true,
             "schema": {
@@ -2147,7 +2147,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BlockAuthResponse"
+                  "$ref": "#/components/schemas/BagAuthResponse"
                 }
               }
             }
@@ -3184,7 +3184,7 @@
             "type": "string",
             "nullable": true
           },
-          "blocks": {
+          "bags": {
             "type": "array",
             "items": {
               "type": "string"
@@ -3263,7 +3263,7 @@
           "token",
           "name",
           "displayName",
-          "blocks",
+          "bags",
           "traits",
           "scopeId",
           "defaultCodingAgent",
@@ -3299,7 +3299,7 @@
                   "type": "string",
                   "nullable": true
                 },
-                "blocks": {
+                "bags": {
                   "type": "array",
                   "items": {
                     "type": "string"
@@ -3378,7 +3378,7 @@
                 "token",
                 "name",
                 "displayName",
-                "blocks",
+                "bags",
                 "traits",
                 "scopeId",
                 "defaultCodingAgent",
@@ -3419,7 +3419,7 @@
                 "type": "string",
                 "nullable": true
               },
-              "blocks": {
+              "bags": {
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -3498,7 +3498,7 @@
               "token",
               "name",
               "displayName",
-              "blocks",
+              "bags",
               "traits",
               "scopeId",
               "defaultCodingAgent",
@@ -3519,7 +3519,7 @@
                 "kind": {
                   "type": "string"
                 },
-                "block": {
+                "bag": {
                   "type": "string"
                 },
                 "message": {
@@ -3563,7 +3563,7 @@
                 "type": "string",
                 "nullable": true
               },
-              "blocks": {
+              "bags": {
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -3642,7 +3642,7 @@
               "token",
               "name",
               "displayName",
-              "blocks",
+              "bags",
               "traits",
               "scopeId",
               "defaultCodingAgent",
@@ -3676,10 +3676,10 @@
         ],
         "additionalProperties": false
       },
-      "AvailableBlocksResponse": {
+      "AvailableBagsResponse": {
         "type": "object",
         "properties": {
-          "blocks": {
+          "bags": {
             "type": "array",
             "items": {
               "type": "object",
@@ -3709,7 +3709,7 @@
           }
         },
         "required": [
-          "blocks"
+          "bags"
         ],
         "additionalProperties": false
       },
@@ -4771,7 +4771,7 @@
             "type": "string",
             "nullable": true
           },
-          "blocks": {
+          "bags": {
             "type": "array",
             "items": {
               "type": "string"
@@ -4823,7 +4823,7 @@
             "minLength": 1,
             "maxLength": 100
           },
-          "blocks": {
+          "bags": {
             "type": "array",
             "items": {
               "type": "string"
@@ -5200,7 +5200,7 @@
         ],
         "additionalProperties": false
       },
-      "BlockStatusResponse": {
+      "BagStatusResponse": {
         "type": "object",
         "properties": {
           "shared": {
@@ -5236,7 +5236,7 @@
         ],
         "additionalProperties": false
       },
-      "BlockAuthResponse": {
+      "BagAuthResponse": {
         "type": "object",
         "properties": {
           "status": {

@@ -6,12 +6,13 @@
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./identity-blocks": "./src/identity-blocks.ts",
+    "./identity-bags": "./src/identity-bags.ts",
     "./qa": "./src/qa.ts",
     "./migrate": "./src/migrate.ts",
     "./seed": "./scripts/seed.ts",
     "./test-db-url": "./src/test-db-url.ts",
-    "./identity-files": "./src/identity-files.ts"
+    "./identity-files": "./src/identity-files.ts",
+    "./bag-registry": "./src/bag-registry.ts"
   },
   "scripts": {
     "setup": "tsx scripts/setup.ts",
@@ -26,7 +27,7 @@
   "dependencies": {
     "@barry/agent-scope": "workspace:*",
     "@barry/env": "workspace:*",
-    "@barry/blocks": "workspace:*",
+    "@barry/bags": "workspace:*",
     "kysely": "0.28.17",
     "kysely-postgres-js": "2.0.0",
     "nanoid": "5.0.9",

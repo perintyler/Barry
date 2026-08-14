@@ -3,7 +3,7 @@
 -- "Barry" collided with the product name: `~/.barry` is the install root while
 -- `~/.barry/barrys/` was the entity collection, and `getBarryDir()` (one
 -- entity) sat one letter from `getBarryHome()` (the whole install). The entity
--- is an agent identity — blocks, traits, model defaults, secrets, scopes that a
+-- is an agent identity — bags, traits, model defaults, secrets, scopes that a
 -- session inherits — so `identities` names it without borrowing the product
 -- word.
 --

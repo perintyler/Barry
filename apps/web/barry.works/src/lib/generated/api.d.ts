@@ -134,14 +134,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/identities/blocks/available": {
+    "/identities/bags/available": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["listAvailableBlocks"];
+        get: operations["listAvailableBags"];
         put?: never;
         post?: never;
         delete?: never;
@@ -776,14 +776,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/identities/blocks/status": {
+    "/identities/bags/status": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["getBlockStatus"];
+        get: operations["getBagStatus"];
         put?: never;
         post?: never;
         delete?: never;
@@ -792,7 +792,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/identities/blocks/{blockName}/retry": {
+    "/identities/bags/{bagName}/retry": {
         parameters: {
             query?: never;
             header?: never;
@@ -801,14 +801,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["retryBlock"];
+        post: operations["retryBag"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/identities/blocks/{blockName}/auth": {
+    "/identities/bags/{bagName}/auth": {
         parameters: {
             query?: never;
             header?: never;
@@ -817,21 +817,21 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["authorizeBlock"];
+        post: operations["authorizeBag"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/identities/blocks/{blockName}/auth/status": {
+    "/identities/bags/{bagName}/auth/status": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["getBlockAuthStatus"];
+        get: operations["getBagAuthStatus"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1131,7 +1131,7 @@ export interface components {
             token: string;
             name: string;
             displayName: string | null;
-            blocks: string[];
+            bags: string[];
             traits: string[];
             scopeId: number | null;
             defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
@@ -1153,7 +1153,7 @@ export interface components {
                 token: string;
                 name: string;
                 displayName: string | null;
-                blocks: string[];
+                bags: string[];
                 traits: string[];
                 scopeId: number | null;
                 defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
@@ -1176,7 +1176,7 @@ export interface components {
                 token: string;
                 name: string;
                 displayName: string | null;
-                blocks: string[];
+                bags: string[];
                 traits: string[];
                 scopeId: number | null;
                 defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
@@ -1194,7 +1194,7 @@ export interface components {
             };
             warnings?: {
                 kind: string;
-                block?: string;
+                bag?: string;
                 message: string;
                 hint?: string;
             }[];
@@ -1205,7 +1205,7 @@ export interface components {
                 token: string;
                 name: string;
                 displayName: string | null;
-                blocks: string[];
+                bags: string[];
                 traits: string[];
                 scopeId: number | null;
                 defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
@@ -1225,8 +1225,8 @@ export interface components {
             source: "explicit" | "repo" | "default" | "file";
             repoRoot: string | null;
         };
-        AvailableBlocksResponse: {
-            blocks: {
+        AvailableBagsResponse: {
+            bags: {
                 name: string;
                 /** @enum {string} */
                 type: "local" | "remote";
@@ -1468,7 +1468,7 @@ export interface components {
         UpdateIdentityRequest: {
             name?: string;
             displayName?: string | null;
-            blocks?: string[];
+            bags?: string[];
             traits?: string[];
             scopeId?: number | null;
             defaultCodingAgent?: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
@@ -1479,7 +1479,7 @@ export interface components {
         };
         CreateIdentityRequest: {
             name: string;
-            blocks?: string[];
+            bags?: string[];
             traits?: string[];
             scopeId?: number | null;
             defaultCodingAgent?: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
@@ -1574,13 +1574,13 @@ export interface components {
         NativeSessionRequest: {
             sessionId: string;
         };
-        BlockStatusResponse: {
+        BagStatusResponse: {
             shared: string[];
             needsAuth: string[];
             authExpired: string[];
             failed: string[];
         };
-        BlockAuthResponse: {
+        BagAuthResponse: {
             status: string;
         };
         Question: {
@@ -2126,7 +2126,7 @@ export interface operations {
             };
         };
     };
-    listAvailableBlocks: {
+    listAvailableBags: {
         parameters: {
             query?: never;
             header?: never;
@@ -2135,13 +2135,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Available blocks */
+            /** @description Available bags */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AvailableBlocksResponse"];
+                    "application/json": components["schemas"]["AvailableBagsResponse"];
                 };
             };
             /** @description Request failed */
@@ -3451,7 +3451,7 @@ export interface operations {
             };
         };
     };
-    getBlockStatus: {
+    getBagStatus: {
         parameters: {
             query?: never;
             header?: never;
@@ -3466,7 +3466,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BlockStatusResponse"];
+                    "application/json": components["schemas"]["BagStatusResponse"];
                 };
             };
             /** @description Request failed */
@@ -3480,12 +3480,12 @@ export interface operations {
             };
         };
     };
-    retryBlock: {
+    retryBag: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                blockName: string;
+                bagName: string;
             };
             cookie?: never;
         };
@@ -3497,7 +3497,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BlockAuthResponse"];
+                    "application/json": components["schemas"]["BagAuthResponse"];
                 };
             };
             /** @description Request failed */
@@ -3511,12 +3511,12 @@ export interface operations {
             };
         };
     };
-    authorizeBlock: {
+    authorizeBag: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                blockName: string;
+                bagName: string;
             };
             cookie?: never;
         };
@@ -3528,7 +3528,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BlockAuthResponse"];
+                    "application/json": components["schemas"]["BagAuthResponse"];
                 };
             };
             /** @description Request failed */
@@ -3542,12 +3542,12 @@ export interface operations {
             };
         };
     };
-    getBlockAuthStatus: {
+    getBagAuthStatus: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                blockName: string;
+                bagName: string;
             };
             cookie?: never;
         };
@@ -3559,7 +3559,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BlockAuthResponse"];
+                    "application/json": components["schemas"]["BagAuthResponse"];
                 };
             };
             /** @description Request failed */

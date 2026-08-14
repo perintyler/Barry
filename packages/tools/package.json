@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./define-tool": "./src/define-tool.ts",
     "./register": "./src/register.ts",
-    "./block-server": "./src/block-server.ts",
+    "./mcp-adapter": "./src/mcp-adapter.ts",
+    "./bag-server": "./src/bag-server.ts",
     "./cli-adapter": "./src/cli-adapter.ts"
   },
   "scripts": {

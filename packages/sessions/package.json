@@ -6,7 +6,8 @@
   "main": "src/index.ts",
   "scripts": {},
   "dependencies": {
-    "@barry/db": "workspace:*"
+    "@barry/db": "workspace:*",
+    "@barry/session-client": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.15.0",

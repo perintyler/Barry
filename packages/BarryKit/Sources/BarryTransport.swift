@@ -67,7 +67,7 @@ public struct IdentityTransport: Sendable {
 
     /// Returns any non-fatal warnings the server reported alongside the update.
     /// The API accepts values it can't vouch for — an off-catalog model id, a
-    /// block whose binary is missing — and reports them here rather than
+    /// bag whose binary is missing — and reports them here rather than
     /// failing, so a caller that drops these leaves the user with no signal.
     @discardableResult
     public func updateIdentity(
@@ -86,8 +86,8 @@ public struct IdentityTransport: Sendable {
         _ = try await client.setActiveIdentity(input).ok.body.json
     }
 
-    public func listAvailableBlocks() async throws -> Components.Schemas.AvailableBlocksResponse {
-        try await client.listAvailableBlocks().ok.body.json
+    public func listAvailableBags() async throws -> Components.Schemas.AvailableBagsResponse {
+        try await client.listAvailableBags().ok.body.json
     }
 
     public func listTraits() async throws -> Components.Schemas.TraitListResponse {
