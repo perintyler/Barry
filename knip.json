@@ -20,7 +20,8 @@
   ],
   "ignoreUnresolved": [
     "^cloudflare:",
-    "/usr/bin/plutil"
+    "/usr/bin/plutil",
+    "/bin/launchctl"
   ],
   "ignoreFiles": [
     "**/public/vendor/**",
@@ -34,7 +35,9 @@
     "packages/db/src/config.ts",
     "scripts/audit-identity.ts",
     "scripts/generate-caddy-config.ts",
-    "scripts/generate-firewall-config.ts"
+    "scripts/generate-firewall-config.ts",
+    "packages/db/scripts/seed-bag-registry.mts",
+    "packages/bags/src/hook-dispatch.ts"
   ],
   "workspaces": {
     "apps/web/barry.works": {
@@ -102,7 +105,11 @@
       "entry": [
         "tools.ts",
         "skills/**/scripts/**/*.{js,mjs,ts}",
-        "src/*.{js,mjs,ts}"
+        "src/*.{js,mjs,ts}",
+        "hooks/*/index.ts",
+        "server/src/index.ts",
+        "deploy/*/index.ts",
+        "deploy/*/entry.ts"
       ],
       "ignoreDependencies": [
         "tsx"
@@ -114,6 +121,9 @@
         "src/worker/**/*.ts",
         "src/mcp-app/viewer-entry.js",
         "src/mcp-app/vite.config.ts"
+      ],
+      "ignoreDependencies": [
+        "@barry/logger"
       ]
     },
     "servers/api": {
@@ -130,6 +140,34 @@
     "servers/mcp": {
       "ignoreDependencies": [
         "better-sqlite3"
+      ]
+    },
+    "bags/artifacts": {
+      "entry": [
+        "tools.ts",
+        "src/*.{js,mjs,ts}",
+        "deploy/app/index.ts",
+        "deploy/backend/entry.ts"
+      ],
+      "ignoreDependencies": [
+        "@barry/google-auth",
+        "@barry/logger",
+        "@barry/ui",
+        "@cloudflare/workers-types",
+        "wrangler"
+      ]
+    },
+    "bags/session": {
+      "entry": [
+        "tools.ts",
+        "src/*.{js,mjs,ts}",
+        "hooks/*/index.ts",
+        "server/src/index.ts"
+      ],
+      "ignoreDependencies": [
+        "dotenv",
+        "express",
+        "@types/express"
       ]
     }
   }
