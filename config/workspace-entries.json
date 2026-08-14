@@ -35,6 +35,10 @@
     "name": "@barry-bags/changes",
     "class": "bag"
   },
+  "bags/coffee": {
+    "name": "@barry-bags/coffee",
+    "class": "bag"
+  },
   "bags/events": {
     "name": "@barry-bags/events",
     "class": "bag"

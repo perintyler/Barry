@@ -1,3 +1,11 @@
 {
-  "allow": []
+  "allow": [
+    {
+      "id": "GHSA-jmr9-qjv8-65gv",
+      "packages": ["extract-zip"],
+      "owner": "perintyler",
+      "expires": "2026-11-14",
+      "reason": "Transitive via @cloudflare/puppeteer → @puppeteer/browsers@2.2.4 which pins extract-zip@2.0.1. No patched extract-zip release exists. @puppeteer/browsers v3 drops it, but @cloudflare/puppeteer has not upgraded yet."
+    }
+  ]
 }
