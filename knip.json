@@ -167,7 +167,8 @@
       "ignoreDependencies": [
         "dotenv",
         "express",
-        "@types/express"
+        "@types/express",
+        "tsx"
       ]
     }
   }
