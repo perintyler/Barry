@@ -6,6 +6,6 @@
     "lib": ["ES2022", "DOM"],
     "types": ["node", "@cloudflare/workers-types"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "dist"]
 }

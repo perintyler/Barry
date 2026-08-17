@@ -10,24 +10,24 @@
     "mode": "source-start"
   },
   "apps/web/vault": {
-    "name": "@barry/vault-server",
+    "name": "@barry-rocks/vault-server",
     "class": "runtime-edge",
     "mode": "container"
   },
   "bags/actions": {
-    "name": "@barry-bags/actions",
+    "name": "@barry-rocks/actions-bag",
     "class": "bag"
   },
   "bags/artifacts": {
-    "name": "@barry-bags/artifacts",
+    "name": "@barry-rocks/artifacts-bag",
     "class": "bag"
   },
   "bags/changes": {
-    "name": "@barry-bags/changes",
+    "name": "@barry-rocks/changes-bag",
     "class": "bag"
   },
   "bags/events": {
-    "name": "@barry-bags/events",
+    "name": "@barry-rocks/events-bag",
     "class": "bag"
   },
   "bags/system/filesystem": {
@@ -35,11 +35,11 @@
     "class": "bag"
   },
   "bags/git": {
-    "name": "@barry-bags/git",
+    "name": "@barry-rocks/git-bag",
     "class": "bag"
   },
   "bags/keychain": {
-    "name": "@barry-bags/keychain",
+    "name": "@barry-rocks/keychain-bag",
     "class": "bag"
   },
   "bags/system/locks": {
@@ -47,7 +47,7 @@
     "class": "bag"
   },
   "bags/reminders": {
-    "name": "@barry-bags/reminders",
+    "name": "@barry-rocks/reminders-bag",
     "class": "bag"
   },
   "bags/sessions": {
@@ -55,7 +55,7 @@
     "class": "bag"
   },
   "bags/system": {
-    "name": "@barry-bags/system",
+    "name": "@barry-rocks/system-bag",
     "class": "bag"
   },
   "cli": {
@@ -64,124 +64,124 @@
     "mode": "source-bin"
   },
   "packages/agent-runtime": {
-    "name": "@barry/agent-runtime",
+    "name": "@barry-rocks/agent-runtime",
     "class": "internal-package"
   },
   "packages/agent-scope": {
-    "name": "@barry/agent-scope",
+    "name": "@barry-rocks/agent-scope",
     "class": "internal-package"
   },
   "packages/auth": {
-    "name": "@barry/auth",
+    "name": "@barry-rocks/auth",
     "class": "internal-package"
   },
   "packages/bags": {
-    "name": "@barry/bags",
+    "name": "@barry-rocks/bags",
     "class": "internal-package"
   },
   "packages/bags-sdk": {
-    "name": "@barry-sdk/bags-sdk",
+    "name": "@barry-rocks/bags-sdk",
     "class": "npm-published"
   },
   "packages/contracts": {
-    "name": "@barry/contracts",
+    "name": "@barry-rocks/contracts",
     "class": "internal-package"
   },
   "packages/db": {
-    "name": "@barry/db",
+    "name": "@barry-rocks/db",
     "class": "internal-package"
   },
   "packages/email": {
-    "name": "@barry/email",
+    "name": "@barry-rocks/email",
     "class": "internal-package"
   },
   "packages/env": {
-    "name": "@barry/env",
+    "name": "@barry-rocks/env",
     "class": "internal-package"
   },
   "packages/file-tracker": {
-    "name": "@barry/file-tracker",
+    "name": "@barry-rocks/file-tracker",
     "class": "internal-package"
   },
   "packages/github": {
-    "name": "@barry/github",
+    "name": "@barry-rocks/github",
     "class": "internal-package"
   },
   "packages/google-auth": {
-    "name": "@barry/google-auth",
+    "name": "@barry-rocks/google-auth",
     "class": "internal-package"
   },
   "packages/logger": {
-    "name": "@barry/logger",
+    "name": "@barry-rocks/logger",
     "class": "internal-package"
   },
   "packages/md-to-ansi": {
-    "name": "@barry/md-to-ansi",
+    "name": "@barry-rocks/md-to-ansi",
     "class": "internal-package"
   },
   "packages/secrets": {
-    "name": "@barry/secrets",
+    "name": "@barry-rocks/secrets",
     "class": "internal-package"
   },
   "packages/sentry": {
-    "name": "@barry/sentry",
+    "name": "@barry-rocks/sentry",
     "class": "internal-package"
   },
   "packages/session-client": {
-    "name": "@barry/session-client",
+    "name": "@barry-rocks/session-client",
     "class": "internal-package"
   },
   "packages/sessions": {
-    "name": "@barry/sessions",
+    "name": "@barry-rocks/sessions",
     "class": "internal-package"
   },
   "packages/skills": {
-    "name": "@barry/skills",
+    "name": "@barry-rocks/skills",
     "class": "internal-package"
   },
   "packages/slack": {
-    "name": "@barry/slack",
+    "name": "@barry-rocks/slack",
     "class": "internal-package"
   },
   "packages/spunk": {
-    "name": "@barry/spunk",
+    "name": "@barry-rocks/spunk",
     "class": "internal-package"
   },
   "packages/stop-robots": {
-    "name": "@barry/stop-robots",
+    "name": "@barry-rocks/stop-robots",
     "class": "internal-package"
   },
   "packages/syntax": {
-    "name": "@barry/syntax",
+    "name": "@barry-rocks/syntax",
     "class": "internal-package"
   },
   "packages/themes": {
-    "name": "@barry/themes",
+    "name": "@barry-rocks/themes",
     "class": "internal-package"
   },
   "packages/tools": {
-    "name": "@barry/tools",
+    "name": "@barry-rocks/tools",
     "class": "internal-package"
   },
   "packages/ui": {
-    "name": "@barry/ui",
+    "name": "@barry-rocks/ui",
     "class": "publishable-candidate"
   },
   "packages/vault": {
-    "name": "@barry/vault",
+    "name": "@barry-rocks/vault",
     "class": "internal-package"
   },
   "sdks/artifacts": {
-    "name": "@barry-sdks/artifacts",
+    "name": "@barry-rocks/sdk-artifacts",
     "class": "publishable-candidate"
   },
   "sdks/links": {
-    "name": "@barry-sdks/links",
+    "name": "@barry-rocks/sdk-links",
     "class": "runtime-edge",
     "mode": "wrangler"
   },
   "sdks/notes": {
-    "name": "@barry-sdks/notes",
+    "name": "@barry-rocks/sdk-notes",
     "class": "runtime-edge",
     "mode": "wrangler"
   },
@@ -191,7 +191,7 @@
     "mode": "source-start"
   },
   "servers/mcp": {
-    "name": "@barry/mcp-server",
+    "name": "@barry-rocks/mcp-server",
     "class": "runtime-edge",
     "mode": "bundle-source"
   }

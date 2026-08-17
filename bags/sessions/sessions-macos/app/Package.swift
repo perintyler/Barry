@@ -18,7 +18,7 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(path: "../../../packages/BarryKit"),
+        .package(path: "../../../../packages/BarryKit"),
         .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.4.1"),
         .package(url: "https://github.com/smittytone/HighlighterSwift", from: "3.1.0")
     ],
