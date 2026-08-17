@@ -1,7 +1,6 @@
 {
-  "name": "@barry/slack",
+  "name": "@barry-rocks/slack",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "src/index.ts",
   "exports": {
@@ -13,8 +12,43 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.78.0",
-    "@barry/agent-runtime": "workspace:*",
-    "@barry/env": "workspace:*",
+    "@barry-rocks/agent-runtime": "workspace:*",
+    "@barry-rocks/env": "workspace:*",
     "@slack/web-api": "7.8.0"
-  }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./commands": {
+        "types": "./dist/commands.d.ts",
+        "default": "./dist/commands.js"
+      },
+      "./service": {
+        "types": "./dist/slack-service.d.ts",
+        "default": "./dist/slack-service.js"
+      },
+      "./messaging-service": {
+        "types": "./dist/slack-messaging-service.d.ts",
+        "default": "./dist/slack-messaging-service.js"
+      },
+      "./relevance-service": {
+        "types": "./dist/relevance-service.d.ts",
+        "default": "./dist/relevance-service.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
+  },
+  "license": "SEE LICENSE IN LICENSE.md"
 }

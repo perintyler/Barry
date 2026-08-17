@@ -1,5 +1,5 @@
 {
-  "name": "@barry-sdks/links",
+  "name": "@barry-rocks/sdk-links",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "description": "Link bookmarking — Cloudflare Worker + Durable Object + browser UI",
@@ -13,15 +13,22 @@
     "./browser-inline": "./dist/browser-inline.js",
     "./worker": "./src/worker/index.ts"
   },
-  "files": ["src", "dist"],
+  "files": [
+    "src",
+    "dist"
+  ],
   "scripts": {
     "build": "node scripts/build.js",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20260111.0",
     "esbuild": "0.27.0",
     "typescript": "5.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@barry/md-to-ansi",
+  "name": "@barry-rocks/md-to-ansi",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
@@ -11,11 +11,37 @@
   },
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
-  }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./markup": {
+        "types": "./dist/markup/index.d.ts",
+        "default": "./dist/markup/index.js"
+      },
+      "./tui": {
+        "types": "./dist/tui/index.d.ts",
+        "default": "./dist/tui/index.js"
+      }
+    }
+  },
+  "description": "Convert Markdown to ANSI-colored terminal output"
 }

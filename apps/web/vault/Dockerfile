@@ -8,7 +8,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/vault/package.json apps/web/vault/
 COPY packages/vault/package.json packages/vault/
 
-RUN pnpm install --frozen-lockfile --filter @barry/vault-server... --filter @barry/vault...
+RUN pnpm install --frozen-lockfile --filter @barry-rocks/vault-server... --filter @barry-rocks/vault...
 
 COPY apps/web/vault/ apps/web/vault/
 COPY packages/vault/ packages/vault/

@@ -4,10 +4,21 @@
 <dict>
     <key>Label</key>
     <string>com.barry.__SERVICE_NAME__</string>
+    <!-- Exec node DIRECTLY rather than via `pnpm start:prod`.
+         pnpm spawns a child which spawns node, so launchd's job PID is the pnpm
+         wrapper: `launchctl kickstart -k` signals that, the node GRANDCHILD
+         survives still holding the port, and every restart then dies with
+         EADDRINUSE while launchd reports a live PID. That cost three manual
+         recoveries in one session. The mcp template has always exec'd node
+         directly, which is why it restarts cleanly.
+         NODE_ENV=production is set under EnvironmentVariables below, so the
+         inline prefix the package scripts used is not needed here. -->
     <key>ProgramArguments</key>
     <array>
-        <string>__PNPM_PATH__</string>
-        <string>__SERVICE_START_SCRIPT__</string>
+        <string>__NODE_PATH__</string>
+        <string>--import</string>
+        <string>tsx</string>
+        <string>__SERVICE_ENTRY__</string>
     </array>
     <key>RunAtLoad</key>
     <true/>

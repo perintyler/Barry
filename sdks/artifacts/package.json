@@ -1,5 +1,5 @@
 {
-  "name": "@barry-sdks/artifacts",
+  "name": "@barry-rocks/sdk-artifacts",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "description": "Artifact list and file viewer components",
@@ -27,16 +27,17 @@
   ],
   "scripts": {
     "build": "node scripts/build.js",
-    "pretest": "pnpm --filter @barry/ui... build && node scripts/build.js && tsc --noEmit",
+    "pretest": "pnpm --filter @barry-rocks/ui... build && node scripts/build.js && tsc --noEmit",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:consumer-deps": "node scripts/check-consumer-deps.mjs"
   },
   "dependencies": {
-    "@barry/syntax": "workspace:*",
-    "@barry/themes": "workspace:*",
-    "@barry/ui": "workspace:*",
+    "@barry-rocks/syntax": "workspace:*",
+    "@barry-rocks/themes": "workspace:*",
+    "@barry-rocks/ui": "workspace:*",
     "@cloudflare/puppeteer": "^1.1.0",
-    "@cloudflare/workers-oauth-provider": "^0.0.11",
+    "@cloudflare/workers-oauth-provider": "^0.8.2",
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@taga3s/highlightjs-terraform": "^1.0.7",
@@ -45,6 +46,10 @@
     "highlightjs-zig": "^1.0.2",
     "hono": "4.13.1",
     "markdown-it": "14.2.0",
+    "markdown-it-deflist": "4.0.0",
+    "markdown-it-footnote": "4.0.0",
+    "markdown-it-front-matter": "0.2.4",
+    "markdown-it-task-lists": "2.1.1",
     "oauth4webapi": "^3.8.6",
     "zod": "4.3.6"
   },
@@ -53,7 +58,6 @@
     "jose": "6.2.3"
   },
   "devDependencies": {
-    "@barry/logger": "workspace:*",
     "@cloudflare/workers-types": "4.20260702.1",
     "@types/express": "5.0.6",
     "@types/markdown-it": "14.1.2",
@@ -64,5 +68,8 @@
     "vite": "^8.1.5",
     "vite-plugin-singlefile": "^2.3.3",
     "vitest": "4.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

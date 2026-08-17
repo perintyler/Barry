@@ -1,5 +1,5 @@
 {
-  "name": "@barry/sentry",
+  "name": "@barry-rocks/sentry",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
@@ -8,7 +8,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@sentry/node": "10.44.0"
@@ -24,5 +26,20 @@
     "express": {
       "optional": true
     }
-  }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "description": "Sentry error reporting integration"
 }

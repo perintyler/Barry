@@ -4,17 +4,18 @@
   "description": "",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@barry-sdks/links": "workspace:*",
-    "@barry/google-auth": "workspace:*",
-    "@barry/spunk": "workspace:*",
-    "@barry/ui": "workspace:*",
+    "@barry-rocks/sdk-links": "workspace:*",
+    "@barry-rocks/google-auth": "workspace:*",
+    "@barry-rocks/spunk": "workspace:*",
+    "@barry-rocks/ui": "workspace:*",
     "postal-mime": "^1.1.0"
   },
   "devDependencies": {

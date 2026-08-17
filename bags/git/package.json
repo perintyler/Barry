@@ -1,5 +1,5 @@
 {
-  "name": "@barry-bags/git",
+  "name": "@barry-rocks/git-bag",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -8,8 +8,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@barry/file-tracker": "workspace:*",
-    "@barry/tools": "workspace:*",
+    "@barry-rocks/file-tracker": "workspace:*",
+    "@barry-rocks/tools": "workspace:*",
     "zod": "3.25.76"
   },
   "devDependencies": {

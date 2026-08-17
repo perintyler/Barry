@@ -1,5 +1,5 @@
 {
-  "name": "@barry/logger",
+  "name": "@barry-rocks/logger",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
@@ -11,7 +11,9 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@axiomhq/js": "1.0.0",
@@ -30,5 +32,28 @@
     "express": {
       "optional": true
     }
-  }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./middleware": {
+        "types": "./dist/middleware.d.ts",
+        "default": "./dist/middleware.js"
+      },
+      "./workers": {
+        "types": "./dist/workers.d.ts",
+        "default": "./dist/workers.js"
+      }
+    }
+  },
+  "description": "Structured logging for Barry services"
 }

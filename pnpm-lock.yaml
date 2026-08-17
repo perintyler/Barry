@@ -69,6 +69,9 @@ importers:
       knip:
         specifier: ^6.27.0
         version: 6.27.0
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.23)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
       tsx:
         specifier: 4.21.0
         version: 4.21.0
@@ -80,23 +83,23 @@ importers:
         version: 8.63.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       vitest:
         specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
+        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.27.3)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
       yaml:
         specifier: 2.8.3
         version: 2.8.3
 
   apps/web/barry.rocks:
     dependencies:
-      '@barry-sdks/links':
-        specifier: workspace:*
-        version: link:../../../sdks/links
-      '@barry/google-auth':
+      '@barry-rocks/google-auth':
         specifier: workspace:*
         version: link:../../../packages/google-auth
-      '@barry/spunk':
+      '@barry-rocks/sdk-links':
+        specifier: workspace:*
+        version: link:../../../sdks/links
+      '@barry-rocks/spunk':
         specifier: workspace:*
         version: link:../../../packages/spunk
-      '@barry/ui':
+      '@barry-rocks/ui':
         specifier: workspace:*
         version: link:../../../packages/ui
       postal-mime:
@@ -118,19 +121,19 @@ importers:
 
   apps/web/barry.works:
     dependencies:
-      '@barry-sdks/notes':
-        specifier: workspace:*
-        version: link:../../../sdks/notes
-      '@barry/env':
+      '@barry-rocks/env':
         specifier: workspace:*
         version: link:../../../packages/env
-      '@barry/logger':
+      '@barry-rocks/logger':
         specifier: workspace:*
         version: link:../../../packages/logger
-      '@barry/sentry':
+      '@barry-rocks/sdk-notes':
+        specifier: workspace:*
+        version: link:../../../sdks/notes
+      '@barry-rocks/sentry':
         specifier: workspace:*
         version: link:../../../packages/sentry
-      '@barry/ui':
+      '@barry-rocks/ui':
         specifier: workspace:*
         version: link:../../../packages/ui
       '@sentry/svelte':
@@ -197,7 +200,7 @@ importers:
 
   apps/web/vault:
     dependencies:
-      '@barry/vault':
+      '@barry-rocks/vault':
         specifier: workspace:*
         version: link:../../../packages/vault
       '@modelcontextprotocol/sdk':
@@ -237,16 +240,16 @@ importers:
 
   bags/actions:
     dependencies:
-      '@barry/bags':
+      '@barry-rocks/bags':
         specifier: workspace:*
         version: link:../../packages/bags
-      '@barry/db':
+      '@barry-rocks/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@barry/skills':
+      '@barry-rocks/skills':
         specifier: workspace:*
         version: link:../../packages/skills
-      '@barry/tools':
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../../packages/tools
       zod:
@@ -268,19 +271,19 @@ importers:
 
   bags/artifacts:
     dependencies:
-      '@barry-sdks/artifacts':
-        specifier: workspace:*
-        version: link:../../sdks/artifacts
-      '@barry/google-auth':
+      '@barry-rocks/google-auth':
         specifier: workspace:*
         version: link:../../packages/google-auth
-      '@barry/logger':
+      '@barry-rocks/logger':
         specifier: workspace:*
         version: link:../../packages/logger
-      '@barry/tools':
+      '@barry-rocks/sdk-artifacts':
+        specifier: workspace:*
+        version: link:../../sdks/artifacts
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../../packages/tools
-      '@barry/ui':
+      '@barry-rocks/ui':
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
@@ -300,58 +303,12 @@ importers:
         specifier: 4.113.0
         version: 4.113.0(@cloudflare/workers-types@4.20260702.1)
 
-  bags/bdiff:
-    dependencies:
-      '@barry/bags':
-        specifier: workspace:*
-        version: link:../../packages/bags
-      '@barry/env':
-        specifier: workspace:*
-        version: link:../../packages/env
-      '@barry/tools':
-        specifier: workspace:*
-        version: link:../../packages/tools
-      better-sqlite3:
-        specifier: 12.10.0
-        version: 12.10.0
-      cors:
-        specifier: 2.8.5
-        version: 2.8.5
-      express:
-        specifier: 4.22.1
-        version: 4.22.1
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: 7.6.13
-        version: 7.6.13
-      '@types/cors':
-        specifier: 2.8.17
-        version: 2.8.17
-      '@types/express':
-        specifier: 4.17.21
-        version: 4.17.21
-      '@types/node':
-        specifier: 22.15.0
-        version: 22.15.0
-      tsx:
-        specifier: 4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
-
   bags/changes:
     dependencies:
-      '@barry/file-tracker':
+      '@barry-rocks/file-tracker':
         specifier: workspace:*
         version: link:../../packages/file-tracker
-      '@barry/tools':
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../../packages/tools
       zod:
@@ -367,57 +324,13 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
-
-  bags/coffee:
-    dependencies:
-      '@barry/tools':
-        specifier: workspace:*
-        version: link:../../packages/tools
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/node':
-        specifier: 22.15.0
-        version: 22.15.0
-      tsx:
-        specifier: 4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
 
   bags/events:
     dependencies:
-      '@barry/db':
+      '@barry-rocks/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@barry/tools':
-        specifier: workspace:*
-        version: link:../../packages/tools
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/node':
-        specifier: 22.15.0
-        version: 22.15.0
-      tsx:
-        specifier: 4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
-
-  bags/filesystem:
-    dependencies:
-      '@barry/tools':
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../../packages/tools
       zod:
@@ -439,10 +352,10 @@ importers:
 
   bags/git:
     dependencies:
-      '@barry/file-tracker':
+      '@barry-rocks/file-tracker':
         specifier: workspace:*
         version: link:../../packages/file-tracker
-      '@barry/tools':
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../../packages/tools
       zod:
@@ -461,41 +374,10 @@ importers:
       vitest:
         specifier: 4.1.0
         version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
-
-  bags/github-app:
-    dependencies:
-      '@barry/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@barry/env':
-        specifier: workspace:*
-        version: link:../../packages/env
-      '@barry/github':
-        specifier: workspace:*
-        version: link:../../packages/github
-      '@barry/logger':
-        specifier: workspace:*
-        version: link:../../packages/logger
-      '@barry/secrets':
-        specifier: workspace:*
-        version: link:../../packages/secrets
-      express:
-        specifier: 4.22.1
-        version: 4.22.1
-    devDependencies:
-      '@types/express':
-        specifier: 4.17.21
-        version: 4.17.21
-      '@types/node':
-        specifier: 22.15.0
-        version: 22.15.0
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
 
   bags/keychain:
     dependencies:
-      '@barry/tools':
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../../packages/tools
       zod:
@@ -511,41 +393,10 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
-
-  bags/locks:
-    dependencies:
-      '@barry/file-tracker':
-        specifier: workspace:*
-        version: link:../../packages/file-tracker
-      '@barry/tools':
-        specifier: workspace:*
-        version: link:../../packages/tools
-      better-sqlite3:
-        specifier: 12.10.0
-        version: 12.10.0
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: 7.6.13
-        version: 7.6.13
-      '@types/node':
-        specifier: 22.15.0
-        version: 22.15.0
-      tsx:
-        specifier: 4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
 
   bags/reminders:
     dependencies:
-      '@barry/tools':
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../../packages/tools
       zod:
@@ -565,18 +416,18 @@ importers:
         specifier: 4.1.0
         version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
 
-  bags/session:
+  bags/sessions:
     dependencies:
-      '@barry/db':
+      '@barry-rocks/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@barry/file-tracker':
+      '@barry-rocks/file-tracker':
         specifier: workspace:*
         version: link:../../packages/file-tracker
-      '@barry/session-client':
+      '@barry-rocks/session-client':
         specifier: workspace:*
         version: link:../../packages/session-client
-      '@barry/tools':
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../../packages/tools
       dotenv:
@@ -605,61 +456,15 @@ importers:
         specifier: 4.1.0
         version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
 
-  bags/slack-app:
-    dependencies:
-      '@barry/bags':
-        specifier: workspace:*
-        version: link:../../packages/bags
-      '@barry/env':
-        specifier: workspace:*
-        version: link:../../packages/env
-      '@barry/slack':
-        specifier: workspace:*
-        version: link:../../packages/slack
-      better-sqlite3:
-        specifier: 12.10.0
-        version: 12.10.0
-      cors:
-        specifier: 2.8.5
-        version: 2.8.5
-      express:
-        specifier: 4.22.1
-        version: 4.22.1
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: 7.6.13
-        version: 7.6.13
-      '@types/cors':
-        specifier: 2.8.17
-        version: 2.8.17
-      '@types/express':
-        specifier: 4.17.21
-        version: 4.17.21
-      '@types/node':
-        specifier: 22.15.0
-        version: 22.15.0
-      tsx:
-        specifier: 4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
-
   bags/system:
     dependencies:
-      '@barry/db':
+      '@barry-rocks/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@barry/email':
+      '@barry-rocks/email':
         specifier: workspace:*
         version: link:../../packages/email
-      '@barry/tools':
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../../packages/tools
       zod:
@@ -676,45 +481,98 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  bags/system/filesystem:
+    dependencies:
+      '@barry-rocks/tools':
+        specifier: workspace:*
+        version: link:../../../packages/tools
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 22.15.0
+        version: 22.15.0
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.0
+        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
+
+  bags/system/locks:
+    dependencies:
+      '@barry-rocks/file-tracker':
+        specifier: workspace:*
+        version: link:../../../packages/file-tracker
+      '@barry-rocks/tools':
+        specifier: workspace:*
+        version: link:../../../packages/tools
+      better-sqlite3:
+        specifier: 12.10.0
+        version: 12.10.0
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: 7.6.13
+        version: 7.6.13
+      '@types/node':
+        specifier: 22.15.0
+        version: 22.15.0
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.0
+        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
+
   cli:
     dependencies:
-      '@barry/agent-runtime':
+      '@barry-rocks/agent-runtime':
         specifier: workspace:*
         version: link:../packages/agent-runtime
-      '@barry/agent-scope':
+      '@barry-rocks/agent-scope':
         specifier: workspace:*
         version: link:../packages/agent-scope
-      '@barry/bags':
+      '@barry-rocks/bags':
         specifier: workspace:*
         version: link:../packages/bags
-      '@barry/db':
+      '@barry-rocks/db':
         specifier: workspace:*
         version: link:../packages/db
-      '@barry/env':
+      '@barry-rocks/env':
         specifier: workspace:*
         version: link:../packages/env
-      '@barry/file-tracker':
+      '@barry-rocks/file-tracker':
         specifier: workspace:*
         version: link:../packages/file-tracker
-      '@barry/md-to-ansi':
+      '@barry-rocks/md-to-ansi':
         specifier: workspace:*
         version: link:../packages/md-to-ansi
-      '@barry/secrets':
+      '@barry-rocks/secrets':
         specifier: workspace:*
         version: link:../packages/secrets
-      '@barry/session-client':
+      '@barry-rocks/session-client':
         specifier: workspace:*
         version: link:../packages/session-client
-      '@barry/skills':
+      '@barry-rocks/skills':
         specifier: workspace:*
         version: link:../packages/skills
-      '@barry/stop-robots':
+      '@barry-rocks/stop-robots':
         specifier: workspace:*
         version: link:../packages/stop-robots
-      '@barry/tools':
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../packages/tools
-      '@barry/vault':
+      '@barry-rocks/vault':
         specifier: workspace:*
         version: link:../packages/vault
       '@inquirer/core':
@@ -757,10 +615,10 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.2.76
         version: 0.2.76(zod@4.4.3)
-      '@barry/contracts':
+      '@barry-rocks/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@barry/env':
+      '@barry-rocks/env':
         specifier: workspace:*
         version: link:../env
       '@openai/codex-sdk':
@@ -814,7 +672,7 @@ importers:
 
   packages/bags:
     dependencies:
-      '@barry/env':
+      '@barry-rocks/env':
         specifier: workspace:*
         version: link:../env
       '@modelcontextprotocol/sdk':
@@ -842,7 +700,7 @@ importers:
 
   packages/bags-sdk:
     dependencies:
-      '@barry/tools':
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../tools
     devDependencies:
@@ -880,13 +738,13 @@ importers:
 
   packages/db:
     dependencies:
-      '@barry/agent-scope':
+      '@barry-rocks/agent-scope':
         specifier: workspace:*
         version: link:../agent-scope
-      '@barry/bags':
+      '@barry-rocks/bags':
         specifier: workspace:*
         version: link:../bags
-      '@barry/env':
+      '@barry-rocks/env':
         specifier: workspace:*
         version: link:../env
       kysely:
@@ -905,7 +763,7 @@ importers:
         specifier: 2.8.3
         version: 2.8.3
     devDependencies:
-      '@barry/agent-runtime':
+      '@barry-rocks/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
       '@types/node':
@@ -963,10 +821,10 @@ importers:
 
   packages/github:
     dependencies:
-      '@barry/agent-runtime':
+      '@barry-rocks/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
-      '@barry/logger':
+      '@barry-rocks/logger':
         specifier: workspace:*
         version: link:../logger
       jsonwebtoken:
@@ -985,6 +843,9 @@ importers:
 
   packages/google-auth:
     devDependencies:
+      '@cloudflare/workers-types':
+        specifier: 4.20260111.0
+        version: 4.20260111.0
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -1028,13 +889,13 @@ importers:
 
   packages/secrets:
     dependencies:
-      '@barry/bags':
+      '@barry-rocks/bags':
         specifier: workspace:*
         version: link:../bags
-      '@barry/db':
+      '@barry-rocks/db':
         specifier: workspace:*
         version: link:../db
-      '@barry/vault':
+      '@barry-rocks/vault':
         specifier: workspace:*
         version: link:../vault
     devDependencies:
@@ -1066,10 +927,10 @@ importers:
 
   packages/session-client:
     dependencies:
-      '@barry/bags':
+      '@barry-rocks/bags':
         specifier: workspace:*
         version: link:../bags
-      '@barry/db':
+      '@barry-rocks/db':
         specifier: workspace:*
         version: link:../db
     devDependencies:
@@ -1085,10 +946,10 @@ importers:
 
   packages/sessions:
     dependencies:
-      '@barry/db':
+      '@barry-rocks/db':
         specifier: workspace:*
         version: link:../db
-      '@barry/session-client':
+      '@barry-rocks/session-client':
         specifier: workspace:*
         version: link:../session-client
     devDependencies:
@@ -1101,7 +962,7 @@ importers:
 
   packages/skills:
     dependencies:
-      '@barry/bags':
+      '@barry-rocks/bags':
         specifier: workspace:*
         version: link:../bags
     devDependencies:
@@ -1120,10 +981,10 @@ importers:
       '@anthropic-ai/sdk':
         specifier: 0.78.0
         version: 0.78.0(zod@4.4.3)
-      '@barry/agent-runtime':
+      '@barry-rocks/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
-      '@barry/env':
+      '@barry-rocks/env':
         specifier: workspace:*
         version: link:../env
       '@slack/web-api':
@@ -1187,7 +1048,7 @@ importers:
 
   packages/ui:
     dependencies:
-      '@barry/themes':
+      '@barry-rocks/themes':
         specifier: workspace:*
         version: link:../themes
     devDependencies:
@@ -1209,21 +1070,21 @@ importers:
 
   sdks/artifacts:
     dependencies:
-      '@barry/syntax':
+      '@barry-rocks/syntax':
         specifier: workspace:*
         version: link:../../packages/syntax
-      '@barry/themes':
+      '@barry-rocks/themes':
         specifier: workspace:*
         version: link:../../packages/themes
-      '@barry/ui':
+      '@barry-rocks/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@cloudflare/puppeteer':
         specifier: ^1.1.0
         version: 1.1.0
       '@cloudflare/workers-oauth-provider':
-        specifier: ^0.0.11
-        version: 0.0.11
+        specifier: ^0.8.2
+        version: 0.8.2
       '@modelcontextprotocol/ext-apps':
         specifier: 1.7.5
         version: 1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(react@19.2.7)(zod@4.3.6)
@@ -1248,6 +1109,18 @@ importers:
       markdown-it:
         specifier: 14.2.0
         version: 14.2.0
+      markdown-it-deflist:
+        specifier: 4.0.0
+        version: 4.0.0
+      markdown-it-footnote:
+        specifier: 4.0.0
+        version: 4.0.0
+      markdown-it-front-matter:
+        specifier: 0.2.4
+        version: 0.2.4
+      markdown-it-task-lists:
+        specifier: 2.1.1
+        version: 2.1.1
       oauth4webapi:
         specifier: ^3.8.6
         version: 3.8.6
@@ -1255,9 +1128,6 @@ importers:
         specifier: 4.3.6
         version: 4.3.6
     devDependencies:
-      '@barry/logger':
-        specifier: workspace:*
-        version: link:../../packages/logger
       '@cloudflare/workers-types':
         specifier: 4.20260702.1
         version: 4.20260702.1
@@ -1325,46 +1195,46 @@ importers:
       '@anthropic-ai/sdk':
         specifier: 0.39.0
         version: 0.39.0
-      '@barry/agent-runtime':
+      '@barry-rocks/agent-runtime':
         specifier: workspace:*
         version: link:../../packages/agent-runtime
-      '@barry/agent-scope':
+      '@barry-rocks/agent-scope':
         specifier: workspace:*
         version: link:../../packages/agent-scope
-      '@barry/auth':
+      '@barry-rocks/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@barry/bags':
+      '@barry-rocks/bags':
         specifier: workspace:*
         version: link:../../packages/bags
-      '@barry/contracts':
+      '@barry-rocks/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@barry/db':
+      '@barry-rocks/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@barry/env':
+      '@barry-rocks/env':
         specifier: workspace:*
         version: link:../../packages/env
-      '@barry/file-tracker':
+      '@barry-rocks/file-tracker':
         specifier: workspace:*
         version: link:../../packages/file-tracker
-      '@barry/logger':
+      '@barry-rocks/logger':
         specifier: workspace:*
         version: link:../../packages/logger
-      '@barry/secrets':
+      '@barry-rocks/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets
-      '@barry/sentry':
+      '@barry-rocks/sentry':
         specifier: workspace:*
         version: link:../../packages/sentry
-      '@barry/session-client':
+      '@barry-rocks/session-client':
         specifier: workspace:*
         version: link:../../packages/session-client
-      '@barry/sessions':
+      '@barry-rocks/sessions':
         specifier: workspace:*
         version: link:../../packages/sessions
-      '@barry/skills':
+      '@barry-rocks/skills':
         specifier: workspace:*
         version: link:../../packages/skills
       express:
@@ -1401,40 +1271,43 @@ importers:
       '@anthropic-ai/sdk':
         specifier: 0.39.0
         version: 0.39.0
-      '@barry-bags/locks':
-        specifier: workspace:*
-        version: link:../../bags/locks
-      '@barry/agent-scope':
+      '@barry-rocks/agent-scope':
         specifier: workspace:*
         version: link:../../packages/agent-scope
-      '@barry/auth':
+      '@barry-rocks/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@barry/bags':
+      '@barry-rocks/bags':
         specifier: workspace:*
         version: link:../../packages/bags
-      '@barry/db':
+      '@barry-rocks/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@barry/env':
+      '@barry-rocks/env':
         specifier: workspace:*
         version: link:../../packages/env
-      '@barry/file-tracker':
+      '@barry-rocks/file-tracker':
         specifier: workspace:*
         version: link:../../packages/file-tracker
-      '@barry/logger':
+      '@barry-rocks/locks-bag':
+        specifier: workspace:*
+        version: link:../../bags/system/locks
+      '@barry-rocks/logger':
         specifier: workspace:*
         version: link:../../packages/logger
-      '@barry/secrets':
+      '@barry-rocks/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets
-      '@barry/sentry':
+      '@barry-rocks/sentry':
         specifier: workspace:*
         version: link:../../packages/sentry
-      '@barry/session-client':
+      '@barry-rocks/session-client':
         specifier: workspace:*
         version: link:../../packages/session-client
-      '@barry/tools':
+      '@barry-rocks/system-bag':
+        specifier: workspace:*
+        version: link:../../bags/system
+      '@barry-rocks/tools':
         specifier: workspace:*
         version: link:../../packages/tools
       '@modelcontextprotocol/sdk':
@@ -1677,9 +1550,6 @@ packages:
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
-
-  '@cloudflare/workers-oauth-provider@0.0.11':
-    resolution: {integrity: sha512-uarVcE1y/lf0y6iMFTwpJe8u6kpDP9CRZQTsGfCFonCEmH9n9b8k4ZmFpxI5g4XfoS7s9YHO0XcSRH8fgsjHWA==}
 
   '@cloudflare/workers-oauth-provider@0.8.2':
     resolution: {integrity: sha512-Pho5qWDl4qj1STI5QYMQfPmJBBkxyrFpXyDl9BrtYOfWHxThabEzdi9p3ezS2cUkbjA0E6L5ki/kq2pcbRUtlg==}
@@ -4269,6 +4139,9 @@ packages:
     resolution: {integrity: sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg==}
     engines: {node: '>=12'}
 
+  any-promise@1.3.0:
+    resolution: {integrity: sha512-7UvmKalWRt1wgjL1RrGxoSJW/0QZFIegpeGvZG9kjp8vrRu55XTHbwnqq2GpXm9uLbcuhxm3IqX9OB4MZR1b2A==}
+
   anymatch@3.1.3:
     resolution: {integrity: sha512-KMReFUr0B4t+D+OBkjR3KYqvocp2XaSzO55UcB6mgQMd3KbcE+mWTyvVV7D/zsdEbNnV6acZUutkiHQXvTr1Rw==}
     engines: {node: '>= 8'}
@@ -4422,9 +4295,19 @@ packages:
   buffer@5.7.1:
     resolution: {integrity: sha512-EHcyIPBQ4BSGlvjB16k5KgAJ27CIsHY/2JBmCRReo48y9rQ3MaUzWX3KVlBa4U7MyX02HdVj0K7C3WaB3ju7FQ==}
 
+  bundle-require@5.1.0:
+    resolution: {integrity: sha512-3WrrOuZiyaaZPWiEt4G3+IffISVC9HYlWueJEBWED4ZH4aIAC2PnkdnuRrR94M+w6yGWn4AglWtJtBI8YqvgoA==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+    peerDependencies:
+      esbuild: '>=0.18'
+
   bytes@3.1.2:
     resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
     engines: {node: '>= 0.8'}
+
+  cac@6.7.14:
+    resolution: {integrity: sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ==}
+    engines: {node: '>=8'}
 
   call-bind-apply-helpers@1.0.2:
     resolution: {integrity: sha512-Sp1ablJ0ivDkSzjcaJdxEunN5/XvksFJ2sMBFfq6x0ryhQV/2b/KwFe21cMpmHtPOSij8K99/wSfoEuTObmuMQ==}
@@ -4458,6 +4341,10 @@ packages:
   chokidar@3.6.0:
     resolution: {integrity: sha512-7VT13fmjotKpGipCW9JEQAusEPE+Ei8nl6/g4FBAmIm0GOOLMua9NDDo/DWp0ZAxCr3cPq5ZpBqmPAQgDda2Pw==}
     engines: {node: '>= 8.10.0'}
+
+  chokidar@4.0.3:
+    resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
+    engines: {node: '>= 14.16.0'}
 
   chownr@1.1.4:
     resolution: {integrity: sha512-jJ0bqzaylmJtVnNgzTeSOs8DPavpbYgEr/b0YL8/2GO3xJEhInFmhKMUnEJQjZumK7KXGFhUy89PrsJWlakBVg==}
@@ -4499,6 +4386,10 @@ packages:
     resolution: {integrity: sha512-MwVNWlYjDTtOjX5PiD7o5pK0UrFU/OYgcJfjjK4RaHZETNtjJqrZa9Y9ds88+A+f+d5lv+561eZ+yCKoS3gbAA==}
     engines: {node: '>=18'}
 
+  commander@4.1.1:
+    resolution: {integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA==}
+    engines: {node: '>= 6'}
+
   compressible@2.0.18:
     resolution: {integrity: sha512-AF3r7P5dWxL8MxyITRMlORQNaOA2IkAFaTr4k7BUumjPtRpGDTZpl0Pb1XCO6JeDCBdp126Cgs9sMxqSjgYyRg==}
     engines: {node: '>= 0.6'}
@@ -4509,6 +4400,13 @@ packages:
 
   concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
+
+  confbox@0.1.8:
+    resolution: {integrity: sha512-RMtmw0iFkeR4YV+fUOSucriAQNb9g8zFR52MWCtl+cCZOFRNL6zeB395vPzFhEjjn4fMxXudmELnl/KF/WrK6w==}
+
+  consola@3.4.2:
+    resolution: {integrity: sha512-5IKcdX0nnYavi6G7TtOhwkYzyjfJlatbjMjuLSfE2kYT5pMDOilZ4OvMhi637CcDICTmz3wARPoyhqyX1Y+XvA==}
+    engines: {node: ^14.18.0 || >=16.10.0}
 
   content-disposition@0.5.4:
     resolution: {integrity: sha512-FveZTNuGw04cxlAiWbzi6zTAL/lhehaWbTtgluJh4/E95DqMwTmha3KZN1aAWA8cFIhHzMZUvLevkw5Rqk+tSQ==}
@@ -4954,6 +4852,9 @@ packages:
     resolution: {integrity: sha512-78/PXT1wlLLDgTzDs7sjq9hzz0vXD+zn+7wypEe4fXQxCmdmqfGsEPQxmiCSQI3ajFV91bVSsvNtrJRiW6nGng==}
     engines: {node: '>=10'}
 
+  fix-dts-default-cjs-exports@1.0.1:
+    resolution: {integrity: sha512-pVIECanWFC61Hzl2+oOCtoJ3F17kglZC/6N94eRWycFgBH35hHx0Li604ZIzhseh97mf2p0cv7vVrOZGoqhlEg==}
+
   flat-cache@4.0.1:
     resolution: {integrity: sha512-f7ccFPK3SXFHpx15UIGyRJ/FJQctuKZ0zVuN3frBo4HnK3cay9VEW0R6yPYFHC0AgqhukPzKjq22t5DmAyqGyw==}
     engines: {node: '>=16'}
@@ -5245,6 +5146,10 @@ packages:
   jose@6.2.4:
     resolution: {integrity: sha512-N8acGzVsQy6M/fjFcxtysNc4Q379TcM5dM/qKkNtsHFji88yANnXTr7BLeP75iPnFwBfQzM/jg2BZ9+HZrHCZA==}
 
+  joycon@3.1.1:
+    resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
+    engines: {node: '>=10'}
+
   js-base64@3.9.1:
     resolution: {integrity: sha512-U73qptcvf/HIOauFOmqT3a0mDUp0MYlfd15oqoe9kqZt5XhiXVb+HG09sLvI9PQ9tZIBFS4nlErai8zbWazP0g==}
 
@@ -5426,8 +5331,19 @@ packages:
     resolution: {integrity: sha512-utWOt/GHzuUxnLKxB6dk81RoOeoNeHgbrXiuGk4yyF5qlRz+iIVWu56E2fqGHFrXz0QNUhLB/8nKqvRH66JKGQ==}
     engines: {node: '>=10'}
 
+  lilconfig@3.1.3:
+    resolution: {integrity: sha512-/vlFKAoH5Cgt3Ie+JLhRbwOsCQePABiU3tJ1egGvyQ+33R/vcwM2Zl2QR/LzjsBeItPt3oSVXapn+m4nQDvpzw==}
+    engines: {node: '>=14'}
+
+  lines-and-columns@1.2.4:
+    resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
+
   linkify-it@5.0.2:
     resolution: {integrity: sha512-ONTm2jCMAVZjgQa/Fy1kScXsuOoF5NPTsoFBdE1KVIZ2vAh/r9+Bqo+0jINCBYnavTPQZz38QzFTme79ENoN3Q==}
+
+  load-tsconfig@0.2.5:
+    resolution: {integrity: sha512-IXO6OCs9yg8tMKzfPZ1YmheJbZCiEsnBdcB03l0OcfK9prKnJb96siuHCr5Fl37/yo9DnKU+TLpxzTUspw9shg==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   locate-character@3.0.0:
     resolution: {integrity: sha512-SW13ws7BjaeJ6p7Q6CO2nchbYEc3X3J6WrmTTDto7yMPqVSZTUyY5Tjbid+Ab8gLnATtygYtiDIJGQRRn2ZOiA==}
@@ -5476,6 +5392,18 @@ packages:
   magic-string@0.30.8:
     resolution: {integrity: sha512-ISQTe55T2ao7XtlAStud6qwYPZjE4GK1S/BeVPus4jrq6JuOnQ00YKQC581RWhR122W7msZV263KzVeLoqidyQ==}
     engines: {node: '>=12'}
+
+  markdown-it-deflist@4.0.0:
+    resolution: {integrity: sha512-06186ZWDwNLg638THD70MxBeFrDMF0+nL7IWU/qwCGHGOcUIm4MTYXbfjpv0ooWnVjkSnAjW8msKaOQmNRfY6Q==}
+
+  markdown-it-footnote@4.0.0:
+    resolution: {integrity: sha512-WYJ7urf+khJYl3DqofQpYfEYkZKbmXmwxQV8c8mO/hGIhgZ1wOe7R4HLFNwqx7TjILbnC98fuyeSsin19JdFcQ==}
+
+  markdown-it-front-matter@0.2.4:
+    resolution: {integrity: sha512-25GUs0yjS2hLl8zAemVndeEzThB1p42yxuDEKbd4JlL3jiz+jsm6e56Ya8B0VREOkNxLYB4TTwaoPJ3ElMmW+w==}
+
+  markdown-it-task-lists@2.1.1:
+    resolution: {integrity: sha512-TxFAc76Jnhb2OUu+n3yz9RMu4CwGfaT788br6HhEDlvWfdeJcLUsxk1Hgw2yJio0OXsxv7pyIPmvECY7bMbluA==}
 
   markdown-it@14.2.0:
     resolution: {integrity: sha512-1TGiQiJVRQ3NPmZH6sx5Cfnmg6GQm9jvC1ch4TK511NjSJvjzKLzn5pPfZRNZkRPZP0HqCioSndqH8v2nRaWVQ==}
@@ -5573,6 +5501,9 @@ packages:
   mkdirp-classic@0.5.3:
     resolution: {integrity: sha512-gKLcREMhtuZRwRAfqP3RFW+TK4JqApVBtOIftVgjuABpAtpxhPGaDcfvbhNvD0B8iD1oUr/txX35NjcaY6Ns/A==}
 
+  mlly@1.8.2:
+    resolution: {integrity: sha512-d+ObxMQFmbt10sretNDytwt85VrbkhhUA/JBGm1MPaWJ65Cl4wOgLaB1NYvJSZ0Ef03MMEU/0xpPMXUIQ29UfA==}
+
   module-details-from-path@1.0.4:
     resolution: {integrity: sha512-EGWKgxALGMgzvxYF1UyGTy0HXX/2vHLkw6+NvDKW2jypWbHpjQuj4UMcqQWXHERJhVGKikolT06G3bcKe4fi7w==}
 
@@ -5585,6 +5516,9 @@ packages:
   mute-stream@3.0.0:
     resolution: {integrity: sha512-dkEJPVvun4FryqBmZ5KhDo0K9iDXAwn08tMLDinNdRBNPcYEDiWYysLcc6k3mjTMlbP9KyylvRpd4wFtwrT9rw==}
     engines: {node: ^20.17.0 || >=22.9.0}
+
+  mz@2.7.0:
+    resolution: {integrity: sha512-z81GNO7nnYMEhrGh9LeymoE4+Yr0Wn5McHIZMK5cfQCl+NDX08sCZgUc9/6MHni9IWuFLm1Z3HTCXu2z9fN62Q==}
 
   nanoid@6.0.1:
     resolution: {integrity: sha512-3wVS3i51pE2pi1k5FFL/95BGfVS0kSsvDVuGXHOtxox/TywUmtgq+3qiTOTbs9J7KfHaXPiN171k/A6dBnaXFw==}
@@ -5818,9 +5752,16 @@ packages:
     resolution: {integrity: sha512-8OEwKp5juEvb/MjpIc4hjqfgCNysrS94RIOMXYvpYCdm/jglrKEiAYmiumbmGhCvs+IcInsphYDFwqrjr7398w==}
     hasBin: true
 
+  pirates@4.0.7:
+    resolution: {integrity: sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA==}
+    engines: {node: '>= 6'}
+
   pkce-challenge@5.0.1:
     resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
     engines: {node: '>=16.20.0'}
+
+  pkg-types@1.3.1:
+    resolution: {integrity: sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ==}
 
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
@@ -5839,6 +5780,24 @@ packages:
       postcss:
         optional: true
       ts-node:
+        optional: true
+
+  postcss-load-config@6.0.1:
+    resolution: {integrity: sha512-oPtTM4oerL+UXmx+93ytZVN82RrlY/wPUV8IeDxFrzIjXOLF1pN+EmKPLbubvKHT2HC20xXsCAH2Z+CKV6Oz/g==}
+    engines: {node: '>= 18'}
+    peerDependencies:
+      jiti: '>=1.21.0'
+      postcss: 8.5.23
+      tsx: ^4.8.1
+      yaml: 2.8.3
+    peerDependenciesMeta:
+      jiti:
+        optional: true
+      postcss:
+        optional: true
+      tsx:
+        optional: true
+      yaml:
         optional: true
 
   postcss-safe-parser@7.0.1:
@@ -5969,6 +5928,10 @@ packages:
     resolution: {integrity: sha512-hOS089on8RduqdbhvQ5Z37A0ESjsqz6qnRcffsMU3495FuTdqSm+7bhJ29JvIOsBDEEnan5DPu9t3To9VRlMzA==}
     engines: {node: '>=8.10.0'}
 
+  readdirp@4.1.2:
+    resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
+    engines: {node: '>= 14.18.0'}
+
   real-require@0.2.0:
     resolution: {integrity: sha512-57frrGM/OCTLqLOAh0mhVA9VBMHd+9U7Zb2THMGdBUoZVOtGbJzjxsYGDJ3A9AYYCP4hn6y1TVbaOfzWtm5GFg==}
     engines: {node: '>= 12.13.0'}
@@ -5991,6 +5954,10 @@ packages:
   resolve-from@4.0.0:
     resolution: {integrity: sha512-pb/MYmXstAkysRFx8piNI1tGFNQIFA3vkE3Gq4EuA1dF6gHp/+vgZqsCGJapvy8N3Q+4o7FwvquPJcnZ7RYy4g==}
     engines: {node: '>=4'}
+
+  resolve-from@5.0.0:
+    resolution: {integrity: sha512-qYg9KP24dD5qka9J47d0aVky0N+b4fTU89LN9iDnjB5waksiC49rvMB0PrUJQGoTmH50XPiqOvAjDfaijGxYZw==}
+    engines: {node: '>=8'}
 
   resolve-pkg-maps@1.0.0:
     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
@@ -6134,6 +6101,10 @@ packages:
     resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
     engines: {node: '>=0.10.0'}
 
+  source-map@0.7.6:
+    resolution: {integrity: sha512-i5uvt8C3ikiWeNZSVZNWcfZPItFQOsYTUAOkcUPGd8DqDy1uOUikjt5dG+uRlwyvR108Fb9DOd4GvXfT0N2/uQ==}
+    engines: {node: '>= 12'}
+
   split2@4.2.0:
     resolution: {integrity: sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==}
     engines: {node: '>= 10.x'}
@@ -6182,6 +6153,11 @@ packages:
     resolution: {integrity: sha512-1tB5mhVo7U+ETBKNf92xT4hrQa3pm0MZ0PQvuDnWgAAGHDsfp4lPSpiS6psrSiet87wyGPh9ft6wmhOMQ0hDiw==}
     engines: {node: '>=14.16'}
 
+  sucrase@3.35.1:
+    resolution: {integrity: sha512-DhuTmvZWux4H1UOnWMB3sk0sbaCVOoQZjv8u1rDoTV0HTdGem9hkAZtl4JZy8P2z4Bg0nT+YMeOFyVr4zcG5Tw==}
+    engines: {node: '>=16 || 14 >=14.17'}
+    hasBin: true
+
   supports-color@10.2.2:
     resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
     engines: {node: '>=18'}
@@ -6225,6 +6201,13 @@ packages:
   text-decoder@1.2.7:
     resolution: {integrity: sha512-vlLytXkeP4xvEq2otHeJfSQIRyWxo/oZGEbXrtEEF9Hnmrdly59sUbzZ/QgyWuLYHctCHxFF4tRQZNQ9k60ExQ==}
 
+  thenify-all@1.6.0:
+    resolution: {integrity: sha512-RNxQH/qI8/t3thXJDwcstUO4zeqo64+Uy/+sNVRBx4Xn2OX+OZ9oP+iJnNFqplFra2ZUVeKCSa2oVWi3T4uVmA==}
+    engines: {node: '>=0.8'}
+
+  thenify@3.3.1:
+    resolution: {integrity: sha512-RVZSIV5IG10Hk3enotrhvz0T9em6cyHBLkH/YAZuKqd8hRkKhSfCGIcP2KUY0EPxndzANBmNllzWPwak+bheSw==}
+
   thread-stream@3.2.0:
     resolution: {integrity: sha512-zLBvqpwr4Esa0kRjcrzGU6zL25lePWaCLMx0RQFrmteozIfeNdaMLpG5U7PeHzvlFkAWaRKA9/KVW4F60iB+qw==}
 
@@ -6233,6 +6216,9 @@ packages:
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
+
+  tinyexec@0.3.2:
+    resolution: {integrity: sha512-KQQR9yN7R5+OSwaK0XQoj22pwHoTlgYqmUscPYoknOoWCWfj/5/ABTMRi69FrKU5ffPVh5QcFikpWJI/P1ocHA==}
 
   tinyexec@1.2.4:
     resolution: {integrity: sha512-SHf/r48b7vOrjve9PxJo3MN5v5yuyjHvdUcrQffT3WXMUfnGmHDVbC4k3sHJaJTgZCwpUplIaAo5ANtMyp3YHg==}
@@ -6276,6 +6262,10 @@ packages:
     resolution: {integrity: sha512-hdF5ZgjTqgAntKkklYw0R03MG2x/bSzTtkxmIRw/sTNV8YXsCJ1tfLAX23lhxhHJlEf3CRCOCGGWw3vI3GaSPw==}
     engines: {node: '>=18'}
 
+  tree-kill@1.2.2:
+    resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
+    hasBin: true
+
   ts-algebra@2.0.0:
     resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
 
@@ -6285,8 +6275,30 @@ packages:
     peerDependencies:
       typescript: 5.9.3
 
+  ts-interface-checker@0.1.13:
+    resolution: {integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==}
+
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
+
+  tsup@8.5.1:
+    resolution: {integrity: sha512-xtgkqwdhpKWr3tKPmCkvYmS9xnQK3m3XgxZHwSUjvfTjp7YfXe5tT3GgWi0F2N+ZSMsOeWeZFh7ZZFg5iPhing==}
+    engines: {node: '>=18'}
+    hasBin: true
+    peerDependencies:
+      '@microsoft/api-extractor': ^7.36.0
+      '@swc/core': ^1
+      postcss: 8.5.23
+      typescript: 5.9.3
+    peerDependenciesMeta:
+      '@microsoft/api-extractor':
+        optional: true
+      '@swc/core':
+        optional: true
+      postcss:
+        optional: true
+      typescript:
+        optional: true
 
   tsx@4.19.4:
     resolution: {integrity: sha512-gK5GVzDkJK1SI1zwHf32Mqxf2tSJkNx+eYcNly5+nHvWqXUJYUkWBQtKauoESz3ymezAI++ZwT855x5p5eop+Q==}
@@ -6331,6 +6343,9 @@ packages:
 
   uc.micro@2.1.0:
     resolution: {integrity: sha512-ARDJmphmdvUk6Glw7y9DQ2bFkKBHwQHLi2lsaH6PPmz/Ka9sFOBsBluozhDltWmnv9u/cF6Rt87znRTPV+yp/A==}
+
+  ufo@1.6.4:
+    resolution: {integrity: sha512-JFNbkD1Svwe0KvGi8GOeLcP4kAWQ609twvCdcHxq1oSL8svv39ZuSvajcD8B+5D0eL4+s1Is2D/O6KN3qcTeRA==}
 
   unbash@4.0.3:
     resolution: {integrity: sha512-3cudTErfToSc4Ggv8XGXVNVli/xHKUtUZvaY5UVwhOcUPbQGz7PeaEnT/SAVgNziZtX67KEN9swMUYkLghxA1w==}
@@ -6969,8 +6984,6 @@ snapshots:
 
   '@cloudflare/workerd-windows-64@1.20260721.1':
     optional: true
-
-  '@cloudflare/workers-oauth-provider@0.0.11': {}
 
   '@cloudflare/workers-oauth-provider@0.8.2': {}
 
@@ -9178,6 +9191,8 @@ snapshots:
 
   ansi-styles@6.2.3: {}
 
+  any-promise@1.3.0: {}
+
   anymatch@3.1.3:
     dependencies:
       normalize-path: 3.0.0
@@ -9336,7 +9351,14 @@ snapshots:
       base64-js: 1.5.1
       ieee754: 1.2.1
 
+  bundle-require@5.1.0(esbuild@0.27.3):
+    dependencies:
+      esbuild: 0.27.3
+      load-tsconfig: 0.2.5
+
   bytes@3.1.2: {}
+
+  cac@6.7.14: {}
 
   call-bind-apply-helpers@1.0.2:
     dependencies:
@@ -9375,6 +9397,10 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
+  chokidar@4.0.3:
+    dependencies:
+      readdirp: 4.1.2
+
   chownr@1.1.4: {}
 
   cjs-module-lexer@2.2.0: {}
@@ -9409,6 +9435,8 @@ snapshots:
 
   commander@12.0.0: {}
 
+  commander@4.1.1: {}
+
   compressible@2.0.18:
     dependencies:
       mime-db: 1.54.0
@@ -9426,6 +9454,10 @@ snapshots:
       - supports-color
 
   concat-map@0.0.1: {}
+
+  confbox@0.1.8: {}
+
+  consola@3.4.2: {}
 
   content-disposition@0.5.4:
     dependencies:
@@ -10043,6 +10075,12 @@ snapshots:
       locate-path: 6.0.0
       path-exists: 4.0.0
 
+  fix-dts-default-cjs-exports@1.0.1:
+    dependencies:
+      magic-string: 0.30.21
+      mlly: 1.8.2
+      rollup: 4.62.2
+
   flat-cache@4.0.1:
     dependencies:
       flatted: 3.4.2
@@ -10313,6 +10351,8 @@ snapshots:
 
   jose@6.2.4: {}
 
+  joycon@3.1.1: {}
+
   js-base64@3.9.1: {}
 
   js-levenshtein@1.1.6: {}
@@ -10512,9 +10552,15 @@ snapshots:
 
   lilconfig@2.1.0: {}
 
+  lilconfig@3.1.3: {}
+
+  lines-and-columns@1.2.4: {}
+
   linkify-it@5.0.2:
     dependencies:
       uc.micro: 2.1.0
+
+  load-tsconfig@0.2.5: {}
 
   locate-character@3.0.0: {}
 
@@ -10553,6 +10599,14 @@ snapshots:
   magic-string@0.30.8:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  markdown-it-deflist@4.0.0: {}
+
+  markdown-it-footnote@4.0.0: {}
+
+  markdown-it-front-matter@0.2.4: {}
+
+  markdown-it-task-lists@2.1.1: {}
 
   markdown-it@14.2.0:
     dependencies:
@@ -10641,6 +10695,13 @@ snapshots:
 
   mkdirp-classic@0.5.3: {}
 
+  mlly@1.8.2:
+    dependencies:
+      acorn: 8.17.0
+      pathe: 2.0.3
+      pkg-types: 1.3.1
+      ufo: 1.6.4
+
   module-details-from-path@1.0.4: {}
 
   ms@2.0.0: {}
@@ -10648,6 +10709,12 @@ snapshots:
   ms@2.1.3: {}
 
   mute-stream@3.0.0: {}
+
+  mz@2.7.0:
+    dependencies:
+      any-promise: 1.3.0
+      object-assign: 4.1.1
+      thenify-all: 1.6.0
 
   nanoid@6.0.1: {}
 
@@ -10901,7 +10968,15 @@ snapshots:
       sonic-boom: 4.2.1
       thread-stream: 3.2.0
 
+  pirates@4.0.7: {}
+
   pkce-challenge@5.0.1: {}
+
+  pkg-types@1.3.1:
+    dependencies:
+      confbox: 0.1.8
+      mlly: 1.8.2
+      pathe: 2.0.3
 
   pluralize@8.0.0: {}
 
@@ -10913,6 +10988,15 @@ snapshots:
       yaml: 2.8.3
     optionalDependencies:
       postcss: 8.5.23
+
+  postcss-load-config@6.0.1(jiti@2.7.0)(postcss@8.5.23)(tsx@4.21.0)(yaml@2.8.3):
+    dependencies:
+      lilconfig: 3.1.3
+    optionalDependencies:
+      jiti: 2.7.0
+      postcss: 8.5.23
+      tsx: 4.21.0
+      yaml: 2.8.3
 
   postcss-safe-parser@7.0.1(postcss@8.5.23):
     dependencies:
@@ -11046,6 +11130,8 @@ snapshots:
     dependencies:
       picomatch: 2.3.2
 
+  readdirp@4.1.2: {}
+
   real-require@0.2.0: {}
 
   require-directory@2.1.1: {}
@@ -11062,6 +11148,8 @@ snapshots:
   requires-port@1.0.0: {}
 
   resolve-from@4.0.0: {}
+
+  resolve-from@5.0.0: {}
 
   resolve-pkg-maps@1.0.0: {}
 
@@ -11139,7 +11227,6 @@ snapshots:
       '@rollup/rollup-win32-x64-gnu': 4.62.2
       '@rollup/rollup-win32-x64-msvc': 4.62.2
       fsevents: 2.3.3
-    optional: true
 
   router@2.2.0:
     dependencies:
@@ -11327,6 +11414,8 @@ snapshots:
   source-map@0.6.1:
     optional: true
 
+  source-map@0.7.6: {}
+
   split2@4.2.0: {}
 
   stackback@0.0.2: {}
@@ -11373,6 +11462,16 @@ snapshots:
   strip-json-comments@3.1.1: {}
 
   strip-json-comments@5.0.3: {}
+
+  sucrase@3.35.1:
+    dependencies:
+      '@jridgewell/gen-mapping': 0.3.13
+      commander: 4.1.1
+      lines-and-columns: 1.2.4
+      mz: 2.7.0
+      pirates: 4.0.7
+      tinyglobby: 0.2.17
+      ts-interface-checker: 0.1.13
 
   supports-color@10.2.2: {}
 
@@ -11466,6 +11565,14 @@ snapshots:
     transitivePeerDependencies:
       - react-native-b4a
 
+  thenify-all@1.6.0:
+    dependencies:
+      thenify: 3.3.1
+
+  thenify@3.3.1:
+    dependencies:
+      any-promise: 1.3.0
+
   thread-stream@3.2.0:
     dependencies:
       real-require: 0.2.0
@@ -11473,6 +11580,8 @@ snapshots:
   through@2.3.8: {}
 
   tinybench@2.9.0: {}
+
+  tinyexec@0.3.2: {}
 
   tinyexec@1.2.4: {}
 
@@ -11515,13 +11624,45 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
+  tree-kill@1.2.2: {}
+
   ts-algebra@2.0.0: {}
 
   ts-api-utils@2.5.0(typescript@5.9.3):
     dependencies:
       typescript: 5.9.3
 
+  ts-interface-checker@0.1.13: {}
+
   tslib@2.8.1: {}
+
+  tsup@8.5.1(jiti@2.7.0)(postcss@8.5.23)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3):
+    dependencies:
+      bundle-require: 5.1.0(esbuild@0.27.3)
+      cac: 6.7.14
+      chokidar: 4.0.3
+      consola: 3.4.2
+      debug: 4.4.3(supports-color@10.2.2)
+      esbuild: 0.27.3
+      fix-dts-default-cjs-exports: 1.0.1
+      joycon: 3.1.1
+      picocolors: 1.1.1
+      postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.23)(tsx@4.21.0)(yaml@2.8.3)
+      resolve-from: 5.0.0
+      rollup: 4.62.2
+      source-map: 0.7.6
+      sucrase: 3.35.1
+      tinyexec: 0.3.2
+      tinyglobby: 0.2.17
+      tree-kill: 1.2.2
+    optionalDependencies:
+      postcss: 8.5.23
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - jiti
+      - supports-color
+      - tsx
+      - yaml
 
   tsx@4.19.4:
     dependencies:
@@ -11572,6 +11713,8 @@ snapshots:
   typescript@5.9.3: {}
 
   uc.micro@2.1.0: {}
+
+  ufo@1.6.4: {}
 
   unbash@4.0.3: {}
 

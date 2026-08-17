@@ -1,5 +1,5 @@
 {
-  "name": "@barry/themes",
+  "name": "@barry-rocks/themes",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "description": "Structured theme definitions with dark/light mode support",
@@ -14,5 +14,8 @@
   ],
   "scripts": {
     "test": "node --test src/**/*.test.js"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

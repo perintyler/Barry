@@ -1,5 +1,5 @@
 {
-  "name": "@barry/agent-runtime",
+  "name": "@barry-rocks/agent-runtime",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
@@ -10,17 +10,33 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.76",
-    "@barry/contracts": "workspace:*",
-    "@barry/env": "workspace:*",
+    "@barry-rocks/contracts": "workspace:*",
+    "@barry-rocks/env": "workspace:*",
     "@openai/codex-sdk": "0.115.0"
   },
   "devDependencies": {
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
   }
 }

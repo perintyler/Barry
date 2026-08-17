@@ -1,10 +1,10 @@
 {
-  "name": "@barry-bags/keychain",
+  "name": "@barry-rocks/keychain-bag",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@barry/tools": "workspace:*",
+    "@barry-rocks/tools": "workspace:*",
     "zod": "3.25.76"
   },
   "devDependencies": {

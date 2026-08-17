@@ -1,18 +1,18 @@
 {
-  "name": "@barry-bags/artifacts",
+  "name": "@barry-rocks/artifacts-bag",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "pretest": "pnpm --filter @barry-sdks/artifacts build",
+    "pretest": "pnpm --filter @barry-rocks/sdk-artifacts build",
     "test": "vitest run"
   },
   "dependencies": {
-    "@barry-sdks/artifacts": "workspace:*",
-    "@barry/google-auth": "workspace:*",
-    "@barry/logger": "workspace:*",
-    "@barry/tools": "workspace:*",
-    "@barry/ui": "workspace:*"
+    "@barry-rocks/sdk-artifacts": "workspace:*",
+    "@barry-rocks/google-auth": "workspace:*",
+    "@barry-rocks/logger": "workspace:*",
+    "@barry-rocks/tools": "workspace:*",
+    "@barry-rocks/ui": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20260702.1",

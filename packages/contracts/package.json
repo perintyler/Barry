@@ -1,7 +1,6 @@
 {
-  "name": "@barry/contracts",
+  "name": "@barry-rocks/contracts",
   "version": "1.0.0",
-  "private": true,
   "license": "SEE LICENSE IN LICENSE.md",
   "description": "Runtime-validated HTTP, WebSocket, and persisted JSON contracts for Barry",
   "type": "module",
@@ -15,7 +14,9 @@
     "generate": "NODE_OPTIONS=--disable-warning=DEP0205 tsx scripts/generate-openapi.ts",
     "check:generated": "NODE_OPTIONS=--disable-warning=DEP0205 tsx scripts/generate-openapi.ts --check",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "zod": "4.3.6"
@@ -25,5 +26,24 @@
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./openapi": {
+        "types": "./dist/openapi.d.ts",
+        "default": "./dist/openapi.js"
+      },
+      "./generated/openapi.json": "./generated/openapi.json"
+    }
   }
 }

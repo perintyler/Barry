@@ -1,5 +1,5 @@
 {
-  "name": "@barry/vault-server",
+  "name": "@barry-rocks/vault-server",
   "version": "1.0.0",
   "private": true,
   "license": "SEE LICENSE IN LICENSE.md",
@@ -9,7 +9,7 @@
     "build": "node build.mjs"
   },
   "dependencies": {
-    "@barry/vault": "workspace:*",
+    "@barry-rocks/vault": "workspace:*",
     "@modelcontextprotocol/sdk": "1.27.1",
     "better-sqlite3": "12.10.0",
     "cors": "2.8.5",

@@ -1,6 +1,6 @@
 {
-  "name": "@barry-sdk/bags-sdk",
-  "version": "0.1.0",
+  "name": "@barry-rocks/bags-sdk",
+  "version": "1.0.0",
   "description": "SDK for building Barry bags — define tools, register them, and run an MCP server",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
@@ -9,11 +9,13 @@
     ".": "./src/index.ts"
   },
   "publishConfig": {
-    "main": "dist/index.js",
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",
-        "import": "./dist/index.js"
+        "default": "./dist/index.js"
       }
     }
   },
@@ -24,11 +26,12 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "test": "vitest run --passWithNoTests"
+    "build": "tsup",
+    "test": "vitest run --passWithNoTests",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@barry/tools": "workspace:*"
+    "@barry-rocks/tools": "workspace:*"
   },
   "peerDependencies": {
     "zod": "^3.25.0"

@@ -1,11 +1,11 @@
 {
-  "name": "@barry-bags/events",
+  "name": "@barry-rocks/events-bag",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@barry/db": "workspace:*",
-    "@barry/tools": "workspace:*",
+    "@barry-rocks/db": "workspace:*",
+    "@barry-rocks/tools": "workspace:*",
     "zod": "3.25.76"
   },
   "devDependencies": {

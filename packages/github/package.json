@@ -1,5 +1,5 @@
 {
-  "name": "@barry/github",
+  "name": "@barry-rocks/github",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
@@ -10,16 +10,32 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@barry/agent-runtime": "workspace:*",
-    "@barry/logger": "workspace:*",
+    "@barry-rocks/agent-runtime": "workspace:*",
+    "@barry-rocks/logger": "workspace:*",
     "jsonwebtoken": "9.0.3"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "9.0.10",
     "@types/node": "22.15.0",
     "typescript": "5.9.3"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
   }
 }

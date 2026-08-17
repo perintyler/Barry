@@ -1,13 +1,34 @@
 {
-  "name": "@barry/google-auth",
+  "name": "@barry-rocks/google-auth",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "description": "Shared Google OAuth for Cloudflare Workers",
   "type": "module",
+  "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "4.20260111.0",
     "typescript": "5.9.3"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
   }
 }

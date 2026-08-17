@@ -1,16 +1,28 @@
 {
-  "name": "@barry/sessions",
+  "name": "@barry-rocks/sessions",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
   "main": "src/index.ts",
-  "scripts": {},
+  "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
+  },
   "dependencies": {
-    "@barry/db": "workspace:*",
-    "@barry/session-client": "workspace:*"
+    "@barry-rocks/db": "workspace:*",
+    "@barry-rocks/session-client": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.15.0",
     "typescript": "5.9.3"
-  }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts"
+  },
+  "description": "Session management and lifecycle"
 }

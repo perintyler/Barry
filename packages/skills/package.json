@@ -1,7 +1,6 @@
 {
-  "name": "@barry/skills",
+  "name": "@barry-rocks/skills",
   "version": "1.0.0",
-  "private": true,
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
   "main": "src/index.ts",
@@ -15,14 +14,50 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@barry/bags": "workspace:*"
+    "@barry-rocks/bags": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./skill-catalog": {
+        "types": "./dist/skill-catalog.d.ts",
+        "default": "./dist/skill-catalog.js"
+      },
+      "./action-catalog": {
+        "types": "./dist/action-catalog.d.ts",
+        "default": "./dist/action-catalog.js"
+      },
+      "./action-index": {
+        "types": "./dist/action-index.d.ts",
+        "default": "./dist/action-index.js"
+      },
+      "./instruction-catalog": {
+        "types": "./dist/instruction-catalog.d.ts",
+        "default": "./dist/instruction-catalog.js"
+      },
+      "./instruction-index": {
+        "types": "./dist/instruction-index.d.ts",
+        "default": "./dist/instruction-index.js"
+      }
+    }
   }
 }

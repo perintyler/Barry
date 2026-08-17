@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "clean": "rm -rf dist public/assets ../tsconfig.server.tsbuildinfo",
-    "prebuild": "pnpm --filter @barry/ui build",
+    "prebuild": "pnpm --filter @barry-rocks/ui build",
     "build": "pnpm clean && vite build && tsc -p tsconfig.server.json && find dist/client -name '*.map' -delete",
     "build:server": "tsc -p tsconfig.server.json",
     "start": "NODE_ENV=production tsx src/server/index.ts",
@@ -18,11 +18,11 @@
     "generate:api": "openapi-typescript ../../../packages/contracts/generated/openapi.json -o src/lib/generated/api.d.ts"
   },
   "dependencies": {
-    "@barry-sdks/notes": "workspace:*",
-    "@barry/env": "workspace:*",
-    "@barry/logger": "workspace:*",
-    "@barry/sentry": "workspace:*",
-    "@barry/ui": "workspace:*",
+    "@barry-rocks/sdk-notes": "workspace:*",
+    "@barry-rocks/env": "workspace:*",
+    "@barry-rocks/logger": "workspace:*",
+    "@barry-rocks/sentry": "workspace:*",
+    "@barry-rocks/ui": "workspace:*",
     "@sentry/svelte": "10.44.0",
     "@sentry/vite-plugin": "3.5.0",
     "@sveltejs/vite-plugin-svelte": "7.2.0",

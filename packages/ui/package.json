@@ -1,5 +1,5 @@
 {
-  "name": "@barry/ui",
+  "name": "@barry-rocks/ui",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "description": "Barry design system - tokens, styles, and components",
@@ -39,10 +39,13 @@
     "test": "node --test src/**/*.test.js"
   },
   "dependencies": {
-    "@barry/themes": "workspace:*"
+    "@barry-rocks/themes": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.15.0",
     "jsdom": "25.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -250,8 +250,16 @@ get_port_var() {
 
 for server in $http_servers; do
     # Check enabled flag (default true for backwards compat)
-    enabled=$(grep -A5 "^  $server:" "$HTTP_REGISTRY" | grep "enabled:" | head -1 | sed 's/.*enabled: *//; s/ *#.*//')
-    service_path=$(grep -A5 "^  $server:" "$HTTP_REGISTRY" | grep "path:" | head -1 | sed 's/.*path: *//')
+    # -A12, not -A5: these keys are separated by explanatory comments in the
+    # registry, and a too-narrow window silently yields an empty value — which
+    # reads as "disabled" and skips the service with no error.
+    enabled=$(grep -A12 "^  $server:" "$HTTP_REGISTRY" | grep "enabled:" | head -1 | sed 's/.*enabled: *//; s/ *#.*//')
+    service_path=$(grep -A12 "^  $server:" "$HTTP_REGISTRY" | grep -E "^\s+path:" | head -1 | sed 's/.*path: *//')
+    service_entry=$(grep -A12 "^  $server:" "$HTTP_REGISTRY" | grep -E "^\s+entry:" | head -1 | sed 's/.*entry: *//')
+    if [[ -z "$service_entry" ]]; then
+        echo -e "  ${RED}✗${NC} com.barry.$server: no 'entry:' in $HTTP_REGISTRY — cannot exec node directly, skipping"
+        continue
+    fi
 
     # Get port from env var
     port_var="$(get_port_var "$server")"
@@ -321,7 +329,7 @@ for server in $http_servers; do
         -e "s|__SERVICE_PATH__|$service_path|g" \
         -e "s|__SERVICE_PORT__|$service_port|g" \
         -e "s|__PNPM_PATH__|$PNPM_PATH|g" \
-        -e "s|__SERVICE_START_SCRIPT__|$SERVICE_START_SCRIPT|g" \
+        -e "s|__SERVICE_ENTRY__|$service_entry|g" \
         -e "s|__NODE_PATH__|$NODE_PATH|g" \
         -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
         -e "s|__BARRY_DIR__|$BARRY_DIR|g" \
@@ -581,6 +589,41 @@ fi
 # (/usr/bin:/bin:/usr/sbin:/sbin), not the PATH in EnvironmentVariables — so a
 # bare command like `tsx` or `barry` fails to spawn with exit 78 (EX_CONFIG),
 # an empty log and no other signal. Resolve it here instead.
+# Rewrite `pnpm exec tsx <entry>` into a direct `node --import tsx <entry>`.
+#
+# pnpm spawns a child which spawns node, so launchd's job PID is the WRAPPER:
+# `kickstart -k` signals it, the node grandchild survives still holding the
+# port, and every restart then dies with EADDRINUSE while launchd reports a
+# live PID. The api/web plists had exactly this bug (fixed in a5986033 by
+# exec'ing node directly); bag services declare `command: pnpm` in their own
+# manifests, so the same shape reaches them here.
+#
+# Bags keep declaring pnpm — that is the right thing for `barry bag serve` and
+# for running by hand. The rewrite happens only where launchd needs a process
+# it can actually signal.
+normalize_bag_command() {
+    local cmd="$1" args_json="$2"
+    if [[ "$cmd" != "pnpm" ]]; then
+        printf '%s\t%s' "$cmd" "$args_json"
+        return
+    fi
+    local rewritten
+    rewritten=$(echo "$args_json" | node -e "
+      const a = JSON.parse(require('fs').readFileSync(0,'utf8'));
+      // pnpm exec tsx <entry> [...rest]  ->  --import tsx <entry> [...rest]
+      if (a[0] === 'exec' && a[1] === 'tsx' && a[2]) {
+        process.stdout.write(JSON.stringify(['--import','tsx',...a.slice(2)]));
+      } else {
+        process.stdout.write('');
+      }
+    " 2>/dev/null)
+    if [[ -n "$rewritten" ]]; then
+        printf 'node\t%s' "$rewritten"
+    else
+        printf '%s\t%s' "$cmd" "$args_json"
+    fi
+}
+
 resolve_program() {
     local cmd="$1"
     if [[ "$cmd" == /* ]]; then
@@ -704,6 +747,12 @@ if [[ -n "$bag_items" ]]; then
             keep_alive=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.keepAlive||false))")
 
             # Build ProgramArguments XML
+            # Command substitution, NOT `read < <(...)`: a read inside this
+            # while-loop consumes the OUTER loop's stdin and silently ends
+            # iteration after the first item.
+            normalized=$(normalize_bag_command "$item_cmd" "$item_args")
+            item_cmd="${normalized%%$'\t'*}"
+            item_args="${normalized#*$'\t'}"
             prog_args_xml="        <string>$(resolve_program "$item_cmd")</string>"
             # Read line-by-line rather than `for arg in $(...)`: unquoted word
             # splitting broke every argument containing a space, which is fatal
@@ -795,6 +844,12 @@ if [[ -n "$bag_items" ]]; then
             sched_wday=$(echo "$line" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(d.schedule?.weekday ?? ''))")
 
             # Build ProgramArguments XML
+            # Command substitution, NOT `read < <(...)`: a read inside this
+            # while-loop consumes the OUTER loop's stdin and silently ends
+            # iteration after the first item.
+            normalized=$(normalize_bag_command "$item_cmd" "$item_args")
+            item_cmd="${normalized%%$'\t'*}"
+            item_args="${normalized#*$'\t'}"
             prog_args_xml="        <string>$(resolve_program "$item_cmd")</string>"
             # Read line-by-line rather than `for arg in $(...)`: unquoted word
             # splitting broke every argument containing a space, which is fatal

@@ -23,7 +23,7 @@
       "path": "./packages/github"
     },
     {
-      "path": "./bags/session"
+      "path": "./bags/sessions"
     },
     {
       "path": "./packages/logger"

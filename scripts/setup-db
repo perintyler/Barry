@@ -14,4 +14,4 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BARRY_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "Setting up Barry databases..."
-exec npx tsx "$BARRY_DIR/packages/db/scripts/setup.ts" "$@"
+exec pnpm exec tsx "$BARRY_DIR/packages/db/scripts/setup.ts" "$@"

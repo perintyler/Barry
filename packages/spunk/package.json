@@ -1,5 +1,5 @@
 {
-  "name": "@barry/spunk",
+  "name": "@barry-rocks/spunk",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "description": "Random spunk content generator — NBA, recipes, Iroh quotes, UFO cases",
@@ -9,10 +9,26 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
     "@types/node": "22.15.0",
     "typescript": "5.9.3"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
   }
 }

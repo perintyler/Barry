@@ -1,13 +1,13 @@
 {
-  "name": "@barry-bags/actions",
+  "name": "@barry-rocks/actions-bag",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@barry/bags": "workspace:*",
-    "@barry/db": "workspace:*",
-    "@barry/skills": "workspace:*",
-    "@barry/tools": "workspace:*",
+    "@barry-rocks/bags": "workspace:*",
+    "@barry-rocks/db": "workspace:*",
+    "@barry-rocks/skills": "workspace:*",
+    "@barry-rocks/tools": "workspace:*",
     "zod": "3.25.76"
   },
   "devDependencies": {

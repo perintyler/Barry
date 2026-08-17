@@ -1,5 +1,5 @@
 {
-  "name": "@barry/syntax",
+  "name": "@barry-rocks/syntax",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "description": "Language detection and syntax highlighting",
@@ -11,11 +11,28 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./theme": "./src/theme.css"
+    }
   }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@barry/db",
+  "name": "@barry-rocks/db",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
@@ -22,12 +22,14 @@
     "test:watch": "vitest",
     "qa:setup": "tsx scripts/setup-qa.ts",
     "qa:seed": "tsx scripts/setup-qa.ts",
-    "backfill:provider-sessions": "tsx scripts/backfill-provider-sessions.ts"
+    "backfill:provider-sessions": "tsx scripts/backfill-provider-sessions.ts",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@barry/agent-scope": "workspace:*",
-    "@barry/env": "workspace:*",
-    "@barry/bags": "workspace:*",
+    "@barry-rocks/agent-scope": "workspace:*",
+    "@barry-rocks/env": "workspace:*",
+    "@barry-rocks/bags": "workspace:*",
     "kysely": "0.28.17",
     "kysely-postgres-js": "2.0.0",
     "nanoid": "5.0.9",
@@ -35,9 +37,52 @@
     "yaml": "2.8.3"
   },
   "devDependencies": {
-    "@barry/agent-runtime": "workspace:*",
+    "@barry-rocks/agent-runtime": "workspace:*",
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
-  }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./identity-bags": {
+        "types": "./dist/identity-bags.d.ts",
+        "default": "./dist/identity-bags.js"
+      },
+      "./qa": {
+        "types": "./dist/qa.d.ts",
+        "default": "./dist/qa.js"
+      },
+      "./migrate": {
+        "types": "./dist/migrate.d.ts",
+        "default": "./dist/migrate.js"
+      },
+      "./seed": {
+        "types": "./dist/seed.d.ts",
+        "default": "./dist/seed.js"
+      },
+      "./test-db-url": {
+        "types": "./dist/test-db-url.d.ts",
+        "default": "./dist/test-db-url.js"
+      },
+      "./identity-files": {
+        "types": "./dist/identity-files.d.ts",
+        "default": "./dist/identity-files.js"
+      },
+      "./bag-registry": {
+        "types": "./dist/bag-registry.d.ts",
+        "default": "./dist/bag-registry.js"
+      }
+    }
+  },
+  "description": "Database schema, queries, and migrations for Barry"
 }

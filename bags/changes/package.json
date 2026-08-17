@@ -1,11 +1,11 @@
 {
-  "name": "@barry-bags/changes",
+  "name": "@barry-rocks/changes-bag",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@barry/file-tracker": "workspace:*",
-    "@barry/tools": "workspace:*",
+    "@barry-rocks/file-tracker": "workspace:*",
+    "@barry-rocks/tools": "workspace:*",
     "zod": "3.25.76"
   },
   "devDependencies": {

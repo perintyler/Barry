@@ -9,11 +9,6 @@
     "class": "runtime-edge",
     "mode": "source-start"
   },
-  "apps/web/red-marker": {
-    "name": "@barry/red-marker",
-    "class": "runtime-edge",
-    "mode": "wrangler"
-  },
   "apps/web/vault": {
     "name": "@barry/vault-server",
     "class": "runtime-edge",
@@ -27,52 +22,36 @@
     "name": "@barry-bags/artifacts",
     "class": "bag"
   },
-  "bags/bdiff": {
-    "name": "@barry-bags/bdiff",
-    "class": "bag"
-  },
   "bags/changes": {
     "name": "@barry-bags/changes",
-    "class": "bag"
-  },
-  "bags/coffee": {
-    "name": "@barry-bags/coffee",
     "class": "bag"
   },
   "bags/events": {
     "name": "@barry-bags/events",
     "class": "bag"
   },
-  "bags/filesystem": {
-    "name": "@barry-bags/filesystem",
+  "bags/system/filesystem": {
+    "name": "@barry-rocks/filesystem-bag",
     "class": "bag"
   },
   "bags/git": {
     "name": "@barry-bags/git",
     "class": "bag"
   },
-  "bags/github-app": {
-    "name": "@barry-bags/github-app",
-    "class": "bag"
-  },
   "bags/keychain": {
     "name": "@barry-bags/keychain",
     "class": "bag"
   },
-  "bags/locks": {
-    "name": "@barry-bags/locks",
+  "bags/system/locks": {
+    "name": "@barry-rocks/locks-bag",
     "class": "bag"
   },
   "bags/reminders": {
     "name": "@barry-bags/reminders",
     "class": "bag"
   },
-  "bags/session": {
-    "name": "@barry-bags/session",
-    "class": "bag"
-  },
-  "bags/slack-app": {
-    "name": "@barry-bags/slack-app",
+  "bags/sessions": {
+    "name": "@barry-rocks/session-bag",
     "class": "bag"
   },
   "bags/system": {

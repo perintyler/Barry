@@ -1,7 +1,6 @@
 {
-  "name": "@barry/tools",
+  "name": "@barry-rocks/tools",
   "version": "1.0.0",
-  "private": true,
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
   "main": "src/index.ts",
@@ -14,7 +13,10 @@
     "./cli-adapter": "./src/cli-adapter.ts"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
@@ -24,5 +26,39 @@
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./define-tool": {
+        "types": "./dist/define-tool.d.ts",
+        "default": "./dist/define-tool.js"
+      },
+      "./register": {
+        "types": "./dist/register.d.ts",
+        "default": "./dist/register.js"
+      },
+      "./mcp-adapter": {
+        "types": "./dist/mcp-adapter.d.ts",
+        "default": "./dist/mcp-adapter.js"
+      },
+      "./bag-server": {
+        "types": "./dist/bag-server.d.ts",
+        "default": "./dist/bag-server.js"
+      },
+      "./cli-adapter": {
+        "types": "./dist/cli-adapter.d.ts",
+        "default": "./dist/cli-adapter.js"
+      }
+    }
   }
 }

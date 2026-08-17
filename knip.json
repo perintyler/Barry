@@ -23,7 +23,11 @@
     "/usr/bin/plutil",
     "/bin/launchctl"
   ],
+  "ignore": [
+    ".experimental/**"
+  ],
   "ignoreFiles": [
+    ".experimental/**",
     "**/public/vendor/**",
     "**/*.generated.*",
     "**/generated/**",
@@ -37,7 +41,9 @@
     "scripts/generate-caddy-config.ts",
     "scripts/generate-firewall-config.ts",
     "packages/db/scripts/seed-bag-registry.mts",
-    "packages/bags/src/hook-dispatch.ts"
+    "packages/bags/src/hook-dispatch.ts",
+    "scripts/generate-tunnel-ingress.ts",
+    "scripts/jobs/profile-node-spin.mjs"
   ],
   "workspaces": {
     "apps/web/barry.works": {
@@ -46,18 +52,6 @@
         "src/instrument.ts",
         "src/server/index.ts",
         "tests/**/*.{js,ts}"
-      ]
-    },
-    "apps/web/red-marker": {
-      "entry": [
-        "src/cli.ts",
-        "src/worker.ts",
-        "src/mcp/index.ts",
-        "src/overlay.js",
-        "qa/**/*.{js,mjs,ts}"
-      ],
-      "ignoreDependencies": [
-        "tsx"
       ]
     },
     "cli": {
@@ -84,12 +78,6 @@
         "qa/fixtures/**"
       ]
     },
-    "packages/google-images": {
-      "entry": [
-        "src/index.ts",
-        "qa/*.{mjs,mts}"
-      ]
-    },
     "packages/bags": {
       "entry": [
         "src/index.ts",
@@ -110,6 +98,18 @@
         "server/src/index.ts",
         "deploy/*/index.ts",
         "deploy/*/entry.ts"
+      ],
+      "ignoreDependencies": [
+        "tsx"
+      ]
+    },
+    "bags/system/*": {
+      "entry": [
+        "tools.ts",
+        "skills/**/scripts/**/*.{js,mjs,ts}",
+        "src/*.{js,mjs,ts}",
+        "hooks/*/index.ts",
+        "server/src/index.ts"
       ],
       "ignoreDependencies": [
         "tsx"
@@ -139,7 +139,8 @@
     },
     "servers/mcp": {
       "ignoreDependencies": [
-        "better-sqlite3"
+        "better-sqlite3",
+        "@barry-rocks/system-bag"
       ]
     },
     "bags/artifacts": {
@@ -157,7 +158,7 @@
         "wrangler"
       ]
     },
-    "bags/session": {
+    "bags/sessions": {
       "entry": [
         "tools.ts",
         "src/*.{js,mjs,ts}",

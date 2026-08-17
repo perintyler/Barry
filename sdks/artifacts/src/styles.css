@@ -5,6 +5,22 @@
 
 /* --- ArtifactsApp (all-in-one) --- */
 
+/*
+ * Tell the UA which palette to paint form controls in. Without this, a
+ * markdown task-list checkbox renders as a light-mode grey square on the dark
+ * background and `accent-color` is ignored entirely. The app toggles themes at
+ * runtime, so this follows the active mode rather than hardcoding dark.
+ */
+.artifacts-app,
+.md-viewer {
+  color-scheme: dark;
+}
+
+[data-color-mode="light"] .artifacts-app,
+[data-color-mode="light"] .md-viewer {
+  color-scheme: light;
+}
+
 .artifacts-app {
   display: flex;
   flex-direction: column;
@@ -1752,10 +1768,17 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-/* Task lists (checkbox-style) */
+/* Task lists (checkbox-style) — markup from markdown-it-task-lists */
+.md-viewer-body ul.contains-task-list,
 .md-viewer-body ul:has(> li > input[type="checkbox"]) {
   list-style: none;
   padding-left: 0.5em;
+}
+
+.md-viewer-body li.task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
 }
 
 .md-viewer-body input[type="checkbox"] {
@@ -1763,6 +1786,18 @@
   accent-color: var(--accent);
   position: relative;
   top: 1px;
+}
+
+.md-viewer-body li.task-list-item > input[type="checkbox"] {
+  margin-right: 0;
+  flex-shrink: 0;
+  top: 0.4em;
+}
+
+/* A checked item reads as done without having to parse the box. */
+.md-viewer-body li.task-list-item > input[type="checkbox"]:checked + .task-list-item-label {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
 }
 
 /* Strong / Em */
@@ -1798,6 +1833,30 @@
   border-top: 1px solid var(--border);
   font-size: 0.875em;
   color: var(--text-tertiary);
+}
+
+/* The plugin emits its own <hr>; the border-top above is the visible rule. */
+.md-viewer-body .footnotes-sep {
+  display: none;
+}
+
+.md-viewer-body .footnotes-list {
+  padding-left: 1.25em;
+}
+
+.md-viewer-body .footnote-item p {
+  margin: 0.25em 0;
+}
+
+.md-viewer-body .footnote-ref a {
+  text-decoration: none;
+  font-weight: var(--font-medium);
+  padding: 0 0.15em;
+}
+
+.md-viewer-body .footnote-backref {
+  text-decoration: none;
+  margin-left: 0.35em;
 }
 
 /* Markdown viewer mobile */
@@ -1994,6 +2053,58 @@
 .artifacts-app-csv-wrapper {
   overflow-x: auto;
   padding: var(--space-4);
+}
+
+.csv-truncated-notice {
+  margin: var(--space-3) 0 0;
+  font-size: 0.875em;
+  color: var(--text-tertiary);
+}
+
+/* Jupyter notebooks — cell-by-cell view */
+.artifact-notebook {
+  padding: var(--space-4);
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+.artifact-notebook-cell {
+  margin-bottom: var(--space-5);
+}
+
+.artifact-notebook-cell--code {
+  border-left: 3px solid var(--border);
+  padding-left: var(--space-3);
+}
+
+.artifact-notebook-prompt {
+  font-family: var(--font-mono);
+  font-size: 0.75em;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+}
+
+.artifact-notebook-source pre {
+  margin: 0;
+}
+
+.artifact-notebook-output {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 0.8125em;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.artifact-notebook-raw {
+  font-family: var(--font-mono);
+  font-size: 0.8125em;
+  color: var(--text-tertiary);
 }
 
 .artifacts-app-csv-table {

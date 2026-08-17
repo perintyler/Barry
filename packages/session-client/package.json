@@ -1,20 +1,31 @@
 {
-  "name": "@barry/session-client",
+  "name": "@barry-rocks/session-client",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@barry/bags": "workspace:*",
-    "@barry/db": "workspace:*"
+    "@barry-rocks/bags": "workspace:*",
+    "@barry-rocks/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
-  }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts"
+  },
+  "description": "Client library for Barry session storage service",
+  "license": "SEE LICENSE IN LICENSE.md"
 }

@@ -1,0 +1,32 @@
+{
+  "name": "@barry-rocks/locks-bag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "tools.ts",
+  "exports": {
+    ".": "./tools.ts",
+    "./acquire": "./src/acquire.ts",
+    "./liveness": "./src/liveness.ts",
+    "./repo": "./src/repo.ts",
+    "./coordinate": "./src/coordinate.ts",
+    "./regions": "./src/regions.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@barry-rocks/file-tracker": "workspace:*",
+    "@barry-rocks/tools": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.15.0",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

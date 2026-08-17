@@ -1,9 +1,9 @@
 /* All styles needed to render the artifacts SDK */
-@import '@barry/ui/skeleton';
-@import '@barry/ui/sidebar';
-@import '@barry/ui/icon-button';
-@import '@barry/ui/toast';
-@import '@barry/ui/code-viewer';
-@import '@barry/ui/toolbar';
-@import '@barry/syntax/theme';
+@import '@barry-rocks/ui/skeleton';
+@import '@barry-rocks/ui/sidebar';
+@import '@barry-rocks/ui/icon-button';
+@import '@barry-rocks/ui/toast';
+@import '@barry-rocks/ui/code-viewer';
+@import '@barry-rocks/ui/toolbar';
+@import '@barry-rocks/syntax/theme';
 @import './styles.css';

@@ -1,5 +1,5 @@
 {
-  "name": "@barry/bags",
+  "name": "@barry-rocks/bags",
   "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
@@ -9,10 +9,12 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@barry/env": "workspace:*",
+    "@barry-rocks/env": "workspace:*",
     "@modelcontextprotocol/sdk": "1.29.0",
     "esbuild": "0.27.3",
     "yaml": "2.8.3",
@@ -22,5 +24,20 @@
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
-  }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "description": "Block/bag manifest parsing, loading, and lifecycle management"
 }
