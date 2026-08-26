@@ -17,13 +17,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.39.0",
+    "@anthropic-ai/sdk": "0.117.1",
     "@barry-rocks/agent-scope": "workspace:*",
     "@barry-rocks/auth": "workspace:*",
     "@barry-rocks/bags": "workspace:*",
     "@barry-rocks/db": "workspace:*",
     "@barry-rocks/env": "workspace:*",
     "@barry-rocks/file-tracker": "workspace:*",
+    "@barry-rocks/json-schema": "workspace:*",
     "@barry-rocks/locks-bag": "workspace:*",
     "@barry-rocks/logger": "workspace:*",
     "@barry-rocks/secrets": "workspace:*",
@@ -34,8 +35,7 @@
     "@modelcontextprotocol/sdk": "1.29.0",
     "better-sqlite3": "12.10.0",
     "express": "4.22.1",
-    "zod": "3.25.76",
-    "zod-to-json-schema": "3.25.1"
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/express": "4.17.21",

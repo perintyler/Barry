@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Loads and enables the Barry pf firewall at boot.
+
+  macOS does not persist pf across reboots — `pfctl -e` and a loaded ruleset are
+  runtime state that a restart drops. Without this daemon, the firewall that
+  blocks LAN access to Barry ports silently stops enforcing on every reboot, and
+  the exposure it prevents comes back with no signal. This runs once at boot as
+  root (pf requires root) and exits.
+
+  Install (needs sudo — system LaunchDaemon):
+    sudo cp scripts/firewall/com.barry.pf.plist /Library/LaunchDaemons/
+    sudo chown root:wheel /Library/LaunchDaemons/com.barry.pf.plist
+    sudo chmod 644 /Library/LaunchDaemons/com.barry.pf.plist
+    sudo launchctl bootstrap system /Library/LaunchDaemons/com.barry.pf.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.barry.pf</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <!-- -E reloads pf.conf (loading the barry anchor) and enables pf in
+             one reference-counted step, the macOS-documented way. -->
+        <string>/sbin/pfctl -E -f /etc/pf.conf</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- Not KeepAlive: this configures pf and exits. pf then enforces on its
+         own; there is no process to keep alive. -->
+    <key>StandardOutPath</key>
+    <string>/var/log/barry-pf.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/barry-pf.log</string>
+</dict>
+</plist>

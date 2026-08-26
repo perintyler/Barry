@@ -26,20 +26,66 @@ public struct BarryCore: Sendable {
         self.session = URLSession(configuration: config)
     }
 
-    private static func readLaunchdConfig() -> (port: Int, secret: String?) {
-        let plistPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/LaunchAgents/com.barry.api.plist")
+    /// Port to assume when nothing on the machine says otherwise.
+    ///
+    /// `PORTS.api` in @barry-rocks/env is 3854 and prod adds an offset of 1000,
+    /// so a shipped app talks to 4854. The old default here was the *dev* port,
+    /// which only ever worked because the plist read below succeeds — the
+    /// moment it didn't, the app would quietly connect to a dev server or to
+    /// nothing at all.
+    private static let defaultProdPort = 4854
 
-        if let data = try? Data(contentsOf: plistPath),
-           let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-           let env = plist["EnvironmentVariables"] as? [String: String] {
-            let port = env["PORT"].flatMap(Int.init) ?? 3854
-            let secret = env["BARRY_SECRET"]
-            return (port, secret)
+    /// Environment overrides, then the prod launchd plist, then the dev one.
+    ///
+    /// The dev fallback and the environment overrides come from the events
+    /// app's own config reader, which was the more complete of the two
+    /// implementations this type absorbed when the apps merged.
+    private static func readLaunchdConfig() -> (port: Int, secret: String?) {
+        let environment = ProcessInfo.processInfo.environment
+        if let raw = environment["BARRY_API_URL"],
+           let url = URL(string: raw),
+           let port = url.port {
+            return (port, environment["BARRY_SECRET"])
+        }
+
+        for label in ["com.barry.api", "com.barry.api.dev"] {
+            guard let vars = launchAgentEnvironment(label: label),
+                  let port = vars["PORT"].flatMap(Int.init)
+            else { continue }
+            return (port, vars["BARRY_SECRET"] ?? environment["BARRY_SECRET"])
         }
 
         // Fallback: parse `launchctl print` output for env vars
         return readFromLaunchctl()
+    }
+
+    /// The `EnvironmentVariables` dictionary of an installed launch agent.
+    private static func launchAgentEnvironment(label: String) -> [String: String]? {
+        let path = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents/\(label).plist")
+        guard let data = try? Data(contentsOf: path),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        else { return nil }
+        return plist["EnvironmentVariables"] as? [String: String]
+    }
+
+    /// Where the web UI lives, for links out of the app (an event's session).
+    ///
+    /// Resolved the same way as the API: env override, prod agent, dev agent,
+    /// then the prod default. Without this the events feed's "Open session"
+    /// has nowhere to point.
+    public static func webBaseURL() -> URL {
+        let environment = ProcessInfo.processInfo.environment
+        if let raw = environment["BARRY_WEB_URL"], let url = URL(string: raw) { return url }
+
+        for label in ["com.barry.web", "com.barry.web.dev"] {
+            guard let vars = launchAgentEnvironment(label: label),
+                  let port = vars["PORT"].flatMap(Int.init),
+                  let url = URL(string: "http://localhost:\(port)")
+            else { continue }
+            return url
+        }
+        return URL(string: "http://localhost:9429")!
     }
 
     private static func readFromLaunchctl() -> (port: Int, secret: String?) {
@@ -51,19 +97,19 @@ public struct BarryCore: Sendable {
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
 
-        guard (try? process.run()) != nil else { return (3854, nil) }
+        guard (try? process.run()) != nil else { return (defaultProdPort, nil) }
         process.waitUntilExit()
 
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard let output = String(data: data, encoding: .utf8) else { return (3854, nil) }
+        guard let output = String(data: data, encoding: .utf8) else { return (defaultProdPort, nil) }
 
-        var port = 3854
+        var port = defaultProdPort
         var secret: String?
 
         for line in output.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("PORT => ") {
-                port = Int(trimmed.replacingOccurrences(of: "PORT => ", with: "")) ?? 3854
+                port = Int(trimmed.replacingOccurrences(of: "PORT => ", with: "")) ?? defaultProdPort
             } else if trimmed.hasPrefix("BARRY_SECRET => ") {
                 secret = trimmed.replacingOccurrences(of: "BARRY_SECRET => ", with: "")
             }

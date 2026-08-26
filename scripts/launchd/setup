@@ -445,6 +445,42 @@ for retired_job_label in com.barry.log-maintenance com.barry.artifact-cleanup; d
     fi
 done
 
+resolve_program() {
+    local cmd="$1"
+    if [[ "$cmd" == /* ]]; then
+        printf '%s' "$cmd"
+        return
+    fi
+    local found
+    found=$(PATH="$NODE_BIN_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" command -v "$cmd" 2>/dev/null || true)
+    if [[ -n "$found" ]]; then
+        printf '%s' "$found"
+    else
+        printf '%s' "$cmd"
+    fi
+}
+
+# The job-run wrapper: times a job, records start/duration/exit, and execs the
+# real command. Jobs only — a service is long-lived and has no "run" to record.
+#
+# Plain node against the package's own script, NOT `barry job ...`: the CLI
+# costs ~3s of startup, which on a 60s job is 5% of a core spent measuring, and
+# it would land in the sampler-cost metric this bag watches. This starts in
+# ~50ms. If the file is missing the job is emitted unwrapped rather than not at
+# all — telemetry must never be the reason work stops happening.
+JOB_RUNNER="$BARRY_DIR/packages/job-telemetry/run-job.mjs"
+
+job_wrapper_xml() {
+    local job_label="$1" bag="$2"
+    [[ -f "$JOB_RUNNER" ]] || return 1
+    printf '        <string>%s</string>\n        <string>%s</string>\n        <string>%s</string>' \
+        "$(resolve_program node)" "$JOB_RUNNER" "$job_label"
+    if [[ -n "$bag" ]]; then
+        printf '\n        <string>--bag</string>\n        <string>%s</string>' "$bag"
+    fi
+    printf '\n        <string>--</string>'
+}
+
 # ============================================================================
 # JOBS (PERIODIC TASKS — driven by config/jobs.yaml)
 # ============================================================================
@@ -503,14 +539,24 @@ if [[ -f "$JOBS_REGISTRY" && -f "$JOB_TEMPLATE" ]]; then
             found && /schedule:/ {in_sched=1; next}
             found && in_sched && /minute:/ {sub(/.*minute: */, ""); sub(/ *#.*/, ""); print; exit}
         ' "$JOBS_REGISTRY")
+        # launchd Weekday: 0 and 7 both mean Sunday. Without this a weekly
+        # first-party job is inexpressible — the only options were "every N
+        # seconds" or "every day" — which pushed weekly work into bags.
+        sched_wday=$(awk -v job="$job_name" '
+            $0 ~ ("^  " job ":") {found=1; next}
+            found && /^  [a-zA-Z]/ && !/^    / {exit}
+            found && /schedule:/ {in_sched=1; next}
+            found && in_sched && /weekday:/ {sub(/.*weekday: */, ""); sub(/ *#.*/, ""); print; exit}
+        ' "$JOBS_REGISTRY")
 
         schedule_xml=""
         if [[ -n "$interval" ]]; then
             schedule_xml="    <key>StartInterval</key>\n    <integer>$interval</integer>"
-        elif [[ -n "$sched_hour" || -n "$sched_min" ]]; then
+        elif [[ -n "$sched_hour" || -n "$sched_min" || -n "$sched_wday" ]]; then
             schedule_xml="    <key>StartCalendarInterval</key>\n    <dict>"
             [[ -n "$sched_hour" ]] && schedule_xml+="\n        <key>Hour</key>\n        <integer>$sched_hour</integer>"
             [[ -n "$sched_min" ]] && schedule_xml+="\n        <key>Minute</key>\n        <integer>$sched_min</integer>"
+            [[ -n "$sched_wday" ]] && schedule_xml+="\n        <key>Weekday</key>\n        <integer>$sched_wday</integer>"
             schedule_xml+="\n    </dict>"
         else
             echo -e "  ${YELLOW}⚠${NC} com.barry.job.$job_name: no interval or schedule, skipping"
@@ -560,9 +606,19 @@ if [[ -f "$JOBS_REGISTRY" && -f "$JOB_TEMPLATE" ]]; then
             -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
             "$JOB_TEMPLATE")
 
+        # ProgramArguments. First-party jobs are always `bash scripts/jobs/<name>`;
+        # the wrapper in front records the run. These jobs have no bag, so the
+        # run is attributed by name alone.
+        job_prog_xml="        <string>/bin/bash</string>\n        <string>$BARRY_DIR/scripts/jobs/$job_name</string>"
+        if wrapper_xml=$(job_wrapper_xml "$job_name" ""); then
+            job_prog_xml="$wrapper_xml\n$job_prog_xml"
+        fi
+
         # Multi-line replacements (sed can't handle newlines in substitution)
         rendered_schedule=$(echo -e "$schedule_xml")
         rendered_env=$(echo -e "$env_xml")
+        rendered_job_prog=$(echo -e "$job_prog_xml")
+        PLIST_GENERATED="${PLIST_GENERATED/__JOB_PROGRAM_ARGS__/$rendered_job_prog}"
         PLIST_GENERATED="${PLIST_GENERATED/__JOB_SCHEDULE__/$rendered_schedule}"
         PLIST_GENERATED="${PLIST_GENERATED/__JOB_ENV_VARS__/$rendered_env}"
 
@@ -624,20 +680,6 @@ normalize_bag_command() {
     fi
 }
 
-resolve_program() {
-    local cmd="$1"
-    if [[ "$cmd" == /* ]]; then
-        printf '%s' "$cmd"
-        return
-    fi
-    local found
-    found=$(PATH="$NODE_BIN_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" command -v "$cmd" 2>/dev/null || true)
-    if [[ -n "$found" ]]; then
-        printf '%s' "$found"
-    else
-        printf '%s' "$cmd"
-    fi
-}
 
 # ============================================================================
 # BAG SERVICES & JOBS (driven by barry-bag.yaml in registered bags)
@@ -850,7 +892,13 @@ if [[ -n "$bag_items" ]]; then
             normalized=$(normalize_bag_command "$item_cmd" "$item_args")
             item_cmd="${normalized%%$'\t'*}"
             item_args="${normalized#*$'\t'}"
-            prog_args_xml="        <string>$(resolve_program "$item_cmd")</string>"
+            # Route through the run recorder so duration and exit code exist at
+            # all. Falls back to running the command directly if it is missing.
+            if wrapper_xml=$(job_wrapper_xml "$bag_name.$item_name" "$bag_name"); then
+                prog_args_xml="$wrapper_xml\n        <string>$(resolve_program "$item_cmd")</string>"
+            else
+                prog_args_xml="        <string>$(resolve_program "$item_cmd")</string>"
+            fi
             # Read line-by-line rather than `for arg in $(...)`: unquoted word
             # splitting broke every argument containing a space, which is fatal
             # for an agent prompt.
@@ -1062,6 +1110,24 @@ if [[ -f "$OLD_PROFILES_PLIST" ]]; then
     echo -e "  ${GREEN}✓${NC} Retired com.barry.profiles (now com.barry.my-barrys)"
 fi
 
+# BarryEvents and BarryServices were folded into Barry Sessions as its Events
+# and Services tabs.
+#
+# Dropping the `apps:` block from their bag.yaml is enough to retire the
+# launchd agent — the prune sweep above boots out any com.barry.bag.* plist no
+# bag still declares. It does *not* remove the installed bundle, though, and a
+# bundle left in ~/.barry/apps is a second copy of a menu bar app the user can
+# still launch by hand. Remove them here, the same way the profiles rename did.
+#
+# Identities is deliberately absent: it went the other way, from a tab back out
+# to its own windowed app, so its bundle is installed rather than retired.
+for retired_app in BarryEvents BarryServices; do
+    if [[ -d "$APPS_DIR/$retired_app.app" ]]; then
+        rm -rf "$APPS_DIR/$retired_app.app"
+        echo -e "  ${GREEN}✓${NC} Removed $retired_app.app (folded into Barry Sessions)"
+    fi
+done
+
 
 echo ""
 
@@ -1169,6 +1235,14 @@ if [[ -f "$MCP_TEMPLATE" ]]; then
             svc_stop "$plist_name"
             NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
             echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (bundle updated, reloading)"
+            # Restarting the MCP server drops every connected agent's tool session.
+            # The server comes back fine, but an already-running agent holds a stale
+            # client and sees "MCP server is not connected" for the rest of its run
+            # with no hint why — which is how this reload got misdiagnosed as a
+            # spurious side effect of an unrelated job install. It is not spurious:
+            # the bundle inlines packages/*, so a real code change means a real
+            # rebuild. The reload was never the problem; the silence was.
+            echo -e "     ${YELLOW}!${NC} running agent sessions must reconnect to regain MCP tools"
         elif ! launchctl list "$plist_name" &>/dev/null; then
             NEEDS_LOAD_MCP="$NEEDS_LOAD_MCP $plist_target"
             echo -e "  ${GREEN}✓${NC} $plist_name (:$port) (unchanged, reloading)"
@@ -1339,8 +1413,14 @@ echo ""
 echo "MCP Servers (via Supergateway):"
 MCP_OK=0
 port=$((3901 + 1000))
-response=$(curl -sf -H "Authorization: Bearer ${BARRY_SECRET}" "http://localhost:$port/health" 2>/dev/null || true)
-if [[ "$response" == "ok" ]]; then
+# The handler answers JSON (`{"ok":true,...}`), and /health is an open path —
+# it has never returned the bare string this compared against, so the check
+# could not pass and every run ended with "Some services failed to start" while
+# the server was serving hundreds of tools. A summary that always cries wolf
+# stops being read, which is worse than not having one: it was also the line
+# that would have reported a real failure.
+response=$(curl -sf --max-time 3 "http://localhost:$port/health" 2>/dev/null || true)
+if grep -q '"ok":true' <<<"$response"; then
     echo -e "  ${GREEN}✓${NC} barry (:$port)"
     ((MCP_OK++)) || true
 else

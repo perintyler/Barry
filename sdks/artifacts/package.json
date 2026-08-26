@@ -58,7 +58,7 @@
     "jose": "6.2.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260702.1",
+    "@cloudflare/workers-types": "5.20260819.1",
     "@types/express": "5.0.6",
     "@types/markdown-it": "14.1.2",
     "@types/node": "22.15.0",

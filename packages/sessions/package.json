@@ -6,6 +6,8 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
@@ -14,7 +16,8 @@
   },
   "devDependencies": {
     "@types/node": "22.15.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
   },
   "files": [
     "dist"

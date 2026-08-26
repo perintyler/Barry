@@ -8,6 +8,8 @@
     ".": "./src/index.ts",
     "./define-tool": "./src/define-tool.ts",
     "./register": "./src/register.ts",
+    "./truncate": "./src/truncate.ts",
+    "./paths": "./src/paths.ts",
     "./mcp-adapter": "./src/mcp-adapter.ts",
     "./bag-server": "./src/bag-server.ts",
     "./cli-adapter": "./src/cli-adapter.ts"
@@ -46,6 +48,14 @@
       "./register": {
         "types": "./dist/register.d.ts",
         "default": "./dist/register.js"
+      },
+      "./truncate": {
+        "types": "./dist/truncate.d.ts",
+        "default": "./dist/truncate.js"
+      },
+      "./paths": {
+        "types": "./dist/paths.d.ts",
+        "default": "./dist/paths.js"
       },
       "./mcp-adapter": {
         "types": "./dist/mcp-adapter.d.ts",

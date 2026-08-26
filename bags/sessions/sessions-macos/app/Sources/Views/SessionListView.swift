@@ -1,10 +1,12 @@
 import SwiftUI
+import Components
 
 struct SessionListView: View {
     @Bindable var appState: AppState
-    var onSearch: () -> Void = {}
-    var onNewSession: () -> Void = {}
+    @Bindable var searchState: SearchState
+    let onSelectResult: (String, Int) -> Void
 
+    @FocusState private var isSearchFocused: Bool
     @State private var renamingSessionId: String?
     @State private var renameText: String = ""
     @State private var isRefreshing = false
@@ -20,24 +22,6 @@ struct SessionListView: View {
                 Text("Barry Sessions")
                     .font(AppFont.sans(size: 13, weight: .semibold))
                 Spacer()
-
-                Button(action: onNewSession) {
-                    Image(systemName: "plus")
-                        .font(AppFont.sans(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.borderless)
-                .help("New session")
-                .keyboardShortcut("n", modifiers: .command)
-
-                Button(action: onSearch) {
-                    Image(systemName: "magnifyingglass")
-                        .font(AppFont.sans(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.borderless)
-                .help("Search messages")
-                .keyboardShortcut("f", modifiers: .command)
 
                 Button {
                     guard !isRefreshing else { return }
@@ -61,12 +45,20 @@ struct SessionListView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
-            .padding(.bottom, 10)
+            .padding(.bottom, 8)
+
+            searchBar
 
             Divider()
 
-            // Session list
-            if visibleSessions.isEmpty {
+            // Typing swaps the list out for message results; clearing the field
+            // brings the sessions straight back.
+            if searchState.isActive {
+                SearchResultsList(
+                    searchState: searchState,
+                    onSelectResult: onSelectResult
+                )
+            } else if visibleSessions.isEmpty {
                 emptyState
             } else {
                 ScrollView {
@@ -108,6 +100,41 @@ struct SessionListView: View {
                     .padding(.vertical, 6)
                 }
             }
+        }
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(AppFont.sans(size: 12))
+                .foregroundStyle(.tertiary)
+            TextField("Search messages\u{2026}", text: $searchState.query)
+                .textFieldStyle(.plain)
+                .font(AppFont.sans(size: 13))
+                .focused($isSearchFocused)
+                .onSubmit { searchState.search() }
+                .onChange(of: searchState.query) { searchState.search() }
+            if !searchState.query.isEmpty {
+                Button { searchState.clear() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(AppFont.sans(size: 12))
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear search")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.quaternary)
+        .clipShape(RoundedRectangle(cornerRadius: 7))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+        // Cmd-F now just moves focus: the field is already on screen.
+        .onKeyPress(.init("f"), phases: .down) { press in
+            guard press.modifiers.contains(.command) else { return .ignored }
+            isSearchFocused = true
+            return .handled
         }
     }
 

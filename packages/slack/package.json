@@ -11,7 +11,7 @@
     "./relevance-service": "./src/relevance-service.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.78.0",
+    "@anthropic-ai/sdk": "0.117.1",
     "@barry-rocks/agent-runtime": "workspace:*",
     "@barry-rocks/env": "workspace:*",
     "@slack/web-api": "7.8.0"

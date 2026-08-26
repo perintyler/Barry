@@ -1,0 +1,306 @@
+#!/bin/bash
+# Barry Disk Retention
+# Prunes ~/.barry/deploys and ~/.barry/worktrees on a schedule.
+#
+# Why this exists: both directories grow without bound. deploys was pruned only
+# as a side effect of `barry promote` (KEEP_DEPLOYS=5, a COUNT cap — five large
+# snapshots sat at 12GB while retention considered itself satisfied), and
+# worktrees had no pruning at all and reached 9.3GB against a 10GB alert. The
+# disk-dir-large alert fired for days with nothing able to clear it.
+#
+# Safety rules, each one load-bearing:
+#   - Never touch the live deploy or the rollback target.
+#   - Never delete a worktree with uncommitted changes. Session worktrees are
+#     where work happens; an age cap alone would eat someone's unpushed work.
+#   - Never delete a worktree whose session is still running.
+#   - Remove worktrees with `git worktree remove`, never `rm`. These are
+#     REGISTERED worktrees; deleting the directory leaves git metadata behind
+#     and `git worktree list` keeps reporting them forever.
+#   - Delete outright rather than via `trash`. ~/.barry/trash is itself a
+#     watched directory, so trashing 6GB just moves the alert.
+#
+# Deletes by default; pass --dry-run to see what it would do.
+#
+# This way round because the job template renders ProgramArguments with no
+# arguments, so a dry-by-default script would be scheduled to do nothing every
+# night while looking installed and healthy — the same class of silent no-op as
+# a verifier that cannot fail.
+
+set -euo pipefail
+source "$(dirname "$0")/lib.sh"
+load_env
+
+BARRY_HOME="${BARRY_HOME:-$HOME/.barry}"
+DEPLOYS_DIR="$BARRY_HOME/deploys"
+WORKTREES_DIR="$BARRY_HOME/worktrees"
+
+# Keep this many deploy snapshots.
+#
+# Deliberately NOT the same as KEEP_DEPLOYS in cli/src/commands/promote.ts,
+# which is 5. This comment used to claim they matched; they never have. The two
+# run at different moments — promote prunes as a side effect of deploying, this
+# runs nightly — and the tighter number here is what stops five large snapshots
+# sitting at 12GB while promote considers its own cap satisfied.
+#
+# The count cap is the primary rule (rollback reaches at most one generation
+# back); the age cap below is what it misses when snapshot COUNT is low but
+# each one is large.
+KEEP_DEPLOYS="${KEEP_DEPLOYS:-3}"
+# Delete deploys older than this regardless of count. A snapshot you cannot
+# roll back to is 2-3GB of dead weight holding plaintext .env files.
+DEPLOY_MAX_AGE_DAYS="${DEPLOY_MAX_AGE_DAYS:-30}"
+# Worktrees for sessions that ended. 14 days is well past "I might come back
+# to it" while still leaving a fortnight to notice.
+WORKTREE_MAX_AGE_DAYS="${WORKTREE_MAX_AGE_DAYS:-14}"
+
+APPLY=true
+[[ "${1:-}" == "--dry-run" ]] && APPLY=false
+
+freed_mb=0
+removed_deploys=0
+removed_worktrees=0
+skipped_dirty=0
+skipped_live=0
+
+log() { echo "$@"; }
+
+dir_mb() {
+    # du -sk then divide: -m rounds per-file on some versions and drifts.
+    local kb
+    kb=$(du -sk "$1" 2>/dev/null | awk '{print $1}') || kb=0
+    echo $(( ${kb:-0} / 1024 ))
+}
+
+# ── Deploys ──────────────────────────────────────────────────────────────────
+#
+# Ordering is lexical, which is chronological for the ISO-ish timestamp names
+# these are given (2026-06-04T20-55-51). Anything that is not a timestamp
+# directory is left alone rather than guessed at.
+
+# How old a deploy snapshot is, in days.
+#
+# Read from the timestamp in the directory NAME, not its mtime. A snapshot
+# directory's mtime is whenever something last touched the tree, which is not
+# when the deploy was made: on this machine `2026-05-06T04-34-49` carried an
+# mtime of 2026-07-31, so a three-month-old snapshot measured as 24 days and
+# survived the 30-day rule indefinitely. The name is the only honest record of
+# when a deploy happened, and the writer controls it.
+#
+# Falls back to mtime for any directory whose name is not a timestamp, so a
+# hand-made or differently-named entry still ages out rather than living
+# forever.
+deploy_age_days() {
+    local name="$1" path="$2" epoch=""
+
+    # Format: 2026-05-06T04-34-49 (the T separates date from a HH-MM-SS clock).
+    if [[ "$name" =~ ^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2})-([0-9]{2})-([0-9]{2})$ ]]; then
+        # `date -j -f` parses without setting the clock (BSD date).
+        epoch=$(date -j -f "%Y-%m-%dT%H-%M-%S" "$name" +%s 2>/dev/null || echo "")
+    fi
+
+    if [[ -z "$epoch" ]]; then
+        epoch=$(stat -f %m "$path" 2>/dev/null || echo 0)
+    fi
+
+    echo $(( ( $(date +%s) - epoch ) / 86400 ))
+}
+
+prune_deploys() {
+    [[ -d "$DEPLOYS_DIR" ]] || return 0
+
+    local current_target=""
+    if [[ -L "$DEPLOYS_DIR/current" ]]; then
+        current_target=$(basename "$(readlink "$DEPLOYS_DIR/current")")
+    fi
+
+    # Newest first.
+    local deploys=()
+    while IFS= read -r d; do
+        [[ -n "$d" ]] && deploys+=("$d")
+    done < <(ls -1 "$DEPLOYS_DIR" 2>/dev/null | grep -v '^current$' | grep -v '\.tmp$' | sort -r)
+
+    local idx=0
+    for name in "${deploys[@]}"; do
+        local path="$DEPLOYS_DIR/$name"
+        [[ -d "$path" ]] || continue
+
+        # The live deploy is never a candidate, whatever its age or position.
+        if [[ "$name" == "$current_target" ]]; then
+            idx=$((idx + 1))
+            continue
+        fi
+
+        local age_days
+        age_days=$(deploy_age_days "$name" "$path")
+
+        local reason=""
+        if (( idx >= KEEP_DEPLOYS )); then
+            reason="beyond keep=$KEEP_DEPLOYS"
+        elif (( age_days > DEPLOY_MAX_AGE_DAYS && idx > 1 )); then
+            # `idx > 1` keeps the rollback target off the age rule. Rolling back
+            # is exactly what you do when a deploy has been up a long time and
+            # something finally breaks — age-expiring the one snapshot you would
+            # roll back TO would disarm rollback precisely when it is needed.
+            reason="age ${age_days}d > ${DEPLOY_MAX_AGE_DAYS}d"
+        fi
+
+        if [[ -n "$reason" ]]; then
+            local mb
+            mb=$(dir_mb "$path")
+            if $APPLY; then
+                rm -rf "$path"
+                log "  removed deploy $name (${mb}MB, $reason)"
+            else
+                log "  would remove deploy $name (${mb}MB, $reason)"
+            fi
+            freed_mb=$((freed_mb + mb))
+            removed_deploys=$((removed_deploys + 1))
+        fi
+        idx=$((idx + 1))
+    done
+}
+
+# ── Worktrees ────────────────────────────────────────────────────────────────
+#
+# Layout is ~/.barry/worktrees/<repo-hash>/<session-id>. Each is a REGISTERED
+# git worktree, so removal goes through git. The repo it belongs to is read
+# back from the worktree's own gitdir rather than assumed, because a hash
+# directory does not name its origin.
+
+# Treat "cannot tell" as DIRTY.
+#
+# The obvious `|| return 1` says "git failed, so nothing is uncommitted", which
+# makes the worktree deletable on the strength of a check that did not run —
+# a broken git, a corrupt index or a permissions problem would silently unlock
+# deletion of the very worktrees this guard exists to protect. Erring toward
+# keeping costs disk; erring the other way costs someone's unpushed work.
+worktree_is_dirty() {
+    local wt="$1" out
+    out=$(git -C "$wt" status --porcelain 2>/dev/null) || return 0
+    [[ -n "$out" ]]
+}
+
+# Is a session still running?
+#
+# Asked of the database, not the API: /sessions/:id is authenticated and returns
+# 403 unauthenticated, so a curl-based check fails for every session and — with
+# a fail-safe default of "live" — silently turns this whole job into a no-op
+# that reports success. A verifier that cannot fail is worse than none.
+#
+# A session row that no longer exists is NOT live (these worktrees outlived
+# their sessions by months). Only an actual "running" status protects one.
+# If psql itself cannot be reached we cannot know, so we keep the worktree.
+PSQL_BIN="${PSQL_BIN:-/opt/homebrew/bin/psql}"
+
+session_is_live() {
+    local sid="$1" status
+    [[ -x "$PSQL_BIN" ]] || return 0            # cannot verify → keep
+    [[ -n "${BARRY_DATABASE_URL:-}" ]] || return 0
+    status=$("$PSQL_BIN" "$BARRY_DATABASE_URL" -t -A --no-psqlrc \
+        -c "SELECT status FROM sessions WHERE id = '${sid//\'/}' LIMIT 1;" 2>/dev/null) || return 0
+    [[ "$status" == "running" || "$status" == "pending" ]]
+}
+
+# Collect worktree directories, handling BOTH layouts that exist here:
+#   ~/.barry/worktrees/<repo-hash>/<session-id>   (created by the API)
+#   ~/.barry/worktrees/<name>                     (named, created by hand)
+#
+# Detected by the presence of .git rather than by depth. Assuming depth-2 made
+# the job descend INTO a named worktree and treat its subdirectories (assets/,
+# hooks/, infra/, sdks/) as prunable worktrees — it would have deleted parts of
+# a live checkout while reporting success.
+collect_worktrees() {
+    local top
+    for top in "$WORKTREES_DIR"/*/; do
+        [[ -d "$top" ]] || continue
+        top="${top%/}"
+        if [[ -e "$top/.git" ]]; then
+            echo "$top"                 # a worktree in its own right
+        else
+            local sub                   # a container of session worktrees
+            for sub in "$top"/*/; do
+                [[ -d "$sub" ]] || continue
+                sub="${sub%/}"
+                [[ -e "$sub/.git" ]] && echo "$sub"
+            done
+        fi
+    done
+}
+
+prune_worktrees() {
+    [[ -d "$WORKTREES_DIR" ]] || return 0
+
+    local wt sid
+    while IFS= read -r wt; do
+        [[ -n "$wt" ]] || continue
+        sid=$(basename "$wt")
+
+        local age_days
+        age_days=$(( ( $(date +%s) - $(stat -f %m "$wt" 2>/dev/null || echo 0) ) / 86400 ))
+        (( age_days > WORKTREE_MAX_AGE_DAYS )) || continue
+
+        # Uncommitted work is never age-expired. This is the check that
+        # makes the job safe to run unattended.
+        if worktree_is_dirty "$wt"; then
+            skipped_dirty=$((skipped_dirty + 1))
+            log "  keep worktree $sid (uncommitted changes)"
+            continue
+        fi
+
+        if session_is_live "$sid"; then
+            skipped_live=$((skipped_live + 1))
+            log "  keep worktree $sid (session running)"
+            continue
+        fi
+
+        # Resolve the owning repo from the worktree itself.
+        local repo
+        repo=$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || repo=""
+        repo="${repo%/.git}"
+
+        local mb
+        mb=$(dir_mb "$wt")
+        if $APPLY; then
+            if [[ -n "$repo" && -d "$repo" ]]; then
+                git -C "$repo" worktree remove "$wt" --force 2>/dev/null \
+                    || rm -rf "$wt"
+                git -C "$repo" branch -D "barry/$sid" 2>/dev/null || true
+            else
+                rm -rf "$wt"
+            fi
+            log "  removed worktree $sid (${mb}MB, age ${age_days}d)"
+        else
+            log "  would remove worktree $sid (${mb}MB, age ${age_days}d)"
+        fi
+        freed_mb=$((freed_mb + mb))
+        removed_worktrees=$((removed_worktrees + 1))
+    done < <(collect_worktrees)
+
+    # Drop registrations whose directory is gone, so `git worktree list` and
+    # the metadata under .git/worktrees do not accumulate.
+    if $APPLY; then
+        local repo
+        for repo in "$HOME/repos/barry" "$HOME/repos/bags"; do
+            [[ -d "$repo/.git" ]] && git -C "$repo" worktree prune 2>/dev/null || true
+        done
+    fi
+}
+
+# ── Run ──────────────────────────────────────────────────────────────────────
+
+$APPLY || log "DRY RUN (omit --dry-run to delete)"
+log "deploys:"
+prune_deploys
+log "worktrees:"
+prune_worktrees
+
+summary="freed ${freed_mb}MB (${removed_deploys} deploys, ${removed_worktrees} worktrees)"
+[[ $skipped_dirty -gt 0 ]] && summary="$summary; kept $skipped_dirty with uncommitted work"
+[[ $skipped_live -gt 0 ]] && summary="$summary; kept $skipped_live running"
+log "$summary"
+
+# Only announce real deletions, and only when they happened. A maintenance job
+# that Slacks on every no-op run is the noise this whole effort is removing.
+if $APPLY && (( removed_deploys + removed_worktrees > 0 )); then
+    notify ":broom: *Barry* disk retention: $summary" "" "system_alert" "info" || true
+fi

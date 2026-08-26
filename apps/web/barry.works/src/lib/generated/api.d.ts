@@ -159,7 +159,7 @@ export interface paths {
         };
         get: operations["listTraits"];
         put?: never;
-        post?: never;
+        post: operations["createTrait"];
         delete?: never;
         options?: never;
         head?: never;
@@ -198,6 +198,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/scopes/{scopeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scopeId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateScope"];
+        trace?: never;
+    };
     "/identities/{identityId}": {
         parameters: {
             query?: never;
@@ -210,7 +228,7 @@ export interface paths {
         get: operations["getIdentity"];
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["deleteIdentity"];
         options?: never;
         head?: never;
         patch: operations["updateIdentity"];
@@ -1137,7 +1155,16 @@ export interface components {
             defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
             defaultModel: string | null;
             envKeys: string[];
+            envSources?: {
+                [key: string]: string;
+            };
             vaultEmail: string | null;
+            statusNotify?: {
+                tool: string;
+                target?: string;
+            } | null;
+            githubInstallationId?: number | null;
+            allowNativeTools?: boolean;
             isDefault: boolean;
             createdAt: string | null;
             lastUsedAt: string | null;
@@ -1159,7 +1186,16 @@ export interface components {
                 defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
                 defaultModel: string | null;
                 envKeys: string[];
+                envSources?: {
+                    [key: string]: string;
+                };
                 vaultEmail: string | null;
+                statusNotify?: {
+                    tool: string;
+                    target?: string;
+                } | null;
+                githubInstallationId?: number | null;
+                allowNativeTools?: boolean;
                 isDefault: boolean;
                 createdAt: string | null;
                 lastUsedAt: string | null;
@@ -1182,7 +1218,16 @@ export interface components {
                 defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
                 defaultModel: string | null;
                 envKeys: string[];
+                envSources?: {
+                    [key: string]: string;
+                };
                 vaultEmail: string | null;
+                statusNotify?: {
+                    tool: string;
+                    target?: string;
+                } | null;
+                githubInstallationId?: number | null;
+                allowNativeTools?: boolean;
                 isDefault: boolean;
                 createdAt: string | null;
                 lastUsedAt: string | null;
@@ -1211,7 +1256,16 @@ export interface components {
                 defaultCodingAgent: ("claude" | "codex" | "opencode" | "cursor" | "zai") | null;
                 defaultModel: string | null;
                 envKeys: string[];
+                envSources?: {
+                    [key: string]: string;
+                };
                 vaultEmail: string | null;
+                statusNotify?: {
+                    tool: string;
+                    target?: string;
+                } | null;
+                githubInstallationId?: number | null;
+                allowNativeTools?: boolean;
                 isDefault: boolean;
                 createdAt: string | null;
                 lastUsedAt: string | null;
@@ -1253,8 +1307,7 @@ export interface components {
             systemPrompt?: string;
             repoPath?: string;
             name?: string;
-            /** @default [] */
-            traits: string[];
+            traits?: string[];
             identityId?: number | null;
             useWorktree?: boolean;
             /** @enum {string} */
@@ -1267,6 +1320,8 @@ export interface components {
             pinned?: boolean;
             selectedNamespaces?: string[];
             selectedTools?: string[];
+            pid?: number | null;
+            pidStartedAt?: number | null;
         };
         SendMessageRequest: {
             content: string;
@@ -1343,7 +1398,47 @@ export interface components {
                 access: "read" | "readwrite";
                 namespaces: string[];
                 skills?: string[];
+                tools?: string[];
+                instructions?: string[];
+                scope?: {
+                    [key: string]: unknown;
+                };
+                scopeNames?: string[];
+                bag?: string | null;
             }[];
+        };
+        TraitResponse: {
+            trait: {
+                name: string;
+                description: string | null;
+                /** @enum {string} */
+                access: "read" | "readwrite";
+                namespaces: string[];
+                skills?: string[];
+                tools?: string[];
+                instructions?: string[];
+                scope?: {
+                    [key: string]: unknown;
+                };
+                scopeNames?: string[];
+                bag?: string | null;
+            } | null;
+        };
+        CreateTraitRequest: {
+            name: string;
+            description?: string | null;
+            namespaces: string[];
+            /** @enum {string} */
+            access: "read" | "readwrite";
+            skills?: string[];
+            instructions?: string[];
+            scopeNames?: string[];
+        };
+        UpdateScopeRequest: {
+            description?: string | null;
+            scope?: {
+                [key: string]: unknown;
+            };
         };
         ModelCatalogResponse: {
             providers: {
@@ -1476,6 +1571,12 @@ export interface components {
             scope?: {
                 [key: string]: unknown;
             } | null;
+            statusNotify?: {
+                tool: string;
+                target?: string;
+            } | null;
+            githubInstallationId?: number | null;
+            allowNativeTools?: boolean;
         };
         CreateIdentityRequest: {
             name: string;
@@ -2157,7 +2258,9 @@ export interface operations {
     };
     listTraits: {
         parameters: {
-            query?: never;
+            query?: {
+                identityId?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2171,6 +2274,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TraitListResponse"];
+                };
+            };
+            /** @description Request failed */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    createTrait: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTraitRequest"];
+            };
+        };
+        responses: {
+            /** @description Trait */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraitResponse"];
                 };
             };
             /** @description Request failed */
@@ -2275,6 +2411,41 @@ export interface operations {
             };
         };
     };
+    updateScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scopeId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateScopeRequest"];
+            };
+        };
+        responses: {
+            /** @description Scope */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeResponse"];
+                };
+            };
+            /** @description Request failed */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     getIdentity: {
         parameters: {
             query?: never;
@@ -2293,6 +2464,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IdentityResponse"];
+                };
+            };
+            /** @description Request failed */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    deleteIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                identityId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionAck"];
                 };
             };
             /** @description Request failed */

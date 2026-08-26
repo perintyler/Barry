@@ -33,7 +33,15 @@ check_api() {
 check_mcp_barry() {
     local response
     response=$(curl -sf --max-time 5 "http://localhost:${MCP_PORT}/health" 2>/dev/null) || return 1
-    [[ "$response" == *"ok"* ]] || return 1
+    # The old *"ok"* match passed on ANY body containing the letters "ok" —
+    # including {"ok":false}. Require the real field.
+    [[ "$response" == *'"ok":true'* ]] || return 1
+    # Since the readiness gate (2026-08-24) the port binds at boot and /health
+    # reports ready: loading|ready|failed. A booting server is healthy — /mcp
+    # requests park and then succeed — but a FAILED boot is not, even though
+    # it briefly serves ok:true during its 500ms flush-and-exit grace.
+    [[ "$response" == *'"ready":"failed"'* ]] && return 1
+    return 0
 }
 
 check_postgres() {

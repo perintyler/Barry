@@ -2,148 +2,6 @@ import SwiftUI
 import AppKit
 import Components
 
-// MARK: - Font Registration
-
-/// Register bundled Inter and JetBrains Mono for snapshot rendering.
-private func registerFonts() {
-    let fontsDir = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent() // Snapshots/
-        .appendingPathComponent("../Resources/Fonts")
-        .standardized
-    for name in ["InterVariable.ttf", "JetBrainsMono.ttf"] {
-        let url = fontsDir.appendingPathComponent(name)
-        guard FileManager.default.fileExists(atPath: url.path) else { continue }
-        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
-    }
-}
-
-// MARK: - Snapshot Harness
-
-/// Renders SwiftUI views to PNG files for visual QA.
-/// Run: swift run Snapshots [output-dir]
-/// Opens the output directory in Finder when done.
-
-/// Snapshots render dark by default (the reference design). Pass --light to
-/// QA the adaptive light palette of the shared Components.
-let renderLight = CommandLine.arguments.contains("--light")
-
-@MainActor
-func renderSnapshot<V: View>(
-    _ name: String,
-    width: CGFloat = 400,
-    to directory: URL,
-    @ViewBuilder content: () -> V
-) {
-    let panelBg = renderLight
-        ? NSColor(red: 0.976, green: 0.976, blue: 0.980, alpha: 1)  // #f9f9fa
-        : NSColor(red: 0.133, green: 0.133, blue: 0.149, alpha: 1)  // #222226
-    let view = content()
-        .frame(width: width)
-        .padding(1) // avoid clipping
-        .background(Color(nsColor: panelBg))
-        .environment(\.colorScheme, renderLight ? .light : .dark)
-
-    let renderer = ImageRenderer(content: view)
-    renderer.scale = 2.0
-
-    // Components colors are appearance-adaptive (NSColor dynamic providers), so
-    // the drawing appearance must be pinned too — .colorScheme alone doesn't
-    // affect NSColor resolution.
-    var rendered: NSImage?
-    NSAppearance(named: renderLight ? .aqua : .darkAqua)?.performAsCurrentDrawingAppearance {
-        rendered = renderer.nsImage
-    }
-    guard let image = rendered else {
-        print("  FAIL: \(name) — could not render")
-        return
-    }
-
-    guard let tiff = image.tiffRepresentation,
-          let bitmap = NSBitmapImageRep(data: tiff),
-          let png = bitmap.representation(using: .png, properties: [:]) else {
-        print("  FAIL: \(name) — could not encode PNG")
-        return
-    }
-
-    let path = directory.appendingPathComponent("\(name).png")
-    do {
-        try png.write(to: path)
-        print("  OK: \(name).png")
-    } catch {
-        print("  FAIL: \(name) — \(error)")
-    }
-}
-
-// MARK: - Mock Colors (matching v13.html CSS vars)
-
-private enum MockColors {
-    // Adaptive pairs mirroring the app palette (MessagesPanel.TurnColors /
-    // ToolRenderers.DetailColors) so --light snapshots match the real app.
-    static let panelBg = Color.adaptive(
-        light: Color(red: 0.976, green: 0.976, blue: 0.980),           // #f9f9fa
-        dark: Color(red: 0.133, green: 0.133, blue: 0.149)             // #222226
-    )
-
-    static let userBase = Color.adaptive(
-        light: Color(red: 37/255, green: 99/255, blue: 235/255),       // #2563eb
-        dark: Color(red: 96/255, green: 165/255, blue: 250/255)        // #60a5fa
-    )
-    static let userBg = userBase.opacity(0.055)
-    static let userLine = userBase.opacity(0.16)
-    static let userLabel = userBase.opacity(0.55)
-
-    static let agentBase = Color.adaptive(
-        light: Color(red: 217/255, green: 119/255, blue: 6/255),       // #d97706
-        dark: Color(red: 251/255, green: 191/255, blue: 36/255)        // #fbbf24
-    )
-    static let agentBg = agentBase.opacity(0.04)
-    static let agentLine = agentBase.opacity(0.1)
-    static let agentLabel = agentBase.opacity(0.45)
-
-    static let toolName = Color.adaptive(light: Color(white: 0.60), dark: Color(white: 0.33))
-    static let toolSummary = Color.adaptive(
-        light: Color(red: 0.72, green: 0.73, blue: 0.75),
-        dark: Color(red: 0.22, green: 0.23, blue: 0.25)                // #383b40
-    )
-    static let toolLine = Color.primary.opacity(0.05)
-    static let toolChevron = Color.adaptive(light: Color(white: 0.80), dark: Color(white: 0.2))
-
-    static let detailLabel = toolName
-    static let detailBg = Color.adaptive(light: Color.black.opacity(0.05), dark: Color.black.opacity(0.15))
-    static let inputColor = Color.adaptive(
-        light: Color(red: 0.40, green: 0.41, blue: 0.44),
-        dark: Color(red: 0.60, green: 0.62, blue: 0.64)                // #9a9da3
-    )
-    static let resultColor = successGreen.opacity(0.7)
-
-    static let lineNumber = Color.adaptive(
-        light: Color(red: 0.78, green: 0.78, blue: 0.80),
-        dark: Color(red: 0.23, green: 0.24, blue: 0.26)                // #3a3d42
-    )
-    static let codeText = Color.adaptive(
-        light: Color(red: 0.26, green: 0.27, blue: 0.30),
-        dark: Color(red: 0.69, green: 0.71, blue: 0.73)                // #b0b4ba
-    )
-    static let successGreen = Color.adaptive(
-        light: Color(red: 0.09, green: 0.64, blue: 0.29),              // #16a34a
-        dark: Color(red: 0.29, green: 0.87, blue: 0.50)                // #4ade80
-    )
-    static let errorRed = Color.adaptive(
-        light: Color(red: 0.86, green: 0.15, blue: 0.15),              // #dc2626
-        dark: Color(red: 0.97, green: 0.44, blue: 0.44)                // #f87171
-    )
-    static let blue = Color.adaptive(
-        light: Color(red: 0.15, green: 0.39, blue: 0.92),              // #2563eb
-        dark: Color(red: 0.38, green: 0.65, blue: 0.98)                // #60a5fa
-    )
-    static let purple = Color.adaptive(
-        light: Color(red: 0.58, green: 0.20, blue: 0.92),              // #9333ea
-        dark: Color(red: 0.75, green: 0.52, blue: 0.99)                // #c084fc
-    )
-    static let filePath = Color.adaptive(light: Color(white: 0.52), dark: Color(white: 0.40))
-    static let dimText = Color.adaptive(light: Color(white: 0.72), dark: Color(white: 0.27))
-}
-
 // MARK: - Snapshot Helpers
 
 /// Static tool row for snapshot rendering (Style 7a — flush left, 12px padding).
@@ -198,6 +56,51 @@ private func mockTurn(
     .background(bg)
 }
 
+// MARK: - System Row Mocks
+//
+// Mirror MessagesPanel.systemRow / noticeRow / proseRow, which are private to
+// the view. Keep in sync with them.
+
+private enum MockSystemColors {
+    static let proseRule = Color.primary.opacity(0.13)
+    static let failureRule = Color.red.opacity(0.45)
+    static let failureBg = Color.red.opacity(0.05)
+}
+
+@MainActor
+func mockNoticeRow(_ text: String) -> some View {
+    HStack {
+        Spacer()
+        Text(text)
+            .font(.custom("Inter Variable", size: 11))
+            .foregroundStyle(.tertiary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Color.primary.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+        Spacer()
+    }
+    .padding(.vertical, 6)
+}
+
+@MainActor
+func mockProseRow(isFailure: Bool, content: String) -> some View {
+    HStack(alignment: .top, spacing: 10) {
+        Rectangle()
+            .fill(isFailure ? MockSystemColors.failureRule : MockSystemColors.proseRule)
+            .frame(width: 2)
+        MarkdownText(content: content)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .fixedSize(horizontal: false, vertical: true)
+    .padding(.vertical, 8)
+    .padding(.horizontal, 4)
+    .background(
+        (isFailure ? MockSystemColors.failureBg : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+    )
+}
+
 // MARK: - Tool Renderer Mocks
 
 /// Read detail: file preview with line numbers.
@@ -226,7 +129,7 @@ private func readDetailMock() -> some View {
                 "    name: \"BarrySessions\",",
                 "    platforms: [",
                 "        .macOS(.v14)",
-                "    ],",
+                "    ],"
             ].enumerated()), id: \.offset) { idx, line in
                 HStack(alignment: .top, spacing: 0) {
                     Text("\(idx + 1)")
@@ -419,7 +322,7 @@ private func globDetailMock() -> some View {
                 "Sources/Models/Message.swift",
                 "Sources/Views/MessagesPanel.swift",
                 "Sources/Views/ContentView.swift",
-                "Sources/main.swift",
+                "Sources/main.swift"
             ], id: \.self) { file in
                 Text(file)
                     .font(.system(size: 10.5, design: .monospaced))
@@ -823,6 +726,126 @@ func renderAll(to dir: URL) {
     }
 
     // 14. Timestamp pill between turns
+    // 18. Markdown — GFM coverage that previously had no fixture at all:
+    // task lists, strikethrough, autolinks, nested quotes, h5/h6.
+    renderSnapshot("18-gfm-coverage", width: 420, to: dir) {
+        MarkdownText(content: """
+        ##### Heading 5
+        ###### Heading 6
+
+        - [x] Completed task item
+        - [ ] Outstanding task item
+        - [x] Another done thing
+
+        Text with ~~strikethrough~~ and an autolink: https://example.com
+
+        > Outer quote.
+        >
+        > > Nested inner quote.
+
+        Term list:
+
+        1. First
+           - nested under a number
+           - second nested
+        2. Second
+        """)
+        .foregroundStyle(.primary)
+        .padding(12)
+    }
+
+    // 19. The wrapping torture test — long inline code, deep nesting, and
+    // hanging indents. This is where the old theme fell apart.
+    renderSnapshot("19-wrapping", width: 380, to: dir) {
+        MarkdownText(content: """
+        The only local change is the `.trycloudflare.com` host addition in `config/environments/development.rb` which is uncommitted.
+
+        - A list item long enough that it must wrap across several lines, so the hanging indent is visible and the wrapped text aligns to the text column rather than sliding back under the bullet.
+        - Short one.
+          - A nested item that also wraps, to confirm indentation compounds correctly at depth two without the text colliding with its marker.
+
+        Run `barry-hook-session-tracker assistant-message --session-id abc123` to test the hook.
+        """)
+        .foregroundStyle(.primary)
+        .padding(12)
+    }
+
+    // 22. System rows: init notice, summary prose, failed result.
+    //
+    // Mirrors MessagesPanel.systemRow's three styles. `summary` is markdown by
+    // construction (the summarizer prompt emits ### headings and bullets) and
+    // used to render as flat gray text with the syntax visible.
+    renderSnapshot("22-system-rows", width: 420, to: dir) {
+        VStack(alignment: .leading, spacing: 0) {
+            mockNoticeRow("Session k3n8x2 started")
+
+            mockProseRow(isFailure: false, content: """
+            ### Done
+            - Fixed the markdown theme and font resolution
+            - Added rhythm regression tests
+
+            ### Open Loops
+            - `systemRow` layout still needs light-mode QA
+            """)
+
+            mockProseRow(isFailure: true, content: "Session ended: rate limit exceeded after 3 retries")
+        }
+        .padding(12)
+    }
+
+    // 21. Link + long-token wrapping guard.
+    //
+    // Regression fixture for a bug that turned out not to exist: long URLs were
+    // believed to truncate with an ellipsis. They do not — SwiftUI breaks them
+    // at `/` boundaries. This fixture exists so that if a future change (a
+    // stray `lineLimit`, a `fixedSize(horizontal: true)`) ever *does* introduce
+    // truncation, it shows up immediately. Every line below must wrap, never
+    // end in "…".
+    renderSnapshot("21-link-wrapping", width: 380, to: dir) {
+        MarkdownText(content: """
+        Bare autolink: https://example.com
+
+        Long autolink: https://example.com/some/very/long/path/segment/here
+
+        Labeled [link](https://example.com/some/very/long/path) inline.
+
+        Bare domain in prose: example.com/some/very/long/path/segment here.
+
+        Long inline code: `barry-hook-session-tracker assistant-message --session-id abc123`
+
+        Unbroken token: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        """)
+        .foregroundStyle(.primary)
+        .padding(12)
+    }
+
+    // 20. Mixed real-world document — the "does it read beautifully" test.
+    renderSnapshot("20-document", width: 420, to: dir) {
+        MarkdownText(content: """
+        ## Summary
+
+        The transport leak is fixed. Each client opened ~46 transports and never sent `DELETE`, so predecessors leaked at roughly **720/hour**.
+
+        ### Root cause
+
+        `admitTransport` let a *known* session bypass `MAX_TRANSPORTS`, so one session reached 1,628 live connections and locked everyone else out.
+
+        ### Changes
+
+        1. One live transport per `(sessionId, namespace)` slot
+        2. Re-init closes its own predecessor
+        3. `MAX_TRANSPORTS` is no longer bypassable
+
+        > Verified: 445 supersedes over 2h33m, live count flat.
+
+        ---
+
+        Next: rebuild the bundle — it does **not** auto-rebuild.
+        """)
+        .foregroundStyle(.primary)
+        .padding(12)
+    }
+
     renderSnapshot("14-timestamp-pill", width: 420, to: dir) {
         VStack(spacing: 0) {
             mockTurn(actor: "Barry") {

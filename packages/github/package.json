@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@barry-rocks/agent-runtime": "workspace:*",
+    "@barry-rocks/json-schema": "workspace:*",
     "@barry-rocks/logger": "workspace:*",
     "jsonwebtoken": "9.0.3"
   },

@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "seed:bags": "tsx scripts/seed-bag-registry.mts",
     "qa:setup": "tsx scripts/setup-qa.ts",
     "qa:seed": "tsx scripts/setup-qa.ts",
     "backfill:provider-sessions": "tsx scripts/backfill-provider-sessions.ts",
@@ -28,8 +29,9 @@
   },
   "dependencies": {
     "@barry-rocks/agent-scope": "workspace:*",
-    "@barry-rocks/env": "workspace:*",
     "@barry-rocks/bags": "workspace:*",
+    "@barry-rocks/env": "workspace:*",
+    "@barry-rocks/tools": "workspace:*",
     "kysely": "0.28.17",
     "kysely-postgres-js": "2.0.0",
     "nanoid": "5.0.9",
@@ -37,7 +39,6 @@
     "yaml": "2.8.3"
   },
   "devDependencies": {
-    "@barry-rocks/agent-runtime": "workspace:*",
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"

@@ -41,6 +41,42 @@ public struct Message: Identifiable {
     public var isSystemRow: Bool { type == "result" || type == "summary" || type == "init" }
     public var needsDetailLoad: Bool { hasDetail == true && result == nil }
 
+    // MARK: - System row presentation
+
+    /// How a system row (`result` / `summary` / `init`) should be rendered.
+    ///
+    /// These three types share one branch in the message list but are not alike:
+    /// `init` is a fixed one-liner, while `summary` and `result` carry
+    /// agent-authored prose that is markdown.
+    public enum SystemRowStyle: Equatable {
+        /// Short fixed notice — centered pill, no markdown.
+        case notice
+        /// Agent-authored markdown prose — full width.
+        case prose
+        /// A failed result — prose, but styled as an error.
+        case failure
+    }
+
+    /// The text a system row should display.
+    ///
+    /// The API populates **`error`** and omits `result` when a result message
+    /// carries `status == "error"` (see `packages/db/src/messages.ts`, which
+    /// spreads `status === "error" ? { error: text } : { result: text }`).
+    /// Reading only `result`/`content` therefore renders an **empty** row for
+    /// every failed session — so `error` must be in the chain.
+    public var systemRowText: String {
+        result ?? content ?? error ?? ""
+    }
+
+    /// How this system row should be presented. Non-system rows return `.notice`.
+    public var systemRowStyle: SystemRowStyle {
+        guard isSystemRow else { return .notice }
+        if type == "result" && status == "error" { return .failure }
+        // `init` is a fixed "Session <id> started" notice; summary and result
+        // are agent prose (the summarizer prompt mandates markdown bullets).
+        return type == "init" ? .notice : .prose
+    }
+
     /// Cached summary of tool input for the collapsed row.
     /// Computed once at decode time to avoid JSON parsing on every scroll frame.
     public var toolInputSummary: String = ""

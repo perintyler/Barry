@@ -1,4 +1,5 @@
 import SwiftUI
+import Components
 
 struct TraitsPanel: View {
     @Bindable var editor: SessionEditor

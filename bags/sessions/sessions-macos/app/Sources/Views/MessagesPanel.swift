@@ -244,6 +244,14 @@ struct MessagesPanel: View {
         static let agentBg = agentBase.opacity(0.04)
         static let agentLine = agentBase.opacity(0.1)
         static let agentLabel = agentBase.opacity(0.45)
+
+        // System prose (summary / result). Neutral, so it reads as
+        // system-authored rather than as another speaker's turn.
+        static let systemProseRule = Color.primary.opacity(0.13)
+
+        // Failed result — red, matching the error row's language.
+        static let systemFailureRule = Color.red.opacity(0.45)
+        static let systemFailureBg = Color.red.opacity(0.05)
     }
 
     // MARK: - Turn View
@@ -468,10 +476,37 @@ struct MessagesPanel: View {
 
     // MARK: - System Row
 
+    /// Renders `init` / `summary` / `result` messages.
+    ///
+    /// These share one branch but are not alike. `init` is a fixed one-liner and
+    /// stays a compact centered notice. `summary` and `result` carry
+    /// agent-authored prose — the summarizer prompt explicitly emits `###`
+    /// headings and markdown bullets — so they render through `MarkdownText`
+    /// like any other agent message. Rendering them as plain text showed raw
+    /// `###` and `-` to the user.
+    @ViewBuilder
     private func systemRow(_ msg: Message) -> some View {
+        let text = msg.systemRowText
+
+        if text.isEmpty {
+            EmptyView()
+        } else {
+            switch msg.systemRowStyle {
+            case .notice:
+                noticeRow(text)
+            case .prose:
+                proseRow(text, isFailure: false)
+            case .failure:
+                proseRow(text, isFailure: true)
+            }
+        }
+    }
+
+    /// Compact centered pill — for short fixed notices like "Session … started".
+    private func noticeRow(_ text: String) -> some View {
         HStack {
             Spacer()
-            Text(msg.result ?? msg.content ?? "")
+            Text(text)
                 .font(AppFont.sans(size: 11))
                 .foregroundStyle(.tertiary)
                 .padding(.horizontal, 10)
@@ -481,6 +516,28 @@ struct MessagesPanel: View {
             Spacer()
         }
         .padding(.vertical, 6)
+    }
+
+    /// Full-width markdown for agent prose. A leading rule marks it as a
+    /// system-authored block rather than a turn, so it stays distinguishable
+    /// from the assistant's own messages without hiding its structure.
+    private func proseRow(_ text: String, isFailure: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Rectangle()
+                .fill(isFailure ? TurnColors.systemFailureRule : TurnColors.systemProseRule)
+                .frame(width: 2)
+            EquatableView(content: MarkdownText(content: text))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        // Without this the HStack takes its intrinsic height and the rule stops
+        // short of the prose it is marking.
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .background(
+            (isFailure ? TurnColors.systemFailureBg : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        )
     }
 
     // MARK: - Timestamp Pill

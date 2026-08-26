@@ -18,6 +18,10 @@
     "name": "@barry-rocks/actions-bag",
     "class": "bag"
   },
+  "bags/approvals": {
+    "name": "@barry-rocks/approvals-bag",
+    "class": "bag"
+  },
   "bags/artifacts": {
     "name": "@barry-rocks/artifacts-bag",
     "class": "bag"
@@ -30,20 +34,16 @@
     "name": "@barry-rocks/events-bag",
     "class": "bag"
   },
-  "bags/system/filesystem": {
-    "name": "@barry-rocks/filesystem-bag",
-    "class": "bag"
-  },
   "bags/git": {
     "name": "@barry-rocks/git-bag",
     "class": "bag"
   },
-  "bags/keychain": {
-    "name": "@barry-rocks/keychain-bag",
+  "bags/instructions": {
+    "name": "@barry-rocks/instructions-bag",
     "class": "bag"
   },
-  "bags/system/locks": {
-    "name": "@barry-rocks/locks-bag",
+  "bags/keychain": {
+    "name": "@barry-rocks/keychain-bag",
     "class": "bag"
   },
   "bags/reminders": {
@@ -56,6 +56,14 @@
   },
   "bags/system": {
     "name": "@barry-rocks/system-bag",
+    "class": "bag"
+  },
+  "bags/system/filesystem": {
+    "name": "@barry-rocks/filesystem-bag",
+    "class": "bag"
+  },
+  "bags/system/locks": {
+    "name": "@barry-rocks/locks-bag",
     "class": "bag"
   },
   "cli": {
@@ -109,6 +117,14 @@
   },
   "packages/google-auth": {
     "name": "@barry-rocks/google-auth",
+    "class": "internal-package"
+  },
+  "packages/job-telemetry": {
+    "name": "@barry-rocks/job-telemetry",
+    "class": "internal-package"
+  },
+  "packages/json-schema": {
+    "name": "@barry-rocks/json-schema",
     "class": "internal-package"
   },
   "packages/logger": {
@@ -166,6 +182,10 @@
   "packages/ui": {
     "name": "@barry-rocks/ui",
     "class": "publishable-candidate"
+  },
+  "packages/usage-telemetry": {
+    "name": "@barry-rocks/usage-telemetry",
+    "class": "internal-package"
   },
   "packages/vault": {
     "name": "@barry-rocks/vault",

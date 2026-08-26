@@ -1,4 +1,5 @@
 import SwiftUI
+import Components
 
 struct SessionDetailView: View {
     let session: Session

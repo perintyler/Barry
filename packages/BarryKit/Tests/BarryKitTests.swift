@@ -103,4 +103,39 @@ final class BarryKitTests: XCTestCase {
         XCTAssertNotNil(core.baseURL.port)
     }
 
+    // MARK: - Traits
+
+    /// `bag` is what lets the Identities window say WHERE a trait came from.
+    /// Most traits are generated one per bag, so a UI without it is a flat list
+    /// of names whose origin is invisible. It was served by the API and silently
+    /// dropped here for a long time, which is exactly the kind of gap a decode
+    /// test catches and a compile never will.
+    func testTraitDecodesOwningBag() throws {
+        let json = #"{"name":"notion","description":"Notion","access":"readwrite","namespaces":["notion"],"bag":"notion"}"#
+        let trait = try JSONDecoder().decode(TraitInfo.self, from: Data(json.utf8))
+        XCTAssertEqual(trait.bag, "notion")
+        XCTAssertFalse(trait.isHandAuthored)
+        XCTAssertTrue(trait.isReadWrite)
+    }
+
+    /// A hand-authored trait has no owning bag — that is what keeps it safe from
+    /// `ensureTraits` reconciliation — so the field must be genuinely optional
+    /// rather than defaulted to a bag name that does not exist.
+    func testTraitWithoutBagDecodesAsHandAuthored() throws {
+        let json = #"{"name":"coding","description":"Code and shell","access":"readwrite","namespaces":["git"]}"#
+        let trait = try JSONDecoder().decode(TraitInfo.self, from: Data(json.utf8))
+        XCTAssertNil(trait.bag)
+        XCTAssertTrue(trait.isHandAuthored)
+    }
+
+    /// The API spells the absent case as an explicit null, not just a missing
+    /// key, and both have to mean the same thing.
+    func testTraitWithNullBagDecodesAsHandAuthored() throws {
+        let json = #"{"name":"read","description":"read-only","access":"read","namespaces":["git"],"bag":null}"#
+        let trait = try JSONDecoder().decode(TraitInfo.self, from: Data(json.utf8))
+        XCTAssertNil(trait.bag)
+        XCTAssertTrue(trait.isHandAuthored)
+        XCTAssertFalse(trait.isReadWrite)
+    }
+
 }

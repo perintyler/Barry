@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260111.0",
+    "@cloudflare/workers-types": "5.20260819.1",
     "typescript": "5.9.3"
   },
   "scripts": {

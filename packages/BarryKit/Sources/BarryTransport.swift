@@ -86,12 +86,47 @@ public struct IdentityTransport: Sendable {
         _ = try await client.setActiveIdentity(input).ok.body.json
     }
 
+    /// Create a hand-authored trait. Stays bag-less so a bag sync can't
+    /// reconcile it away.
+    public func createTrait(
+        request: Components.Schemas.CreateTraitRequest
+    ) async throws -> Components.Schemas.TraitResponse {
+        try await client.createTrait(.init(body: .json(request))).created.body.json
+    }
+
+    /// Edit a scope's description and deny rules. The name is fixed — traits
+    /// reference scopes by name, so renaming detaches them.
+    public func updateScope(
+        id: Int,
+        request: Components.Schemas.UpdateScopeRequest
+    ) async throws -> Components.Schemas.ScopeResponse {
+        try await client.updateScope(.init(path: .init(scopeId: id), body: .json(request))).ok.body.json
+    }
+
+    /// Re-read a single identity, for refreshing a detail view after a write.
+    public func getIdentity(id: Int) async throws -> Components.Schemas.IdentityResponse {
+        let input = Operations.GetIdentity.Input(path: .init(identityId: id))
+        return try await client.getIdentity(input).ok.body.json
+    }
+
+    /// Delete a DB-backed identity.
+    ///
+    /// The server refuses this for a file-based Barry — that one is a directory
+    /// the user owns — and answers 400, which surfaces here as a thrown error
+    /// carrying the server's explanation.
+    public func deleteIdentity(id: Int) async throws {
+        let input = Operations.DeleteIdentity.Input(path: .init(identityId: id))
+        _ = try await client.deleteIdentity(input).ok.body.json
+    }
+
     public func listAvailableBags() async throws -> Components.Schemas.AvailableBagsResponse {
         try await client.listAvailableBags().ok.body.json
     }
 
-    public func listTraits() async throws -> Components.Schemas.TraitListResponse {
-        try await client.listTraits().ok.body.json
+    /// `identityId` narrows the list to the bags that barry holds. Omit it
+    /// before a barry is chosen and the server returns the registry-wide list.
+    public func listTraits(identityId: Int? = nil) async throws -> Components.Schemas.TraitListResponse {
+        try await client.listTraits(query: .init(identityId: identityId)).ok.body.json
     }
 
     public func listModels() async throws -> Components.Schemas.ModelCatalogResponse {

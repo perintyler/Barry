@@ -18,7 +18,9 @@
     "@anthropic-ai/claude-agent-sdk": "0.2.76",
     "@barry-rocks/contracts": "workspace:*",
     "@barry-rocks/env": "workspace:*",
-    "@openai/codex-sdk": "0.115.0"
+    "@barry-rocks/json-schema": "workspace:*",
+    "@openai/codex-sdk": "0.115.0",
+    "yaml": "2.8.3"
   },
   "devDependencies": {
     "@types/node": "22.15.0",

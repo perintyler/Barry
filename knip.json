@@ -37,10 +37,10 @@
     "sdks/links/dist/css.d.ts",
     "sdks/links/dist/browser-inline.d.ts",
     "packages/db/src/config.ts",
+    "packages/job-telemetry/run-job.mjs",
     "scripts/audit-identity.ts",
     "scripts/generate-caddy-config.ts",
     "scripts/generate-firewall-config.ts",
-    "packages/db/scripts/seed-bag-registry.mts",
     "packages/bags/src/hook-dispatch.ts",
     "scripts/generate-tunnel-ingress.ts",
     "scripts/jobs/profile-node-spin.mjs"

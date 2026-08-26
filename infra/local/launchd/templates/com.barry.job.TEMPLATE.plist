@@ -6,8 +6,7 @@
     <string>com.barry.job.__JOB_NAME__</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
-        <string>__BARRY_DIR__/scripts/jobs/__JOB_NAME__</string>
+__JOB_PROGRAM_ARGS__
     </array>
 __JOB_SCHEDULE__
     <key>StandardOutPath</key>

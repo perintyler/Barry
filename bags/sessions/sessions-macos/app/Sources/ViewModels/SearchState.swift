@@ -11,12 +11,24 @@ final class SearchState: @unchecked Sendable {
     private let client = BarryClient()
     private var searchTask: Task<Void, Never>?
 
+    /// Shortest query worth a round trip. A single character matches most of
+    /// the corpus, so it costs a request to say nothing useful.
+    static let minimumQueryLength = 2
+
+    /// Whether the session list should give way to search results.
+    ///
+    /// Deliberately keyed to the same threshold `search()` enforces, so the
+    /// screen never shows an empty result list for a query that was never sent.
+    var isActive: Bool {
+        query.trimmingCharacters(in: .whitespacesAndNewlines).count >= Self.minimumQueryLength
+    }
+
     /// Debounced search — cancels previous request if the user is still typing.
     func search() {
         searchTask?.cancel()
 
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 2 else {
+        guard trimmed.count >= Self.minimumQueryLength else {
             results = []
             errorMessage = nil
             isSearching = false

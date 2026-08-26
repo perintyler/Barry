@@ -29,42 +29,10 @@ actor BarryClient {
         return RecentSessionsResponse(sessions: sessions, nextCursor: response.nextCursor)
     }
 
-    func createSession(
-        prompt: String,
-        repoPath: String,
-        name: String?,
-        identityId: Int?,
-        traits: [String],
-        provider: String,
-        model: String?,
-        useWorktree: Bool
-    ) async throws -> Session {
-        var body: [String: Any] = [
-            "systemPrompt": prompt,
-            "repoPath": repoPath,
-            "traits": traits,
-            "provider": provider,
-            "useWorktree": useWorktree
-        ]
-        if let name, !name.isEmpty { body["name"] = name }
-        if let identityId { body["identityId"] = identityId }
-        if let model, !model.isEmpty { body["model"] = model }
-
-        let draft: Session = try await core.postReturning("sessions/draft", body: body)
-        try await core.post("sessions/\(draft.id)/message", body: ["content": prompt])
-        return draft
-    }
-
     private func decodeSessions<T: Encodable>(_ value: T) throws -> [Session] {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         return try JSONDecoder().decode([Session].self, from: encoder.encode(value))
-    }
-
-    // MARK: - Traits
-
-    func fetchTraits() async throws -> [TraitInfo] {
-        try await core.fetchTraits()
     }
 
     // MARK: - Resolved Tools

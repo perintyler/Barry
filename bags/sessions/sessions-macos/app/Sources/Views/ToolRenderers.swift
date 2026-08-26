@@ -471,7 +471,7 @@ private struct GrepDetail: View {
             var lastFile = ""
             for line in rawLines {
                 let parts = line.split(separator: ":", maxSplits: 2)
-                if parts.count >= 2, let _ = Int(parts[1]) {
+                if parts.count >= 2, Int(parts[1]) != nil {
                     let file = String(parts[0])
                     if file != lastFile {
                         parsed.append(ResultLine(id: parsed.count, text: file, isFile: true, isFirst: parsed.isEmpty))

@@ -10,7 +10,9 @@
     "build:projects": "pnpm exec tsc -b tsconfig.projects.json",
     "build:projects:dry": "pnpm exec tsc -b tsconfig.projects.json --dry",
     "check:monorepo": "node scripts/check/monorepo-policy.mjs",
+    "check:stale-paths": "node scripts/check/stale-paths.mjs",
     "check:identity-residue": "node scripts/check/identity-residue.mjs",
+    "check:doc-links": "node scripts/check/doc-links.mjs",
     "contracts:generate": "pnpm --dir packages/contracts generate",
     "contracts:check": "pnpm --dir packages/contracts check:generated && node scripts/ci/check-generated-clients.mjs",
     "health:ci": "bash scripts/health-check.sh --skip-build",
@@ -44,7 +46,7 @@
     "pnpm": "10.x"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.39.0",
+    "@anthropic-ai/sdk": "0.117.1",
     "@cloudflare/workers-oauth-provider": "^0.8.2",
     "@inquirer/prompts": "8.2.0",
     "@slack/web-api": "7.13.0"
@@ -56,7 +58,7 @@
     "globals": "17.4.0",
     "knip": "^6.27.0",
     "tsup": "^8.5.1",
-    "tsx": "4.21.0",
+    "tsx": "4.23.12",
     "typescript": "5.9.3",
     "typescript-eslint": "8.63.0",
     "vitest": "4.1.0",

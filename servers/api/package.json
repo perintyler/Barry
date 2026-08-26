@@ -12,7 +12,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.39.0",
+    "@anthropic-ai/sdk": "0.117.1",
+    "@barry-rocks/actions-bag": "workspace:*",
     "@barry-rocks/agent-runtime": "workspace:*",
     "@barry-rocks/agent-scope": "workspace:*",
     "@barry-rocks/auth": "workspace:*",
@@ -21,6 +22,7 @@
     "@barry-rocks/db": "workspace:*",
     "@barry-rocks/env": "workspace:*",
     "@barry-rocks/file-tracker": "workspace:*",
+    "@barry-rocks/usage-telemetry": "workspace:*",
     "@barry-rocks/logger": "workspace:*",
     "@barry-rocks/secrets": "workspace:*",
     "@barry-rocks/sentry": "workspace:*",

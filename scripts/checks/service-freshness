@@ -1,0 +1,245 @@
+#!/usr/bin/env node
+/**
+ * Verify no source-run service is serving code older than its last commit.
+ *
+ * Services under launchd run their TypeScript directly (`node --import tsx
+ * src/index.ts`). There is no build step to go stale, which makes it easy to
+ * assume a landed change is live. It is not: the process loaded its modules at
+ * exec, so a commit landing afterwards is on disk and NOT being served until
+ * the service restarts.
+ *
+ * That failure is invisible from outside and looks like a code bug rather than
+ * a deployment one. It cost two debugging detours in a single session:
+ *
+ *   - a new field on `UpdateSessionRequestSchema` 400'd with "Unrecognized
+ *     keys" — the schema was correct on disk; the API had started 13 minutes
+ *     before the commit landed
+ *   - verifying a `packages/contracts` fix first required proving the running
+ *     API was new enough to contain it
+ *
+ * Both times the code was right and the process was old. This says so directly.
+ *
+ * A service is stale when the newest commit touching its own directory or any
+ * of its workspace dependencies is NEWER than the process start time.
+ *
+ * Fails loudly when:
+ *   - a running source-run service is older than its inputs
+ *   - a plist names a working directory that does not exist
+ *   - NO services could be examined at all
+ *
+ * That last one matters most. Every other breakage here is silent by nature: if
+ * the plist glob matched nothing, or `launchctl` returned nothing, or `ps`
+ * stopped reporting start times, this would examine zero services and print a
+ * clean pass — indistinguishable from a healthy machine. So examining nothing
+ * is itself a failure.
+ *
+ * Usage: node scripts/checks/service-freshness [--verbose]
+ */
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+
+const VERBOSE = process.argv.includes("--verbose");
+const AGENTS_DIR = join(homedir(), "Library", "LaunchAgents");
+
+/** Jobs are one-shot: launchd execs a fresh process per tick, so they cannot be stale. */
+const IS_JOB = /\.job\./;
+
+function sh(cmd, args, cwd) {
+  try {
+    return execFileSync(cmd, args, {
+      encoding: "utf8",
+      cwd,
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 8 * 1024 * 1024,
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function plistValue(file, key) {
+  return sh("plutil", ["-extract", key, "raw", file]);
+}
+
+/** Process start time in unix seconds, or null when the pid is gone. */
+function processStartedAt(pid) {
+  const out = sh("ps", ["-o", "lstart=", "-p", String(pid)]);
+  if (!out) return null;
+  const parsed = Date.parse(out);
+  return Number.isNaN(parsed) ? null : Math.floor(parsed / 1000);
+}
+
+/** launchd label -> pid, for every currently-loaded entry. */
+function loadedPids() {
+  const pids = new Map();
+  for (const line of sh("launchctl", ["list"]).split("\n")) {
+    const [pid, , label] = line.split(/\s+/);
+    if (label && /^\d+$/.test(pid)) pids.set(label, Number(pid));
+  }
+  return pids;
+}
+
+/** Repo root for a directory, so services living in other repos still resolve. */
+function repoRoot(dir) {
+  return sh("git", ["rev-parse", "--show-toplevel"], dir) || null;
+}
+
+/** package.json name -> directory, for one repo. */
+function workspaceIndex(root) {
+  const index = new Map();
+  const walk = (dir, depth) => {
+    if (depth > 3 || !existsSync(dir)) return;
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      const child = join(dir, entry.name);
+      const pkg = join(child, "package.json");
+      if (existsSync(pkg)) {
+        try {
+          const name = JSON.parse(readFileSync(pkg, "utf8")).name;
+          if (name && !index.has(name)) index.set(name, child);
+        } catch {
+          /* an unreadable package.json is not this check's business */
+        }
+      }
+      walk(child, depth + 1);
+    }
+  };
+  for (const g of ["packages", "servers", "apps", "bags", "cli"]) walk(join(root, g), 0);
+  return index;
+}
+
+/**
+ * Directories whose commits affect this service: its own, plus every workspace
+ * dependency, transitively. A change to `packages/contracts` is exactly as
+ * stale-making for the API as a change to `servers/api` itself — and that is
+ * the case that actually bit.
+ */
+function inputDirs(serviceDir, root, index) {
+  const dirs = new Set([serviceDir]);
+  const seen = new Set();
+  const visit = (dir) => {
+    const pkg = join(dir, "package.json");
+    if (seen.has(dir) || !existsSync(pkg)) return;
+    seen.add(dir);
+    let deps = {};
+    try {
+      const parsed = JSON.parse(readFileSync(pkg, "utf8"));
+      deps = { ...parsed.dependencies, ...parsed.devDependencies };
+    } catch {
+      return;
+    }
+    for (const [name, spec] of Object.entries(deps)) {
+      if (typeof spec !== "string" || !spec.startsWith("workspace:")) continue;
+      const target = index.get(name);
+      if (target) {
+        dirs.add(target);
+        visit(target);
+      }
+    }
+  };
+  visit(serviceDir);
+  return [...dirs].map((d) => d.replace(root + "/", ""));
+}
+
+/** Newest commit touching any of `dirs`, or null when git says nothing. */
+function newestCommit(root, dirs) {
+  const out = sh("git", ["log", "-1", "--format=%ct|%h|%s", "--", ...dirs], root);
+  if (!out) return null;
+  const [ts, hash, ...rest] = out.split("|");
+  const seconds = Number(ts);
+  if (!Number.isFinite(seconds)) return null;
+  return { seconds, hash, subject: rest.join("|") };
+}
+
+const pids = loadedPids();
+let examined = 0;
+let failures = 0;
+
+let plists;
+try {
+  plists = readdirSync(AGENTS_DIR).filter((f) => f.startsWith("com.barry.") && f.endsWith(".plist"));
+} catch {
+  plists = [];
+}
+
+for (const file of plists) {
+  const label = file.replace(/\.plist$/, "");
+  if (IS_JOB.test(label)) continue;
+
+  const path = join(AGENTS_DIR, file);
+  // Only services executing TypeScript directly can go stale this way. A
+  // bundled service (dist/bundle.cjs) goes stale differently — the bundle is
+  // rebuilt and reloaded by scripts/launchd/setup — so it is out of scope here
+  // rather than silently mishandled.
+  if (!/\btsx\b/.test(sh("plutil", ["-p", path]))) continue;
+
+  const pid = pids.get(label);
+  if (!pid) continue; // not running; nothing to be stale
+
+  const workingDirectory = plistValue(path, "WorkingDirectory");
+  if (!workingDirectory || !existsSync(workingDirectory)) {
+    console.error(`x ${label}: WorkingDirectory does not exist (${workingDirectory || "unset"})`);
+    failures++;
+    continue;
+  }
+
+  const root = repoRoot(workingDirectory);
+  if (!root) {
+    if (VERBOSE) console.log(`. ${label}: not in a git repo, skipped`);
+    continue;
+  }
+
+  const startedAt = processStartedAt(pid);
+  if (startedAt === null) {
+    if (VERBOSE) console.log(`. ${label}: pid ${pid} vanished mid-check, skipped`);
+    continue;
+  }
+
+  const commit = newestCommit(root, inputDirs(resolve(workingDirectory), root, workspaceIndex(root)));
+  if (!commit) {
+    if (VERBOSE) console.log(`. ${label}: no commits found for its inputs, skipped`);
+    continue;
+  }
+
+  examined++;
+
+  if (commit.seconds > startedAt) {
+    const minutes = Math.round((commit.seconds - startedAt) / 60);
+    console.error(
+      `x ${label}: serving code from before ${commit.hash} (${minutes} min stale)\n`
+        + `    ${commit.subject}\n`
+        + `    -> barry service restart ${label.replace(/^com\.barry\./, "")}`,
+    );
+    failures++;
+  } else if (VERBOSE) {
+    console.log(`ok ${label}: started after ${commit.hash}`);
+  }
+}
+
+// Examining nothing is a failure, not a pass. Every silent breakage of this
+// check — no plists matched, launchctl returned nothing, ps stopped reporting
+// start times — converges on examined === 0, which would otherwise print the
+// same clean output as a perfectly fresh machine.
+if (examined === 0) {
+  console.error(
+    "x service-freshness examined ZERO services - the check itself is broken.\n"
+      + `    (${plists.length} plists found, ${pids.size} loaded entries)\n`
+      + "    Re-run with --verbose to see where each candidate was dropped.",
+  );
+  process.exit(1);
+}
+
+if (failures > 0) {
+  console.error(`\n${failures} problem(s) across ${examined} service(s) examined.`);
+  process.exit(1);
+}
+
+console.log(`ok service-freshness: ${examined} service(s) examined, all serving current code.`);

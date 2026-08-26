@@ -11,7 +11,7 @@ import AppKit
 import ApplicationServices
 
 guard CommandLine.arguments.count >= 2 else {
-    FileHandle.standardError.write("usage: axprobe.swift <frame|rows|topmost> [id]\n".data(using: .utf8)!)
+    FileHandle.standardError.write(Data("usage: axprobe.swift <frame|rows|topmost> [id]\n".utf8))
     exit(2)
 }
 let command = CommandLine.arguments[1]
@@ -41,9 +41,13 @@ func identifier(_ el: AXUIElement) -> String? {
 func frame(_ el: AXUIElement) -> CGRect? {
     guard let posV = attr(el, kAXPositionAttribute as String),
           let sizeV = attr(el, kAXSizeAttribute as String) else { return nil }
+    // Conditional casts, not `as!`: these come back from the AX API as
+    // CFTypeRef, and a wrong attribute type should read as "no frame" rather
+    // than trap the probe.
+    guard let posValue = posV as? AXValue, let sizeValue = sizeV as? AXValue else { return nil }
     var pos = CGPoint.zero, size = CGSize.zero
-    AXValueGetValue(posV as! AXValue, .cgPoint, &pos)
-    AXValueGetValue(sizeV as! AXValue, .cgSize, &size)
+    AXValueGetValue(posValue, .cgPoint, &pos)
+    AXValueGetValue(sizeValue, .cgSize, &size)
     return CGRect(origin: pos, size: size)
 }
 
@@ -98,7 +102,7 @@ case "scroll":
     // to be frontmost. `wanted` is the target position, e.g. "0" scrolls to top.
     guard let sv = find(axApp, id: "MessageScrollView") else { print("NO_SCROLLVIEW"); exit(1) }
     guard let barRef = attr(sv, "AXVerticalScrollBar") else { print("NO_SCROLLBAR"); exit(1) }
-    let bar = barRef as! AXUIElement
+    guard let bar = barRef as? AXUIElement else { print("NO_SCROLLBAR"); exit(1) }
     let target = Double(wanted) ?? 0.0
     let result = AXUIElementSetAttributeValue(bar, kAXValueAttribute as CFString, target as CFNumber)
     if result == .success {
@@ -109,6 +113,6 @@ case "scroll":
     exit(1)
 
 default:
-    FileHandle.standardError.write("unknown command: \(command)\n".data(using: .utf8)!)
+    FileHandle.standardError.write(Data("unknown command: \(command)\n".utf8))
     exit(2)
 }

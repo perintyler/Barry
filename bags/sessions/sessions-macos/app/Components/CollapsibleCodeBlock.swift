@@ -13,18 +13,23 @@ public struct CollapsibleCodeBlock: View {
     let codeBorder: Color
 
     @State private var isExpanded = false
+    @State private var didCopy = false
 
     /// Dim text levels mirrored around the code background in each appearance.
-    private static let langLabel = Color.adaptive(light: Color(white: 0.45), dark: Color(white: 0.55))
-    private static let lineCountLabel = Color.adaptive(light: Color(white: 0.62), dark: Color(white: 0.33))
-    private static let chevron = Color.adaptive(light: Color(white: 0.70), dark: Color(white: 0.27))
-    private static let copyLabel = Color.adaptive(light: Color(white: 0.52), dark: Color(white: 0.4))
+    private static let langLabel = Color.adaptive(light: Color(white: 0.42), dark: Color(white: 0.62))
+    private static let lineCountLabel = Color.adaptive(light: Color(white: 0.58), dark: Color(white: 0.45))
+    private static let chevron = Color.adaptive(light: Color(white: 0.62), dark: Color(white: 0.42))
+    private static let copyLabel = Color.adaptive(light: Color(white: 0.45), dark: Color(white: 0.58))
+    private static let copiedLabel = Color.adaptive(
+        light: Color(red: 0.13, green: 0.55, blue: 0.30),
+        dark: Color(red: 0.44, green: 0.83, blue: 0.55)
+    )
 
     public init(
         configuration: CodeBlockConfiguration,
-        lineThreshold: Int = 8,
-        monoFamily: String = "JetBrains Mono",
-        sansFamily: String = "Inter",
+        lineThreshold: Int = MarkdownTokens.Block.codeCollapseThreshold,
+        monoFamily: String = MarkdownTokens.Family.mono,
+        sansFamily: String = MarkdownTokens.Family.sans,
         codeBackground: Color = MarkdownText.codeBackground,
         codeBorder: Color = MarkdownText.codeBorder
     ) {
@@ -97,22 +102,28 @@ public struct CollapsibleCodeBlock: View {
             // Header bar — clickable to collapse if long
             header
 
-            // Code content
+            // Code content.
+            //
+            // Deliberately *not* wrapped in a horizontal ScrollView: doing so
+            // hands the content an unbounded width, which collapses the
+            // layout and renders nothing at all. MarkdownUI wraps long lines
+            // instead, which is the acceptable trade-off in a narrow popover.
             configuration.label
-                .relativeLineSpacing(.em(0.2))
+                .relativeLineSpacing(.em(MarkdownTokens.Space.codeLineSpacing))
                 .markdownTextStyle {
                     FontFamily(.custom(monoFamily))
-                    FontSize(.em(0.85))
+                    FontSize(.em(MarkdownTokens.Size.codeEm))
                 }
-                .padding(10)
+                .padding(MarkdownTokens.Block.padding)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(codeBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: MarkdownTokens.Block.cornerRadius))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: MarkdownTokens.Block.cornerRadius)
                 .strokeBorder(codeBorder, lineWidth: 1)
         )
-        .markdownMargin(top: 4, bottom: 4)
+        .markdownMargin(top: MarkdownTokens.Space.block, bottom: MarkdownTokens.Space.block)
     }
 
     @ViewBuilder
@@ -135,15 +146,16 @@ public struct CollapsibleCodeBlock: View {
     }
 
     private func headerContent(showLineCount: Bool, chevronRotated: Bool) -> some View {
-        HStack {
+        HStack(spacing: 8) {
             if let lang = configuration.language {
                 Text(lang)
-                    .font(.custom(monoFamily, size: 10).weight(.medium))
+                    .font(.custom(monoFamily, size: MarkdownTokens.Size.tiny).weight(.medium))
                     .foregroundStyle(Self.langLabel)
                     .textCase(.uppercase)
+                    .kerning(0.5)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
             if showLineCount {
                 Text("\(lineCount) lines")
@@ -154,25 +166,40 @@ public struct CollapsibleCodeBlock: View {
                     .font(.system(size: 9))
                     .foregroundStyle(Self.chevron)
                     .rotationEffect(.degrees(chevronRotated ? 90 : 0))
-            } else {
-                Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(configuration.content, forType: .string)
-                } label: {
-                    Text("Copy")
-                        .font(.custom(sansFamily, size: 10))
-                        .foregroundStyle(Self.copyLabel)
-                }
-                .buttonStyle(.plain)
             }
+
+            // Copy is always present. It used to live in the `else` branch of
+            // the line-count check, so it disappeared on exactly the long
+            // blocks people most want to copy.
+            copyButton
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-        .background(Color.primary.opacity(0.03))
+        .padding(.vertical, 5)
+        .background(Color.primary.opacity(0.035))
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(codeBorder)
                 .frame(height: 1)
         }
+    }
+
+    @ViewBuilder
+    private var copyButton: some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(configuration.content, forType: .string)
+            withAnimation(.easeOut(duration: 0.12)) { didCopy = true }
+            Task {
+                try? await Task.sleep(for: .milliseconds(1400))
+                withAnimation(.easeOut(duration: 0.2)) { didCopy = false }
+            }
+        } label: {
+            Text(didCopy ? "Copied" : "Copy")
+                .font(.custom(sansFamily, size: MarkdownTokens.Size.tiny))
+                .foregroundStyle(didCopy ? Self.copiedLabel : Self.copyLabel)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Copy code to clipboard")
     }
 }

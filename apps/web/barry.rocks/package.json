@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "pretypecheck": "pnpm --filter @barry-rocks/ui --filter @barry-rocks/sdk-links build",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
@@ -19,7 +20,7 @@
     "postal-mime": "^1.1.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260702.1",
+    "@cloudflare/workers-types": "5.20260819.1",
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "wrangler": "^4.113.0"

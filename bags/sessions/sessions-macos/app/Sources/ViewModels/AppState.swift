@@ -1,6 +1,7 @@
-import SwiftUI
-import Combine
 import BarryKit
+import BarrySessionsCore
+import Combine
+import SwiftUI
 
 /// Top-level app state: session list, connection status, and change tracking.
 ///
@@ -16,13 +17,19 @@ final class AppState: @unchecked Sendable {
     var hasMoreRecent = true
     private var recentCursor: String?
     var isLoadingMore = false
-    var identities: [IdentityDefaults] = []
-    var availableTraits: [TraitInfo] = []
 
     private let client = BarryClient()
     private var pollTimer: Timer?
     private var bus: BusClient?
+    /// Supplied by the app shell so every feature shares one socket. When nil,
+    /// `startBus()` builds a private client — the pre-merge behaviour, still
+    /// used by tests and previews.
+    private let sharedBus: BusClient?
     private let recentPageSize = 20
+
+    init(bus: BusClient? = nil) {
+        self.sharedBus = bus
+    }
 
     /// Safety net only — the bus is the real update path. Long enough that a
     /// healthy socket makes this effectively free, short enough that a socket
@@ -46,8 +53,41 @@ final class AppState: @unchecked Sendable {
         sessions.first { $0.id == selectedSessionId }
     }
 
+    // MARK: - Navigation
+
+    /// Bumped whenever the app should return to the session list. `ContentView`
+    /// watches this to clear the screen state it owns privately (search, sheet,
+    /// scroll target), which this class can't reach.
+    private(set) var homeResetToken = 0
+
+    /// A tab the app should switch to, bumped with a token so the same request
+    /// twice still registers.
+    ///
+    /// Same shape as `homeResetToken`, and for the same reason: the selected
+    /// tab is `ContentView`'s private `@State`, which this class cannot reach.
+    /// The delegate needs it for the Shutdown item, whose confirmation is drawn
+    /// by the services tab — asking without switching would wait on an answer
+    /// to a question nobody was shown.
+    private(set) var requestedTab: RootTab?
+    private(set) var requestedTabToken = 0
+
+    func requestTab(_ tab: RootTab) {
+        requestedTab = tab
+        requestedTabToken &+= 1
+    }
+
+    /// Return to the session list, discarding whatever screen was open.
+    ///
+    /// Called when the popover closes so reopening the menu-bar item always
+    /// lands on the home screen rather than resuming the previous session.
+    func resetToHome() {
+        selectedSessionId = nil
+        homeResetToken &+= 1
+    }
+
     // MARK: - Lifecycle
 
+    @MainActor
     func start() {
         Task {
             await checkConnection()
@@ -66,7 +106,7 @@ final class AppState: @unchecked Sendable {
                 }
             }
         }
-        startBus()
+        attachBus()
         startPolling()
     }
 
@@ -141,37 +181,6 @@ final class AppState: @unchecked Sendable {
         await refreshSessions()
     }
 
-    func loadSessionCreationOptions() async {
-        async let loadedIdentities = try? client.fetchIdentityDefaults()
-        async let loadedTraits = try? client.fetchTraits()
-        identities = await loadedIdentities ?? []
-        availableTraits = await loadedTraits ?? []
-    }
-
-    func createSession(
-        prompt: String,
-        repoPath: String,
-        name: String?,
-        identityId: Int?,
-        traits: [String],
-        provider: String,
-        model: String?,
-        useWorktree: Bool
-    ) async throws {
-        let session = try await client.createSession(
-            prompt: prompt,
-            repoPath: repoPath,
-            name: name,
-            identityId: identityId,
-            traits: traits,
-            provider: provider,
-            model: model,
-            useWorktree: useWorktree
-        )
-        await refreshSessionList()
-        selectedSessionId = session.id
-    }
-
     // MARK: - Realtime
 
     /// Subscribe to the `sessions` topic so a write in any process refreshes the
@@ -181,20 +190,37 @@ final class AppState: @unchecked Sendable {
     /// handler refetches over REST exactly as the poll did. That keeps the
     /// NOTIFY envelope tiny and means a missed frame is never lost state, just a
     /// delayed refresh the fallback poll will pick up.
-    private func startBus() {
-        Task { @MainActor in
-            // The WS upgrade needs BARRY_SECRET even from localhost, so the
-            // endpoint and secret come from the same launchd config the REST
-            // client already uses.
+    /// Register the `sessions` handler on the bus.
+    ///
+    /// Synchronous and idempotent on purpose. The app shell calls this during
+    /// `setup()` so the shared socket cannot connect before a subscriber
+    /// exists; `start()` also calls it, which keeps the standalone path (and
+    /// tests, and previews) working. Whichever runs first wins and the other
+    /// is a no-op — subscribing twice would refetch twice per frame.
+    @MainActor
+    func attachBus() {
+        guard bus == nil else { return }
+
+        // The WS upgrade needs BARRY_SECRET even from localhost, so the
+        // endpoint and secret come from the same launchd config the REST
+        // client already uses.
+        // Reuse the app-wide socket when the shell provided one. Building a
+        // second client here would open a second connection carrying a
+        // single topic.
+        let bus = sharedBus ?? {
             let core = BarryCore()
-            let bus = BusClient(baseURL: core.baseURL, secret: core.authToken, topics: ["sessions"])
-            bus.onTopicChanged = { [weak self] topic in
-                guard topic == "sessions", let self else { return }
-                Task { @MainActor in await self.checkConnection() }
-            }
-            self.bus = bus
-            bus.start()
+            return BusClient(baseURL: core.baseURL, secret: core.authToken, topics: ["sessions"])
+        }()
+
+        bus.subscribe("sessions") { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in await self.checkConnection() }
         }
+        self.bus = bus
+
+        // Only start a client we created; a shared one is started by its owner
+        // once every feature has subscribed.
+        if sharedBus == nil { bus.start() }
     }
 
     // MARK: - Polling
