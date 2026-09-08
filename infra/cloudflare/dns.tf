@@ -45,6 +45,27 @@ resource "cloudflare_dns_record" "rocks_slack" {
   ttl     = 1
 }
 
+# Metrics dashboard — Barry's own telemetry, gated by Cloudflare Access.
+# The origin (localhost:4870) has no authentication of its own, so the Access
+# application in access.tf is the only thing between this record and the
+# internet. Do not add this hostname to the tunnel without that app.
+#
+# Ordering matters when adding a record like this. On the apply that created
+# it, DNS and the tunnel route took effect before the Access policy finished
+# propagating, and for a few seconds the dashboard answered unauthenticated
+# requests with real content. Terraform gives no ordering between these
+# resources because none is expressed: the Access app and the DNS record do
+# not reference each other. For a new unauthenticated origin, apply the Access
+# application FIRST (-target it), confirm it is live, then add the record.
+resource "cloudflare_dns_record" "rocks_metrics" {
+  zone_id = cloudflare_zone.rocks.id
+  name    = "metrics"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.barry_mac.id}.cfargotunnel.com"
+  type    = "CNAME"
+  proxied = true
+  ttl     = 1
+}
+
 # SPF — allow Mailgun to send on behalf of barry.rocks
 # Note: MX records are managed automatically by Cloudflare Email Routing (see email.tf)
 resource "cloudflare_dns_record" "rocks_spf" {

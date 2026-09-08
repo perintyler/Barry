@@ -44,9 +44,6 @@
       "path": "./cli"
     },
     {
-      "path": "./apps/web/barry.works/tsconfig.server.json"
-    },
-    {
       "path": "./servers/api"
     },
     {

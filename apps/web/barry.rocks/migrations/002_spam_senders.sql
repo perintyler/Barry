@@ -1,7 +1,0 @@
-CREATE TABLE spam_senders (
-  id         TEXT PRIMARY KEY,
-  pattern    TEXT NOT NULL UNIQUE,
-  created_at INTEGER NOT NULL
-);
-
-ALTER TABLE emails ADD COLUMN spam INTEGER NOT NULL DEFAULT 0;

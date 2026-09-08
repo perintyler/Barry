@@ -26,6 +26,7 @@ variable "tunnel_ingress" {
   default = [
     { hostname = "barry.works", service = "http://localhost:9429" },
     { hostname = "github.barry.rocks", service = "http://localhost:4861" },
+    { hostname = "metrics.barry.rocks", service = "http://localhost:4870" },
     { hostname = "slack.barry.rocks", service = "http://localhost:4863" },
     { service = "http_status:404" },
   ]

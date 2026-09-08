@@ -21,6 +21,7 @@
     "@barry-rocks/env": "workspace:*",
     "@barry-rocks/file-tracker": "workspace:*",
     "@barry-rocks/md-to-ansi": "workspace:*",
+    "@barry-rocks/memory-bag": "workspace:*",
     "@barry-rocks/secrets": "workspace:*",
     "@barry-rocks/session-client": "workspace:*",
     "@barry-rocks/skills": "workspace:*",

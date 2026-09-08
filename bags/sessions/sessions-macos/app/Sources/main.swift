@@ -204,6 +204,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNUserNot
     /// Expose the popover content to the accessibility tree and open it, for
     /// scripted UI QA. See the call site in `setup()`.
     private func enableUITestAccessibility() {
+        // A `.transient` popover closes on any outside activation — including
+        // the `NSApp.activate` below and the app's own launch activation. That
+        // close routes through `popoverDidClose` → `resetToHome()`, which
+        // clears `selectedSessionId` moments after the BARRY_UI_TEST_SESSION
+        // hook sets it, so the popover stayed open on the session list and the
+        // Messages tab never rendered. Under UI test the popover has to be the
+        // one thing that does NOT vanish when something takes focus.
+        popover.behavior = .applicationDefined
         popover.setAccessibilityEnabled(true)
         if let contentView = popover.contentViewController?.view {
             contentView.setAccessibilityEnabled(true)

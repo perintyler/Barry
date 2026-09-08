@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.30.3",
   "scripts": {
     "build": "pnpm -r build",
-    "build:apps": "pnpm --dir packages/ui build && pnpm --dir apps/web/barry.works build",
+    "build:apps": "pnpm --dir packages/ui build",
     "build:projects": "pnpm exec tsc -b tsconfig.projects.json",
     "build:projects:dry": "pnpm exec tsc -b tsconfig.projects.json --dry",
     "check:monorepo": "node scripts/check/monorepo-policy.mjs",
@@ -14,14 +14,14 @@
     "check:identity-residue": "node scripts/check/identity-residue.mjs",
     "check:doc-links": "node scripts/check/doc-links.mjs",
     "contracts:generate": "pnpm --dir packages/contracts generate",
-    "contracts:check": "pnpm --dir packages/contracts check:generated && node scripts/ci/check-generated-clients.mjs",
+    "contracts:check": "pnpm --dir packages/contracts check:generated",
     "health:ci": "bash scripts/health-check.sh --skip-build",
     "test": "pnpm test:ci:unit",
     "test:ci:unit": "node scripts/ci/run-unit-tests.mjs",
     "test:ci:integration": "pnpm --dir cli test",
     "test:ci:targeted": "pnpm test:ci:unit",
     "test:ci": "pnpm test:ci:unit && pnpm test:ci:integration",
-    "ci:verify:static": "pnpm check:monorepo && pnpm check:firewall && pnpm check:vocabulary && pnpm contracts:check && pnpm knip && pnpm security:dependencies && pnpm security:licenses && pnpm security:secrets && pnpm run build:projects && pnpm run build:apps",
+    "ci:verify:static": "pnpm check:monorepo && pnpm check:firewall && pnpm check:tunnel && pnpm check:vocabulary && pnpm contracts:check && pnpm knip && pnpm security:dependencies && pnpm security:licenses && pnpm security:secrets && pnpm run build:projects && pnpm run build:apps",
     "ci:verify": "pnpm run ci:verify:static && pnpm test:ci:unit",
     "dev": "pnpm -r --parallel dev",
     "clean": "pnpm -r exec rm -rf node_modules dist",
@@ -39,6 +39,7 @@
     "security:network:quick": "./scripts/security/network/check-core.sh",
     "security:firewall": "./scripts/firewall/verify.sh",
     "check:firewall": "tsx scripts/generate-firewall-config.ts --check",
+    "check:tunnel": "tsx scripts/generate-tunnel-ingress.ts --check",
     "check:vocabulary": "bash scripts/check/bag-vocabulary.sh"
   },
   "engines": {

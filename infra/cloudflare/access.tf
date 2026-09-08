@@ -28,6 +28,37 @@ resource "cloudflare_zero_trust_access_identity_provider" "otp" {
   config = {}
 }
 
+# Google sign-in, offered alongside the PIN rather than replacing it.
+#
+# The PIN stays because it is the fallback that cannot lock anyone out: it
+# depends on nothing but email delivery, whereas this depends on a Google
+# client that can be deleted, have its secret rotated, or (being in Testing)
+# drop an address from its test-user list. `auto_redirect_to_identity` is off
+# on every app for the same reason — with two IdPs, skipping the chooser would
+# silently commit each app to one of them.
+#
+# The client lives in the Barry Google Cloud project (barry-485300) and must
+# list https://<access_team_name>.cloudflareaccess.com/cdn-cgi/access/callback
+# as an authorized redirect URI; Google rejects any request whose redirect_uri
+# is not registered. Note the team domain is barry-works, NOT the older
+# footlama one that an earlier client was built against.
+resource "cloudflare_zero_trust_access_identity_provider" "google" {
+  account_id = var.cloudflare_account_id
+  name       = "Google"
+  type       = "google"
+
+  config = {
+    client_id     = var.access_google_client_id
+    client_secret = var.access_google_client_secret
+  }
+
+  lifecycle {
+    # The API returns the secret redacted, which would otherwise show as
+    # perpetual drift and re-send the credential on every apply.
+    ignore_changes = [config]
+  }
+}
+
 # v5 restructure: policies are account-scoped resources rather than children of
 # an application, and the app attaches them in order via `policies` (precedence
 # is now list position). `self_hosted_domains` became `destinations`.
@@ -40,8 +71,11 @@ resource "cloudflare_zero_trust_access_application" "barry_works" {
 
   # Terraform is now the authority on sign-in methods. Adding an IdP means
   # adding it here — a dashboard-only change will be reverted on next apply.
-  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.otp.id]
-  auto_redirect_to_identity = true
+  allowed_idps = [
+    cloudflare_zero_trust_access_identity_provider.google.id,
+    cloudflare_zero_trust_access_identity_provider.otp.id,
+  ]
+  auto_redirect_to_identity = false
 
   # Pinned to the live values. v5 defaults http_only_cookie_attribute to true,
   # which would otherwise show as perpetual drift on an app that has always run
@@ -111,11 +145,52 @@ resource "cloudflare_zero_trust_access_application" "barry_vault" {
   type             = "self_hosted"
   session_duration = "24h"
 
-  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.otp.id]
-  auto_redirect_to_identity = true
+  allowed_idps = [
+    cloudflare_zero_trust_access_identity_provider.google.id,
+    cloudflare_zero_trust_access_identity_provider.otp.id,
+  ]
+  auto_redirect_to_identity = false
 
   destinations = [
     { type = "public", uri = "vault.barry.rocks" },
+  ]
+
+  policies = [
+    { id = cloudflare_zero_trust_access_policy.barry_machine.id, precedence = 1 },
+    { id = cloudflare_zero_trust_access_policy.barry_owner.id, precedence = 2 },
+  ]
+}
+
+# =============================================================================
+# Cloudflare Access — metrics.barry.rocks
+# =============================================================================
+
+# The metrics dashboard reports on Barry itself: service health, resource
+# trends, token spend and the Postgres-backed usage panels. The origin is a
+# local tsx server on localhost:4870 with no authentication of its own — the
+# tunnel publishes it, so this application is the only gate in front of it.
+#
+# Same policies as the other apps rather than duplicates, for the reason given
+# above: the allowed email stays defined in exactly one place.
+#
+# barry_machine is included so scripted checks (uptime probes, `barry` CLI
+# calls) can reach the dashboard with the service token instead of a human
+# login. Drop it from `policies` if only browser access is ever wanted.
+resource "cloudflare_zero_trust_access_application" "barry_metrics" {
+  zone_id          = cloudflare_zone.rocks.id
+  name             = "Barry Metrics"
+  domain           = "metrics.barry.rocks"
+  type             = "self_hosted"
+  session_duration = "24h"
+
+  allowed_idps = [
+    cloudflare_zero_trust_access_identity_provider.google.id,
+    cloudflare_zero_trust_access_identity_provider.otp.id,
+  ]
+  auto_redirect_to_identity = false
+
+  destinations = [
+    { type = "public", uri = "metrics.barry.rocks" },
   ]
 
   policies = [

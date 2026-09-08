@@ -1,14 +1,4 @@
 {
-  "apps/web/barry.rocks": {
-    "name": "barry-rocks",
-    "class": "runtime-edge",
-    "mode": "wrangler"
-  },
-  "apps/web/barry.works": {
-    "name": "barry-works",
-    "class": "runtime-edge",
-    "mode": "source-start"
-  },
   "apps/web/vault": {
     "name": "@barry-rocks/vault-server",
     "class": "runtime-edge",
@@ -42,8 +32,8 @@
     "name": "@barry-rocks/instructions-bag",
     "class": "bag"
   },
-  "bags/keychain": {
-    "name": "@barry-rocks/keychain-bag",
+  "bags/memory": {
+    "name": "@barry-rocks/memory-bag",
     "class": "bag"
   },
   "bags/reminders": {
@@ -64,6 +54,10 @@
   },
   "bags/system/locks": {
     "name": "@barry-rocks/locks-bag",
+    "class": "bag"
+  },
+  "bags/vault": {
+    "name": "@barry-rocks/vault-bag",
     "class": "bag"
   },
   "cli": {

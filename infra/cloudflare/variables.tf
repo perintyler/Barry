@@ -31,6 +31,20 @@ variable "tunnel_secret" {
   default     = ""
 }
 
+variable "access_google_client_id" {
+  description = "Google OAuth client ID for the Access Google identity provider"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "access_google_client_secret" {
+  description = "Google OAuth client secret for the Access Google identity provider"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "access_allowed_email" {
   description = "Email address allowed through Cloudflare Access for Barry"
   type        = string

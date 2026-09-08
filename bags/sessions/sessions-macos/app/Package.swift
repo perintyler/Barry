@@ -22,6 +22,13 @@ let package = Package(
         .library(
             name: "IdentitiesFeature",
             targets: ["IdentitiesFeature"]
+        ),
+        // Exported for the same reason: BarryActions renders action
+        // deliverables, which are markdown, and re-implementing the theme
+        // would drift from the one MarkdownRhythmTests pins.
+        .library(
+            name: "Components",
+            targets: ["Components"]
         )
     ],
     dependencies: [

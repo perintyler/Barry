@@ -49,6 +49,171 @@
         }
       }
     },
+    "/actions/runs": {
+      "get": {
+        "operationId": "listActionRuns",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "started",
+                "complete",
+                "failed"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Action runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionRunListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actions/runs/{runId}": {
+      "get": {
+        "operationId": "getActionRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Action run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionRunDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actions/catalog": {
+      "get": {
+        "operationId": "listActionCatalog",
+        "responses": {
+          "200": {
+            "description": "Available actions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionCatalogResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actions/trigger": {
+      "post": {
+        "operationId": "triggerAction",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session created for the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerActionResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sessions": {
       "get": {
         "operationId": "listSessions",
@@ -328,7 +493,7 @@
           }
         },
         "responses": {
-          "202": {
+          "200": {
             "description": "Accepted"
           },
           "default": {
@@ -3078,6 +3243,400 @@
   },
   "components": {
     "schemas": {
+      "ActionRunSummary": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "bag": {
+            "type": "string"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "Run status: started | complete | failed. Unknown values may appear on legacy rows."
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "has_output": {
+            "type": "boolean"
+          },
+          "output_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "json | text"
+          }
+        },
+        "required": [
+          "run_id",
+          "action",
+          "bag",
+          "session_id",
+          "status",
+          "summary",
+          "started_at",
+          "completed_at",
+          "has_output",
+          "output_type"
+        ],
+        "additionalProperties": false
+      },
+      "ActionRunDetail": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "bag": {
+            "type": "string"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "Run status: started | complete | failed. Unknown values may appear on legacy rows."
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "validated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "output_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "json | text"
+          },
+          "validation_failures": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "run_id",
+          "action",
+          "bag",
+          "session_id",
+          "status",
+          "summary",
+          "started_at",
+          "completed_at",
+          "output",
+          "output_type"
+        ],
+        "additionalProperties": false
+      },
+      "ActionRunListResponse": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "run_id": {
+                  "type": "string"
+                },
+                "action": {
+                  "type": "string"
+                },
+                "bag": {
+                  "type": "string"
+                },
+                "session_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "description": "Run status: started | complete | failed. Unknown values may appear on legacy rows."
+                },
+                "summary": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "started_at": {
+                  "type": "string"
+                },
+                "completed_at": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "has_output": {
+                  "type": "boolean"
+                },
+                "output_type": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "json | text"
+                }
+              },
+              "required": [
+                "run_id",
+                "action",
+                "bag",
+                "session_id",
+                "status",
+                "summary",
+                "started_at",
+                "completed_at",
+                "has_output",
+                "output_type"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "count",
+          "runs"
+        ],
+        "additionalProperties": false
+      },
+      "ActionCatalogResponse": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "qualified_name": {
+                  "type": "string"
+                },
+                "bag": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "executable": {
+                  "type": "boolean"
+                },
+                "input_names": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "qualified_name",
+                "bag",
+                "description",
+                "executable",
+                "input_names"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "count",
+          "actions"
+        ],
+        "additionalProperties": false
+      },
+      "TriggerActionRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "repo_path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "extra": {
+            "type": "string",
+            "maxLength": 10000
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false
+      },
+      "TriggerActionResponse": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "executable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session_id",
+          "action",
+          "prompt",
+          "executable"
+        ],
+        "additionalProperties": false
+      },
       "ProblemDetails": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",

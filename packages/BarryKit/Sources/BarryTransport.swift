@@ -3,6 +3,20 @@ import HTTPTypes
 import OpenAPIRuntime
 import OpenAPIURLSession
 
+/// Errors raised by the transport itself, rather than by the generated client.
+public enum BarryTransportError: Error, LocalizedError {
+    /// A response the contract does not describe, and which does not look like
+    /// a success. Carries the generator's description so the status is visible.
+    case undescribedResponse(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .undescribedResponse(description):
+            return "The API returned an unexpected response: \(description)"
+        }
+    }
+}
+
 struct BarryAuthMiddleware: ClientMiddleware {
     let token: String?
 
@@ -48,6 +62,84 @@ public struct IdentityTransport: Sendable {
     public func listIdentities() async throws -> Components.Schemas.IdentityListResponse {
         let output = try await client.listIdentities()
         return try output.ok.body.json
+    }
+
+    /// Recorded action runs, newest first.
+    ///
+    /// Deliberately carries no deliverables: fifty wrap-up reports is megabytes
+    /// of markdown nobody asked for, so the list reports `hasOutput` and a
+    /// caller fetches the one run it wants with `getActionRun`.
+    public func listActionRuns(
+        action: String? = nil,
+        status: Operations.ListActionRuns.Input.Query.StatusPayload? = nil,
+        sessionId: String? = nil,
+        limit: Int? = nil
+    ) async throws -> Components.Schemas.ActionRunListResponse {
+        let output = try await client.listActionRuns(
+            .init(query: .init(sessionId: sessionId, action: action, status: status, limit: limit))
+        )
+        return try output.ok.body.json
+    }
+
+    /// One run in full — the deliverable AND the `metadata` carrying the input
+    /// side (the inputs it was called with, and the composed prompt). This is
+    /// the only endpoint that returns either, which is what makes a run
+    /// readable end to end rather than output-only.
+    public func getActionRun(id: String) async throws -> Components.Schemas.ActionRunDetail {
+        let output = try await client.getActionRun(.init(path: .init(runId: id)))
+        return try output.ok.body.json
+    }
+
+    /// Every action installed, with `executable` marking the ones that can run
+    /// detached. Unlike `find_actions` this is not filtered by session traits —
+    /// a GUI has no session, and the MCP layer is the real enforcement.
+    public func listActionCatalog() async throws -> Components.Schemas.ActionCatalogResponse {
+        try await client.listActionCatalog().ok.body.json
+    }
+
+    /// Create a session set up to run an action.
+    ///
+    /// This does NOT spawn the agent — it returns a draft session and the
+    /// prompt to send it. Sending is a second call (`sendSessionMessage`) so a
+    /// caller can subscribe to the session's socket in between and miss no
+    /// early output, the same order the CLI's codex path uses.
+    public func triggerAction(
+        _ request: Components.Schemas.TriggerActionRequest
+    ) async throws -> Components.Schemas.TriggerActionResponse {
+        try await client.triggerAction(.init(body: .json(request))).created.body.json
+    }
+
+    /// Send a message to a session, spawning the agent when none is running.
+    ///
+    /// The body carries only `content` and `repoPath` — the schema is strict
+    /// and rejects provider/model, which is why those belong on the draft.
+    ///
+    /// Returns nothing: the spawn is acknowledged rather than described.
+    /// Progress is observed by watching the run appear, not by this call.
+    ///
+    /// The contract declares only 202, but the route replies with
+    /// `res.json(...)` — a 200. Insisting on `.accepted` would therefore throw
+    /// on every SUCCESSFUL send. Both are accepted here, and only a genuine
+    /// error status becomes an error. (Correcting the contract is the real
+    /// fix, but it is frozen and shared with barry.works.)
+    public func sendSessionMessage(
+        sessionId: String,
+        content: String,
+        repoPath: String? = nil
+    ) async throws {
+        let input = Operations.SendMessage.Input(
+            path: .init(sessionId: sessionId),
+            body: .json(.init(content: content, repoPath: repoPath))
+        )
+        let output = try await client.sendMessage(input)
+        switch output {
+        case .ok:
+            return
+        default:
+            // Covers the contract's `default` problem response and any status
+            // it does not describe. Both are failures — the send did not land.
+            throw BarryTransportError.undescribedResponse(String(describing: output))
+        }
     }
 
     public func updateSession(

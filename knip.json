@@ -31,7 +31,6 @@
     "**/public/vendor/**",
     "**/*.generated.*",
     "**/generated/**",
-    "apps/web/barry.works/src/lib/tool-cards/components/index.js",
     "packages/ui/src/index.d.ts",
     "packages/ui/dist/css.d.ts",
     "sdks/links/dist/css.d.ts",
@@ -46,14 +45,6 @@
     "scripts/jobs/profile-node-spin.mjs"
   ],
   "workspaces": {
-    "apps/web/barry.works": {
-      "entry": [
-        "src/main.js",
-        "src/instrument.ts",
-        "src/server/index.ts",
-        "tests/**/*.{js,ts}"
-      ]
-    },
     "cli": {
       "entry": [
         "src/index.ts",
@@ -94,6 +85,7 @@
         "tools.ts",
         "skills/**/scripts/**/*.{js,mjs,ts}",
         "src/*.{js,mjs,ts}",
+        "web/**/*.{js,mjs}",
         "hooks/*/index.ts",
         "server/src/index.ts",
         "deploy/*/index.ts",

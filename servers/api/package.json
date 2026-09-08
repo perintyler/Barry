@@ -24,6 +24,7 @@
     "@barry-rocks/file-tracker": "workspace:*",
     "@barry-rocks/usage-telemetry": "workspace:*",
     "@barry-rocks/logger": "workspace:*",
+    "@barry-rocks/memory-bag": "workspace:*",
     "@barry-rocks/secrets": "workspace:*",
     "@barry-rocks/sentry": "workspace:*",
     "@barry-rocks/session-client": "workspace:*",

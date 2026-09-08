@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./skill-catalog": "./src/skill-catalog.ts",
     "./action-catalog": "./src/action-catalog.ts",
+    "./action-commands": "./src/action-commands.ts",
     "./action-index": "./src/action-index.ts",
     "./instruction-catalog": "./src/instruction-catalog.ts",
     "./instruction-index": "./src/instruction-index.ts"
@@ -45,6 +46,10 @@
       "./action-catalog": {
         "types": "./dist/action-catalog.d.ts",
         "default": "./dist/action-catalog.js"
+      },
+      "./action-commands": {
+        "types": "./dist/action-commands.d.ts",
+        "default": "./dist/action-commands.js"
       },
       "./action-index": {
         "types": "./dist/action-index.d.ts",

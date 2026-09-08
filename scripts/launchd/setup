@@ -58,6 +58,30 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Read one scalar key from a two-space-indented YAML block.
+#
+# The registries are read with shell text tools rather than a YAML parser, and
+# the naive form — `grep -A<n> "^  <block>:" | grep "<key>:"` — is wrong twice
+# over. It matches the key anywhere in the window, so a COMMENT mentioning the
+# key is scraped as the value (a comment reading "enabled: false was considered
+# here" yields exactly that string instead of the real `true`), and its fixed
+# window silently truncates a block that has more lines than the window,
+# yielding an empty value that reads as a legitimate default.
+#
+# Both failures are silent and produce a plausible-looking result, which is the
+# worst shape a config bug can have. Anchoring on the key's own indentation and
+# stopping at the next block fixes both.
+yaml_scalar() {
+    local file="$1" block="$2" key="$3"
+    awk -v block="$block" -v key="$key" '
+        $0 ~ ("^  " block ":") {found=1; next}
+        found && /^  [a-zA-Z]/ && !/^    / {exit}
+        found && $0 ~ ("^    " key ":") {
+            sub("^    " key ": *", ""); sub(/ *#.*/, ""); print; exit
+        }
+    ' "$file"
+}
+
 upsert_env_var() {
     local key="$1"
     local value="$2"
@@ -230,7 +254,7 @@ echo "Installing HTTP server plist files..."
 # launchd state so upgrading an existing installation cannot keep them alive —
 # for a service that binds a port, a surviving old agent is a second receiver
 # racing the new one for the same port.
-for retired_label in com.barry.admin com.barry.git-server com.barry.slack-app com.barry.whisperflow com.barry.github-app com.barry.slack; do
+for retired_label in com.barry.admin com.barry.git-server com.barry.slack-app com.barry.whisperflow com.barry.github-app com.barry.slack com.barry.web; do
     retired_plist="$LAUNCH_AGENTS_DIR/$retired_label.plist"
     if [[ -f "$retired_plist" ]] || launchctl list "$retired_label" &>/dev/null; then
         svc_stop "$retired_label"
@@ -242,20 +266,18 @@ done
 # Map service names to their env var for port
 get_port_var() {
     case "$1" in
-        web) echo "BARRY_WEB_PORT" ;;
         api) echo "BARRY_API_PORT" ;;
         *) echo "" ;;
     esac
 }
 
 for server in $http_servers; do
-    # Check enabled flag (default true for backwards compat)
-    # -A12, not -A5: these keys are separated by explanatory comments in the
-    # registry, and a too-narrow window silently yields an empty value — which
-    # reads as "disabled" and skips the service with no error.
-    enabled=$(grep -A12 "^  $server:" "$HTTP_REGISTRY" | grep "enabled:" | head -1 | sed 's/.*enabled: *//; s/ *#.*//')
-    service_path=$(grep -A12 "^  $server:" "$HTTP_REGISTRY" | grep -E "^\s+path:" | head -1 | sed 's/.*path: *//')
-    service_entry=$(grep -A12 "^  $server:" "$HTTP_REGISTRY" | grep -E "^\s+entry:" | head -1 | sed 's/.*entry: *//')
+    # Check enabled flag (default true for backwards compat). The window these
+    # once used had to keep growing as explanatory comments were added to the
+    # registry; yaml_scalar has no window to outgrow.
+    enabled=$(yaml_scalar "$HTTP_REGISTRY" "$server" enabled)
+    service_path=$(yaml_scalar "$HTTP_REGISTRY" "$server" path)
+    service_entry=$(yaml_scalar "$HTTP_REGISTRY" "$server" entry)
     if [[ -z "$service_entry" ]]; then
         echo -e "  ${RED}✗${NC} com.barry.$server: no 'entry:' in $HTTP_REGISTRY — cannot exec node directly, skipping"
         continue
@@ -504,7 +526,7 @@ if [[ -f "$JOBS_REGISTRY" && -f "$JOB_TEMPLATE" ]]; then
 
     for job_name in $job_names; do
         # Check enabled flag
-        enabled=$(grep -A5 "^  $job_name:" "$JOBS_REGISTRY" | grep "enabled:" | head -1 | sed 's/.*enabled: *//; s/ *#.*//')
+        enabled=$(yaml_scalar "$JOBS_REGISTRY" "$job_name" enabled)
         JOB_PLIST_TARGET="$LAUNCH_AGENTS_DIR/com.barry.job.$job_name.plist"
 
         if [[ "$enabled" == "false" ]]; then
@@ -525,8 +547,20 @@ if [[ -f "$JOBS_REGISTRY" && -f "$JOB_TEMPLATE" ]]; then
             continue
         fi
 
-        # Determine schedule type: interval or calendar
-        interval=$(grep -A8 "^  $job_name:" "$JOBS_REGISTRY" | grep "interval:" | head -1 | sed 's/.*interval: *//; s/ *#.*//')
+        # Determine schedule type: interval or calendar.
+        #
+        # This is the read that motivated yaml_scalar: a comment mentioning
+        # StartInterval was scraped as the value and emitted
+        # <integer>StartInterval counts from load and resets on every</integer> —
+        # a plist launchd cannot parse, from a registry that still read correctly.
+        interval=$(yaml_scalar "$JOBS_REGISTRY" "$job_name" interval)
+
+        # A non-numeric value means the parse went wrong. Fail loudly rather than
+        # writing a plist whose corruption only surfaces when launchd rejects it.
+        if [[ -n "$interval" && ! "$interval" =~ ^[0-9]+$ ]]; then
+            echo -e "  ${RED}✗${NC} com.barry.job.$job_name: interval is not a number: '$interval'"
+            exit 1
+        fi
         sched_hour=$(awk -v job="$job_name" '
             $0 ~ ("^  " job ":") {found=1; next}
             found && /^  [a-zA-Z]/ && !/^    / {exit}
@@ -782,6 +816,23 @@ if [[ -n "$bag_items" ]]; then
 
         if [[ "$item_type" == "service" ]]; then
             label="com.barry.bag.$bag_name.$item_name"
+
+            # A service naming `user:` must run as a DIFFERENT PRINCIPAL, which
+            # means a LaunchDaemon in /Library/LaunchDaemons — root-owned, and
+            # installed deliberately rather than by a setup run that happens on
+            # every `barry pack`. Installing it here as a LaunchAgent would start
+            # it as the invoking user: same UID as every agent session on this
+            # machine, so the isolation the field exists to provide is gone while
+            # the service looks correctly installed.
+            #
+            # Skipped WITHOUT adding to bag_desired_labels, so the prune sweep
+            # does not retract a daemon that a privileged install put in place.
+            item_user=$(echo "$line" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).user||'')")
+            if [[ -n "$item_user" ]]; then
+                echo -e "  ${YELLOW}⚠${NC} $label runs as $item_user — install it as a LaunchDaemon (needs root); skipping here"
+                continue
+            fi
+
             bag_desired_labels+=" $label"
             PLIST_TARGET="$LAUNCH_AGENTS_DIR/$label.plist"
 
@@ -1374,11 +1425,11 @@ sleep 6
 echo "HTTP Servers:"
 ALL_OK=true
 for server in $http_servers; do
-    enabled=$(grep -A5 "^  $server:" "$HTTP_REGISTRY" | grep "enabled:" | head -1 | sed 's/.*enabled: *//; s/ *#.*//')
+    enabled=$(yaml_scalar "$HTTP_REGISTRY" "$server" enabled)
     [[ "$enabled" == "false" ]] && continue
 
     # Skip services that opt out of verification (e.g. on-demand services)
-    verify=$(grep -A8 "^  $server:" "$HTTP_REGISTRY" | grep "verify:" | head -1 | sed 's/.*verify: *//; s/ *#.*//')
+    verify=$(yaml_scalar "$HTTP_REGISTRY" "$server" verify)
     if [[ "$verify" == "false" ]]; then
         echo -e "  ${YELLOW}⚠${NC} $server (verify: false, skipped)"
         continue
