@@ -10,12 +10,14 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260819.1",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsup",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "test": "vitest run"
   },
   "files": [
     "dist"

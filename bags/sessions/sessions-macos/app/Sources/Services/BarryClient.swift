@@ -23,8 +23,17 @@ actor BarryClient {
     }
 
     /// Fetch recent sessions (all statuses) with pagination and message counts.
+    ///
+    /// Asks the server to omit message-less sessions, because the list hides
+    /// them anyway. Fetching them only to drop them is what let a run of them
+    /// read as "this page gained nothing" while the cursor said "more rows" —
+    /// the mismatch the load-more sentinel used to spin on.
     func fetchRecentSessions(limit: Int = 20, cursor: String? = nil) async throws -> RecentSessionsResponse {
-        let response = try await core.transport.listSessions(cursor: cursor, limit: limit)
+        let response = try await core.transport.listSessions(
+            cursor: cursor,
+            limit: limit,
+            hasMessages: true
+        )
         let sessions = try decodeSessions(response.sessions)
         return RecentSessionsResponse(sessions: sessions, nextCursor: response.nextCursor)
     }

@@ -252,7 +252,10 @@ private struct EditDetail: View {
         let isOld: Bool
     }
 
-    /// Cached diff lines — parsed once per view identity, not per frame.
+    /// Re-parsed on every body evaluation — a computed property on a struct
+    /// `View` is not cached, whatever the shape suggests. Acceptable only
+    /// because this renders solely while a diff row is expanded; if that
+    /// changes, hoist it into the model rather than trusting the name.
     private var diffLines: [DiffLine] {
         let oldString = input.string("old_string") ?? ""
         let newString = input.string("new_string") ?? ""
@@ -323,7 +326,9 @@ private struct WriteDetail: View {
     let input: ToolInput
     let result: String?
 
-    /// Cached preview — truncates to 8 lines, computed once per view identity.
+    /// Truncates to 8 lines. Recomputed on every body evaluation — a computed
+    /// property on a struct `View` is not cached — but bounded, and only while
+    /// this row is expanded.
     private var contentPreview: (fileName: String, lineCount: Int, preview: String) {
         let filePath = input.string("file_path") ?? "unknown"
         let content = input.string("content") ?? ""
@@ -391,7 +396,10 @@ private struct GrepDetail: View {
         let isFirst: Bool
     }
 
-    /// Parsed once and cached — avoids re-parsing on every render frame.
+    /// Re-parsed on every body evaluation — a computed property on a struct
+    /// `View` caches nothing, and this one runs a regex over every result line.
+    /// Bounded only by the row being expanded; hoist into the model if that
+    /// stops being true.
     private var parsedLines: [ResultLine] {
         Self.parseResultLines(result)
     }

@@ -11,6 +11,10 @@ public struct CatalogEntry: Identifiable, Sendable, Equatable {
     /// for all sixteen actions rather than the one that is detachable.
     public let executable: Bool
     public let inputNames: [String]
+    /// The declared inputs, parsed into form fields. Empty when the action
+    /// declares none — which is 15 of the 16 shipped actions, so the detail
+    /// pane must read well with no form at all.
+    public let inputs: [InputField]
 
     public var id: String { qualifiedName }
 
@@ -20,7 +24,8 @@ public struct CatalogEntry: Identifiable, Sendable, Equatable {
         bag: String,
         description: String,
         executable: Bool,
-        inputNames: [String]
+        inputNames: [String],
+        inputs: [InputField] = []
     ) {
         self.name = name
         self.qualifiedName = qualifiedName
@@ -28,6 +33,7 @@ public struct CatalogEntry: Identifiable, Sendable, Equatable {
         self.description = description
         self.executable = executable
         self.inputNames = inputNames
+        self.inputs = inputs
     }
 
     /// First line only. Descriptions are written to be MATCHED by

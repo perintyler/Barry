@@ -236,10 +236,14 @@ final class MessagesState {
 
     // MARK: - Derived
 
+    /// Built once: this is read from `InfoPanel`'s body, so allocating a
+    /// formatter per call put it in the render path.
+    private static let isoFormatter = ISO8601DateFormatter()
+
     /// Timestamp of the last message, for the Info panel
     var lastMessageDate: Date? {
         guard let last = messages.last, let iso = last.createdAt else { return nil }
-        return ISO8601DateFormatter().date(from: iso)
+        return Self.isoFormatter.date(from: iso)
     }
 
     // MARK: - Private

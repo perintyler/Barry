@@ -66,6 +66,20 @@ resource "cloudflare_dns_record" "rocks_metrics" {
   ttl     = 1
 }
 
+# Plans — the plans bag's web app, gated by Cloudflare Access exactly like
+# metrics above: the origin (localhost:4880) has no authentication of its own,
+# so the "Barry Plans" application in access.tf is the only thing between this
+# record and a read/write store. Per the ordering note above, that Access app
+# was applied and confirmed live BEFORE this record was added.
+resource "cloudflare_dns_record" "rocks_plans" {
+  zone_id = cloudflare_zone.rocks.id
+  name    = "plans"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.barry_mac.id}.cfargotunnel.com"
+  type    = "CNAME"
+  proxied = true
+  ttl     = 1
+}
+
 # SPF — allow Mailgun to send on behalf of barry.rocks
 # Note: MX records are managed automatically by Cloudflare Email Routing (see email.tf)
 resource "cloudflare_dns_record" "rocks_spf" {

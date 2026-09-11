@@ -198,3 +198,40 @@ resource "cloudflare_zero_trust_access_application" "barry_metrics" {
     { id = cloudflare_zero_trust_access_policy.barry_owner.id, precedence = 2 },
   ]
 }
+
+# =============================================================================
+# Cloudflare Access — plans.barry.rocks
+# =============================================================================
+
+# The plans bag's web app — write and edit plans from a phone. The origin is a
+# local tsx server on localhost:4880 with no authentication of its own — the
+# shared tunnel publishes it (bags/plans/bag.yaml, services.web.tunnel), so
+# this application is the only gate in front of a read/write store and must
+# exist before that tunnel hostname does.
+#
+# Same policies as the other apps rather than duplicates, for the reason given
+# above: the allowed email stays defined in exactly one place. barry_machine is
+# included so the MCP tools' HTTP path could ride the service token if it is
+# ever pointed at the public hostname instead of loopback.
+resource "cloudflare_zero_trust_access_application" "barry_plans" {
+  zone_id          = cloudflare_zone.rocks.id
+  name             = "Barry Plans"
+  domain           = "plans.barry.rocks"
+  type             = "self_hosted"
+  session_duration = "24h"
+
+  allowed_idps = [
+    cloudflare_zero_trust_access_identity_provider.google.id,
+    cloudflare_zero_trust_access_identity_provider.otp.id,
+  ]
+  auto_redirect_to_identity = false
+
+  destinations = [
+    { type = "public", uri = "plans.barry.rocks" },
+  ]
+
+  policies = [
+    { id = cloudflare_zero_trust_access_policy.barry_machine.id, precedence = 1 },
+    { id = cloudflare_zero_trust_access_policy.barry_owner.id, precedence = 2 },
+  ]
+}

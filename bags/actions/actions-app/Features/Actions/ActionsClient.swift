@@ -1,5 +1,6 @@
 import BarryKit
 import Foundation
+import OpenAPIRuntime
 
 /// Reads action runs from the Barry API.
 ///
@@ -26,7 +27,13 @@ public actor ActionsClient {
                     bag: $0.bag,
                     description: $0.description,
                     executable: $0.executable,
-                    inputNames: $0.inputNames
+                    inputNames: $0.inputNames,
+                    // An API predating the form sends no schema; that reads as
+                    // "no form", which is also the honest answer for the 15
+                    // actions that declare nothing.
+                    inputs: InputField.parse(
+                        schema: $0.inputSchema?.additionalProperties.mapValues(\.value)
+                    )
                 )
             }
             .sorted { $0.name < $1.name }
@@ -45,13 +52,26 @@ public actor ActionsClient {
     public func trigger(
         action: String,
         repoPath: String?,
-        extra: String?
+        extra: String?,
+        inputs: [String: Any]? = nil
     ) async throws -> String {
+        // Only fields the user touched arrive here, so an empty dictionary and
+        // nil mean the same thing: nothing was decided, infer it all.
+        var encoded: Components.Schemas.TriggerActionRequest.InputsPayload?
+        if let inputs, !inputs.isEmpty {
+            encoded = .init(
+                additionalProperties: try inputs.mapValues {
+                    try OpenAPIRuntime.OpenAPIValueContainer(unvalidatedValue: $0)
+                }
+            )
+        }
+
         let response = try await core.transport.triggerAction(
             .init(
                 action: action,
                 repoPath: repoPath,
-                extra: (extra?.isEmpty ?? true) ? nil : extra
+                extra: (extra?.isEmpty ?? true) ? nil : extra,
+                inputs: encoded
             )
         )
         try await core.transport.sendSessionMessage(

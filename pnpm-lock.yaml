@@ -365,6 +365,64 @@ importers:
         specifier: 4.1.0
         version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.8.3))
 
+  bags/point-guard:
+    dependencies:
+      '@barry-rocks/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
+      '@barry-rocks/json-schema':
+        specifier: workspace:*
+        version: link:../../packages/json-schema
+      '@barry-rocks/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
+      '@barry-rocks/session-client':
+        specifier: workspace:*
+        version: link:../../packages/session-client
+      '@barry-rocks/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
+      '@barry-rocks/usage-telemetry':
+        specifier: workspace:*
+        version: link:../../packages/usage-telemetry
+      better-sqlite3:
+        specifier: 12.10.0
+        version: 12.10.0
+      express:
+        specifier: 4.22.1
+        version: 4.22.1
+      openai:
+        specifier: 7.10.0
+        version: 7.10.0(undici@8.10.0)(ws@8.21.0)(zod@3.25.76)
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: 7.6.13
+        version: 7.6.13
+      '@types/express':
+        specifier: 4.17.21
+        version: 4.17.21
+      '@types/node':
+        specifier: 22.15.0
+        version: 22.15.0
+      '@types/ws':
+        specifier: 8.5.13
+        version: 8.5.13
+      tsx:
+        specifier: 4.23.12
+        version: 4.23.12
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.0
+        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.8.3))
+
   bags/reminders:
     dependencies:
       '@barry-rocks/tools':
@@ -881,6 +939,9 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+      vitest:
+        specifier: 4.1.0
+        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1)(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.8.3))
 
   packages/job-telemetry:
     dependencies:
@@ -5142,6 +5203,30 @@ packages:
 
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
+
+  openai@7.10.0:
+    resolution: {integrity: sha512-sn9t2Kls7O52PwuF9BUTYNu4Gk/r0lXJyrgaNht4TNRlZFb3dJIGO0RciSgjARGCBRtWjySubAQFJttlzUvGQQ==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      undici: 8.10.0
+      ws: 8.21.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      undici:
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
 
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
@@ -9494,6 +9579,12 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
+
+  openai@7.10.0(undici@8.10.0)(ws@8.21.0)(zod@3.25.76):
+    optionalDependencies:
+      undici: 8.10.0
+      ws: 8.21.0
+      zod: 3.25.76
 
   optionator@0.9.4:
     dependencies:

@@ -208,5 +208,9 @@
     "name": "@barry-rocks/mcp-server",
     "class": "runtime-edge",
     "mode": "bundle-source"
+  },
+  "bags/point-guard": {
+    "name": "@barry-rocks/point-guard-bag",
+    "class": "bag"
   }
 }

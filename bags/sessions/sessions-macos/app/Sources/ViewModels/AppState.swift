@@ -13,7 +13,12 @@ final class AppState: @unchecked Sendable {
     var activeSessions: [Session] = []
     var recentSessions: [Session] = []
     var isConnected = false
-    var selectedSessionId: String?
+    var selectedSessionId: String? {
+        didSet {
+            guard selectedSessionId != oldValue else { return }
+            selectedSession = selectedSessionId.flatMap { sessionsById[$0] }
+        }
+    }
     var hasMoreRecent = true
     private var recentCursor: String?
     var isLoadingMore = false
@@ -26,6 +31,9 @@ final class AppState: @unchecked Sendable {
     /// used by tests and previews.
     private let sharedBus: BusClient?
     private let recentPageSize = 20
+    /// In-flight coalesced bus refresh, cancelled and rescheduled per frame.
+    private var busRefreshTask: Task<Void, Never>?
+    private let busRefreshDebounce = 300
 
     init(bus: BusClient? = nil) {
         self.sharedBus = bus
@@ -38,19 +46,45 @@ final class AppState: @unchecked Sendable {
 
     /// All sessions: deduplicated and sorted by last message time (most recent first).
     /// Active sessions are merged with recent to avoid duplicates.
-    var sessions: [Session] {
+    ///
+    /// Stored, not computed. As a computed property this rebuilt a Set, three
+    /// arrays and a full sort on *every read* — and it was read at least four
+    /// times per frame (twice by the list for `isEmpty` + `ForEach`, twice by
+    /// `ContentView` via `selectedSession`). Under a burst of refreshes that
+    /// alone could saturate the main thread. It is rebuilt once per mutation
+    /// instead, the same way `MessagesState.commit(_:)` caches its segments.
+    private(set) var sessions: [Session] = []
+
+    /// The subset the list actually renders: sessions with no messages are
+    /// hidden. Derived here so the view reads a stored array instead of
+    /// re-filtering a freshly sorted one on every body pass.
+    private(set) var visibleSessions: [Session] = []
+
+    /// Selected row, resolved by id, so `ContentView` does not pay for a scan
+    /// (previously a full re-sort) twice per pass.
+    private(set) var selectedSession: Session?
+
+    private var sessionsById: [String: Session] = [:]
+
+    /// Recompute everything derived from `activeSessions` + `recentSessions`.
+    /// Call after any mutation of either — and only then.
+    private func rebuildSessions() {
         let activeIds = Set(activeSessions.map(\.id))
         let dedupedRecent = recentSessions.filter { !activeIds.contains($0.id) }
         let all = activeSessions + dedupedRecent
-        return all.sorted { a, b in
-            let aTime = a.lastMessageAt ?? a.createdAt ?? ""
-            let bTime = b.lastMessageAt ?? b.createdAt ?? ""
-            return aTime > bTime
-        }
-    }
 
-    var selectedSession: Session? {
-        sessions.first { $0.id == selectedSessionId }
+        // Sort on a precomputed key rather than reaching through two optionals
+        // inside the comparator: `sorted` calls its predicate O(n log n) times,
+        // so that work belongs in the decoration, not the comparison.
+        sessions =
+            all
+            .map { (session: $0, key: $0.lastMessageAt ?? $0.createdAt ?? "") }
+            .sorted { $0.key > $1.key }
+            .map(\.session)
+
+        visibleSessions = sessions.filter(\.hasMessages)
+        sessionsById = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        selectedSession = selectedSessionId.flatMap { sessionsById[$0] }
     }
 
     // MARK: - Navigation
@@ -113,14 +147,22 @@ final class AppState: @unchecked Sendable {
     func stop() {
         pollTimer?.invalidate()
         pollTimer = nil
+        busRefreshTask?.cancel()
+        busRefreshTask = nil
         Task { @MainActor [bus] in bus?.stop() }
     }
 
     // MARK: - Connection
 
     func checkConnection() async {
-        isConnected = await client.checkHealth()
-        if isConnected {
+        let healthy = await client.checkHealth()
+        // Only write when it actually changed: this runs on every bus frame,
+        // and an unconditional assignment invalidates every observer of
+        // `isConnected` at message rate.
+        if healthy != isConnected {
+            isConnected = healthy
+        }
+        if healthy {
             await refreshSessions()
         }
     }
@@ -129,7 +171,14 @@ final class AppState: @unchecked Sendable {
 
     func refreshSessions() async {
         do {
-            activeSessions = try await client.fetchActiveSessions()
+            let fetched = try await client.fetchActiveSessions()
+            // The bus fires on every session write from any process, and an
+            // active session writes at message rate. Assigning an identical
+            // array would still invalidate every observer, so compare first.
+            if fetched != activeSessions {
+                activeSessions = fetched
+                rebuildSessions()
+            }
         } catch {
             // Keep existing on transient failure
         }
@@ -150,24 +199,56 @@ final class AppState: @unchecked Sendable {
         recentSessions = []
         recentCursor = nil
         hasMoreRecent = true
+        rebuildSessions()
         await loadMoreRecent()
     }
 
+    /// Fetch the next page(s) of recent sessions.
+    ///
+    /// Keeps paging while a page adds nothing the list will render. The list
+    /// hides sessions with no messages, but the load-more sentinel is armed
+    /// from the server's cursor — so a run of message-less sessions used to
+    /// leave the sentinel on screen with nothing gained, re-firing `onAppear`
+    /// and paging the whole table while the main thread re-laid out the list
+    /// each time. That is the wedge this loop closes: one firing either makes
+    /// visible progress or exhausts its budget, then stops.
+    ///
+    /// `SessionPaging.maxPagesPerFetch` bounds the slice so a long empty run
+    /// does not hold the main actor; the sentinel resumes where this left off.
     func loadMoreRecent() async {
         guard hasMoreRecent, !isLoadingMore else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
 
-        do {
-            let response = try await client.fetchRecentSessions(
-                limit: recentPageSize,
-                cursor: recentCursor
-            )
-            recentSessions.append(contentsOf: response.sessions)
-            recentCursor = response.nextCursor
-            hasMoreRecent = response.nextCursor != nil
-        } catch {
-            // Keep existing on failure
+        var pagesFetched = 0
+
+        while true {
+            let visibleBefore = visibleSessions.count
+
+            do {
+                let response = try await client.fetchRecentSessions(
+                    limit: recentPageSize,
+                    cursor: recentCursor
+                )
+                recentSessions.append(contentsOf: response.sessions)
+                recentCursor = response.nextCursor
+                hasMoreRecent = response.nextCursor != nil
+                rebuildSessions()
+            } catch {
+                // Keep existing on failure, and stop paging: retrying a failing
+                // request in a tight loop is the same spin in another costume.
+                return
+            }
+
+            pagesFetched += 1
+
+            guard
+                SessionPaging.shouldFetchAnotherPage(
+                    gainedVisibleRows: visibleSessions.count > visibleBefore,
+                    hasMoreServerRows: hasMoreRecent,
+                    pagesFetched: pagesFetched
+                )
+            else { return }
         }
     }
 
@@ -182,6 +263,25 @@ final class AppState: @unchecked Sendable {
     }
 
     // MARK: - Realtime
+
+    /// Coalesce a burst of bus frames into one refresh.
+    ///
+    /// The socket says only "session X changed", so every frame triggers the
+    /// same full refetch — and a running session emits at message rate. Without
+    /// this, a busy session drives a refetch, a whole-list rebuild and a relayout
+    /// per message. The delay is short enough to still read as realtime.
+    @MainActor
+    private func scheduleBusRefresh() {
+        busRefreshTask?.cancel()
+        // Read outside the closure: capturing `self` merely to reach a constant
+        // is an error under the Swift 6 language mode.
+        let delay = busRefreshDebounce
+        busRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(delay))
+            guard !Task.isCancelled, let self else { return }
+            await self.checkConnection()
+        }
+    }
 
     /// Subscribe to the `sessions` topic so a write in any process refreshes the
     /// list immediately, instead of waiting out a poll interval.
@@ -214,7 +314,7 @@ final class AppState: @unchecked Sendable {
 
         bus.subscribe("sessions") { [weak self] _ in
             guard let self else { return }
-            Task { @MainActor in await self.checkConnection() }
+            Task { @MainActor in self.scheduleBusRefresh() }
         }
         self.bus = bus
 

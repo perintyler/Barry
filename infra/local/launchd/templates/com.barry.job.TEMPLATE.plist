@@ -16,7 +16,7 @@ __JOB_SCHEDULE__
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>__NODE_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>__LAUNCHD_PATH__</string>
         <key>BARRY_DIR</key>
         <string>__BARRY_DIR__</string>
         <key>HOME</key>

@@ -81,10 +81,16 @@ private struct SearchResultRow: View {
         if seconds < 3600 { return "\(Int(seconds / 60))m ago" }
         if seconds < 86400 { return "\(Int(seconds / 3600))h ago" }
         if seconds < 604800 { return "\(Int(seconds / 86400))d ago" }
-        let df = DateFormatter()
-        df.dateFormat = "MMM d"
-        return df.string(from: date)
+        return Self.monthDayFormatter.string(from: date)
     }
+
+    /// Hoisted alongside the ISO formatters above — built once, not once per
+    /// result row per frame.
+    private static let monthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f
+    }()
 
     private var roleColor: Color {
         result.role == "user" ? .blue : .orange

@@ -100,6 +100,7 @@ struct RunListView: View {
             }
             .buttonStyle(.borderless)
             .help("Run an action")
+            .accessibilityIdentifier("TriggerActionButton")
 
             Button {
                 Task { await state.refresh() }

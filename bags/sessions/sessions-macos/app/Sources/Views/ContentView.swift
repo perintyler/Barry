@@ -10,42 +10,56 @@ struct ContentView: View {
     let eventsState: EventsState
     let servicesState: ServicesState
     let approvalsState: ApprovalsState
-    /// Opens the identities manager window. Supplied by the app delegate,
-    /// which owns the window controller.
+    /// Opens the identities manager. Supplied by the app delegate, which owns
+    /// the launch.
     var onOpenIdentities: () -> Void = {}
+    /// Opens the action-run reader. Same arrangement as `onOpenIdentities`.
+    var onOpenActions: () -> Void = {}
+    /// Opens the plans editor. Same arrangement as `onOpenIdentities`.
+    var onOpenPlans: () -> Void = {}
     @State private var searchState = SearchState()
     @State private var targetMessageSequence: Int?
     @State private var tab: RootTab = RootNavigation.home
-
-    /// The metrics dashboard, served by Caddy on the LAN hostname rather than a
-    /// port. Force-unwrapped because it is a compile-time constant: if this
-    /// literal ever stops parsing as a URL, every launch should surface it, not
-    /// one silently dead button.
-    static let metricsURL = URL(string: "http://metrics.barry.lan")!
+    @State private var railIcons: [AppRailIcon] = []
 
     var body: some View {
-        VStack(spacing: 0) {
-            // The switcher is hidden while a session is open: that screen has
-            // its own back button and its own tab row, and stacking a second
-            // row above the first read as two competing navigations.
-            if RootNavigation.showsTabBar(selected: tab, isShowingDetail: isShowingSessionDetail) {
-                tabBar
-                Divider()
-            }
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                // The switcher is hidden while a session is open: that screen
+                // has its own back button and its own tab row, and stacking a
+                // second row above the first read as two competing navigations.
+                if RootNavigation.showsTabBar(selected: tab, isShowingDetail: isShowingSessionDetail) {
+                    tabBar
+                    Divider()
+                }
 
-            switch tab {
-            case .sessions:
-                sessionsTab
-            case .events:
-                EventsView(state: eventsState)
-            case .approvals:
-                ApprovalsView(state: approvalsState)
-            case .services:
-                ServicesView(appState: servicesState)
+                switch tab {
+                case .sessions:
+                    sessionsTab
+                case .events:
+                    EventsView(state: eventsState)
+                case .approvals:
+                    ApprovalsView(state: approvalsState)
+                case .services:
+                    ServicesView(appState: servicesState)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // A layout sibling rather than an overlay: the popover is a fixed
+            // 580pt and a floating rail would permanently cover the right edge
+            // of every session row. The rail is not gated on `showsTabBar` —
+            // it is an exit, not navigation, and hiding it inside the screen
+            // you are deepest in is backwards.
+            AppRail(icons: railIcons, onOpen: open)
         }
         .background(Palette.windowBackground)
         .task { appState.start() }
+        .task {
+            // Resolved once per open rather than in `body`: the lookup touches
+            // the filesystem, and hover alone re-evaluates the rail.
+            railIcons = AppRailIconResolver.resolveAll()
+        }
         .onChange(of: appState.homeResetToken) {
             // The popover closed: drop the query and the pending scroll target
             // so the next open starts clean. `selectedSessionId` is cleared by
@@ -92,28 +106,41 @@ struct ContentView: View {
                 }
             }
             Spacer()
-            // Identity management is a window, not a tab: it is configuration
-            // work, and a transient popover that closes on any outside click is
-            // the wrong container for it.
-            Button {
-                NSWorkspace.shared.open(Self.metricsURL)
-            } label: {
-                Image(systemName: "chart.bar.xaxis")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Open metrics")
-            Button(action: onOpenIdentities) {
-                Image(systemName: "person.crop.circle")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Manage identities")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
+    }
+
+    /// Route a rail entry to whatever opens it.
+    ///
+    /// The app cases go through the delegate's closures, which close the
+    /// popover before launching — it is `.transient` and would otherwise race
+    /// the launch and fire `popoverDidClose` midway.
+    private func open(_ entry: AppRailEntry) {
+        switch entry.destination {
+        case .web(let url):
+            NSWorkspace.shared.open(url)
+        case .app(let location):
+            guard let launch = launcher(for: location) else {
+                // A rail entry nobody wired up. Loud on purpose: falling
+                // through quietly would leave a real-looking icon that does
+                // nothing, which is the failure this rail exists to make
+                // visible for missing apps.
+                assertionFailure("No launcher wired for \(location.bundleName)")
+                NSLog("Rail entry \(entry.id) has no launcher")
+                return
+            }
+            launch()
+        }
+    }
+
+    /// Nil for an app the rail lists but nothing here opens — see `open`,
+    /// which refuses to fail quietly on it.
+    private func launcher(for location: BarryAppLocation) -> (() -> Void)? {
+        if location == .identities { return onOpenIdentities }
+        if location == .actions { return onOpenActions }
+        if location == .plans { return onOpenPlans }
+        return nil
     }
 
     @ViewBuilder

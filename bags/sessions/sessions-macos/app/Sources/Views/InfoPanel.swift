@@ -338,30 +338,50 @@ struct InfoPanel: View {
         }
     }
 
+    // Formatters are built once rather than per call: this runs from `body`,
+    // and constructing `DateFormatter`/`RelativeDateTimeFormatter` is costly.
+    // Two ISO instances instead of one mutated in place — reassigning
+    // `formatOptions` on a shared formatter is not thread-safe, the same
+    // reasoning as the cached set in `ConversationSegments`.
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private static let absoluteFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
     private func formattedTime(_ iso: String) -> String {
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = isoFormatter.date(from: iso) {
+        if let date = Self.isoFormatterFractional.date(from: iso) {
             return formattedTimeFromDate(date)
         }
         // Retry without fractional seconds
-        isoFormatter.formatOptions = [.withInternetDateTime]
-        if let date = isoFormatter.date(from: iso) {
+        if let date = Self.isoFormatter.date(from: iso) {
             return formattedTimeFromDate(date)
         }
         return iso
     }
 
     private func formattedTimeFromDate(_ date: Date) -> String {
-        let df = DateFormatter()
-        df.dateStyle = .medium
-        df.timeStyle = .short
-        let absolute = df.string(from: date)
-
-        let rf = RelativeDateTimeFormatter()
-        rf.unitsStyle = .abbreviated
-        let relative = rf.localizedString(for: date, relativeTo: Date())
-
+        let absolute = Self.absoluteFormatter.string(from: date)
+        let relative = Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
         return "\(absolute) (\(relative))"
     }
 }

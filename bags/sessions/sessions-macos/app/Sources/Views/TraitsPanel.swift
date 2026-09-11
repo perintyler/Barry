@@ -86,8 +86,15 @@ struct ToolsPanel: View {
 
     var body: some View {
         LazyVStack(spacing: 0) {
+            // Evaluated once per pass, not once per element. `filteredTools`
+            // re-filters and `enabledTools` rebuilds a Set on every read, so
+            // calling them from inside the predicates below made these
+            // partitions O(n²) in the tool count.
+            let tools = editor.filteredTools
+            let enabled = editor.enabledTools
+
             // Directly selected tools
-            let directlySelected = editor.filteredTools.filter {
+            let directlySelected = tools.filter {
                 editor.selectedTools.contains($0.toolName)
             }
             if !directlySelected.isEmpty {
@@ -108,9 +115,9 @@ struct ToolsPanel: View {
             }
 
             // Enabled via traits/namespaces (partial check, inert)
-            let viaTrait = editor.filteredTools.filter {
+            let viaTrait = tools.filter {
                 !editor.selectedTools.contains($0.toolName) &&
-                editor.enabledTools.contains($0.toolName)
+                enabled.contains($0.toolName)
             }
             if !viaTrait.isEmpty {
                 SectionLabel(text: "Enabled via Traits / Namespaces (\(viaTrait.count))")
@@ -129,9 +136,9 @@ struct ToolsPanel: View {
             }
 
             // Available (not enabled)
-            let available = editor.filteredTools.filter {
+            let available = tools.filter {
                 !editor.selectedTools.contains($0.toolName) &&
-                !editor.enabledTools.contains($0.toolName)
+                !enabled.contains($0.toolName)
             }
             if !available.isEmpty {
                 SectionLabel(text: "Available (\(available.count))")

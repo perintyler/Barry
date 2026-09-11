@@ -247,6 +247,14 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "hasMessages",
+            "in": "query",
+            "description": "Return only sessions with at least one message, so a client that hides message-less sessions gets a full page of renderable rows.",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -3562,6 +3570,13 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "input_schema": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
                 }
               },
               "required": [
@@ -3597,6 +3612,13 @@
           "extra": {
             "type": "string",
             "maxLength": 10000
+          },
+          "inputs": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
           },
           "provider": {
             "type": "string",

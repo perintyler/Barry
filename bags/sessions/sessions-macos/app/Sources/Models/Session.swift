@@ -1,6 +1,11 @@
 import Foundation
 
-struct Session: Codable, Identifiable {
+/// `Equatable` is load-bearing, not decoration: the bus refetches the whole
+/// list on every session write from any process, and without it SwiftUI cannot
+/// tell an identical payload from a changed one, so every row re-renders on
+/// every frame. `SessionScope` and `StatusUpdate` conform for the same reason —
+/// synthesis needs it all the way down.
+struct Session: Codable, Identifiable, Equatable {
     let id: String
     let name: String
     let status: String
@@ -32,12 +37,14 @@ struct Session: Codable, Identifiable {
     var isPending: Bool { status == "pending" }
     var isActive: Bool { isRunning || isPending }
 
+    /// The home directory cannot change while the app runs, but this is read
+    /// once per row per frame — so resolve it once rather than asking
+    /// `FileManager` on every list pass.
+    static let homeDirectoryPath = FileManager.default.homeDirectoryForCurrentUser.path
+
     var displayPath: String {
         guard let path = repoPath else { return "" }
-        return path.replacingOccurrences(
-            of: FileManager.default.homeDirectoryForCurrentUser.path,
-            with: "~"
-        )
+        return path.replacingOccurrences(of: Self.homeDirectoryPath, with: "~")
     }
 
     var isReadOnly: Bool {
@@ -45,11 +52,11 @@ struct Session: Codable, Identifiable {
     }
 }
 
-struct SessionScope: Codable {
+struct SessionScope: Codable, Equatable {
     let deniedAccess: [String]?
 }
 
-struct StatusUpdate: Codable {
+struct StatusUpdate: Codable, Equatable {
     let summary: String?
     let phase: String?
     let updatedAt: String?

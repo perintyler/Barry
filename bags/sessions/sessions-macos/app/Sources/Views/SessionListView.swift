@@ -1,4 +1,5 @@
 import SwiftUI
+import BarrySessionsCore
 import Components
 
 struct SessionListView: View {
@@ -10,9 +11,15 @@ struct SessionListView: View {
     @State private var renamingSessionId: String?
     @State private var renameText: String = ""
     @State private var isRefreshing = false
+    /// Set when a load-more fetch returned nothing the list could show, which
+    /// disarms the sentinel. Cleared by an explicit refresh.
+    @State private var sentinelStalled = false
 
+    /// Stored on `AppState` and rebuilt once per mutation. It used to filter
+    /// `appState.sessions` here, which recomputed a Set, three arrays and a
+    /// full sort on every read — twice per body pass.
     private var visibleSessions: [Session] {
-        appState.sessions.filter(\.hasMessages)
+        appState.visibleSessions
     }
 
     var body: some View {
@@ -26,6 +33,7 @@ struct SessionListView: View {
                 Button {
                     guard !isRefreshing else { return }
                     isRefreshing = true
+                    sentinelStalled = false
                     Task {
                         await appState.refreshSessionList()
                         isRefreshing = false
@@ -81,8 +89,15 @@ struct SessionListView: View {
                             }
                         }
 
-                        // Load more trigger
-                        if appState.hasMoreRecent {
+                        // Load more trigger.
+                        //
+                        // `sentinelStalled` is the backstop for the wedge: the
+                        // server's "more rows" and this list's "more rows to
+                        // show" are different questions, and when they drifted
+                        // apart the sentinel re-fired forever. If a fetch adds
+                        // no visible row, stop arming it — a stalled list the
+                        // user can refresh beats a spin that hangs the app.
+                        if appState.hasMoreRecent && !sentinelStalled {
                             if appState.isLoadingMore {
                                 ProgressView()
                                     .controlSize(.small)
@@ -92,7 +107,15 @@ struct SessionListView: View {
                                 Color.clear
                                     .frame(height: 1)
                                     .onAppear {
-                                        Task { await appState.loadMoreRecent() }
+                                        let before = appState.visibleSessions.count
+                                        Task {
+                                            await appState.loadMoreRecent()
+                                            sentinelStalled = !SessionPaging.shouldRearmSentinel(
+                                                visibleCountBefore: before,
+                                                visibleCountAfter: appState.visibleSessions.count,
+                                                hasMoreServerRows: appState.hasMoreRecent
+                                            )
+                                        }
                                     }
                             }
                         }
@@ -222,10 +245,17 @@ struct SessionRow: View {
         if seconds < 3600 { return "\(Int(seconds / 60))m ago" }
         if seconds < 86400 { return "\(Int(seconds / 3600))h ago" }
         if seconds < 604800 { return "\(Int(seconds / 86400))d ago" }
-        let df = DateFormatter()
-        df.dateFormat = "MMM d"
-        return df.string(from: date)
+        return Self.monthDayFormatter.string(from: date)
     }
+
+    /// Hoisted for the same reason as the ISO formatters above: constructing a
+    /// `DateFormatter` is expensive, and this ran once per row per frame for
+    /// every session older than a week — i.e. most of a long list.
+    private static let monthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f
+    }()
 
     private var statusColor: Color {
         if session.isRunning { return .green }

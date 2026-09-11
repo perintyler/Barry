@@ -47,14 +47,27 @@ public struct IdentityTransport: Sendable {
         )
     }
 
+    /// - Parameter hasMessages: when true, the server omits sessions with no
+    ///   messages. A caller that hides them should pass it rather than filter
+    ///   client-side: otherwise a long run of message-less rows looks like a
+    ///   page that gained nothing while the cursor still says "more".
     public func listSessions(
         cursor: String? = nil,
         limit: Int? = nil,
         query: String? = nil,
-        active: Bool? = nil
+        active: Bool? = nil,
+        hasMessages: Bool? = nil
     ) async throws -> Components.Schemas.SessionListResponse {
         let output = try await client.listSessions(
-            .init(query: .init(cursor: cursor, limit: limit, query: query, active: active))
+            .init(
+                query: .init(
+                    cursor: cursor,
+                    limit: limit,
+                    query: query,
+                    active: active,
+                    hasMessages: hasMessages
+                )
+            )
         )
         return try output.ok.body.json
     }

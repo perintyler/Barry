@@ -34,9 +34,28 @@ svc_stop() {
 write_plist() {
     local target="$1"
     local content="$2"
+
+    # Refuse to write a plist that still holds a __PLACEHOLDER__. A leftover
+    # one is silent damage: substituted into PATH it becomes a literal
+    # directory entry, so binaries quietly stop resolving and the failure
+    # surfaces much later as "not installed" at some tool call. Checked before
+    # the file is touched, so a bad render leaves the previous plist intact.
+    local leftover
+    leftover=$(printf '%s\n' "$content" | grep -o '__[A-Z_]*__' | sort -u | tr '\n' ' ')
+    if [[ -n "${leftover// /}" ]]; then
+        echo "  ✗ $(basename "$target"): unsubstituted placeholder(s): $leftover" >&2
+        return 1
+    fi
+
     : > "$target"
     chmod 600 "$target"
     printf '%s\n' "$content" > "$target"
+
+    # launchd skips a malformed plist without reporting anything here.
+    if ! plutil -lint "$target" >/dev/null 2>&1; then
+        echo "  ✗ $(basename "$target"): generated plist is not valid XML" >&2
+        return 1
+    fi
 }
 
 svc_start() {
@@ -175,6 +194,37 @@ source "$BARRY_DIR/scripts/resolve-node.sh"
 echo "pnpm path: $PNPM_PATH"
 echo "Node bin dir: $NODE_BIN_DIR"
 echo "Barry dir: $BARRY_DIR"
+
+# ── The PATH every generated agent runs with ────────────────────────────────
+#
+# launchd does NOT give a job your login shell's environment, so a binary is
+# reachable at tool-call time only if its directory is listed here. This single
+# definition is substituted into every template as __LAUNCHD_PATH__ and reused
+# by resolve_program below; it was previously copy-pasted into six places,
+# which is how it drifted out of step with where binaries actually live.
+#
+# Directories beyond the system defaults, and why:
+#   $HOME/.local/bin — clickhousectl, piper. Their absence made the MCP server
+#                      report "clickhousectl is not installed" for a binary
+#                      that was installed, because a shell reports an
+#                      unreachable command and a missing one identically.
+#   /usr/sbin        — lsof, sysctl. Omitting it silently blanked the metrics
+#                      bag's swap and port collectors once already.
+#
+# Keep NODE_BIN_DIR first: it pins the node that services run under. It is
+# usually /opt/homebrew/bin, which the list below also names, so entries are
+# deduplicated — a repeated directory is harmless but reads as a bug every
+# time someone inspects a plist.
+BARRY_LAUNCHD_PATH=""
+for _dir in "$NODE_BIN_DIR" /opt/homebrew/bin /usr/local/bin "$HOME/.local/bin" /usr/bin /bin /usr/sbin /sbin; do
+    [[ -z "$_dir" ]] && continue
+    case ":$BARRY_LAUNCHD_PATH:" in
+        *":$_dir:"*) continue ;;  # already present
+    esac
+    BARRY_LAUNCHD_PATH="${BARRY_LAUNCHD_PATH:+$BARRY_LAUNCHD_PATH:}$_dir"
+done
+unset _dir
+echo "launchd PATH: $BARRY_LAUNCHD_PATH"
 echo ""
 
 DEPLOY_ENV="${BARRY_ENV:-prod}"
@@ -354,6 +404,7 @@ for server in $http_servers; do
         -e "s|__SERVICE_ENTRY__|$service_entry|g" \
         -e "s|__NODE_PATH__|$NODE_PATH|g" \
         -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
+        -e "s|__LAUNCHD_PATH__|$BARRY_LAUNCHD_PATH|g" \
         -e "s|__BARRY_DIR__|$BARRY_DIR|g" \
         -e "s|__BARRY_SECRET__|$BARRY_SECRET|g" \
         -e "s|__BARRY_ENV__|$DEPLOY_ENV|g" \
@@ -474,7 +525,7 @@ resolve_program() {
         return
     fi
     local found
-    found=$(PATH="$NODE_BIN_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" command -v "$cmd" 2>/dev/null || true)
+    found=$(PATH="$BARRY_LAUNCHD_PATH" command -v "$cmd" 2>/dev/null || true)
     if [[ -n "$found" ]]; then
         printf '%s' "$found"
     else
@@ -638,6 +689,7 @@ if [[ -f "$JOBS_REGISTRY" && -f "$JOB_TEMPLATE" ]]; then
             -e "s|__BARRY_DIR__|$BARRY_DIR|g" \
             -e "s|__HOME__|$HOME|g" \
             -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
+            -e "s|__LAUNCHD_PATH__|$BARRY_LAUNCHD_PATH|g" \
             "$JOB_TEMPLATE")
 
         # ProgramArguments. First-party jobs are always `bash scripts/jobs/<name>`;
@@ -897,6 +949,7 @@ if [[ -n "$bag_items" ]]; then
                 -e "s|__SERVICE_NAME__|$item_name|g" \
                 -e "s|__HOME__|$HOME|g" \
                 -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
+                -e "s|__LAUNCHD_PATH__|$BARRY_LAUNCHD_PATH|g" \
                 "$BAG_SVC_TEMPLATE")
 
             rendered_prog=$(echo -e "$prog_args_xml")
@@ -1005,6 +1058,7 @@ if [[ -n "$bag_items" ]]; then
                 -e "s|__JOB_NAME__|$item_name|g" \
                 -e "s|__HOME__|$HOME|g" \
                 -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
+                -e "s|__LAUNCHD_PATH__|$BARRY_LAUNCHD_PATH|g" \
                 "$BAG_JOB_TEMPLATE")
 
             rendered_prog=$(echo -e "$prog_args_xml")
@@ -1262,6 +1316,7 @@ if [[ -f "$MCP_TEMPLATE" ]]; then
         -v working_dir="$working_dir" \
         -v dist_path="$dist_path" \
         -v node_bin_dir="$NODE_BIN_DIR" \
+        -v launchd_path="$BARRY_LAUNCHD_PATH" \
         -v node_path="$NODE_PATH" \
         -v db_url="$BARRY_DATABASE_URL" \
         -v axiom_token="$AXIOM_TOKEN" \
@@ -1272,6 +1327,7 @@ if [[ -f "$MCP_TEMPLATE" ]]; then
             gsub(/__MCP_WORKING_DIR__/, working_dir);
             gsub(/__MCP_DIST_PATH__/, dist_path);
             gsub(/__NODE_BIN_DIR__/, node_bin_dir);
+            gsub(/__LAUNCHD_PATH__/, launchd_path);
             gsub(/__NODE_PATH__/, node_path);
             gsub(/__DATABASE_URL__/, db_url);
             gsub(/__AXIOM_TOKEN__/, axiom_token);

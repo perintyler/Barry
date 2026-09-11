@@ -14,10 +14,7 @@ struct SearchResult: Codable, Identifiable {
 
     var displayPath: String {
         guard let path = sessionRepoPath else { return "" }
-        return path.replacingOccurrences(
-            of: FileManager.default.homeDirectoryForCurrentUser.path,
-            with: "~"
-        )
+        return path.replacingOccurrences(of: Session.homeDirectoryPath, with: "~")
     }
 
     var displayName: String {

@@ -46,6 +46,10 @@ public enum RootNavigation {
     /// its own tab row, and stacking a second row above the first read as two
     /// competing navigations. Only the sessions tab has a detail screen, so
     /// every other tab always shows the switcher.
+    ///
+    /// This governs the tab row alone. The app rail is a column on the far
+    /// edge, so it never stacks on the detail header and stays on screen —
+    /// the reasoning above is about rows, and does not carry to it.
     public static func showsTabBar(selected: RootTab, isShowingDetail: Bool) -> Bool {
         !(selected == .sessions && isShowingDetail)
     }

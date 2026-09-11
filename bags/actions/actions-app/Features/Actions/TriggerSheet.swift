@@ -16,7 +16,7 @@ struct TriggerSheet: View {
             Divider()
             footer
         }
-        .frame(width: 620, height: 520)
+        .frame(width: 820, height: 560)
         .background(Palette.windowBackground)
         .task { await state.loadCatalog() }
     }
@@ -48,6 +48,7 @@ struct TriggerSheet: View {
             VStack(spacing: 0) {
                 TextField("Filter actions", text: $search)
                     .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("ActionFilterField")
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
 
@@ -62,30 +63,122 @@ struct TriggerSheet: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                 } else {
-                    List(matches) { entry in
-                        CatalogRow(entry: entry, state: state)
+                    HStack(spacing: 0) {
+                        // Rows are buttons rather than a `List(selection:)`.
+                        // Selection-by-click alone is unreachable to anything
+                        // but a mouse — no keyboard activation, nothing for
+                        // VoiceOver or a UI test to press — and this list is
+                        // now the only way to reach an action's form.
+                        List(matches) { entry in
+                            Button {
+                                state.selectedActionId = entry.id
+                            } label: {
+                                CatalogRow(entry: entry)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("action:\(entry.name)")
+                            .listRowBackground(
+                                entry.id == state.selectedActionId
+                                    ? Palette.hover : Color.clear
+                            )
+                        }
+                        .listStyle(.inset)
+                        .frame(width: 240)
+
+                        Divider()
+
+                        detailPane(matches)
                     }
-                    .listStyle(.inset)
                 }
             }
         }
     }
 
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            TextField(
-                "Repository path (optional — defaults to the API's directory)",
-                text: $state.triggerRepoPath
-            )
-            .textFieldStyle(.roundedBorder)
+    /// The selected action's configuration: what it does, its declared inputs,
+    /// and where to run it.
+    ///
+    /// A form of nine fields cannot live inside a list row, which is why Run
+    /// moved here from the row. For the 15 actions declaring no inputs this is
+    /// just description + extra + Run — strictly what the sheet showed before.
+    @ViewBuilder
+    private func detailPane(_ matches: [CatalogEntry]) -> some View {
+        if let selected = matches.first(where: { $0.id == state.selectedActionId }) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(selected.name)
+                            .font(AppFont.sans(size: 13, weight: .semibold))
+                        Text(selected.description)
+                            .font(AppFont.sans(size: 10))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
-            TextField("Extra context for the run (optional)", text: $state.triggerExtra)
-                .textFieldStyle(.roundedBorder)
+                    if !selected.inputs.isEmpty {
+                        Divider()
+                        // Says the quiet part out loud: the form is a set of
+                        // steers, not a questionnaire to complete.
+                        Text("Anything you leave blank, the action decides.")
+                            .font(AppFont.sans(size: 10))
+                            .foregroundStyle(.tertiary)
+                        InputFormView(
+                            fields: selected.inputs,
+                            draft: Binding(
+                                get: { state.draft(for: selected) },
+                                set: { state.setDraft($0, for: selected) }
+                            )
+                        )
+                    }
 
-            TriggerStatusView(outcome: state.trigger)
+                    Divider()
+
+                    TextField(
+                        "Repository path (optional — defaults to the API's directory)",
+                        text: $state.triggerRepoPath
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .font(AppFont.sans(size: 11))
+
+                    TextField("Extra context for the run (optional)", text: $state.triggerExtra)
+                        .textFieldStyle(.roundedBorder)
+                        .font(AppFont.sans(size: 11))
+
+                    HStack {
+                        Spacer()
+                        Button("Run") {
+                            Task { await state.runAction(selected) }
+                        }
+                        .controlSize(.regular)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(state.trigger == .starting)
+                        .accessibilityIdentifier("RunActionButton")
+                    }
+                }
+                .padding(12)
+            }
+            .frame(maxWidth: .infinity)
+        } else {
+            VStack {
+                Spacer()
+                Text("Select an action.")
+                    .font(AppFont.sans(size: 11))
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
         }
-        .font(AppFont.sans(size: 11))
-        .padding(12)
+    }
+
+    // Repo path and extra context moved into the detail pane, beside the
+    // action they configure. The status line stays here: it reports on the
+    // sheet as a whole, and a result that vanished when the selection changed
+    // would be worse than one that outlives it.
+    private var footer: some View {
+        TriggerStatusView(outcome: state.trigger)
+            .font(AppFont.sans(size: 11))
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func filter(_ entries: [CatalogEntry]) -> [CatalogEntry] {
@@ -99,7 +192,6 @@ struct TriggerSheet: View {
 
 struct CatalogRow: View {
     let entry: CatalogEntry
-    @Bindable var state: ActionsState
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -124,22 +216,16 @@ struct CatalogRow: View {
                     .lineLimit(2)
 
                 if !entry.inputNames.isEmpty {
-                    // Named rather than collected: this app has no per-action
-                    // input form yet, so the honest thing is to say what the
-                    // action expects and let the free-text box carry it.
-                    Text("inputs: \(entry.inputNames.joined(separator: ", "))")
+                    // A count, not the names: the names are now rendered as
+                    // actual controls in the detail pane, and repeating them
+                    // here would only crowd a 240pt row.
+                    Text("\(entry.inputNames.count) input\(entry.inputNames.count == 1 ? "" : "s")")
                         .font(AppFont.mono(size: 9))
                         .foregroundStyle(.tertiary)
                 }
             }
 
             Spacer()
-
-            Button("Run") {
-                Task { await state.runAction(entry) }
-            }
-            .controlSize(.small)
-            .disabled(state.trigger == .starting)
         }
         .padding(.vertical, 3)
     }

@@ -40,12 +40,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNUserNot
         super.init()
     }
 
-    /// Open the identities manager in its own window.
+    /// Open the identities manager in its own app.
     ///
     /// Configuration work does not belong in a transient popover that closes on
     /// any outside click, which is what made the old app frustrating.
     func openIdentities() {
-        IdentitiesAppLauncher.open { [weak self] in
+        BarryAppLauncher.open(.identities) { [weak self] in
+            self?.popover.performClose(nil)
+        }
+    }
+
+    /// Open the action-run reader in its own app.
+    ///
+    /// Same reasoning as identities: a wrap-up report is something you read,
+    /// scroll and copy out of, which a popover that closes on an outside click
+    /// cannot hold.
+    func openActions() {
+        BarryAppLauncher.open(.actions) { [weak self] in
+            self?.popover.performClose(nil)
+        }
+    }
+
+    /// Open the plans editor in its own app.
+    ///
+    /// Same reasoning again: writing a plan is sustained work, and a transient
+    /// popover that closes on any outside click is the wrong container for it.
+    func openPlans() {
+        BarryAppLauncher.open(.plans) { [weak self] in
             self?.popover.performClose(nil)
         }
     }
@@ -72,7 +93,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNUserNot
                 eventsState: eventsState,
                 servicesState: servicesState,
                 approvalsState: approvalsState,
-                onOpenIdentities: { [weak self] in self?.openIdentities() }
+                onOpenIdentities: { [weak self] in self?.openIdentities() },
+                onOpenActions: { [weak self] in self?.openActions() },
+                onOpenPlans: { [weak self] in self?.openPlans() }
             )
                 .frame(width: 580, height: 680)
         )

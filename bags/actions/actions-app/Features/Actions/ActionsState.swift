@@ -16,6 +16,25 @@ public final class ActionsState {
     /// Free text appended to the seeded instruction as context for the run.
     public var triggerExtra: String = ""
 
+    /// Which catalog action the trigger sheet is configuring. A form of nine
+    /// fields cannot live inside a list row, so picking an action opens a
+    /// detail pane beside the list rather than running it immediately.
+    public var selectedActionId: String?
+
+    /// In-progress form values, keyed by action id. Kept per action so a
+    /// half-filled form survives clicking another row and coming back —
+    /// otherwise a nine-field form is lost to a stray click.
+    public var inputDrafts: [String: InputDraft] = [:]
+
+    /// The draft for an action, creating an empty one on first access.
+    public func draft(for entry: CatalogEntry) -> InputDraft {
+        inputDrafts[entry.id] ?? InputDraft()
+    }
+
+    public func setDraft(_ draft: InputDraft, for entry: CatalogEntry) {
+        inputDrafts[entry.id] = draft
+    }
+
     /// Filter by action name; nil means all.
     public var actionFilter: String? {
         didSet { if actionFilter != oldValue { Task { await load() } } }
@@ -81,13 +100,18 @@ public final class ActionsState {
     public func runAction(_ entry: CatalogEntry) async {
         trigger = .starting
         do {
+            // Only what the user actually filled in. An untouched field is
+            // omitted so the agent still infers it — see InputDraft.
+            let values = draft(for: entry).values(for: entry.inputs)
             let sessionId = try await client.trigger(
                 action: entry.qualifiedName,
                 repoPath: triggerRepoPath.isEmpty ? nil : triggerRepoPath,
-                extra: triggerExtra
+                extra: triggerExtra,
+                inputs: values.isEmpty ? nil : values
             )
             trigger = .started(sessionId: sessionId, action: entry.name)
             triggerExtra = ""
+            inputDrafts[entry.id] = nil
             await load()
         } catch {
             trigger = .failed(describeFetchFailure(error))
