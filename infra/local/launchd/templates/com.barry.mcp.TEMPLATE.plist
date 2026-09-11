@@ -35,13 +35,9 @@
         <string>__LAUNCHD_PATH__</string>
         <key>BARRY_DATABASE_URL</key>
         <string>__DATABASE_URL__</string>
-        <key>AXIOM_TOKEN</key>
-        <string>__AXIOM_TOKEN__</string>
         <key>BARRY_ENV</key>
         <string>prod</string>
         <key>ENABLE_LOCAL_LOGS</key>
-        <string>true</string>
-        <key>ENABLE_AXIOM_LOGS</key>
         <string>true</string>
 __MCP_ENV_VARS__
     </dict>

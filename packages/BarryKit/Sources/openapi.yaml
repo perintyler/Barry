@@ -3689,7 +3689,8 @@
               "codex",
               "opencode",
               "cursor",
-              "zai"
+              "zai",
+              "ollama"
             ],
             "nullable": true
           },
@@ -3813,7 +3814,8 @@
               "codex",
               "opencode",
               "cursor",
-              "zai"
+              "zai",
+              "ollama"
             ],
             "nullable": true
           },
@@ -3962,7 +3964,8 @@
                     "codex",
                     "opencode",
                     "cursor",
-                    "zai"
+                    "zai",
+                    "ollama"
                   ],
                   "nullable": true
                 },
@@ -4116,7 +4119,8 @@
                   "codex",
                   "opencode",
                   "cursor",
-                  "zai"
+                  "zai",
+                  "ollama"
                 ],
                 "nullable": true
               },
@@ -4294,7 +4298,8 @@
                   "codex",
                   "opencode",
                   "cursor",
-                  "zai"
+                  "zai",
+                  "ollama"
                 ],
                 "nullable": true
               },
@@ -4492,7 +4497,8 @@
               "codex",
               "opencode",
               "cursor",
-              "zai"
+              "zai",
+              "ollama"
             ]
           },
           "model": {
@@ -4557,7 +4563,8 @@
               "codex",
               "opencode",
               "cursor",
-              "zai"
+              "zai",
+              "ollama"
             ]
           },
           "model": {
@@ -4721,7 +4728,8 @@
                     "codex",
                     "opencode",
                     "cursor",
-                    "zai"
+                    "zai",
+                    "ollama"
                   ],
                   "nullable": true
                 },
@@ -5197,6 +5205,9 @@
                     ],
                     "additionalProperties": false
                   }
+                },
+                "stale": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -5722,7 +5733,8 @@
               "codex",
               "opencode",
               "cursor",
-              "zai"
+              "zai",
+              "ollama"
             ],
             "nullable": true
           },
@@ -5799,7 +5811,8 @@
               "codex",
               "opencode",
               "cursor",
-              "zai"
+              "zai",
+              "ollama"
             ],
             "nullable": true
           },

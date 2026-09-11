@@ -16,7 +16,6 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@axiomhq/js": "1.0.0",
     "pino": "9.14.0"
   },
   "devDependencies": {

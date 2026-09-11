@@ -45,17 +45,51 @@ fi
 # Terraform state. It lives as a single gitignored file per infra dir with no
 # remote backend, so losing it means re-importing every resource by hand — and
 # state holds values the API will not return again.
+#
+# Bags own terraform too. A bag's infra root lives in the bag's own repo, well
+# outside $BARRY_DIR — the axiom bag is the first — so scanning core alone
+# silently stopped covering state the moment infra moved into a bag. Roots come
+# from the generated registry snapshot rather than a hardcoded ~/repos/bags, so
+# a bag checked out anywhere is still covered.
+tf_roots=("$BARRY_DIR/infra")
+bag_registry="$HOME/.barry/bags.yaml"
+if [[ -f "$bag_registry" ]]; then
+    while IFS= read -r bag_path; do
+        [[ -d "$bag_path/infra" ]] && tf_roots+=("$bag_path/infra")
+    done < <(awk '/^[[:space:]]+path:/ { sub(/^[[:space:]]+path:[[:space:]]*/, ""); gsub(/"/, ""); sub(/^~/, ENVIRON["HOME"]); print }' "$bag_registry" 2>/dev/null)
+fi
+
 tf_saved=0
 tf_dir="$BACKUP_ROOT/terraform-$(date +%Y%m%d-%H%M%S)"
 while IFS= read -r state; do
-    rel="${state#"$BARRY_DIR"/}"
+    # Core state keeps its $BARRY_DIR-relative layout; a bag's is filed under
+    # bags/<name>/ so two roots cannot collide on the same basename.
+    if [[ "$state" == "$BARRY_DIR"/* ]]; then
+        rel="${state#"$BARRY_DIR"/}"
+    else
+        bag_root="${state%/infra/*}"
+        rel="bags/$(basename "$bag_root")/${state#"$bag_root"/}"
+    fi
     dest="$tf_dir/$rel"
     mkdir -p "$(dirname "$dest")"
     cp "$state" "$dest" && tf_saved=$((tf_saved + 1))
-done < <(find "$BARRY_DIR/infra" -name 'terraform.tfstate' -not -path '*/.terraform/*' 2>/dev/null)
+done < <(find "${tf_roots[@]}" -name 'terraform.tfstate' -not -path '*/.terraform/*' 2>/dev/null)
 
-if [[ $tf_saved -eq 0 ]]; then
+# Assert the state files we KNOW exist were captured, rather than alarming only
+# when every single one is missing. The old zero-check could not distinguish
+# "axiom's state vanished" from a healthy run — it passed with 3 of 4 saved, and
+# that is exactly how moving axiom out of core would have gone unnoticed.
+tf_expected=0
+for root in "${tf_roots[@]}"; do
+    while IFS= read -r _; do
+        tf_expected=$((tf_expected + 1))
+    done < <(find "$root" -name 'terraform.tfstate' -not -path '*/.terraform/*' 2>/dev/null)
+done
+
+if [[ $tf_expected -eq 0 ]]; then
     notify "Backup: no terraform state files found — expected at least infra/cloudflare" "" "alert" "warning"
+elif [[ $tf_saved -lt $tf_expected ]]; then
+    notify "Backup: only $tf_saved of $tf_expected terraform state files saved" "" "alert" "warning"
 fi
 
 if [[ -d "$BACKUP_ROOT" ]]; then

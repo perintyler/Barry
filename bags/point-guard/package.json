@@ -10,8 +10,11 @@
   },
   "dependencies": {
     "@barry-rocks/agent-runtime": "workspace:*",
+    "@barry-rocks/bags": "workspace:*",
+    "@barry-rocks/db": "workspace:*",
     "@barry-rocks/json-schema": "workspace:*",
     "@barry-rocks/logger": "workspace:*",
+    "@barry-rocks/secrets": "workspace:*",
     "@barry-rocks/session-client": "workspace:*",
     "@barry-rocks/tools": "workspace:*",
     "@barry-rocks/usage-telemetry": "workspace:*",

@@ -12,6 +12,16 @@
     <true/>
     <key>KeepAlive</key>
     <false/>
+    <!-- Without this launchd spawns the app as `daemon`, which means
+         efficiency-core scheduling, deprioritized I/O and coalesced timers.
+         On a GUI app that throttles the main thread: everything is uniformly
+         slow, and timer-driven refreshes arrive late or not at all, which
+         reads as a loading spinner that never resolves. Every other template
+         here sets this; the apps generated from this one were the exception.
+         Verify with `launchctl print gui/$UID/<label> | grep 'spawn type'` —
+         it must say `interactive (4)`, not `daemon (3)`. -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
     <key>StandardOutPath</key>
     <string>__HOME__/.barry/logs/__APP_ID__.log</string>
     <key>StandardErrorPath</key>

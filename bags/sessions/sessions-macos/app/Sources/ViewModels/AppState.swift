@@ -179,8 +179,14 @@ final class AppState: @unchecked Sendable {
                 activeSessions = fetched
                 rebuildSessions()
             }
+        } catch is CancellationError {
+            // Expected: the popover closed mid-refresh.
         } catch {
-            // Keep existing on transient failure
+            // Existing rows are kept deliberately — blanking the list on one
+            // failed poll is worse than showing slightly stale data. Logged
+            // because a list that has quietly stopped updating looks exactly
+            // like one with nothing new in it.
+            NSLog("refreshSessions failed: \(error.localizedDescription)")
         }
 
         // Load first page of recent if empty
@@ -193,8 +199,13 @@ final class AppState: @unchecked Sendable {
     func refreshSessionList() async {
         do {
             activeSessions = try await client.fetchActiveSessions()
+        } catch is CancellationError {
+            // Expected: the popover closed mid-refresh.
         } catch {
-            // Keep existing on transient failure
+            // This one is user-initiated, and the reset below clears the recent
+            // list regardless — so a failure here shows rows vanishing with no
+            // explanation. At minimum it should be in the log.
+            NSLog("refreshSessionList failed: \(error.localizedDescription)")
         }
         recentSessions = []
         recentCursor = nil

@@ -42,10 +42,27 @@ public struct IdentityTransport: Sendable {
         client = Client(
             serverURL: baseURL.appendingPathComponent("api/v1"),
             configuration: .init(dateTranscoder: .iso8601WithFractionalSeconds),
-            transport: URLSessionTransport(),
+            transport: URLSessionTransport(configuration: .init(session: Self.session)),
             middlewares: [BarryAuthMiddleware(token: token)]
         )
     }
+
+    /// The session every generated call rides.
+    ///
+    /// `URLSessionTransport()` would default to `URLSession.shared`: a 60s
+    /// request timeout and a **seven day** resource timeout. This is a local
+    /// API behind a menu bar popover, so a request that has not finished in a
+    /// few seconds has failed — and without these it hangs instead, which the
+    /// UI can only render as a spinner that never stops.
+    ///
+    /// Matches the 10s `BarryCore` uses for its own calls, so health checks and
+    /// data fetches agree about when the server has stopped answering.
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }()
 
     /// - Parameter hasMessages: when true, the server omits sessions with no
     ///   messages. A caller that hides them should pass it rather than filter

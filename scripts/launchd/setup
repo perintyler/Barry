@@ -1319,7 +1319,6 @@ if [[ -f "$MCP_TEMPLATE" ]]; then
         -v launchd_path="$BARRY_LAUNCHD_PATH" \
         -v node_path="$NODE_PATH" \
         -v db_url="$BARRY_DATABASE_URL" \
-        -v axiom_token="$AXIOM_TOKEN" \
         -v env_vars="$env_xml" \
         '{
             gsub(/__MCP_NAME__/, name);
@@ -1330,7 +1329,6 @@ if [[ -f "$MCP_TEMPLATE" ]]; then
             gsub(/__LAUNCHD_PATH__/, launchd_path);
             gsub(/__NODE_PATH__/, node_path);
             gsub(/__DATABASE_URL__/, db_url);
-            gsub(/__AXIOM_TOKEN__/, axiom_token);
             gsub(/__MCP_ENV_VARS__/, env_vars);
             gsub(/\\n/, "\n");
             print;

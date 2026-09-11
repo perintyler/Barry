@@ -25,6 +25,7 @@ variable "tunnel_ingress" {
   }))
   default = [
     { hostname = "barry.works", service = "http://localhost:9429" },
+    { hostname = "actions.barry.rocks", service = "http://localhost:4890" },
     { hostname = "github.barry.rocks", service = "http://localhost:4861" },
     { hostname = "metrics.barry.rocks", service = "http://localhost:4870" },
     { hostname = "plans.barry.rocks", service = "http://localhost:4880" },

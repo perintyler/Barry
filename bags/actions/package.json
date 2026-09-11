@@ -22,6 +22,9 @@
     "vitest": "4.1.0"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev": "tsx --watch server/src/index.ts",
+    "start": "tsx server/src/index.ts",
+    "typecheck": "tsc --noEmit"
   }
 }

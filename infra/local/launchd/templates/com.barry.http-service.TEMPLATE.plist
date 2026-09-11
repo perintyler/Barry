@@ -54,8 +54,6 @@
         <string>__SERVICE_PORT__</string>
         <key>ENABLE_LOCAL_LOGS</key>
         <string>true</string>
-        <key>ENABLE_AXIOM_LOGS</key>
-        <string>true</string>
 __SERVICE_ENV_VARS__
     </dict>
 </dict>

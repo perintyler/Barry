@@ -80,6 +80,21 @@ resource "cloudflare_dns_record" "rocks_plans" {
   ttl     = 1
 }
 
+# Actions — the actions bag's web app, gated by the "Barry Actions"
+# application in access.tf. The ordering note above is not boilerplate here:
+# this origin's POST /api/trigger spawns a live agent on this machine, so a
+# window where it answers unauthenticated is a window where a stranger can
+# start an agent. Apply the Access app FIRST (-target), confirm it redirects
+# to the login page, and only then apply this record.
+resource "cloudflare_dns_record" "rocks_actions" {
+  zone_id = cloudflare_zone.rocks.id
+  name    = "actions"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.barry_mac.id}.cfargotunnel.com"
+  type    = "CNAME"
+  proxied = true
+  ttl     = 1
+}
+
 # SPF — allow Mailgun to send on behalf of barry.rocks
 # Note: MX records are managed automatically by Cloudflare Email Routing (see email.tf)
 resource "cloudflare_dns_record" "rocks_spf" {

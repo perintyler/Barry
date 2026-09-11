@@ -31,6 +31,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNUserNot
     let servicesState = ServicesState()
     let approvalsState = ApprovalsState()
     private var cancellables: Set<AnyCancellable> = []
+    /// The rail floats beside the popover in its own window, so it has to be
+    /// shown and hidden alongside it — see `showRail()` and `popoverDidClose`.
+    private var railPanel: AppRailPanel?
 
     override init() {
         let bus = Self.makeBus()
@@ -262,6 +265,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNUserNot
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             NSApp.activate(ignoringOtherApps: true)
+            showRail()
             // A fresh open always lands on the home tab, so the feed is not on
             // screen yet. `ContentView` takes over from here on tab changes.
             setFeedVisible(popoverOpen: true)
@@ -275,6 +279,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNUserNot
         guard let button = statusItem.button, !popover.isShown else { return }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApp.activate(ignoringOtherApps: true)
+        showRail()
         setFeedVisible(popoverOpen: true)
     }
 
@@ -286,8 +291,48 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNUserNot
     /// through `handleStatusItemClick`. `popoverDidClose` covers every path —
     /// including the close that a window activation causes.
     func popoverDidClose(_ notification: Notification) {
+        // Every close routes through here, including the outside click that
+        // never touches `handleStatusItemClick`. The rail is a separate window
+        // and would otherwise be left floating beside nothing.
+        railPanel?.hide()
         appState.resetToHome()
         setFeedVisible(popoverOpen: false)
+    }
+
+    /// Bring the rail up beside the popover.
+    ///
+    /// Deferred by one runloop turn: `NSPopover.show` does not have a window to
+    /// measure against until it has been placed, and positioning against a
+    /// zero frame would drop the rail in the corner of the screen.
+    private func showRail() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.popover.isShown else { return }
+            if self.railPanel == nil {
+                self.railPanel = AppRailPanel { [weak self] entry in
+                    self?.openRailEntry(entry)
+                }
+            }
+            self.railPanel?.show(beside: self.popover)
+        }
+    }
+
+    /// Route a rail press to whatever opens it.
+    ///
+    /// Mirrors `ContentView.open`: an entry nobody wired up is loud rather than
+    /// a button that silently does nothing.
+    private func openRailEntry(_ entry: AppRailEntry) {
+        switch entry.destination {
+        case .web(let url):
+            NSWorkspace.shared.open(url)
+        case .app(let location):
+            if location == .identities { openIdentities() }
+            else if location == .actions { openActions() }
+            else if location == .plans { openPlans() }
+            else {
+                assertionFailure("No launcher wired for \(location.bundleName)")
+                NSLog("Rail entry \(entry.id) has no launcher")
+            }
+        }
     }
 
     /// Recompute whether the events feed counts as on screen.

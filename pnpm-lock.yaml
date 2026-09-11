@@ -372,12 +372,21 @@ importers:
       '@barry-rocks/agent-runtime':
         specifier: workspace:*
         version: link:../../packages/agent-runtime
+      '@barry-rocks/bags':
+        specifier: workspace:*
+        version: link:../../packages/bags
+      '@barry-rocks/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@barry-rocks/json-schema':
         specifier: workspace:*
         version: link:../../packages/json-schema
       '@barry-rocks/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@barry-rocks/secrets':
+        specifier: workspace:*
+        version: link:../../packages/secrets
       '@barry-rocks/session-client':
         specifier: workspace:*
         version: link:../../packages/session-client
@@ -991,9 +1000,6 @@ importers:
 
   packages/logger:
     dependencies:
-      '@axiomhq/js':
-        specifier: 1.0.0
-        version: 1.0.0
       express:
         specifier: ^4.18.0
         version: 4.22.2
@@ -1555,10 +1561,6 @@ packages:
 
   '@asamuzakjp/css-color@3.2.0':
     resolution: {integrity: sha512-K1A6z8tS3XsmCMM86xoWdn7Fkdn9m6RSVtocUrJYIwZnFVkng/PvkEoWtOWmP+Scc6saYWHWZYbndEEXxl24jw==}
-
-  '@axiomhq/js@1.0.0':
-    resolution: {integrity: sha512-4xf0b/KFVFmNvjxK4lHHuwioQ6TPr+PZLqEdMl/vcot1RqFwDnjaOEOp0/VPhyTgdE0di8bl/hOsu33bHMM27w==}
-    engines: {node: '>=16'}
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -4046,9 +4048,6 @@ packages:
       picomatch:
         optional: true
 
-  fetch-retry@6.0.0:
-    resolution: {integrity: sha512-BUFj1aMubgib37I3v4q78fYo63Po7t4HUPTpQ6/QE6yK6cIQrP+W43FYToeTEyg5m2Y7eFUtijUuAv/PDlWuag==}
-
   file-entry-cache@8.0.0:
     resolution: {integrity: sha512-XXTUwCvisa5oacNGRP9SfNtYBNAMi+RPwBFmblZEF7N7swHYQS6/Zfk7SRwx4D5j3CH211YNRco1DEMNVfZCnQ==}
     engines: {node: '>=16.0.0'}
@@ -5470,10 +5469,6 @@ packages:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
 
-  uuid@11.1.1:
-    resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
-    hasBin: true
-
   vary@1.1.2:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
@@ -5800,11 +5795,6 @@ snapshots:
       '@csstools/css-parser-algorithms': 3.0.5(@csstools/css-tokenizer@3.0.4)
       '@csstools/css-tokenizer': 3.0.4
       lru-cache: 10.4.3
-
-  '@axiomhq/js@1.0.0':
-    dependencies:
-      fetch-retry: 6.0.0
-      uuid: 11.1.1
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -8142,8 +8132,6 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.5
 
-  fetch-retry@6.0.0: {}
-
   file-entry-cache@8.0.0:
     dependencies:
       flat-cache: 4.0.1
@@ -9692,8 +9680,6 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   utils-merge@1.0.1: {}
-
-  uuid@11.1.1: {}
 
   vary@1.1.2: {}
 

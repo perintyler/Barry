@@ -235,3 +235,33 @@ resource "cloudflare_zero_trust_access_application" "barry_plans" {
     { id = cloudflare_zero_trust_access_policy.barry_owner.id, precedence = 2 },
   ]
 }
+
+# Actions — the actions bag's web app (bags/actions/bag.yaml, services.web),
+# published on the shared tunnel. Gated exactly like plans and metrics above,
+# but the stakes are higher: this origin's POST /api/trigger SPAWNS A LIVE
+# AGENT on the Mac with the repo checked out. The origin has no auth of its
+# own, so this application is the only thing between the internet and an agent
+# session. Per the ordering note in dns.tf, apply this app and confirm it is
+# live BEFORE adding the actions CNAME.
+resource "cloudflare_zero_trust_access_application" "barry_actions" {
+  zone_id          = cloudflare_zone.rocks.id
+  name             = "Barry Actions"
+  domain           = "actions.barry.rocks"
+  type             = "self_hosted"
+  session_duration = "24h"
+
+  allowed_idps = [
+    cloudflare_zero_trust_access_identity_provider.google.id,
+    cloudflare_zero_trust_access_identity_provider.otp.id,
+  ]
+  auto_redirect_to_identity = false
+
+  destinations = [
+    { type = "public", uri = "actions.barry.rocks" },
+  ]
+
+  policies = [
+    { id = cloudflare_zero_trust_access_policy.barry_machine.id, precedence = 1 },
+    { id = cloudflare_zero_trust_access_policy.barry_owner.id, precedence = 2 },
+  ]
+}

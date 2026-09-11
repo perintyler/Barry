@@ -3,13 +3,17 @@ import BarrySessionsCore
 import Components
 import SwiftUI
 
-/// The right-edge rail of apps to leave the popover for.
+/// The rail of apps to leave the popover for.
 ///
 /// A vertical pill rather than four glyphs on the end of the tab row: these are
-/// apps, not tabs, and showing their real icons says so. It is also why the
-/// rail stays on screen while a session is open — the tab row hides there
-/// because a second horizontal row read as competing navigation, which a
-/// column on the far edge does not do.
+/// apps, not tabs, and a column of marks says so. It is also why the rail stays
+/// up while a session is open — the tab row hides there because a second
+/// horizontal row read as competing navigation, which a column beside the
+/// window does not do.
+///
+/// `AppRailPanel` hosts this in its own window, floating outside the popover's
+/// right edge. The view itself knows nothing about that: it lays out a pill and
+/// draws whatever icons it is handed.
 struct AppRail: View {
     let icons: [AppRailIcon]
     let onOpen: (AppRailEntry) -> Void
@@ -74,24 +78,13 @@ private struct AppRailButton: View {
 
     @ViewBuilder
     private var artwork: some View {
-        if let appIcon = icon.appIcon {
-            // App icons are dense square art and read larger than a glyph at
-            // the same box, so they get their own size.
-            Image(nsImage: appIcon)
-                .resizable()
-                .frame(width: 26, height: 26)
-        } else if icon.isReachable {
-            Image(systemName: icon.entry.symbolName)
-                .font(.system(size: 15))
-                .foregroundStyle(.secondary)
-        } else {
+        glyph
+            .foregroundStyle(tint)
             // Amber, not red: this is "never set up", not "just failed". The
-            // badge matters more than the tint — a merely dimmed icon reads as
+            // badge carries the message — a merely dimmed icon reads as
             // temporarily disabled, which invites waiting rather than fixing.
-            Image(systemName: icon.entry.symbolName)
-                .font(.system(size: 15))
-                .foregroundStyle(Palette.amber.opacity(0.55))
-                .overlay(alignment: .bottomTrailing) {
+            .overlay(alignment: .bottomTrailing) {
+                if !icon.isReachable {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 8))
                         .foregroundStyle(Palette.amber)
@@ -102,6 +95,26 @@ private struct AppRailButton: View {
                         )
                         .offset(x: 4, y: 4)
                 }
+            }
+    }
+
+    /// The drawn mark, or the SF Symbol when the asset did not ship.
+    @ViewBuilder
+    private var glyph: some View {
+        if let art = icon.art {
+            // Template art: `foregroundStyle` supplies the color, so one black
+            // asset covers both appearances and every state.
+            Image(nsImage: art)
+                .renderingMode(.template)
+                .resizable()
+                .frame(width: 26, height: 26)
+        } else {
+            Image(systemName: icon.entry.symbolName)
+                .font(.system(size: 15))
         }
+    }
+
+    private var tint: Color {
+        icon.isReachable ? .secondary : Palette.amber.opacity(0.55)
     }
 }

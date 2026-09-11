@@ -23,43 +23,31 @@ struct ContentView: View {
     @State private var railIcons: [AppRailIcon] = []
 
     var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                // The switcher is hidden while a session is open: that screen
-                // has its own back button and its own tab row, and stacking a
-                // second row above the first read as two competing navigations.
-                if RootNavigation.showsTabBar(selected: tab, isShowingDetail: isShowingSessionDetail) {
-                    tabBar
-                    Divider()
-                }
-
-                switch tab {
-                case .sessions:
-                    sessionsTab
-                case .events:
-                    EventsView(state: eventsState)
-                case .approvals:
-                    ApprovalsView(state: approvalsState)
-                case .services:
-                    ServicesView(appState: servicesState)
-                }
+        // The app rail is not here: it floats beside the popover in its own
+        // window (`AppRailPanel`), because a popover cannot draw outside its
+        // own frame. The delegate shows and hides it with the popover.
+        VStack(spacing: 0) {
+            // The switcher is hidden while a session is open: that screen has
+            // its own back button and its own tab row, and stacking a second
+            // row above the first read as two competing navigations.
+            if RootNavigation.showsTabBar(selected: tab, isShowingDetail: isShowingSessionDetail) {
+                tabBar
+                Divider()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // A layout sibling rather than an overlay: the popover is a fixed
-            // 580pt and a floating rail would permanently cover the right edge
-            // of every session row. The rail is not gated on `showsTabBar` —
-            // it is an exit, not navigation, and hiding it inside the screen
-            // you are deepest in is backwards.
-            AppRail(icons: railIcons, onOpen: open)
+            switch tab {
+            case .sessions:
+                sessionsTab
+            case .events:
+                EventsView(state: eventsState)
+            case .approvals:
+                ApprovalsView(state: approvalsState)
+            case .services:
+                ServicesView(appState: servicesState)
+            }
         }
         .background(Palette.windowBackground)
         .task { appState.start() }
-        .task {
-            // Resolved once per open rather than in `body`: the lookup touches
-            // the filesystem, and hover alone re-evaluates the rail.
-            railIcons = AppRailIconResolver.resolveAll()
-        }
         .onChange(of: appState.homeResetToken) {
             // The popover closed: drop the query and the pending scroll target
             // so the next open starts clean. `selectedSessionId` is cleared by
@@ -155,6 +143,12 @@ struct ContentView: View {
                 },
                 onSessionUpdated: { Task { await appState.refreshSessions() } }
             )
+            // Identity per session, so opening a different one builds a fresh
+            // `MessagesState`. Without this SwiftUI reuses the existing view —
+            // and `State(initialValue:)` is ignored on re-init — so the second
+            // session renders its own name above the first session's messages,
+            // with a `let sessionId` that can never correct itself.
+            .id(session.id)
         } else {
             SessionListView(
                 appState: appState,

@@ -83,6 +83,13 @@ final class MessagesState {
 
     func loadInitial() async {
         isLoadingInitial = true
+        // `defer`, not a statement after the `do` block: this runs inside a
+        // `.task`, the popover is `.transient`, and closing it mid-fetch
+        // cancels the task at an `await` — so the function never resumes and
+        // a trailing assignment never runs. The flag stays true, and because
+        // the state object outlives the view, reopening shows a spinner that
+        // never resolves.
+        defer { isLoadingInitial = false }
         errorMessage = nil
         do {
             let response: MessagesResponse
@@ -132,6 +139,9 @@ final class MessagesState {
     func loadOlder() async {
         guard hasOlder, !isLoadingOlder, let lowest = lowestSeq else { return }
         isLoadingOlder = true
+        // Same cancellation hazard as `loadInitial`: the guard above means a
+        // stuck flag blocks every later attempt, not just this one.
+        defer { isLoadingOlder = false }
         do {
             let response = try await client.fetchMessages(
                 sessionId: sessionId, before: lowest, limit: 50, summary: true
@@ -145,10 +155,14 @@ final class MessagesState {
             } else {
                 hasOlder = response.hasMore
             }
+        } catch is CancellationError {
+            // Expected: the view went away mid-scroll.
         } catch {
-            // Silently fail on older message loads
+            // Not surfaced in the UI — the list still holds what it had, and a
+            // banner over a scroll gesture is worse than the gap. Logged so a
+            // failing page-back is diagnosable instead of invisible.
+            NSLog("loadOlder failed for \(sessionId): \(error.localizedDescription)")
         }
-        isLoadingOlder = false
     }
 
     // MARK: - Load Newer (scroll-to-bottom, when loaded around a target)
@@ -156,6 +170,7 @@ final class MessagesState {
     func loadNewer() async {
         guard hasNewer, !isLoadingNewer, let highest = highestSeq else { return }
         isLoadingNewer = true
+        defer { isLoadingNewer = false }
         do {
             let response = try await client.fetchMessages(
                 sessionId: sessionId, after: highest, limit: 10, summary: true
@@ -167,10 +182,11 @@ final class MessagesState {
                 commit(.append(count: deduped.count))
             }
             hasNewer = response.hasMore
+        } catch is CancellationError {
+            // Expected: the view went away mid-scroll.
         } catch {
-            // Silently fail on newer message loads
+            NSLog("loadNewer failed for \(sessionId): \(error.localizedDescription)")
         }
-        isLoadingNewer = false
     }
 
     // MARK: - Poll for New
@@ -207,8 +223,13 @@ final class MessagesState {
                 updateSeqBounds()
                 commit(.append(count: deduped.count))
             }
+        } catch is CancellationError {
+            // Expected: polling stopped.
         } catch {
-            // Silently fail on polls
+            // The 5s loop retries, so one failure is not worth a banner — but a
+            // live session that quietly stops updating looks identical to one
+            // with nothing to say, so it is logged.
+            NSLog("poll failed for \(sessionId): \(error.localizedDescription)")
         }
     }
 
@@ -218,6 +239,10 @@ final class MessagesState {
     func loadDetail(for sequence: Int) async {
         guard !loadingDetails.contains(sequence) else { return }
         loadingDetails.insert(sequence)
+        // Must be `defer`: the guard above treats a lingering entry as "already
+        // loading", so a cancelled fetch would spin that row forever and refuse
+        // every retry.
+        defer { loadingDetails.remove(sequence) }
         do {
             let detail = try await client.fetchMessageDetail(sessionId: sessionId, sequence: sequence)
             if let idx = messages.firstIndex(where: { $0.sequence == sequence && $0.isToolCall }) {
@@ -228,10 +253,13 @@ final class MessagesState {
                 // row renders the loaded detail.
                 commit(.detailUpdate)
             }
+        } catch is CancellationError {
+            // Expected: the row collapsed or the popover closed.
         } catch {
-            // Silently fail — user can retry by collapsing and re-expanding
+            // Retry by collapsing and re-expanding, which the `defer` above is
+            // what actually makes possible.
+            NSLog("loadDetail(\(sequence)) failed for \(sessionId): \(error.localizedDescription)")
         }
-        loadingDetails.remove(sequence)
     }
 
     // MARK: - Derived

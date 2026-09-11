@@ -3846,7 +3846,8 @@
                   "codex",
                   "opencode",
                   "cursor",
-                  "zai"
+                  "zai",
+                  "ollama"
                 ]
               },
               {
@@ -4031,7 +4032,8 @@
                   "codex",
                   "opencode",
                   "cursor",
-                  "zai"
+                  "zai",
+                  "ollama"
                 ]
               },
               {
@@ -4241,7 +4243,8 @@
                         "codex",
                         "opencode",
                         "cursor",
-                        "zai"
+                        "zai",
+                        "ollama"
                       ]
                     },
                     {
@@ -4456,7 +4459,8 @@
                       "codex",
                       "opencode",
                       "cursor",
-                      "zai"
+                      "zai",
+                      "ollama"
                     ]
                   },
                   {
@@ -4695,7 +4699,8 @@
                       "codex",
                       "opencode",
                       "cursor",
-                      "zai"
+                      "zai",
+                      "ollama"
                     ]
                   },
                   {
@@ -4959,7 +4964,8 @@
               "codex",
               "opencode",
               "cursor",
-              "zai"
+              "zai",
+              "ollama"
             ]
           },
           "model": {
@@ -5043,7 +5049,8 @@
               "codex",
               "opencode",
               "cursor",
-              "zai"
+              "zai",
+              "ollama"
             ]
           },
           "model": {
@@ -5295,7 +5302,8 @@
                         "codex",
                         "opencode",
                         "cursor",
-                        "zai"
+                        "zai",
+                        "ollama"
                       ]
                     },
                     {
@@ -5958,6 +5966,9 @@
                     ],
                     "additionalProperties": false
                   }
+                },
+                "stale": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -6550,7 +6561,8 @@
                   "codex",
                   "opencode",
                   "cursor",
-                  "zai"
+                  "zai",
+                  "ollama"
                 ]
               },
               {
@@ -6664,7 +6676,8 @@
                   "codex",
                   "opencode",
                   "cursor",
-                  "zai"
+                  "zai",
+                  "ollama"
                 ]
               },
               {
