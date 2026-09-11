@@ -6,6 +6,13 @@
       "owner": "perintyler",
       "expires": "2026-11-14",
       "reason": "Transitive via @cloudflare/puppeteer → @puppeteer/browsers@2.2.4 which pins extract-zip@2.0.1. No patched extract-zip release exists. @puppeteer/browsers v3 drops it, but @cloudflare/puppeteer has not upgraded yet."
+    },
+    {
+      "id": "GHSA-7pqw-9j4j-h8q3",
+      "packages": ["extract-zip"],
+      "owner": "perintyler",
+      "expires": "2026-11-14",
+      "reason": "Second advisory against the same unfixable dependency as GHSA-jmr9-qjv8-65gv: patched range is <0.0.0, so no release fixes it. Still reached only through @cloudflare/puppeteer, which hard-pins @puppeteer/browsers@2.2.4 as of 1.4.0 — upgrading the parent does not drop it. Expires with the entry above so both are re-reviewed together."
     }
   ]
 }
