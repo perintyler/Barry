@@ -1,0 +1,28 @@
+{
+  "name": "@barry-rocks/stop-robots",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@types/node": "22.15.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts"
+  },
+  "description": "robots.txt and crawler blocking middleware"
+}

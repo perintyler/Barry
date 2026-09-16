@@ -1,0 +1,68 @@
+{
+  "name": "@barry-rocks/skills",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./skill-catalog": "./src/skill-catalog.ts",
+    "./action-catalog": "./src/action-catalog.ts",
+    "./action-commands": "./src/action-commands.ts",
+    "./action-index": "./src/action-index.ts",
+    "./instruction-catalog": "./src/instruction-catalog.ts",
+    "./instruction-index": "./src/instruction-index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@barry-rocks/bags": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./skill-catalog": {
+        "types": "./dist/skill-catalog.d.ts",
+        "default": "./dist/skill-catalog.js"
+      },
+      "./action-catalog": {
+        "types": "./dist/action-catalog.d.ts",
+        "default": "./dist/action-catalog.js"
+      },
+      "./action-commands": {
+        "types": "./dist/action-commands.d.ts",
+        "default": "./dist/action-commands.js"
+      },
+      "./action-index": {
+        "types": "./dist/action-index.d.ts",
+        "default": "./dist/action-index.js"
+      },
+      "./instruction-catalog": {
+        "types": "./dist/instruction-catalog.d.ts",
+        "default": "./dist/instruction-catalog.js"
+      },
+      "./instruction-index": {
+        "types": "./dist/instruction-index.d.ts",
+        "default": "./dist/instruction-index.js"
+      }
+    }
+  }
+}

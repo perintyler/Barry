@@ -1,0 +1,24 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ESNext",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "@cloudflare/workers-types"],
+    // backend/entry.ts imports the worker by relative path now that the SDK
+    // lives in this bag, so this project pulls in the absorbed sources and
+    // needs the same two allowances the bag's own tsconfig makes: allowJs for
+    // the hand-written JS the worker imports, and the ambient declarations for
+    // the untyped markdown-it plugins.
+    "allowJs": true,
+    "noEmit": true
+  },
+  "include": [
+    "app/*.ts",
+    "app/*.d.ts",
+    "backend/*.ts",
+    "../src/artifacts/worker/markdown-it-plugins.d.ts",
+    "../src/artifacts/generated.d.ts"
+  ]
+}

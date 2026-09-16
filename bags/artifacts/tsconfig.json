@@ -1,0 +1,29 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // allowJs: the absorbed browser client, renderers and format helpers are
+    // hand-written JavaScript, and the worker imports parseCsv from them
+    // rather than keeping the hand-copied duplicate it used to carry.
+    "allowJs": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "@cloudflare/workers-types"]
+  },
+  "include": [
+    "*.ts",
+    "src/**/*",
+    "test/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    // Highlighter inputs, not compilable source: they are deliberately partial
+    // snippets (undefined names, missing imports) fed to the syntax detector.
+    // packages/syntax excluded these before it was absorbed; keep doing so.
+    "src/syntax/__tests__/fixtures",
+    // Vitest configs import sibling configs by .ts specifier, which needs
+    // allowImportingTsExtensions. Vitest resolves them itself; tsc need not.
+    "vitest.config.ts"
+  ]
+}

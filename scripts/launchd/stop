@@ -1,0 +1,18 @@
+#!/bin/bash
+# Stop all barry launchd services
+
+LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
+
+# Colors
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+echo "Stopping barry services..."
+
+for plist in "$LAUNCH_AGENTS_DIR"/com.barry.*.plist; do
+    [[ -f "$plist" ]] || continue
+    name=$(basename "$plist" .plist)
+    launchctl unload "$plist" 2>/dev/null && echo -e "  ${GREEN}✓${NC} $name"
+done
+
+echo "Done"

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Stable entry point for bag hooks — PUBLIC PATH CONTRACT.
+#
+# Per-session settings bake THIS path (plus a hook identity: bag, event,
+# index) instead of raw script paths, so moving or renaming bag directories
+# no longer strands running sessions' hooks — the dispatcher re-resolves the
+# script from the live registry at every firing. The corollary: moving THIS
+# file is the one rename that still strands sessions. Don't.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TSX="$ROOT/node_modules/.bin/tsx"
+if [[ ! -x "$TSX" ]]; then
+  TSX="tsx" # session PATH has cli/node_modules/.bin prepended by start.ts
+fi
+exec "$TSX" "$ROOT/packages/bags/src/hook-dispatch.ts" "$@"

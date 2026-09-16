@@ -1,0 +1,139 @@
+/* ========================================
+   @barry/ui - Semantic Tokens
+   Theme colors are generated from @barry/themes.
+   System tokens (spacing, shadows, etc.) are hand-maintained below.
+   ======================================== */
+
+@import './primitives.css';
+@import './theme-tokens.css';
+
+/* ---- System Tokens (not theme-dependent) ---- */
+:root {
+  /* Elevated surface (used by glass cards, distinct from raised/sunken) */
+  --bg-elevated: var(--bg-secondary);
+
+  /* Glass active state (not in theme schema — UI-specific) */
+  --glass-bg-active: rgba(255, 255, 255, 0.1);
+
+  /* Glow (nav card / interactive highlights) */
+  --glow-1: var(--blue-400-50);
+  --glow-2: var(--violet-500-35);
+  --glow-3: var(--cyan-400-50);
+  --glow-1-ambient: var(--blue-400-12);
+  --glow-2-ambient: var(--violet-500-8);
+  --glow-3-ambient: var(--cyan-400-12);
+
+  /* Brand (orange accents for specific UI) */
+  --orange-primary: var(--orange-600);
+  --orange-secondary: var(--orange-700);
+  --orange-accent: var(--orange-500);
+  --orange-dim: var(--orange-600-15);
+
+  /* Typography — sizes and weights (theme provides font families) */
+  --text-xs: var(--font-size-xs);
+  --text-sm: var(--font-size-sm);
+  --text-base: var(--font-size-base);
+  --text-lg: var(--font-size-lg);
+  --text-xl: var(--font-size-xl);
+  --text-2xl: var(--font-size-2xl);
+  --text-3xl: var(--font-size-3xl);
+
+  --font-normal: var(--font-weight-normal);
+  --font-medium: var(--font-weight-medium);
+  --font-semibold: var(--font-weight-semibold);
+  --font-bold: var(--font-weight-bold);
+
+  --leading-tight: var(--font-leading-tight);
+  --leading-normal: var(--font-leading-normal);
+  --leading-relaxed: var(--font-leading-relaxed);
+
+  /* Spacing */
+  --space-0: var(--size-0);
+  --space-1: var(--size-1);
+  --space-2: var(--size-2);
+  --space-3: var(--size-3);
+  --space-4: var(--size-4);
+  --space-5: var(--size-5);
+  --space-6: var(--size-6);
+  --space-8: var(--size-8);
+  --space-10: var(--size-10);
+  --space-12: var(--size-12);
+  --space-16: var(--size-16);
+  --space-20: var(--size-20);
+
+  /* Radius — extended (theme provides sm/md/lg/xl/full) */
+  --radius-2xl: var(--radius-24);
+
+  /* Shadows — now theme-driven (--shadow-sm/md/lg/xl come from theme-tokens.css) */
+  --shadow-glow: 0 0 20px rgba(124, 172, 248, 0.3);
+
+  /* Animation */
+  --ease-out: var(--ease-out-expo);
+  --ease-in-out: var(--ease-in-out-cubic);
+  --ease-spring: var(--ease-spring-bounce);
+  --duration-fast: var(--duration-100);
+  --duration-normal: var(--duration-200);
+  --duration-slow: var(--duration-300);
+
+  /* Z-Index */
+  --z-base: var(--layer-0);
+  --z-dropdown: var(--layer-1);
+  --z-sticky: var(--layer-2);
+  --z-modal: var(--layer-3);
+  --z-toast: var(--layer-4);
+  --z-tooltip: var(--layer-5);
+
+  /* Layout */
+  --max-width-sm: var(--breakpoint-sm);
+  --max-width-md: var(--breakpoint-md);
+  --max-width-lg: var(--breakpoint-lg);
+  --max-width-xl: var(--breakpoint-xl);
+
+  /* ---- Component Tokens ---- */
+
+  /* Button */
+  --btn-padding-x: var(--space-5);
+  --btn-padding-y: var(--space-3);
+  --btn-radius: var(--radius-md);
+  --btn-font-size: var(--text-sm);
+  --btn-font-weight: var(--font-medium);
+
+  /* Glass Card */
+  --card-padding: var(--space-6);
+  --card-radius: var(--radius-lg);
+  --card-bg: var(--glass-bg);
+  --card-border: var(--border);
+
+  /* Modal */
+  --modal-max-width: 520px;
+  --modal-padding: var(--space-8);
+  --modal-radius: var(--radius-xl);
+
+  /* Badge */
+  --badge-padding-x: var(--space-2);
+  --badge-padding-y: var(--space-1);
+  --badge-font-size: var(--text-xs);
+  --badge-radius: var(--radius-full);
+
+  /* Input */
+  --input-padding-x: var(--space-4);
+  --input-padding-y: var(--space-3);
+  --input-radius: var(--radius-md);
+  --input-bg: var(--bg-secondary);
+  --input-border: var(--border);
+}
+
+/* ---- Light Theme — system token overrides ---- */
+[data-theme="light"] {
+  --bg-elevated: var(--bg-primary);
+  --glass-bg-active: rgba(28, 25, 23, 0.16);
+
+  --glow-1: var(--gold-500-50);
+  --glow-2: var(--gold-600-35);
+  --glow-3: var(--gold-500-50);
+  --glow-1-ambient: var(--gold-500-15);
+  --glow-2-ambient: var(--gold-600-8);
+  --glow-3-ambient: var(--gold-500-15);
+
+  --shadow-glow: 0 0 20px rgba(196, 147, 50, 0.2);
+}

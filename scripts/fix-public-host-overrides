@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Remove public Barry hostnames from /etc/hosts so they resolve via Cloudflare.
+# Requires sudo because it edits /etc/hosts and flushes system DNS caches.
+set -euo pipefail
+
+PUBLIC_HOSTS=(
+  "barry.works"
+  "x.barry.rocks"
+)
+
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "This script requires sudo. You may be prompted for your macOS password."
+  exec sudo "$0" "$@"
+fi
+
+for host in "${PUBLIC_HOSTS[@]}"; do
+  perl -0pi -e "s/^.*\\b\Q${host}\E\\b.*\\n?//mg" /etc/hosts
+done
+
+dscacheutil -flushcache
+killall -HUP mDNSResponder
+
+echo "Remaining Barry host overrides in /etc/hosts:"
+grep -n 'barry\\.works\\|barry\\.lan\\|x\\.barry\\.rocks' /etc/hosts || true

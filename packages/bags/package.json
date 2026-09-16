@@ -1,0 +1,45 @@
+{
+  "name": "@barry-rocks/bags",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@barry-rocks/agent-bound": "workspace:*",
+    "@barry-rocks/env": "workspace:*",
+    "@barry-rocks/json-schema": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "esbuild": "0.27.3",
+    "yaml": "2.8.3",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "description": "Bag manifest parsing, loading, and lifecycle management"
+}

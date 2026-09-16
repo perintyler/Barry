@@ -1,0 +1,109 @@
+/* ─── Select ─── */
+
+.select {
+  position: relative;
+  width: 100%;
+}
+
+.select__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.select__trigger:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.select--open .select__trigger {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.select[data-disabled] .select__trigger {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.select__value--placeholder {
+  color: var(--text-muted);
+}
+
+.select__chevron {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.select--open .select__chevron {
+  transform: rotate(180deg);
+}
+
+.select__list {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  z-index: var(--z-dropdown);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-1) 0;
+  list-style: none;
+  margin: 0;
+  overflow-y: auto;
+  max-height: 200px;
+  animation: selectDropIn 120ms var(--ease-out);
+}
+
+.select__list[hidden] {
+  display: none;
+}
+
+@keyframes selectDropIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.select__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+.select__option:hover,
+.select__option--active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.select__option--active {
+  color: var(--accent);
+}
+
+.select__check {
+  color: var(--accent);
+  flex-shrink: 0;
+}

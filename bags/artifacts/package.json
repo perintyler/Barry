@@ -1,0 +1,53 @@
+{
+  "name": "@barry-rocks/artifacts-bag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "pretest": "pnpm --filter @barry-rocks/ui... build && node scripts/build.js && tsc --noEmit && node scripts/check-consumer-deps.mjs \"${BARRY_ARTIFACTS_CONSUMER:-$HOME/vantage/artifacts/package.json}\"",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check:consumer-deps": "node scripts/check-consumer-deps.mjs"
+  },
+  "dependencies": {
+    "@barry-rocks/google-auth": "workspace:*",
+    "@barry-rocks/logger": "workspace:*",
+    "@barry-rocks/themes": "workspace:*",
+    "@barry-rocks/tools": "workspace:*",
+    "@barry-rocks/ui": "workspace:*",
+    "@cloudflare/puppeteer": "^1.1.0",
+    "@cloudflare/workers-oauth-provider": "^0.8.2",
+    "@modelcontextprotocol/ext-apps": "1.7.5",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@taga3s/highlightjs-terraform": "^1.0.7",
+    "agents": "^0.13.3",
+    "highlight.js": "11.11.1",
+    "highlightjs-zig": "^1.0.2",
+    "hono": "4.13.1",
+    "markdown-it": "14.2.0",
+    "markdown-it-deflist": "4.0.0",
+    "markdown-it-footnote": "4.0.0",
+    "markdown-it-front-matter": "0.2.4",
+    "markdown-it-task-lists": "2.1.1",
+    "oauth4webapi": "^3.8.6",
+    "zod": "4.3.6"
+  },
+  "optionalDependencies": {
+    "express": "5.2.1",
+    "jose": "6.2.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260819.1",
+    "@types/express": "5.0.6",
+    "@types/markdown-it": "14.1.2",
+    "@types/node": "22.15.0",
+    "esbuild": "0.27.0",
+    "jsdom": "25.0.0",
+    "typescript": "5.9.3",
+    "vite": "^8.1.5",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "4.1.0",
+    "wrangler": "4.113.0"
+  }
+}

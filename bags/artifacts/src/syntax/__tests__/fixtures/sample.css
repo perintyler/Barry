@@ -1,0 +1,52 @@
+/* @barry/artifacts - Styles */
+
+.artifacts-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.artifacts-app--initializing {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.artifacts-app--initializing,
+.artifacts-app--initializing *,
+.artifacts-app--initializing *::before,
+.artifacts-app--initializing *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+.artifacts-app--ready {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease;
+}
+
+.artifact-list-search-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+@media (max-width: 640px) {
+  .artifacts-app {
+    flex-direction: column;
+  }
+  .artifact-viewer-plain {
+    font-size: 13px;
+    padding: 12px;
+  }
+}
+
+.artifact-viewer-filename::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+}
