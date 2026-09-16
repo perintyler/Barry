@@ -1,0 +1,122 @@
+/* ========================================
+   @barry/ui - Homepage Components
+   Page-specific styles for the Barry homepage.
+   Not generic design system components.
+   Requires: tokens.css (imported via barrel or direct)
+   ======================================== */
+
+/* card-enter keyframe used by .homepage-btn-wrapper */
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Homepage Button (with glow) ---- */
+.homepage-btn-wrapper {
+  position: relative;
+  border-radius: var(--radius-md, 8px);
+  opacity: 0;
+  transform: translateY(12px);
+  animation: card-enter 0.4s var(--ease-out) forwards;
+}
+
+.homepage-btn-glow {
+  position: absolute;
+  inset: -1px;
+  border-radius: calc(var(--radius-md, 8px) + 1px);
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    var(--white-12),
+    var(--white-6),
+    var(--white-12)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.4s var(--ease-out);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.homepage-btn-wrapper:hover .homepage-btn-glow {
+  opacity: 1;
+}
+
+.homepage-btn-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: calc(var(--radius-md, 8px) + 4px);
+  background: radial-gradient(
+    ellipse at center,
+    var(--white-4),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.4s var(--ease-out);
+  pointer-events: none;
+  filter: blur(6px);
+  z-index: -2;
+}
+
+.homepage-btn-wrapper:hover::after {
+  opacity: 1;
+}
+
+.homepage-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md, 8px);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  background: var(--glass-subtle);
+  border: 0.5px solid var(--glass-border);
+  transition: all var(--duration-normal) var(--ease-out);
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: var(--font-normal);
+  letter-spacing: 0.02em;
+  color: var(--glass-text);
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.homepage-btn:hover {
+  background: var(--white-7);
+  border-color: var(--glass-border-hover);
+  color: var(--glass-text-hover);
+}
+
+.homepage-btn:active {
+  transform: scale(0.98);
+  transition-duration: var(--duration-fast);
+}
+
+
+/* ---- Greeting ---- */
+.barry-greeting {
+  position: fixed;
+  bottom: 2rem;
+  left: 2.5rem;
+  font-family: 'Gruppo', cursive;
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  background: linear-gradient(90deg, var(--orange-accent) 0%, var(--orange-primary) 50%, var(--orange-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  opacity: 0.45;
+}

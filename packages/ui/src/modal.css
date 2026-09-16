@@ -1,0 +1,246 @@
+/* ─── Modal ─── */
+
+.modal-overlay {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  background: var(--overlay-bg);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: none; align-items: center; justify-content: center;
+  padding: var(--space-8);
+  opacity: 0; transition: opacity 0.25s ease;
+}
+.modal-overlay.active { display: flex; opacity: 1; }
+.modal-overlay.fading { display: flex; opacity: 0; }
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--modal-radius);
+  width: 100%; max-width: var(--modal-max-width); max-height: 80vh;
+  overflow-y: auto;
+  padding: var(--modal-padding);
+  transform: translateY(20px) scale(0.97);
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+.modal-overlay.active .modal { transform: translateY(0) scale(1); }
+
+.modal-category {
+  display: inline-block; padding: 0.2rem 0.6rem; border-radius: var(--radius-sm);
+  font-size: var(--text-xs); font-weight: var(--font-semibold); text-transform: uppercase;
+  letter-spacing: 0.08em; margin-bottom: var(--space-3);
+  background: var(--orange-dim); color: var(--orange-accent);
+}
+
+.modal-intro {
+  font-size: var(--text-sm); color: var(--white-40);
+  margin-bottom: var(--space-4);
+}
+
+.modal-body {
+  font-size: var(--text-sm); color: var(--white-80);
+  line-height: var(--leading-relaxed);
+}
+.modal-body h1, .modal-body h2, .modal-body h3 {
+  color: var(--text-primary); margin: var(--space-3) 0 var(--space-1);
+}
+.modal-body h1 { font-size: 1.2rem; }
+.modal-body h2 { font-size: 1.05rem; }
+.modal-body h3 { font-size: 0.95rem; }
+.modal-body h1:first-child, .modal-body h2:first-child, .modal-body h3:first-child { margin-top: 0; }
+.modal-body p { margin: 0.3rem 0; }
+.modal-body strong { color: var(--text-primary); }
+.modal-body ul, .modal-body ol {
+  padding-left: var(--space-5); margin: var(--space-1) 0;
+}
+.modal-body li { margin: 0.15rem 0; }
+.modal-body blockquote {
+  border-left: 2px solid var(--orange-600-40);
+  padding-left: var(--space-3); margin: var(--space-2) 0;
+  color: var(--white-50); font-style: italic;
+}
+.modal-body hr {
+  border: none; border-top: 1px solid var(--border);
+  margin: var(--space-4) 0;
+}
+.modal-body code {
+  background: var(--glass-code); padding: 0.1rem 0.35rem;
+  border-radius: 4px; font-size: 0.85em;
+}
+.modal-body br { display: block; content: ''; margin: var(--space-1) 0; }
+
+.modal-actions {
+  display: flex; gap: var(--space-3); margin-top: var(--space-6);
+  justify-content: flex-end;
+}
+.modal-btn {
+  padding: var(--space-2) var(--space-4); border-radius: var(--radius-md);
+  font-size: var(--text-sm); font-weight: var(--font-medium); cursor: pointer;
+  border: none; transition: all var(--duration-fast) ease;
+}
+.modal-btn-close {
+  background: var(--glass-code); color: var(--white-50);
+}
+.modal-btn-close:hover { background: var(--glass-bg-active); color: var(--text-primary); }
+.modal-btn-next {
+  background: var(--orange-600-20); color: var(--orange-accent);
+}
+.modal-btn-next:hover { background: var(--orange-600-40); }
+.modal-loading {
+  text-align: center; padding: var(--space-8);
+  color: var(--white-30); font-size: var(--text-sm);
+}
+
+/* ─── Native <dialog> Modal ─── */
+
+dialog.modal {
+  border: none; padding: 0; background: transparent;
+  max-width: none; max-height: none;
+  width: fit-content; height: fit-content;
+  overflow: visible;
+  opacity: 1;
+  transition:
+    opacity var(--duration-fast) ease,
+    overlay var(--duration-fast) ease allow-discrete,
+    display var(--duration-fast) ease allow-discrete;
+}
+
+dialog.modal:not([open]) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@starting-style {
+  dialog.modal[open] {
+    opacity: 0;
+  }
+}
+
+dialog.modal .modal-inner {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--modal-radius);
+  padding: var(--modal-padding);
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-xl);
+  position: relative;
+  transform: translateY(0) scale(1);
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+dialog.modal:not([open]) .modal-inner {
+  transform: translateY(20px) scale(0.97);
+}
+
+@starting-style {
+  dialog.modal[open] .modal-inner {
+    transform: translateY(20px) scale(0.97);
+  }
+}
+
+/* Size variants */
+dialog.modal[data-size="sm"] .modal-inner { max-width: 400px; }
+dialog.modal[data-size="md"] .modal-inner { max-width: var(--modal-max-width); }
+dialog.modal[data-size="lg"] .modal-inner { max-width: 680px; }
+dialog.modal[data-size="full"] { width: 100%; max-width: 100%; }
+dialog.modal[data-size="full"] .modal-inner {
+  max-width: 100%; min-height: 100dvh; border-radius: 0;
+}
+
+/* Position variants */
+dialog.modal[data-position="center"] { margin: auto; }
+dialog.modal[data-position="bottom"] {
+  margin: auto 0 0 0; width: 100%;
+}
+dialog.modal[data-position="bottom"] .modal-inner {
+  border-radius: var(--modal-radius) var(--modal-radius) 0 0;
+}
+
+/* Backdrop variants */
+dialog.modal::backdrop {
+  opacity: 1;
+  transition:
+    opacity var(--duration-fast) ease,
+    overlay var(--duration-fast) ease allow-discrete,
+    display var(--duration-fast) ease allow-discrete;
+}
+dialog.modal:not([open])::backdrop { opacity: 0; }
+
+@starting-style {
+  dialog.modal[open]::backdrop { opacity: 0; }
+}
+
+dialog.modal[data-backdrop="scrim"]::backdrop {
+  background: var(--overlay-bg);
+}
+dialog.modal[data-backdrop="blur"]::backdrop {
+  background: var(--overlay-bg);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+dialog.modal[data-backdrop="gradient"]::backdrop {
+  background: radial-gradient(ellipse at center, var(--overlay-bg-light) 0%, var(--overlay-bg) 100%);
+}
+
+/* Scroll lock */
+html:has(dialog.modal[open]:modal) { overflow: hidden; }
+
+/* Close button */
+dialog.modal .modal-close {
+  position: absolute; top: var(--space-3); right: var(--space-3);
+  background: none; border: none; cursor: pointer;
+  color: var(--text-tertiary); padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  transition: color var(--duration-fast) ease, background var(--duration-fast) ease;
+}
+dialog.modal .modal-close:hover {
+  color: var(--text-primary);
+  background: var(--glass-bg-hover);
+}
+
+/* Heading */
+dialog.modal .modal-heading {
+  font-size: var(--text-lg); font-weight: var(--font-semibold);
+  color: var(--text-primary); margin: 0 0 var(--space-4) 0;
+  padding-right: var(--space-8);
+}
+
+/* Fullscreen layout — dialog IS the viewport, consumer owns backdrop content */
+dialog.modal[data-layout="fullscreen"] {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  overflow: visible;
+}
+
+dialog.modal[data-layout="fullscreen"]::backdrop {
+  background: transparent;
+}
+
+/* Align: where content gravitates inside the fullscreen dialog */
+dialog.modal[data-layout="fullscreen"][data-align="bottom"],
+dialog.modal[data-layout="fullscreen"]:not([data-align]) {
+  align-items: flex-end;
+}
+
+dialog.modal[data-layout="fullscreen"][data-align="top"] {
+  align-items: flex-start;
+}
+
+dialog.modal[data-layout="fullscreen"][data-align="center"] {
+  align-items: center;
+}
+
+/* Responsive: auto bottom-sheet on mobile */
+@media (max-width: 640px) {
+  dialog.modal:not([data-position="center"]) {
+    margin: auto 0 0 0; width: 100%;
+  }
+  dialog.modal:not([data-position="center"]) .modal-inner {
+    border-radius: var(--modal-radius) var(--modal-radius) 0 0;
+    max-width: 100%;
+  }
+}

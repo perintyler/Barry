@@ -1,0 +1,103 @@
+#!/usr/bin/env node
+/**
+ * Verify the request logger records the path the request actually had.
+ *
+ * `templatePath` is unit-tested, but the other half of the fix — capturing the
+ * path ONCE at entry rather than re-reading req.path inside res.on("finish") —
+ * is not, and deliberately so: pino writes through its own file descriptor, so
+ * an in-process fake logger passes happily while the shipped path stays broken.
+ * That is the exact failure this check exists to catch, and a test that cannot
+ * see the real output cannot catch it.
+ *
+ * So it is verified HERE, against the running service, by reading what it
+ * actually wrote.
+ *
+ * Fails loudly when:
+ *   - a service logged a bare "/" for a request that was not to "/"
+ *   - a raw identifier survived into a logged path (unbounded cardinality)
+ *   - no request.end lines exist at all (the logger is not mounted)
+ *
+ * Usage: node scripts/checks/request-logging
+ */
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
+
+const ROOT = process.env.BARRY_DIR || join(homedir(), "repos", "barry");
+const SOURCES = [
+  { service: "api", file: join(ROOT, "servers", "api", "logs", "stdout.log") },
+  { service: "web", file: join(ROOT, "apps", "web", "barry.works", "logs", "stdout.log") },
+  { service: "mcp", file: join(ROOT, "servers", "mcp", "logs", "stderr.log") },
+];
+
+/** A path segment that looks like an id rather than a route word. */
+const RAW_ID = /\/(?:\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_-]{16,})(?:\/|$)/;
+
+let failures = 0;
+let checked = 0;
+
+for (const { service, file } of SOURCES) {
+  if (!existsSync(file)) {
+    console.log(`  ${service}: no log file — skipped`);
+    continue;
+  }
+
+  // Scoped to lines written AFTER the service last started. These logs span
+  // weeks and survive restarts, so older lines legitimately carry the old shape
+  // — counting them reports a fixed bug as still broken, which is how a check
+  // trains you to ignore it. Verified: a 2000-line window flagged 33 raw ids
+  // that were all written before the fix shipped.
+  const lines = readFileSync(file, "utf8").split("\n").slice(-5000);
+  const all = [];
+  for (const line of lines) {
+    if (!line.includes('"request.end"')) continue;
+    try {
+      const d = JSON.parse(line);
+      if (d.msg === "request.end") all.push(d);
+    } catch { /* partial line */ }
+  }
+
+  // `since` defaults to the last 6 hours, which comfortably covers a normal
+  // deploy cadence. Pass an ISO timestamp to check a specific window.
+  const sinceMs = process.env.SINCE
+    ? Date.parse(process.env.SINCE)
+    : Date.now() - 6 * 3600 * 1000;
+  const ends = all.filter((d) => Date.parse(String(d.time)) >= sinceMs);
+
+  if (ends.length === 0) {
+    // No RECENT lines is not the same as no lines at all: a quiet service is
+    // healthy, an unmounted logger is not. Distinguish them rather than
+    // failing on silence.
+    const verdict = all.length === 0
+      ? "no request.end lines at all — logger not mounted?"
+      : `no requests in the window (${all.length} older lines) — idle`;
+    console.log(`  ${service}: ${verdict}`);
+    if (all.length === 0) failures += 1;
+    continue;
+  }
+
+  checked += ends.length;
+  // A bare "/" is only legitimate for an actual root request. Anything else
+  // means req.path was re-read after Express rewrote it.
+  const roots = ends.filter((d) => d.path === "/").length;
+  const rawIds = ends.filter((d) => typeof d.path === "string" && RAW_ID.test(d.path));
+
+  const rootShare = roots / ends.length;
+  const bad = rootShare > 0.25 || rawIds.length > 0;
+  console.log(
+    `  ${service}: ${ends.length} requests, ${roots} logged as "/" ` +
+    `(${(rootShare * 100).toFixed(0)}%), ${rawIds.length} with a raw id` +
+    (bad ? "  ← FAIL" : ""),
+  );
+  if (rawIds.length > 0) console.log(`      e.g. ${rawIds[0].path}`);
+  if (bad) failures += 1;
+}
+
+if (checked === 0) {
+  console.error("no request.end lines anywhere — cannot verify, treating as failure");
+  process.exit(1);
+}
+console.log(failures === 0
+  ? `OK — ${checked} logged requests carry real, templated paths`
+  : `FAILED — ${failures} service(s) logging corrupted paths`);
+process.exit(failures === 0 ? 0 : 1);

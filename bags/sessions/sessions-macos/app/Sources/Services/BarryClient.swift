@@ -1,0 +1,152 @@
+import Foundation
+import BarryKit
+import BarrySessionsCore
+
+/// Session-specific API client. Config reading, auth, and HTTP primitives
+/// live in BarryKit's `BarryCore`; this actor adds the endpoints
+/// BarrySessions needs.
+actor BarryClient {
+    private let core = BarryCore()
+
+    // MARK: - Health
+
+    func checkHealth() async -> Bool {
+        await core.checkHealth()
+    }
+
+    // MARK: - Sessions
+
+    /// Fetch active (running + pending) sessions with message counts.
+    func fetchActiveSessions() async throws -> [Session] {
+        let response = try await core.transport.listSessions(limit: 100, active: true)
+        return try decodeSessions(response.sessions)
+    }
+
+    /// Fetch recent sessions (all statuses) with pagination and message counts.
+    ///
+    /// Asks the server to omit message-less sessions, because the list hides
+    /// them anyway. Fetching them only to drop them is what let a run of them
+    /// read as "this page gained nothing" while the cursor said "more rows" —
+    /// the mismatch the load-more sentinel used to spin on.
+    func fetchRecentSessions(limit: Int = 20, cursor: String? = nil) async throws -> RecentSessionsResponse {
+        let response = try await core.transport.listSessions(
+            cursor: cursor,
+            limit: limit,
+            hasMessages: true
+        )
+        let sessions = try decodeSessions(response.sessions)
+        return RecentSessionsResponse(sessions: sessions, nextCursor: response.nextCursor)
+    }
+
+    private func decodeSessions<T: Encodable>(_ value: T) throws -> [Session] {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return try JSONDecoder().decode([Session].self, from: encoder.encode(value))
+    }
+
+    // MARK: - Resolved Tools
+
+    func fetchResolvedTools(sessionId: String) async throws -> ResolvedToolsResponse {
+        try decode(try await core.transport.resolvedTools(sessionId: sessionId))
+    }
+
+    func previewTools(sessionId: String, traits: [String]) async throws -> ResolvedToolsResponse {
+        try decode(try await core.transport.previewTools(
+            sessionId: sessionId,
+            traits: traits.joined(separator: ",")
+        ))
+    }
+
+    // MARK: - Messages
+
+    /// Fetch messages for a session. Supports pagination via `after` and `before` sequence numbers.
+    /// When `summary` is true, tool call messages have truncated input and null result.
+    func fetchMessages(sessionId: String, after: Int? = nil, before: Int? = nil, limit: Int = 50, summary: Bool = false) async throws -> MessagesResponse {
+        try decode(try await core.transport.listMessages(
+            sessionId: sessionId,
+            after: after,
+            before: before,
+            limit: limit,
+            summary: summary
+        ))
+    }
+
+    /// Fetch full input/result for a single tool call message (lazy detail loading).
+    func fetchMessageDetail(sessionId: String, sequence: Int) async throws -> MessageDetailResponse {
+        try decode(try await core.transport.messageDetail(sessionId: sessionId, sequence: sequence))
+    }
+
+    // MARK: - Update Session
+
+    /// Update a session's traits and direct namespace/tool picks.
+    func updateSession(
+        sessionId: String,
+        traits: [String],
+        selectedNamespaces: [String],
+        selectedTools: [String]
+    ) async throws {
+        try await patchSession(sessionId: sessionId, body: [
+            "traits": traits,
+            "selectedNamespaces": selectedNamespaces,
+            "selectedTools": selectedTools
+        ])
+    }
+
+    func renameSession(sessionId: String, name: String) async throws {
+        try await patchSession(sessionId: sessionId, body: ["name": name])
+    }
+
+    /// Update session bound (e.g. read-only mode).
+    func updateBound(sessionId: String, bound: [String: Any]) async throws {
+        try await patchSession(sessionId: sessionId, body: ["bound": bound])
+    }
+
+    /// Update pinned state.
+    func updatePinned(sessionId: String, pinned: Bool) async throws {
+        try await patchSession(sessionId: sessionId, body: ["pinned": pinned])
+    }
+
+    /// Set the session's model (applies on next start/resume). nil clears it.
+    func setModel(sessionId: String, model: String?) async throws {
+        try await patchSession(sessionId: sessionId, body: ["model": model ?? NSNull()])
+    }
+
+    /// Stop a running session.
+    func stopSession(sessionId: String) async throws {
+        try await core.transport.stopSession(sessionId: sessionId)
+    }
+
+    // MARK: - Search
+
+    /// Fuzzy search messages across all sessions.
+    func searchMessages(query: String, limit: Int = 20) async throws -> [SearchResult] {
+        let response: SearchResponse = try decode(
+            try await core.transport.searchSessions(query: query, limit: limit)
+        )
+        return response.results
+    }
+
+    // MARK: - Models
+
+    func fetchModels() async throws -> [String: ProviderModels] {
+        try await core.fetchModels()
+    }
+
+    // MARK: - Identities
+
+    func fetchIdentityDefaults() async throws -> [IdentityDefaults] {
+        try await core.fetchIdentityDefaults()
+    }
+
+    private func decode<T: Decodable, U: Encodable>(_ value: U) throws -> T {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return try JSONDecoder().decode(T.self, from: encoder.encode(value))
+    }
+
+    private func patchSession(sessionId: String, body: [String: Any]) async throws {
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let request = try JSONDecoder().decode(Components.Schemas.UpdateSessionRequest.self, from: data)
+        _ = try await core.transport.updateSession(id: sessionId, request: request)
+    }
+}

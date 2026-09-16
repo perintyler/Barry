@@ -1,0 +1,21 @@
+{
+  "$schema": "../../../../node_modules/wrangler/config-schema.json",
+  // account_id sourced from CLOUDFLARE_ACCOUNT_ID env var
+  "name": "barry-artifacts-app",
+  "main": "index.ts",
+  "compatibility_date": "2026-03-01",
+  "routes": [
+    { "pattern": "artifacts.barry.rocks", "custom_domain": true }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "5bf4009cd1044966a3af01dfd2b1522d"
+    }
+  ]
+  // Secrets (set once via: wrangler secret put <NAME>)
+  //   GOOGLE_CLIENT_ID       — Google OAuth client ID
+  //   GOOGLE_CLIENT_SECRET   — Google OAuth client secret
+  //   ALLOWED_EMAILS         — comma-separated email allowlist
+  //   ARTIFACTS_WORKER_URL   — backend worker URL (e.g. https://barry-artifacts.platypus-0f4.workers.dev)
+}

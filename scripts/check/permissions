@@ -1,0 +1,335 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Barry Permission Health Check
+# =============================================================================
+# Checks that all macOS TCC permissions required by Barry services are granted.
+# Run this after setup or after a node upgrade to catch missing grants early.
+#
+# Usage:
+#   ./scripts/check-permissions          # Full check with instructions
+#   ./scripts/check-permissions --quiet  # Exit 0 if ok, 1 if any missing (for CI/cron)
+#   ./scripts/check-permissions --test   # Functional tests: actually exercise each MCP
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BARRY_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROFILE_IDENTIFIER="rocks.barry.tcc.permissions"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+QUIET=false
+TEST=false
+for arg in "$@"; do
+    [[ "$arg" == "--quiet" ]] && QUIET=true
+    [[ "$arg" == "--test" ]]  && TEST=true
+done
+
+PASS=0
+WARN=0
+FAIL=0
+
+pass()   { printf "${GREEN}✓${NC} %s\n" "$1"; PASS=$((PASS+1)); }
+warn()   { printf "${YELLOW}⚠${NC} %s\n" "$1"; WARN=$((WARN+1)); }
+fail()   { printf "${RED}✗${NC} %s\n" "$1"; FAIL=$((FAIL+1)); }
+detail() { $QUIET || printf "     %s\n" "$1"; }
+section(){ $QUIET && return; printf "\n${BOLD}── %s ──${NC}\n" "$1"; }
+
+# ─── Resolve node binary ────────────────────────────────────────────────────
+
+if [[ -x "/opt/homebrew/bin/node" ]]; then
+    NODE_BIN="/opt/homebrew/bin/node"
+elif [[ -x "/usr/local/bin/node" ]]; then
+    NODE_BIN="/usr/local/bin/node"
+else
+    NODE_BIN=""
+fi
+
+# ─── Node binary ─────────────────────────────────────────────────────────────
+
+section "Node Binary"
+
+if [[ -n "$NODE_BIN" ]]; then
+    NODE_VERSION="$($NODE_BIN --version 2>/dev/null)"
+    pass "Homebrew node: $NODE_BIN ($NODE_VERSION)"
+else
+    fail "Homebrew node not found — install: brew install node"
+    detail "TCC grants are tied to the node binary path."
+    detail "nvm's versioned path breaks grants on upgrade."
+fi
+
+# Warn if nvm node is earlier in PATH (would override Homebrew)
+ACTIVE_NODE="$(which node 2>/dev/null || true)"
+if [[ -n "$ACTIVE_NODE" && "$ACTIVE_NODE" == *".nvm"* ]]; then
+    warn "Shell uses nvm node ($ACTIVE_NODE) — launchd uses Homebrew node"
+    detail "This is fine for services (launchd path is explicit)."
+fi
+
+# ─── TCC Profile ─────────────────────────────────────────────────────────────
+
+section "TCC Profile (Automation, Screen Recording, Microphone)"
+
+PROFILE_INSTALLED=false
+if profiles -P 2>/dev/null | grep -q "$PROFILE_IDENTIFIER"; then
+    pass "Barry TCC profile installed ($PROFILE_IDENTIFIER)"
+    PROFILE_INSTALLED=true
+else
+    fail "Barry TCC profile NOT installed"
+    detail "Run: ./scripts/setup-permissions"
+fi
+
+# ─── Automation → Mail ───────────────────────────────────────────────────────
+
+section "Automation → Mail.app (ios-mailer MCP)"
+
+_mail_test=$(osascript -e 'tell application "Mail" to return name' 2>&1 || true)
+if echo "$_mail_test" | grep -qi "not allowed\|1743\|not permitted"; then
+    fail "Automation → Mail: permission denied"
+    detail "Install the Barry TCC profile: ./scripts/setup-permissions"
+else
+    pass "Automation → Mail: accessible"
+fi
+
+# ─── Automation → System Events ──────────────────────────────────────────────
+
+section "Automation → System Events (system-display MCP)"
+
+_se_test=$(osascript -e 'tell application "System Events" to return name' 2>&1 || true)
+if echo "$_se_test" | grep -qi "not allowed\|1743\|not permitted"; then
+    fail "Automation → System Events: permission denied"
+    detail "Install the Barry TCC profile: ./scripts/setup-permissions"
+else
+    pass "Automation → System Events: accessible"
+fi
+
+# ─── Full Disk Access ─────────────────────────────────────────────────────────
+
+section "Full Disk Access (system MCP shell executor)"
+
+_fda_ok=false
+
+# Try reading FDA-protected paths
+for _path in \
+    "$HOME/Library/Safari/History.db" \
+    "$HOME/Library/Mail/V10/MailData/Accounts.plist" \
+    "$HOME/Library/Cookies/Cookies.binarycookies"; do
+    if [[ -e "$_path" ]] && cat "$_path" &>/dev/null 2>&1; then
+        _fda_ok=true
+        break
+    fi
+done
+
+# Fallback: try ls on a protected directory
+if ! $_fda_ok; then
+    if ls "$HOME/Library/Safari/" &>/dev/null 2>&1; then
+        _fda_ok=true
+    fi
+fi
+
+if $_fda_ok; then
+    pass "Full Disk Access: granted"
+else
+    fail "Full Disk Access: NOT granted (manual step required)"
+    if ! $QUIET; then
+        echo ""
+        detail "This cannot be set via profile on a personal Mac."
+        detail "Grant manually:"
+        echo ""
+        detail "  System Settings → Privacy & Security → Full Disk Access"
+        if [[ -n "$NODE_BIN" ]]; then
+            detail "  Add: $NODE_BIN"
+        fi
+        echo ""
+        detail "Or run: ./scripts/setup-permissions"
+    fi
+fi
+
+# ─── Screen Recording ─────────────────────────────────────────────────────────
+
+section "Screen Recording (playwright-recorder MCP)"
+
+if $PROFILE_INSTALLED; then
+    pass "Screen Recording: profile installed (grant active)"
+else
+    warn "Screen Recording: profile not installed (Playwright may be denied)"
+    detail "Run: ./scripts/setup-permissions"
+fi
+
+# =============================================================================
+# --test: Functional verification via the actual node binary
+# =============================================================================
+
+if $TEST; then
+
+    section "Functional Tests (--test)"
+    echo ""
+    printf "${DIM}  Running each permission-sensitive operation through the node binary${NC}\n"
+    printf "${DIM}  that Barry's MCP servers actually use...${NC}\n"
+    echo ""
+
+    # ─── Test 1: node → osascript → Mail (Automation) ─────────────────────────
+
+    printf "  Testing: node → osascript → Mail.app ... "
+    _node_mail=$($NODE_BIN -e "
+        const { execSync } = require('child_process');
+        try {
+            const r = execSync('osascript -e \\'tell application \"Mail\" to return name\\'', { timeout: 5000 }).toString().trim();
+            console.log('OK:' + r);
+        } catch(e) {
+            console.log('FAIL:' + (e.stderr ? e.stderr.toString().substring(0,100) : e.message.substring(0,100)));
+        }
+    " 2>&1 || true)
+
+    if [[ "$_node_mail" == OK:* ]]; then
+        pass "node → Mail.app: ${_node_mail#OK:}"
+    else
+        fail "node → Mail.app: ${_node_mail#FAIL:}"
+        detail "The node binary cannot control Mail via AppleScript."
+        detail "ios-mailer MCP will fail silently."
+    fi
+
+    # ─── Test 2: node → osascript → System Events (Automation) ────────────────
+
+    printf "  Testing: node → osascript → System Events ... "
+    _node_se=$($NODE_BIN -e "
+        const { execSync } = require('child_process');
+        try {
+            const r = execSync('osascript -e \\'tell application \"System Events\" to return name\\'', { timeout: 5000 }).toString().trim();
+            console.log('OK:' + r);
+        } catch(e) {
+            console.log('FAIL:' + (e.stderr ? e.stderr.toString().substring(0,100) : e.message.substring(0,100)));
+        }
+    " 2>&1 || true)
+
+    if [[ "$_node_se" == OK:* ]]; then
+        pass "node → System Events: ${_node_se#OK:}"
+    else
+        fail "node → System Events: ${_node_se#FAIL:}"
+    fi
+
+    # ─── Test 3: node → read protected path (FDA) ────────────────────────────
+
+    printf "  Testing: node → read protected path (FDA) ... "
+
+    # Find a protected path that exists
+    _test_path=""
+    for _p in "$HOME/Library/Safari/History.db" "$HOME/Library/Mail/V10/MailData/Accounts.plist" "$HOME/Library/Cookies/Cookies.binarycookies"; do
+        if [[ -e "$_p" ]]; then
+            _test_path="$_p"
+            break
+        fi
+    done
+
+    if [[ -z "$_test_path" ]]; then
+        warn "node → FDA: no protected test file found to verify"
+    else
+        _node_fda=$($NODE_BIN -e "
+            const fs = require('fs');
+            try {
+                fs.readFileSync('$_test_path');
+                console.log('OK');
+            } catch(e) {
+                console.log('FAIL:' + e.code);
+            }
+        " 2>&1 || true)
+
+        if [[ "$_node_fda" == "OK" ]]; then
+            pass "node → FDA: can read $(basename "$_test_path")"
+        else
+            fail "node → FDA: cannot read protected files (${_node_fda#FAIL:})"
+            detail "The node binary lacks Full Disk Access."
+            detail "system MCP shell commands touching ~/Library will fail."
+            detail "Grant: System Settings → Privacy & Security → Full Disk Access → $NODE_BIN"
+        fi
+    fi
+
+    # ─── Test 4: node → Playwright screenshot (Screen Recording) ─────────────
+
+    printf "  Testing: node → Playwright screenshot (Screen Recording) ... "
+
+    # Check if playwright is available (lives in playwright-recorder's node_modules)
+    _pw_dir="$BARRY_DIR/servers/mcp/playwright-recorder/node_modules/playwright"
+    if [[ ! -d "$_pw_dir" ]]; then
+        warn "node → Screen Recording: Playwright not installed, skipping"
+    else
+        _screenshot_dir=$(mktemp -d)
+        _node_pw=$($NODE_BIN -e "
+            const { chromium } = require('$_pw_dir');
+            (async () => {
+                let browser;
+                try {
+                    browser = await chromium.launch({ headless: true });
+                    const page = await browser.newPage();
+                    await page.goto('data:text/html,<h1>Barry permission test</h1>');
+                    const path = '${_screenshot_dir}/test.png';
+                    await page.screenshot({ path });
+                    const fs = require('fs');
+                    const size = fs.statSync(path).size;
+                    console.log('OK:' + size);
+                } catch(e) {
+                    console.log('FAIL:' + e.message.substring(0, 150));
+                } finally {
+                    if (browser) await browser.close();
+                }
+            })();
+        " 2>&1 || true)
+
+        rm -rf "$_screenshot_dir"
+
+        if [[ "$_node_pw" == OK:* ]]; then
+            _size="${_node_pw#OK:}"
+            pass "node → Playwright screenshot: ${_size} bytes captured"
+        else
+            fail "node → Playwright screenshot: ${_node_pw#FAIL:}"
+            detail "playwright-recorder MCP screenshots will fail or return blank."
+        fi
+    fi
+
+    # ─── Test 5: MCP server health endpoints ─────────────────────────────────
+
+    printf "\n"
+    section "MCP Server Health (services that need permissions)"
+
+    _mcp_checks=(
+        "ios-mailer:3913"
+        "playwright-recorder:3930"
+        "system:3904"
+    )
+
+    for _check in "${_mcp_checks[@]}"; do
+        IFS=':' read -r _name _port <<< "$_check"
+        _health=$(curl -s --max-time 3 "http://localhost:$_port/health" 2>/dev/null || true)
+        if [[ "$_health" == "ok" ]]; then
+            pass "$_name MCP running (:$_port)"
+        else
+            warn "$_name MCP not responding on :$_port"
+            detail "Service may not be started. Check: launchctl list | grep $_name"
+        fi
+    done
+fi
+
+# ─── Summary ─────────────────────────────────────────────────────────────────
+
+if ! $QUIET; then
+    printf "\n${BOLD}── Summary ──${NC}\n"
+    printf "  ${GREEN}%d passed${NC}  ${YELLOW}%d warnings${NC}  ${RED}%d failed${NC}\n\n" \
+        "$PASS" "$WARN" "$FAIL"
+
+    if [[ $FAIL -gt 0 ]]; then
+        echo "Fix failures above, then run: ./scripts/check-permissions"
+    elif [[ $WARN -gt 0 ]]; then
+        echo "Warnings are informational — core permissions look OK."
+    else
+        echo "All permissions OK."
+    fi
+    echo ""
+fi
+
+[[ $FAIL -eq 0 ]]

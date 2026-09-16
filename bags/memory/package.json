@@ -1,0 +1,31 @@
+{
+  "name": "@barry-rocks/memory-bag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@barry-rocks/logger": "workspace:*",
+    "@barry-rocks/tools": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "main": "tools.ts",
+  "exports": {
+    ".": "./tools.ts",
+    "./store": "./src/store.ts",
+    "./db": "./src/db.ts",
+    "./injection": "./src/injection.ts",
+    "./import": "./src/import.ts"
+  }
+}
