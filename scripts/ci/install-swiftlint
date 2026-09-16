@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+version="0.63.2"
+if command -v swiftlint >/dev/null 2>&1 && [[ "$(swiftlint version)" == "$version" ]]; then
+  exit 0
+fi
+
+platform="$(uname -s | tr '[:upper:]' '[:lower:]')"
+machine="$(uname -m)"
+case "$platform:$machine" in
+  darwin:*)
+    asset="portable_swiftlint.zip"
+    checksum="c59a405c85f95b92ced677a500804e081596a4cae4a6a485af76065557d6ed29"
+    ;;
+  linux:x86_64)
+    asset="swiftlint_linux_amd64.zip"
+    checksum="dd1017cfd20a1457f264590bcb5875a6ee06cd75b9a9d4f77cd43a552499143b"
+    ;;
+  linux:arm64|linux:aarch64)
+    asset="swiftlint_linux_arm64.zip"
+    checksum="104dedff762157f5cff7752f1cc2a289b60f3ea677e72d651c6f3a3287fdd948"
+    ;;
+  *)
+    echo "Unsupported SwiftLint platform: $platform/$machine" >&2
+    exit 1
+    ;;
+esac
+
+install_dir="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/barry-bin"
+archive="$install_dir/$asset"
+mkdir -p "$install_dir"
+curl -fsSL "https://github.com/realm/SwiftLint/releases/download/${version}/${asset}" -o "$archive"
+echo "$checksum  $archive" | shasum -a 256 -c -
+unzip -p "$archive" swiftlint > "$install_dir/swiftlint"
+chmod +x "$install_dir/swiftlint"
+rm "$archive"
+
+if [[ -n "${GITHUB_PATH:-}" ]]; then
+  echo "$install_dir" >> "$GITHUB_PATH"
+else
+  echo "Installed $install_dir/swiftlint; add $install_dir to PATH."
+fi

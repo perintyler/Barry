@@ -1,0 +1,18 @@
+#!/bin/sh
+# Block direct commits to staging and prod branches.
+# Promote through: barry promote staging | barry promote prod
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+case "$branch" in
+  staging|prod|production)
+    if [ -z "$BARRY_PROMOTE" ]; then
+      echo ""
+      echo "  ✗ Direct commits to '$branch' are not allowed."
+      echo ""
+      echo "  Use: barry promote $branch"
+      echo ""
+      exit 1
+    fi
+    ;;
+esac

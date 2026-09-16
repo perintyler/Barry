@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.barry.__SERVICE_NAME__</string>
+    <!-- Exec node DIRECTLY rather than via `pnpm start:prod`.
+         pnpm spawns a child which spawns node, so launchd's job PID is the pnpm
+         wrapper: `launchctl kickstart -k` signals that, the node GRANDCHILD
+         survives still holding the port, and every restart then dies with
+         EADDRINUSE while launchd reports a live PID. That cost three manual
+         recoveries in one session. The mcp template has always exec'd node
+         directly, which is why it restarts cleanly.
+         NODE_ENV=production is set under EnvironmentVariables below, so the
+         inline prefix the package scripts used is not needed here. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__NODE_PATH__</string>
+        <string>--import</string>
+        <string>tsx</string>
+        <string>__SERVICE_ENTRY__</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- Without this, launchd runs the agent at background QoS and the tsx
+         TypeScript startup compile crawls on efficiency cores (~54s vs ~2s) -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <!-- A long-running server has no reason to exit on its own, so restart it
+         however it stops. The previous `SuccessfulExit: false` restarted only
+         on a NON-zero exit, which meant a clean SIGTERM shutdown (exit 0) left
+         the service down until someone noticed. -->
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+    <key>StandardOutPath</key>
+    <string>__BARRY_DIR__/__SERVICE_PATH__/logs/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__BARRY_DIR__/__SERVICE_PATH__/logs/stderr.log</string>
+    <key>WorkingDirectory</key>
+    <string>__BARRY_DIR__/__SERVICE_PATH__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__LAUNCHD_PATH__</string>
+        <key>BARRY_SECRET</key>
+        <string>__BARRY_SECRET__</string>
+        <key>NODE_ENV</key>
+        <string>production</string>
+        <key>BARRY_ENV</key>
+        <string>__BARRY_ENV__</string>
+        <key>PORT</key>
+        <string>__SERVICE_PORT__</string>
+        <key>ENABLE_LOCAL_LOGS</key>
+        <string>true</string>
+__SERVICE_ENV_VARS__
+    </dict>
+</dict>
+</plist>

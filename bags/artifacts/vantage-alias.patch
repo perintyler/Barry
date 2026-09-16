@@ -1,0 +1,24 @@
+From: barry monorepo — artifacts SDK absorbed into its bag
+Subject: [PATCH] point the barry aliases at their new paths
+
+The barry monorepo absorbed `sdks/artifacts` and `packages/syntax` into
+`bags/artifacts`. Nothing about the code you consume changed -- same modules,
+same exports, same behaviour -- only where they live on disk.
+
+Apply this in ~/vantage/artifacts. No deploy needed: this is a build-time
+alias, so your running worker is unaffected until you next ship.
+
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -9,9 +9,9 @@ export default defineConfig({
+   plugins: [cloudflare(), react()],
+   resolve: {
+     alias: {
+-      "@barry/artifacts-sdk": path.join(barryRoot, "sdks/artifacts/src"),
++      "@barry/artifacts-sdk": path.join(barryRoot, "bags/artifacts/src/artifacts"),
+       "@barry/ui": path.join(barryRoot, "packages/ui/src"),
+       "@barry/themes": path.join(barryRoot, "packages/themes/src"),
+-      "@barry/syntax": path.join(barryRoot, "packages/syntax/src"),
++      "@barry/syntax": path.join(barryRoot, "bags/artifacts/src/syntax"),
+     },
+   },

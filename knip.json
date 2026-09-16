@@ -1,0 +1,155 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "eslint.config.js",
+    "scripts/**/*.{js,mjs,ts}"
+  ],
+  "include": [
+    "files",
+    "dependencies",
+    "devDependencies",
+    "unlisted",
+    "unresolved"
+  ],
+  "ignoreDependencies": [
+    "@anthropic-ai/sdk",
+    "@cloudflare/workers-oauth-provider",
+    "@inquirer/prompts",
+    "@slack/web-api",
+    "cloudflare"
+  ],
+  "ignoreUnresolved": [
+    "^cloudflare:",
+    "/usr/bin/plutil",
+    "/bin/launchctl"
+  ],
+  "ignore": [
+    ".experimental/**"
+  ],
+  "ignoreFiles": [
+    ".experimental/**",
+    "**/public/vendor/**",
+    "**/*.generated.*",
+    "**/generated/**",
+    "packages/ui/src/index.d.ts",
+    "packages/ui/dist/css.d.ts",
+    "packages/db/src/config.ts",
+    "packages/job-telemetry/run-job.mjs",
+    "scripts/audit-identity.ts",
+    "scripts/generate-caddy-config.ts",
+    "scripts/generate-firewall-config.ts",
+    "packages/bags/src/hook-dispatch.ts",
+    "scripts/generate-tunnel-ingress.ts",
+    "scripts/jobs/profile-node-spin.mjs"
+  ],
+  "workspaces": {
+    "cli": {
+      "entry": [
+        "src/index.ts",
+        "scripts/**/*.{js,mjs,mts,ts}"
+      ]
+    },
+    "packages/agent-runtime": {
+      "entry": [
+        "src/index.ts"
+      ]
+    },
+    "packages/logger": {
+      "ignoreDependencies": [
+        "express"
+      ]
+    },
+    "packages/bags": {
+      "entry": [
+        "src/index.ts",
+        "qa/mock-bag-server/server.ts"
+      ]
+    },
+    "packages/syntax": {
+      "ignore": [
+        "src/__tests__/fixtures/**"
+      ]
+    },
+    "bags/*": {
+      "entry": [
+        "tools.ts",
+        "skills/**/scripts/**/*.{js,mjs,ts}",
+        "src/*.{js,mjs,ts}",
+        "web/**/*.{js,mjs}",
+        "hooks/*/index.ts",
+        "server/src/index.ts",
+        "deploy/*/index.ts",
+        "deploy/*/entry.ts",
+        "launchd/*.{mts,mjs,ts}"
+      ],
+      "ignoreDependencies": [
+        "tsx"
+      ]
+    },
+    "bags/system/*": {
+      "entry": [
+        "tools.ts",
+        "skills/**/scripts/**/*.{js,mjs,ts}",
+        "src/*.{js,mjs,ts}",
+        "hooks/*/index.ts",
+        "server/src/index.ts"
+      ],
+      "ignoreDependencies": [
+        "tsx"
+      ]
+    },
+    "servers/api": {
+      "entry": [
+        "src/index.ts",
+        "qa/**/*.{js,cjs,mjs,ts}"
+      ]
+    },
+    "packages/bags-sdk": {
+      "ignoreDependencies": [
+        "zod"
+      ]
+    },
+    "servers/mcp": {
+      "ignoreDependencies": [
+        "better-sqlite3",
+        "@barry-rocks/system-bag"
+      ]
+    },
+    "bags/artifacts": {
+      "entry": [
+        "tools.ts",
+        "src/*.{js,mjs,ts}",
+        "deploy/app/index.ts",
+        "deploy/backend/entry.ts",
+        "src/artifacts/index.js",
+        "src/artifacts/mcp/cloudflare.ts",
+        "src/artifacts/mcp-app/viewer-entry.js",
+        "src/artifacts/mcp-app/vite.config.ts"
+      ],
+      "ignoreDependencies": [
+        "@barry/google-auth",
+        "@barry/logger",
+        "@barry/ui",
+        "@cloudflare/workers-types",
+        "wrangler"
+      ],
+      "ignoreFiles": [
+        "src/syntax/__tests__/fixtures/**"
+      ]
+    },
+    "bags/sessions": {
+      "entry": [
+        "tools.ts",
+        "src/*.{js,mjs,ts}",
+        "hooks/*/index.ts",
+        "server/src/index.ts"
+      ],
+      "ignoreDependencies": [
+        "dotenv",
+        "express",
+        "@types/express",
+        "tsx"
+      ]
+    }
+  }
+}

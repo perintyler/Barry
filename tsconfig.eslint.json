@@ -1,0 +1,32 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "cli/test/**/*.ts",
+    "cli/src/**/*.test.ts",
+    "packages/**/*.test.ts",
+    // Type-level tests. `*.test-d.ts` does not match `*.test.ts`, so without
+    // this the file parses outside any project and eslint fails the whole run
+    // with "not found in any of the provided project(s)" rather than linting it.
+    "packages/**/*.test-d.ts",
+    "packages/**/tests/**/*.ts",
+    "bags/**/*.test.ts",
+    "bags/**/tests/**/*.ts",
+    "sdks/**/*.test.ts",
+    "sdks/**/tests/**/*.ts",
+    "servers/**/*.test.ts",
+    "hooks/**/*.test.ts",
+    "hooks/**/test/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "generated"
+  ]
+}

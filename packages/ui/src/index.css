@@ -1,0 +1,17 @@
+/* ========================================
+   @barry/ui - Design System
+   Generic system styles only.
+   App-level styles (homepage, avatar) are
+   imported by consumers directly.
+   ======================================== */
+
+@import './tokens.css';
+@import './reset.css';
+@import './animations.css';
+@import './components.css';
+@import './modal.css';
+@import './skeleton.css';
+@import './sidebar.css';
+@import './icon-button.css';
+@import './toolbar.css';
+@import './utils.css';

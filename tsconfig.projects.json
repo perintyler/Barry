@@ -1,0 +1,50 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/auth"
+    },
+    {
+      "path": "./packages/agent-runtime"
+    },
+    {
+      "path": "./packages/contracts"
+    },
+    {
+      "path": "./packages/db"
+    },
+    {
+      "path": "./packages/email"
+    },
+    {
+      "path": "./packages/env"
+    },
+    {
+      "path": "./bags/sessions"
+    },
+    {
+      "path": "./packages/logger"
+    },
+    {
+      "path": "./packages/secrets"
+    },
+    {
+      "path": "./packages/md-to-ansi"
+    },
+    {
+      "path": "./packages/sentry"
+    },
+    {
+      "path": "./packages/sessions"
+    },
+    {
+      "path": "./cli"
+    },
+    {
+      "path": "./servers/api"
+    },
+    {
+      "path": "./servers/mcp"
+    }
+  ]
+}

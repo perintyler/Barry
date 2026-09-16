@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.barry.job.__JOB_NAME__</string>
+    <key>ProgramArguments</key>
+    <array>
+__JOB_PROGRAM_ARGS__
+    </array>
+__JOB_SCHEDULE__
+    <key>StandardOutPath</key>
+    <string>__HOME__/.barry/logs/job-__JOB_NAME__.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.barry/logs/job-__JOB_NAME__.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__LAUNCHD_PATH__</string>
+        <key>BARRY_DIR</key>
+        <string>__BARRY_DIR__</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+__JOB_ENV_VARS__
+    </dict>
+</dict>
+</plist>
