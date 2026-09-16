@@ -1,0 +1,64 @@
+#!/bin/bash
+# Weekly read-before-edit enforcement report.
+#
+# Counts `read_tracking.blocked` warn lines (servers/mcp read-tracking wrapper)
+# emitted since the previous run and ALWAYS notifies — including "0 blocks" —
+# because a silent week is indistinguishable from a broken job, and this whole
+# telemetry line exists because an earlier audit was unfalsifiable.
+#
+# High counts mean hard enforcement is churning real sessions: consider the
+# ENFORCE constant in servers/mcp/src/read-tracking.ts (warn-only mode).
+
+set -euo pipefail
+source "$(dirname "$0")/lib.sh"
+
+BARRY_DIR="${BARRY_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+LOG_FILE="$BARRY_DIR/servers/mcp/logs/stderr.log"
+STATE_FILE="$HOME/.barry/read-tracking-report.since"
+
+since="1970-01-01T00:00:00.000Z"
+[[ -f "$STATE_FILE" ]] && since="$(cat "$STATE_FILE")"
+now="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+
+summary="$(python3 - "$LOG_FILE" "$since" << 'PYEOF'
+import json, sys
+
+log_file, since = sys.argv[1], sys.argv[2]
+total = 0
+by_reason = {}
+by_tool = {}
+unenforced = 0
+try:
+    with open(log_file, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if '"msg":"read_tracking.blocked"' not in line:
+                continue
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            if str(rec.get("time", "")) <= since:
+                continue
+            total += 1
+            by_reason[rec.get("reason", "?")] = by_reason.get(rec.get("reason", "?"), 0) + 1
+            by_tool[rec.get("tool", "?")] = by_tool.get(rec.get("tool", "?"), 0) + 1
+            if rec.get("enforced") is False:
+                unenforced += 1
+except FileNotFoundError:
+    print("log file missing — cannot audit")
+    sys.exit(0)
+
+if total == 0:
+    print("0 blocked edits — enforcement quiet, no churn")
+else:
+    reasons = " ".join(f"{k}:{v}" for k, v in sorted(by_reason.items()))
+    tools = " ".join(f"{k}:{v}" for k, v in sorted(by_tool.items()))
+    extra = f", {unenforced} warn-only" if unenforced else ""
+    print(f"{total} blocked edits ({reasons}; {tools}{extra})")
+PYEOF
+)"
+
+mkdir -p "$(dirname "$STATE_FILE")"
+echo "$now" > "$STATE_FILE"
+
+notify "read-tracking weekly: $summary (since ${since%%.*}Z)" "" "job" "info"

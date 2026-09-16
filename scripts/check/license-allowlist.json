@@ -1,0 +1,8 @@
+{
+  "@anthropic-ai/claude-agent-sdk": {
+    "license": "Unknown",
+    "owner": "platform",
+    "reason": "Required first-party provider SDK; upstream package metadata omits its source license.",
+    "expires": "2026-10-01"
+  }
+}

@@ -1,0 +1,30 @@
+---
+name: barry-core
+description: Core Barry tools and skills
+
+tools:
+  entry: tools.ts
+  deferred:
+    - ask_question
+    - check_prompts
+    - get_session_info
+    - get_status
+    - update_status
+
+traits:
+  core-read:
+    description: "Read-only access to core Barry tools"
+    access: read
+    namespaces:
+      - barry
+
+agents:
+  summarizer:
+    description: Summarize session activity
+    tools: get_session, list_changes
+    model: sonnet
+
+mcp-servers:
+  barry-api:
+    type: http
+    url: http://localhost:3854/mcp

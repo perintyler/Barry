@@ -1,0 +1,177 @@
+{
+  "bags/actions": {
+    "name": "@barry-rocks/actions-bag",
+    "class": "bag"
+  },
+  "bags/approvals": {
+    "name": "@barry-rocks/approvals-bag",
+    "class": "bag"
+  },
+  "bags/artifacts": {
+    "name": "@barry-rocks/artifacts-bag",
+    "class": "bag"
+  },
+  "bags/changes": {
+    "name": "@barry-rocks/changes-bag",
+    "class": "bag"
+  },
+  "bags/events": {
+    "name": "@barry-rocks/events-bag",
+    "class": "bag"
+  },
+  "bags/git": {
+    "name": "@barry-rocks/git-bag",
+    "class": "bag"
+  },
+  "bags/instructions": {
+    "name": "@barry-rocks/instructions-bag",
+    "class": "bag"
+  },
+  "bags/memory": {
+    "name": "@barry-rocks/memory-bag",
+    "class": "bag"
+  },
+  "bags/reminders": {
+    "name": "@barry-rocks/reminders-bag",
+    "class": "bag"
+  },
+  "bags/sessions": {
+    "name": "@barry-rocks/session-bag",
+    "class": "bag"
+  },
+  "bags/system": {
+    "name": "@barry-rocks/system-bag",
+    "class": "bag"
+  },
+  "bags/system/filesystem": {
+    "name": "@barry-rocks/filesystem-bag",
+    "class": "bag"
+  },
+  "bags/system/locks": {
+    "name": "@barry-rocks/locks-bag",
+    "class": "bag"
+  },
+  "bags/vault": {
+    "name": "@barry-rocks/vault-bag",
+    "class": "bag"
+  },
+  "cli": {
+    "name": "barry",
+    "class": "runtime-edge",
+    "mode": "source-bin"
+  },
+  "packages/agent-bound": {
+    "name": "@barry-rocks/agent-bound",
+    "class": "internal-package"
+  },
+  "packages/agent-runtime": {
+    "name": "@barry-rocks/agent-runtime",
+    "class": "internal-package"
+  },
+  "packages/auth": {
+    "name": "@barry-rocks/auth",
+    "class": "internal-package"
+  },
+  "packages/bags": {
+    "name": "@barry-rocks/bags",
+    "class": "internal-package"
+  },
+  "packages/bags-sdk": {
+    "name": "@barry-rocks/bags-sdk",
+    "class": "npm-published"
+  },
+  "packages/contracts": {
+    "name": "@barry-rocks/contracts",
+    "class": "internal-package"
+  },
+  "packages/db": {
+    "name": "@barry-rocks/db",
+    "class": "internal-package"
+  },
+  "packages/email": {
+    "name": "@barry-rocks/email",
+    "class": "internal-package"
+  },
+  "packages/env": {
+    "name": "@barry-rocks/env",
+    "class": "internal-package"
+  },
+  "packages/file-tracker": {
+    "name": "@barry-rocks/file-tracker",
+    "class": "internal-package"
+  },
+  "packages/google-auth": {
+    "name": "@barry-rocks/google-auth",
+    "class": "internal-package"
+  },
+  "packages/job-telemetry": {
+    "name": "@barry-rocks/job-telemetry",
+    "class": "internal-package"
+  },
+  "packages/json-schema": {
+    "name": "@barry-rocks/json-schema",
+    "class": "internal-package"
+  },
+  "packages/logger": {
+    "name": "@barry-rocks/logger",
+    "class": "internal-package"
+  },
+  "packages/md-to-ansi": {
+    "name": "@barry-rocks/md-to-ansi",
+    "class": "internal-package"
+  },
+  "packages/secrets": {
+    "name": "@barry-rocks/secrets",
+    "class": "internal-package"
+  },
+  "packages/sentry": {
+    "name": "@barry-rocks/sentry",
+    "class": "internal-package"
+  },
+  "packages/session-client": {
+    "name": "@barry-rocks/session-client",
+    "class": "internal-package"
+  },
+  "packages/sessions": {
+    "name": "@barry-rocks/sessions",
+    "class": "internal-package"
+  },
+  "packages/skills": {
+    "name": "@barry-rocks/skills",
+    "class": "internal-package"
+  },
+  "packages/stop-robots": {
+    "name": "@barry-rocks/stop-robots",
+    "class": "internal-package"
+  },
+  "packages/themes": {
+    "name": "@barry-rocks/themes",
+    "class": "internal-package"
+  },
+  "packages/tools": {
+    "name": "@barry-rocks/tools",
+    "class": "internal-package"
+  },
+  "packages/ui": {
+    "name": "@barry-rocks/ui",
+    "class": "publishable-candidate"
+  },
+  "packages/usage-telemetry": {
+    "name": "@barry-rocks/usage-telemetry",
+    "class": "internal-package"
+  },
+  "packages/vault": {
+    "name": "@barry-rocks/vault",
+    "class": "internal-package"
+  },
+  "servers/api": {
+    "name": "barry-server",
+    "class": "runtime-edge",
+    "mode": "source-start"
+  },
+  "servers/mcp": {
+    "name": "@barry-rocks/mcp-server",
+    "class": "runtime-edge",
+    "mode": "bundle-source"
+  }
+}

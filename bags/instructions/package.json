@@ -1,0 +1,23 @@
+{
+  "name": "@barry-rocks/instructions-bag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./tools.ts"
+  },
+  "dependencies": {
+    "@barry-rocks/skills": "workspace:*",
+    "@barry-rocks/tools": "workspace:*",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

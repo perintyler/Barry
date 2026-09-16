@@ -1,0 +1,50 @@
+{
+  "name": "@barry-rocks/agent-runtime",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "description": "Barry's provider-neutral coding agent runtime",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./catalog": "./src/catalog.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "tsup",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.76",
+    "@barry-rocks/contracts": "workspace:*",
+    "@barry-rocks/env": "workspace:*",
+    "@barry-rocks/json-schema": "workspace:*",
+    "@openai/codex-sdk": "0.115.0",
+    "yaml": "2.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "files": [
+    "dist",
+    "models.yaml"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./catalog": {
+        "types": "./dist/catalog.d.ts",
+        "default": "./dist/catalog.js"
+      }
+    }
+  }
+}

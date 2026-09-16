@@ -1,0 +1,9 @@
+{"type":"system","subtype":"init","apiKeySource":"login","cwd":"/private/tmp","session_id":"c2eca226-f027-49b5-96ee-2003326c2ebe","model":"Composer 2.5","permissionMode":"default"}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Say exactly: hello world"}]},"session_id":"c2eca226-f027-49b5-96ee-2003326c2ebe"}
+{"type":"thinking","subtype":"delta","text":"I will say exactly \"hello","session_id":"c2eca226-f027-49b5-96ee-2003326c2ebe","timestamp_ms":1789452840645}
+{"type":"thinking","subtype":"delta","text":" world\".","session_id":"c2eca226-f027-49b5-96ee-2003326c2ebe","timestamp_ms":1789452840654}
+{"type":"thinking","subtype":"completed","session_id":"c2eca226-f027-49b5-96ee-2003326c2ebe","timestamp_ms":1789452840655}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]},"session_id":"c2eca226-f027-49b5-96ee-2003326c2ebe","timestamp_ms":1789452840656}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":" world"}]},"session_id":"c2eca226-f027-49b5-96ee-2003326c2ebe","timestamp_ms":1789452840656}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello world"}]},"session_id":"c2eca226-f027-49b5-96ee-2003326c2ebe"}
+{"type":"result","subtype":"success","duration_ms":1716,"duration_api_ms":1716,"is_error":false,"result":"hello world","session_id":"c2eca226-f027-49b5-96ee-2003326c2ebe","request_id":"70a7c095-9e9d-4b9b-93bf-1a266ed22d3b","usage":{"inputTokens":8435,"outputTokens":26,"cacheReadTokens":3872,"cacheWriteTokens":0}}

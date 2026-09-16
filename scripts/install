@@ -1,0 +1,387 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The REPO root, not this script's directory. Everything below reaches root
+# files by "$ROOT_DIR/..." — Brewfile, .env.example, .node-version, cli/,
+# servers/mcp, packages/db/compose — so this must climb out of scripts/.
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+BLUE='\033[0;34m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+log_step() {
+  echo -e "${BLUE}==>${NC} $1"
+}
+
+log_ok() {
+  echo -e "${GREEN}✓${NC} $1"
+}
+
+log_warn() {
+  echo -e "${YELLOW}!${NC} $1"
+}
+
+log_fail() {
+  echo -e "${RED}✗${NC} $1"
+}
+
+usage() {
+  cat <<'EOF'
+Barry local installer.
+
+Usage:
+  ./install [options]
+
+Options:
+  --skip-caddy         Skip building/trusting the local Caddy binary
+  --skip-db            Skip database setup (role, databases, migrations, seed)
+  --skip-launchd       Skip launchd installation and service verification
+  --skip-permissions   Skip macOS permissions setup/check
+  --skip-drift         Skip local drift checks
+  --with-terraform-drift  Also run terraform drift checks
+  --full-setup         Deprecated alias; ignored
+  --local-only         Deprecated alias; ignored
+  --with-edge          Deprecated alias; ignored
+  -h, --help           Show this help
+
+Default behavior:
+  1. Install Homebrew dependencies from Brewfile
+  2. Verify Node/pnpm versions from repo policy
+  3. Install workspace dependencies
+  4. Bootstrap .env if missing
+  5. Start containers (Postgres + Vault) via docker compose
+  6. Build only required runtime artifacts:
+     - servers/mcp HTTP bundle
+  7. Setup databases (role, create DBs, migrations, seed)
+  8. Build/trust local Caddy (best effort)
+  9. Generate/install launchd services
+  10. Run macOS permissions setup/check
+  11. Run local drift checks
+EOF
+}
+
+need_script() {
+  local script="$1"
+  if [[ ! -x "$ROOT_DIR/$script" ]]; then
+    log_fail "Missing executable: $script"
+    exit 1
+  fi
+}
+
+run_cmd() {
+  local label="$1"
+  shift
+  log_step "$label"
+  "$@"
+  log_ok "$label"
+}
+
+run_cmd_soft() {
+  local label="$1"
+  shift
+  log_step "$label"
+  if "$@"; then
+    log_ok "$label"
+    return 0
+  fi
+  log_warn "$label failed; continuing"
+  return 1
+}
+
+check_homebrew() {
+  if ! command -v brew >/dev/null 2>&1; then
+    log_fail "Homebrew is required for Barry's supported local setup"
+    echo 'Install Homebrew first: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/./install)"'
+    exit 1
+  fi
+
+  if [[ ! -f "$ROOT_DIR/Brewfile" ]]; then
+    log_fail "Missing Brewfile"
+    exit 1
+  fi
+}
+
+check_node_version() {
+  local required_file="$ROOT_DIR/.node-version"
+  if [[ ! -f "$required_file" ]]; then
+    log_fail "Missing .node-version"
+    exit 1
+  fi
+
+  if ! command -v node >/dev/null 2>&1; then
+    log_fail "Node is not installed"
+    echo "Install via Homebrew: brew install node"
+    exit 1
+  fi
+
+  local required_major
+  required_major="$(tr -d '[:space:]' < "$required_file")"
+  local current_major
+  current_major="$(node --version | sed 's/^v//' | cut -d. -f1)"
+
+  if [[ "$required_major" != "$current_major" ]]; then
+    log_fail "Node $(node --version) detected; repo requires major ${required_major} (.node-version)"
+    echo "Switch Node first, then rerun install."
+    echo "Example: brew install node@${required_major}"
+    exit 1
+  fi
+}
+
+check_pnpm_version() {
+  if ! command -v pnpm >/dev/null 2>&1; then
+    log_fail "pnpm is not installed"
+    echo "Install pnpm first."
+    echo "Example: corepack prepare pnpm@10.30.3 --activate"
+    exit 1
+  fi
+
+  local current_version
+  current_version="$(pnpm --version)"
+  local current_major
+  current_major="$(echo "$current_version" | cut -d. -f1)"
+  local required_major="10"
+
+  if [[ "$current_major" != "$required_major" ]]; then
+    log_fail "pnpm ${current_version} detected; repo requires major ${required_major}"
+    echo "Switch pnpm first, then rerun install."
+    echo "Example: corepack prepare pnpm@10.30.3 --activate"
+    exit 1
+  fi
+}
+
+main() {
+  local skip_caddy=false
+  local skip_db=false
+  local skip_launchd=false
+  local skip_permissions=false
+  local skip_drift=false
+  local with_terraform_drift=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --skip-caddy) skip_caddy=true; shift ;;
+      --skip-db) skip_db=true; shift ;;
+      --skip-launchd) skip_launchd=true; shift ;;
+      --skip-permissions) skip_permissions=true; shift ;;
+      --skip-drift) skip_drift=true; shift ;;
+      --with-terraform-drift) with_terraform_drift=true; shift ;;
+      --full-setup|--local-only|--with-edge)
+        log_warn "$1 is deprecated and has no effect"
+        shift
+        ;;
+      -h|--help|help) usage; exit 0 ;;
+      *)
+        log_fail "Unknown argument: $1"
+        usage
+        exit 1
+        ;;
+    esac
+  done
+
+  need_script "scripts/setup-caddy"
+  need_script "scripts/setup-db"
+  need_script "scripts/launchd/setup"
+  need_script "scripts/check/drift"
+  need_script "scripts/setup-permissions"
+
+  check_homebrew
+
+  run_cmd "Install Homebrew dependencies (brew bundle)" \
+    brew bundle --file "$ROOT_DIR/Brewfile"
+
+  check_node_version
+  check_pnpm_version
+
+  run_cmd "Install dependencies (pnpm install)" \
+    bash -lc 'pnpm -C "$1" install --frozen-lockfile 2>/dev/null || pnpm -C "$1" install' _ "$ROOT_DIR"
+
+  # OpenCode is an npm package (not in brew); install globally if missing
+  if ! command -v opencode &>/dev/null || ! opencode run --help &>/dev/null 2>&1; then
+    run_cmd "Install OpenCode CLI (pnpm add -g opencode-ai)" \
+      pnpm add -g opencode-ai
+  else
+    log_ok "OpenCode CLI already installed ($(opencode --version 2>/dev/null))"
+  fi
+
+  # Bootstrap .env from example if missing (needed for launchd setup)
+  if [[ ! -f "$ROOT_DIR/.env" ]]; then
+    if [[ -f "$ROOT_DIR/.env.example" ]]; then
+      cp "$ROOT_DIR/.env.example" "$ROOT_DIR/.env"
+      log_warn "Created .env from .env.example — fill in secrets before running launchd setup"
+    else
+      log_warn ".env not found and no example to copy from"
+    fi
+  else
+    log_ok ".env already exists"
+  fi
+
+  # Vault's JWT is bootstrap state and cannot be read from Vault itself.
+  if ! grep -Eq '^BARRY_VAULT_JWT_SECRET=.+$' "$ROOT_DIR/.env"; then
+    local vault_jwt_secret
+    vault_jwt_secret=$(node -e "const crypto = require('crypto'); console.log(crypto.randomBytes(32).toString('hex'))")
+    local vault_env_tmp
+    vault_env_tmp=$(mktemp)
+    awk -v value="$vault_jwt_secret" '
+      BEGIN { replaced = 0 }
+      /^BARRY_VAULT_JWT_SECRET=/ { if (!replaced) print "BARRY_VAULT_JWT_SECRET=" value; replaced = 1; next }
+      { print }
+      END { if (!replaced) print "BARRY_VAULT_JWT_SECRET=" value }
+    ' "$ROOT_DIR/.env" > "$vault_env_tmp"
+    mv "$vault_env_tmp" "$ROOT_DIR/.env"
+    chmod 600 "$ROOT_DIR/.env"
+    log_ok "Generated Vault bootstrap secret"
+  fi
+  # File-backed secrets. Some services read a secret from a file rather than
+  # their environment, because the value gates work that happens before there
+  # is any barry to resolve it against — GitHub signature verification runs
+  # before the payload naming the installation is parsed. Those readers have no
+  # process.env fallback on purpose, so nothing else materializes these files.
+  #
+  # Never overwrites: a file on disk may hold a rotated value newer than .env.
+  local secrets_dir="$HOME/.barry/secrets"
+  mkdir -p "$secrets_dir"
+  chmod 700 "$secrets_dir"
+  local secret_spec secret_var secret_file secret_value
+  for secret_spec in \
+    "GITHUB_WEBHOOK_SECRET:github-webhook-secret" \
+    "GITHUB_CLIENT_SECRET:github-client-secret"; do
+    secret_var="${secret_spec%%:*}"
+    secret_file="$secrets_dir/${secret_spec#*:}"
+    if [[ -f "$secret_file" ]]; then
+      log_ok "$secret_var already at ${secret_file/#$HOME/~}"
+      continue
+    fi
+    # Strip surrounding quotes: .env values may be quoted, and the readers
+    # only .trim() whitespace — a literal quote would break every signature.
+    secret_value=$(grep -E "^${secret_var}=.+$" "$ROOT_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2-)
+    secret_value="${secret_value%\"}"; secret_value="${secret_value#\"}"
+    secret_value="${secret_value%\'}"; secret_value="${secret_value#\'}"
+    if [[ -z "$secret_value" ]]; then
+      log_warn "$secret_var not set in .env — ${secret_file/#$HOME/~} not created"
+      continue
+    fi
+    printf '%s' "$secret_value" > "$secret_file"
+    chmod 600 "$secret_file"
+    log_ok "Wrote $secret_var to ${secret_file/#$HOME/~}"
+  done
+
+  # Ensure OrbStack is running (provides docker for containers)
+  if command -v orbctl >/dev/null 2>&1; then
+    local orb_status
+    orb_status=$(orbctl status 2>/dev/null || echo "unknown")
+    if [[ "$orb_status" != "Running" ]]; then
+      run_cmd_soft "Start OrbStack" orbctl start
+    else
+      log_ok "OrbStack already running"
+    fi
+  fi
+
+  # Start containers (Postgres + Vault) if docker is available
+  if command -v docker >/dev/null 2>&1; then
+    if run_cmd_soft "Start containers (docker compose up -d)" \
+      docker compose --env-file "$ROOT_DIR/.env" -f "$ROOT_DIR/packages/db/compose/compose.yml" up -d; then
+      # Wait for Postgres to be healthy before DB setup
+      log_step "Waiting for Postgres healthcheck"
+      local retries=0
+      while [[ $retries -lt 30 ]]; do
+        if docker exec barry-postgres pg_isready -U barry >/dev/null 2>&1; then
+          log_ok "Postgres is ready"
+          break
+        fi
+        retries=$((retries + 1))
+        sleep 1
+      done
+      if [[ $retries -ge 30 ]]; then
+        log_warn "Postgres healthcheck timed out; DB setup may fail"
+      fi
+    fi
+  else
+    log_warn "docker not found — skipping container start. Install OrbStack: https://orbstack.dev"
+  fi
+
+  # Generates packages/ui/src/theme-tokens.css, which is gitignored and
+  # @import-ed by tokens.css — so any consumer's build fails outright in a
+  # checkout that has never run it (a fresh clone, a git worktree). The
+  # barry.works bag link:s this package and builds it from its own prebuild,
+  # but that only works once the tokens exist here.
+  run_cmd "Build design tokens" \
+    pnpm -C "$ROOT_DIR/packages/ui" build
+
+  run_cmd "Build MCP HTTP bundle" \
+    pnpm -C "$ROOT_DIR/servers/mcp" run build:http
+
+  # Build macOS menu bar apps (Swift)
+  if command -v swift >/dev/null 2>&1; then
+    # Apps a bag declares build themselves, including any asset bundling —
+    # core copies the finished bundle and never reaches inside it.
+    run_cmd_soft "Build bag apps" \
+      pnpm --dir "$ROOT_DIR/cli" exec tsx "$ROOT_DIR/cli/scripts/bag-apps.mts"
+  else
+    log_warn "Swift not found — skipping macOS app builds"
+  fi
+
+  if [[ "$skip_db" == false ]]; then
+    if ! run_cmd_soft "Setup databases (scripts/setup-db)" "$ROOT_DIR/scripts/setup-db"; then
+      log_warn "Database setup failed; services may not start correctly."
+      log_warn "Re-run manually: ./scripts/setup-db"
+    fi
+  else
+    log_warn "Skipping database setup (--skip-db)"
+  fi
+
+  if [[ "$skip_caddy" == false ]]; then
+    if ! run_cmd_soft "Setup Caddy (scripts/setup-caddy)" "$ROOT_DIR/scripts/setup-caddy"; then
+      log_warn "If sudo prompts or trust steps fail, rerun manually: ./scripts/setup-caddy"
+    fi
+  else
+    log_warn "Skipping Caddy setup (--skip-caddy)"
+  fi
+
+  if [[ "$skip_launchd" == false ]]; then
+    if ! run_cmd_soft "Setup launchd services (scripts/launchd/setup)" "$ROOT_DIR/scripts/launchd/setup"; then
+      log_warn "launchd setup may have updated plists before failing verification."
+      log_warn "Re-run manually if needed: ./scripts/launchd/setup"
+    fi
+  else
+    log_warn "Skipping launchd setup (--skip-launchd)"
+  fi
+
+  # Install CLI wrapper in /usr/local/bin (accessible from launchd and all shells)
+  run_cmd_soft "Install barry CLI to /usr/local/bin" "$ROOT_DIR/scripts/install-cli.sh"
+
+  if [[ "$skip_permissions" == false ]]; then
+    if [[ "$skip_launchd" == false ]]; then
+      run_cmd_soft "Check or install macOS permissions" "$ROOT_DIR/scripts/setup-permissions"
+    else
+      run_cmd_soft "Check macOS permissions" "$ROOT_DIR/scripts/setup-permissions" --check
+    fi
+  else
+    log_warn "Skipping macOS permissions (--skip-permissions)"
+  fi
+
+  if [[ "$skip_drift" == false ]]; then
+    if [[ "$with_terraform_drift" == true ]]; then
+      run_cmd "Full drift check (scripts/check/drift)" \
+        "$ROOT_DIR/scripts/check/drift"
+    else
+      run_cmd "Local drift check (scripts/check/drift --skip-terraform)" \
+        "$ROOT_DIR/scripts/check/drift" --skip-terraform
+    fi
+  else
+    log_warn "Skipping drift check (--skip-drift)"
+  fi
+
+  echo ""
+  log_ok "Install complete"
+  echo "Next checks:"
+  echo "  barry --help"
+  if [[ "$skip_launchd" == false ]]; then
+    echo "  ./scripts/health-check.sh --skip-build"
+  fi
+  echo "  ./scripts/check/drift --skip-terraform"
+}
+
+main "$@"

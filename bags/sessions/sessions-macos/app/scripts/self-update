@@ -1,0 +1,111 @@
+#!/bin/bash
+# Rebuild Barry Sessions from source, reinstall it, and bring it back up.
+#
+# This exists as a detached script rather than in-app code because the app
+# cannot survive its own update. Installing replaces
+# ~/.barry/apps/BarrySessions.app — the bundle whose binary is currently
+# mapped into the running process — and copying over a live binary SIGKILLs it
+# with "Code Signature Invalid" the moment the mapped pages stop matching. So
+# the app spawns this, detached, and then gets out of the way; this script
+# waits for it to die before touching anything.
+#
+# Invoked by the "Restart Barry Sessions" menu item (main.swift restartApp).
+# Safe to run by hand — that is also how you debug a failed restart, since the
+# log below is the only place the output survives.
+set -uo pipefail
+
+REPO_APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+APP_NAME="BarrySessions"
+LABEL="com.barry.bag.sessions-macos.app.$APP_NAME"
+INSTALLED="$HOME/.barry/apps/$APP_NAME.app"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+DOMAIN="gui/$(id -u)"
+LOG="$HOME/.barry/logs/bag.sessions-macos.app.$APP_NAME.self-update.log"
+
+mkdir -p "$(dirname "$LOG")"
+exec >>"$LOG" 2>&1
+echo "=== self-update $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+
+# Relaunch whatever is installed. Used both on the happy path and to put the
+# user back where they were when the build fails — a failed restart must never
+# leave the menu bar empty.
+relaunch() {
+    launchctl enable "$DOMAIN/$LABEL" 2>/dev/null || true
+    # bootout+bootstrap, not `kickstart -k`: replacing the bundle invalidates
+    # launchd's cached launch requirement, and kickstart will NOT refresh it —
+    # the app then fails to spawn with OS_REASON_CODESIGNING while
+    # `launchctl print` shows "needs LWCR update". See app/build.sh.
+    launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+    if [[ -f "$PLIST" ]]; then
+        launchctl bootstrap "$DOMAIN" "$PLIST" 2>/dev/null || true
+    fi
+    # bootstrap's exit code lies in both directions, so probe the real state
+    # instead of trusting it, and fall back to a plain launch. Without this a
+    # login-item:false install (no plist at all) would never come back.
+    sleep 1
+    if ! pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+        open "$INSTALLED" 2>/dev/null || true
+    fi
+}
+
+notify() {
+    # Banner, because by now the app that would have shown an in-window error
+    # is gone. Best-effort: a missing/denied notification must not fail the run.
+    osascript -e "display notification \"$1\" with title \"Barry Sessions\"" 2>/dev/null || true
+}
+
+# Wait for the calling app to exit before touching the bundle it is running
+# from. It was asked to terminate before we were spawned; give it a bounded
+# grace period, then insist.
+for _ in $(seq 1 50); do
+    pgrep -x "$APP_NAME" >/dev/null 2>&1 || break
+    sleep 0.1
+done
+if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+    echo "app still running after 5s, forcing"
+    pkill -x "$APP_NAME" 2>/dev/null || true
+    sleep 0.5
+fi
+
+echo "building in $REPO_APP_DIR"
+if ! build_output=$("$REPO_APP_DIR/build.sh" 2>&1); then
+    echo "BUILD FAILED"
+    echo "$build_output"
+    # The old bundle is still installed and untouched, so putting it back is
+    # the correct outcome: the user keeps a working app and gets told why it
+    # did not update.
+    notify "Update failed — rebuilt from source unsuccessfully. Kept the previous version. See $LOG"
+    relaunch
+    exit 1
+fi
+echo "$build_output"
+
+BUILT="$REPO_APP_DIR/.build/$APP_NAME.app"
+if [[ ! -x "$BUILT/Contents/MacOS/$APP_NAME" ]]; then
+    # build.sh exited 0 but produced nothing runnable. Treating that as success
+    # would install a broken bundle and leave the user with no menu bar item.
+    echo "BUILD PRODUCED NO BINARY at $BUILT"
+    notify "Update failed — build produced no app. Kept the previous version. See $LOG"
+    relaunch
+    exit 1
+fi
+
+# Stage beside the target and swap, rather than deleting in place: a plain
+# rm -rf leaves nothing installed if the copy fails, and the app would be
+# unlaunchable until the next successful build.
+mkdir -p "$HOME/.barry/apps"
+STAGED="$HOME/.barry/apps/.$APP_NAME.app.staging"
+rm -rf "$STAGED"
+if ! cp -R "$BUILT" "$STAGED"; then
+    echo "COPY FAILED"
+    rm -rf "$STAGED"
+    notify "Update failed — could not install the new build. Kept the previous version. See $LOG"
+    relaunch
+    exit 1
+fi
+rm -rf "$INSTALLED"
+mv "$STAGED" "$INSTALLED"
+echo "installed $INSTALLED"
+
+relaunch
+echo "relaunched"

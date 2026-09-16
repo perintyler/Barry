@@ -1,0 +1,72 @@
+/* ─── Toast ───
+   Minimal notification that slides up from the bottom.
+   Uses the design system tokens for consistent theming.
+
+   Usage:
+     <div class="toast toast--visible">Message here</div>
+     <div class="toast toast--error toast--visible">Error message</div>
+
+   Or with the behavior:
+     import { toastBehavior } from '@barry/ui';
+     const toast = toastBehavior(container);
+     toast.show('Saved');
+     toast.show('Something broke', { variant: 'error' });
+*/
+
+.toast {
+  position: fixed;
+  bottom: var(--space-6, 24px);
+  left: 50%;
+  z-index: var(--z-toast, 400);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px) var(--space-5, 20px);
+  background: var(--bg-secondary, #1a1a1d);
+  color: var(--text-primary, #f0f0f0);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: var(--text-sm, 0.8125rem);
+  font-weight: var(--font-medium, 500);
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.25),
+    0 2px 8px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  white-space: nowrap;
+
+  /* Start state — below viewport, invisible */
+  opacity: 0;
+  transform: translateX(-50%) translateY(12px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Visible state — slides up, fades in */
+.toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+/* Icon slot (optional leading icon) */
+.toast-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.4));
+}
+
+/* Variants */
+.toast--error {
+  color: var(--error, #dc2626);
+}
+
+.toast--error .toast-icon {
+  color: var(--error, #dc2626);
+}
+
+.toast--success .toast-icon {
+  color: var(--accent, #5C46FF);
+}

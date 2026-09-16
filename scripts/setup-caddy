@@ -1,0 +1,110 @@
+#!/bin/bash
+# Setup Caddy reverse proxy with Cloudflare DNS plugin
+# Usage: ./scripts/setup-caddy
+#
+# Builds a custom Caddy binary using xcaddy with the caddy-dns/cloudflare module.
+# This is required for local TLS and for any public mode that uses Cloudflare DNS challenge.
+# The binary is stored at bin/caddy (gitignored).
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BARRY_DIR="$(dirname "$SCRIPT_DIR")"
+CADDY_BIN="$BARRY_DIR/bin/caddy"
+LOCAL_ROOT_CERT="$HOME/Library/Application Support/Caddy/pki/authorities/local/root.crt"
+
+echo "Setting up Caddy for Barry..."
+
+# 1. Check prerequisites
+if ! command -v go &> /dev/null; then
+    echo "Error: Go is required to build Caddy. Install with: brew install go"
+    exit 1
+fi
+
+if ! command -v xcaddy &> /dev/null; then
+    echo "Installing xcaddy..."
+    go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+fi
+
+# 2. Build custom Caddy with Cloudflare DNS plugin
+mkdir -p "$BARRY_DIR/bin"
+
+if [[ -f "$CADDY_BIN" ]]; then
+    # Check if existing binary already has the cloudflare module
+    if "$CADDY_BIN" list-modules 2>/dev/null | grep -q "dns.providers.cloudflare"; then
+        echo "Custom Caddy with Cloudflare plugin already built at bin/caddy"
+        echo "To force rebuild, delete bin/caddy and re-run this script."
+    else
+        echo "Existing Caddy binary missing Cloudflare plugin, rebuilding..."
+        xcaddy build --with github.com/caddy-dns/cloudflare --output "$CADDY_BIN"
+        echo "Custom Caddy built at bin/caddy"
+    fi
+else
+    echo "Building custom Caddy with Cloudflare DNS plugin..."
+    xcaddy build --with github.com/caddy-dns/cloudflare --output "$CADDY_BIN"
+    echo "Custom Caddy built at bin/caddy"
+fi
+
+# 3. Verify the build
+echo ""
+echo "Verifying Caddy modules..."
+if "$CADDY_BIN" list-modules 2>/dev/null | grep -q "dns.providers.cloudflare"; then
+    echo "  ✓ dns.providers.cloudflare module present"
+else
+    echo "  ✗ Cloudflare module missing — build may have failed"
+    exit 1
+fi
+
+# 4. Add local hostnames to /etc/hosts if not present
+# Keep owner-only core hostnames local-first to avoid Tailnet self-path issues.
+ensure_hosts_entry() {
+    local host="$1"
+    if grep -Eq "(^|[[:space:]])${host}([[:space:]]|$)" /etc/hosts; then
+        echo "  ✓ ${host} already in /etc/hosts"
+    else
+        echo "Adding ${host} to /etc/hosts (requires sudo)..."
+        sudo sh -c "printf '127.0.0.1 %s\n' '${host}' >> /etc/hosts"
+    fi
+}
+
+remove_hosts_entry() {
+    local host="$1"
+    if grep -Eq "(^|[[:space:]])${host}([[:space:]]|$)" /etc/hosts; then
+        echo "Removing ${host} from /etc/hosts (requires sudo)..."
+        sudo perl -0pi -e "s/^.*\\b\Q${host}\E\\b.*\\n?//mg" /etc/hosts
+    else
+        echo "  ✓ ${host} not pinned in /etc/hosts"
+    fi
+}
+
+ensure_hosts_entry "barry.lan"
+remove_hosts_entry "barry.works"
+remove_hosts_entry "x.barry.rocks"
+
+# 5. Trust Caddy local CA for https://barry.lan (best effort, idempotent)
+echo ""
+if [[ -f "$LOCAL_ROOT_CERT" ]]; then
+    CERT_SHA256="$(
+        openssl x509 -in "$LOCAL_ROOT_CERT" -noout -fingerprint -sha256 \
+          | cut -d'=' -f2 \
+          | tr -d ':'
+    )"
+
+    if security find-certificate -a -Z /Library/Keychains/System.keychain 2>/dev/null | grep -q "$CERT_SHA256"; then
+        echo "  ✓ Caddy local root already trusted in System keychain"
+    else
+        echo "Trusting Caddy local root in System keychain (requires sudo)..."
+        sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$LOCAL_ROOT_CERT"
+        echo "  ✓ Caddy local root trusted"
+    fi
+else
+    echo "  ! Caddy local root cert not found yet: $LOCAL_ROOT_CERT"
+    echo "    It is created after Caddy first serves an internal TLS site."
+    echo "    After running ./scripts/launchd/setup once, re-run ./scripts/setup-caddy to trust it."
+fi
+
+echo ""
+echo "Done! Caddy binary built with Cloudflare DNS support."
+echo "  Binary: $CADDY_BIN"
+echo ""
+echo "Next: run ./scripts/launchd/setup to install and start the service."

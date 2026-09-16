@@ -1,0 +1,226 @@
+/* ========================================
+   @barry/ui - Code Viewer
+   Syntax-highlighted code block with line numbers.
+   Uses highlight.js class names with custom One Dark / One Light colors.
+   Dark mode is default; light mode via [data-color-mode="light"].
+   ======================================== */
+
+.code-viewer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.6;
+}
+
+/* Filename bar */
+.code-viewer-filename {
+  font-size: var(--text-xs, 11px);
+  color: var(--text-muted, rgba(255, 255, 255, 0.35));
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.02em;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  padding-bottom: 0;
+}
+
+/* Body: gutter + code side by side */
+.code-viewer-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Line number gutter */
+.code-viewer-gutter {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  padding: var(--space-4, 16px) 0;
+  padding-right: var(--space-3, 12px);
+  padding-left: var(--space-4, 16px);
+  text-align: right;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.code-viewer-line-num {
+  color: var(--text-muted, rgba(255, 255, 255, 0.2));
+  font-size: inherit;
+  line-height: 1.6;
+  min-width: 2ch;
+}
+
+/* Code block */
+.code-viewer-pre {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4, 16px);
+  padding-left: var(--space-3, 12px);
+  overflow-x: auto;
+}
+
+.code-viewer-code {
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+  color: var(--text-primary, rgba(255, 255, 255, 0.87));
+}
+
+/* Theme toggle — reuses md-viewer-theme-toggle pattern */
+.code-viewer-theme-toggle {
+  position: absolute;
+  top: var(--space-3, 12px);
+  right: var(--space-3, 12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 6px);
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.4));
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.1s ease, color 0.1s ease;
+}
+
+.code-viewer:hover .code-viewer-theme-toggle,
+.code-viewer-theme-toggle:focus-visible {
+  opacity: 1;
+}
+
+.code-viewer-theme-toggle:focus-visible {
+  outline: 2px solid var(--accent, #f59e0b);
+  outline-offset: 2px;
+}
+
+.code-viewer-theme-toggle:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary, rgba(255, 255, 255, 0.87));
+}
+
+/* ========================================
+   highlight.js token colors — One Dark
+   ======================================== */
+
+:is(.code-viewer, .md-viewer-body) .hljs-keyword,
+:is(.code-viewer, .md-viewer-body) .hljs-selector-tag { color: #c678dd; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-string,
+:is(.code-viewer, .md-viewer-body) .hljs-regexp,
+:is(.code-viewer, .md-viewer-body) .hljs-addition { color: #98c379; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-comment,
+:is(.code-viewer, .md-viewer-body) .hljs-quote { color: #5c6370; font-style: italic; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-number,
+:is(.code-viewer, .md-viewer-body) .hljs-literal { color: #d19a66; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-function .hljs-title,
+:is(.code-viewer, .md-viewer-body) .hljs-title.function_,
+:is(.code-viewer, .md-viewer-body) .hljs-title { color: #61afef; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-type,
+:is(.code-viewer, .md-viewer-body) .hljs-built_in,
+:is(.code-viewer, .md-viewer-body) .hljs-title.class_ { color: #e5c07b; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-variable,
+:is(.code-viewer, .md-viewer-body) .hljs-template-variable,
+:is(.code-viewer, .md-viewer-body) .hljs-deletion { color: #e06c75; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-tag { color: #e06c75; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-attr,
+:is(.code-viewer, .md-viewer-body) .hljs-attribute { color: #d19a66; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-meta,
+:is(.code-viewer, .md-viewer-body) .hljs-meta .hljs-keyword { color: #61afef; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-symbol,
+:is(.code-viewer, .md-viewer-body) .hljs-bullet { color: #56b6c2; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-operator { color: #56b6c2; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-punctuation { color: #abb2bf; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-property { color: #e06c75; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-params { color: #abb2bf; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-section { color: #61afef; font-weight: bold; }
+
+:is(.code-viewer, .md-viewer-body) .hljs-emphasis { font-style: italic; }
+:is(.code-viewer, .md-viewer-body) .hljs-strong { font-weight: bold; }
+
+/* ========================================
+   highlight.js token colors — One Light
+   ======================================== */
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-keyword,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-selector-tag { color: #a626a4; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-string,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-regexp,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-addition { color: #50a14f; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-comment,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-quote { color: #a0a1a7; font-style: italic; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-number,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-literal { color: #986801; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-function .hljs-title,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-title.function_,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-title { color: #4078f2; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-type,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-built_in,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-title.class_ { color: #c18401; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-variable,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-template-variable,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-deletion { color: #e45649; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-tag { color: #e45649; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-attr,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-attribute { color: #986801; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-meta,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-meta .hljs-keyword { color: #4078f2; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-symbol,
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-bullet { color: #0184bc; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-operator { color: #0184bc; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-punctuation { color: #383a42; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-property { color: #e45649; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-params { color: #383a42; }
+
+[data-color-mode="light"] :is(.code-viewer, .md-viewer-body) .hljs-section { color: #4078f2; font-weight: bold; }
+
+[data-color-mode="light"] .code-viewer-line-num { color: rgba(0, 0, 0, 0.2); }
+
+[data-color-mode="light"] .code-viewer-code { color: #383a42; }
+
+[data-color-mode="light"] .code-viewer-filename { color: rgba(0, 0, 0, 0.4); }
+
+/* Mobile */
+@media (max-width: 640px) {
+  .code-viewer {
+    font-size: var(--text-xs, 11px);
+  }
+  .code-viewer-theme-toggle {
+    opacity: 0.7;
+  }
+}

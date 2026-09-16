@@ -1,0 +1,52 @@
+#!/bin/bash
+# Truncate Barry service logs that exceed a size threshold.
+# Runs daily via launchd (com.barry.log-maintenance).
+#
+# launchd appends to StandardOutPath/StandardErrorPath forever — this script
+# keeps them from growing without bound.
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BARRY_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+MAX_SIZE_KB=10240  # 10MB
+
+truncate_if_large() {
+    local file="$1"
+    [[ -f "$file" ]] || return
+
+    local size_kb
+    size_kb=$(du -k "$file" | cut -f1)
+
+    if (( size_kb > MAX_SIZE_KB )); then
+        # Keep the last 1000 lines before truncating
+        tail -1000 "$file" > "$file.tmp"
+        mv "$file.tmp" "$file"
+        echo "truncated $file (was ${size_kb}KB)"
+    fi
+}
+
+# HTTP service logs
+for dir in "$BARRY_DIR"/servers/*/logs; do
+    [[ -d "$dir" ]] || continue
+    for log in "$dir"/*.log; do
+        truncate_if_large "$log"
+    done
+done
+
+# Vault runs outside $BARRY_DIR entirely, as its own service account --
+# its logs would otherwise grow forever with nothing to catch it. Owned
+# _barryvault, so this needs the same group-read this script already
+# runs with for backups, or root; if neither applies the [[ -d ]] guard
+# just skips it rather than failing the whole run.
+if [[ -d /usr/local/var/barry-vault/logs ]]; then
+    for log in /usr/local/var/barry-vault/logs/*.log; do
+        truncate_if_large "$log"
+    done
+fi
+
+# Caddy logs
+for log in "$HOME"/.barry/logs/*.log; do
+    truncate_if_large "$log"
+done
