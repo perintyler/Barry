@@ -1,0 +1,28 @@
+#!/usr/bin/env node
+/**
+ * launchd entrypoint for one sampling tick.
+ *
+ * Flags:
+ *   --heavy     include directory walks (du over ~/.barry)
+ *   --footprint include real per-process memory footprint (one `top`, ~2.5s)
+ *   --maintain  roll up and prune after sampling
+ *   --dry-run   evaluate rules but print alerts instead of sending
+ *
+ * The base tick runs light and often; a slower schedule passes --heavy
+ * --maintain, because `du` over 12GB of deploys costs far more than every
+ * other collector combined.
+ */
+import { tick } from "../src/sampler.js";
+
+const argv = new Set(process.argv.slice(2));
+const result = await tick({
+  heavy: argv.has("--heavy"),
+  footprint: argv.has("--footprint"),
+  maintain: argv.has("--maintain"),
+  dryRun: argv.has("--dry-run"),
+});
+
+process.stdout.write(
+  `${new Date().toISOString()} points=${result.points} fired=${result.fired.join(",") || "-"} ` +
+    `resolved=${result.resolved.length} ms=${result.durationMs}\n`,
+);

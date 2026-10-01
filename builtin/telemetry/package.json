@@ -1,0 +1,26 @@
+{
+  "name": "@barry-rocks/telemetry-bag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@barry-rocks/actions-bag": "workspace:*",
+    "@barry-rocks/schedules-bag": "workspace:*",
+    "@barry-rocks/logs-bag": "workspace:*",
+    "@barry-rocks/sdk": "workspace:*",
+    "@barry-rocks/session-bag": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

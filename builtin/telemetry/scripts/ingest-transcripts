@@ -1,0 +1,114 @@
+#!/usr/bin/env node
+/**
+ * Recover token usage from the vendor CLI's transcripts.
+ *
+ * `barry start` spawns the vendor binary, so Barry never sees the token counts
+ * as they happen. It does record where the vendor wrote its transcript, and
+ * those files carry the full usage payload — so the numbers are recoverable
+ * afterwards even though they cannot be intercepted.
+ *
+ * The same files also yield per-tool DURATIONS, which have the same problem and
+ * the same fix. `tool_invocation` was written only by sdk-manager's in-runner
+ * timer, which sees API-executed sessions and never a `barry start` one — so the
+ * table sat at 0 rows against 64,386 recovered usage rows. The transcript has no
+ * `duration_ms` field, but a `tool_result` record links to the `tool_use` that
+ * caused it and both are timestamped, so the duration is recoverable as the
+ * delta. See `pairToolCalls` for why that is a slightly different measurement
+ * than the runner's timer, and why over-ceiling samples are dropped.
+ *
+ * Idempotent: usage rows are keyed on the vendor's own requestId and tool rows on
+ * its tool_use id, so re-running over the same transcripts cannot double-count.
+ */
+import { getSessionsSqlite } from "@barry-rocks/session-bag/store/sessions-db";
+import { openUsageDb, recordSessionUsage, recordToolInvocations, measuringSince, recostStoredRows } from "../src/usage/telemetry.js";
+import { readTranscript, readTranscriptToolCalls, costOf } from "../src/usage/transcripts.js";
+
+// Sessions live in `~/.barry/<env>/sessions.db`, and the mapping this job needs
+// (session -> transcript path) is inside the `metadata` JSON column.
+//
+// Opened through the sessions bag's own accessor rather than by path, so the
+// path resolution (BARRY_SESSIONS_DB, the bag's data directory) stays in one place.
+const sessionsDb = getSessionsSqlite();
+const db = openUsageDb();
+
+let sessions = 0;
+let missing = 0;
+let rows = 0;
+let uncosted = 0;
+let toolRows = 0;
+
+try {
+  const found = sessionsDb
+    .prepare(
+      `SELECT id,
+              json_extract(metadata, '$.transcript_path') AS path,
+              json_extract(metadata, '$.model')           AS model
+         FROM sessions
+        WHERE json_extract(metadata, '$.transcript_path') IS NOT NULL
+        ORDER BY created_at DESC`,
+    )
+    .all();
+
+  for (const s of found) {
+    const records = await readTranscript(s.path);
+    // A recorded path with no file is normal — the vendor prunes old
+    // transcripts — but it is counted so the coverage gap is visible rather
+    // than looking like sessions that simply cost nothing.
+    if (records.length === 0) { missing += 1; continue; }
+    sessions += 1;
+
+    for (const rec of records) {
+      const cost = costOf(rec);
+      if (cost === undefined) uncosted += 1;
+      recordSessionUsage(db, {
+        // Vendor requestId, so re-ingest is a no-op rather than a duplicate.
+        id: `tr_${rec.requestId}`,
+        sessionId: s.id,
+        model: rec.model ?? s.model ?? undefined,
+        inputTokens: rec.inputTokens,
+        outputTokens: rec.outputTokens,
+        cacheReadTokens: rec.cacheReadTokens,
+        cacheWriteTokens: rec.cacheWriteTokens,
+        totalTokens: rec.inputTokens + rec.outputTokens,
+        costUsd: cost,
+        status: "ok",
+        createdAt: rec.ts,
+      });
+      rows += 1;
+    }
+
+    // Read separately from the usage pass: pairing needs the whole file indexed
+    // by uuid (a parent can be any earlier line), where usage streams line by
+    // line. Two reads of a few-MB file beats holding both shapes in one pass.
+    const calls = await readTranscriptToolCalls(s.path);
+    toolRows += recordToolInvocations(db, calls.map((c) => ({
+      // The vendor's tool_use id, so re-ingest replaces rather than duplicates.
+      // Prefixed `tr_` to match the usage rows and to keep transcript-derived
+      // durations distinguishable from runner-timed ones, which measure a
+      // slightly different span.
+      id: `tr_${c.toolUseId}`,
+      sessionId: s.id,
+      toolUseId: c.toolUseId,
+      name: c.name,
+      durationMs: c.durationMs,
+      isError: c.isError,
+      createdAt: c.ts,
+    })));
+  }
+} finally {
+  // Catch rows the loop above could not reach: once the vendor prunes a
+  // transcript, its session is skipped entirely, so a row ingested before its
+  // model had a price would keep that NULL forever. Reprices from the tokens
+  // already stored. No-op when nothing is stale, so it stays cheap hourly.
+  const recosted = recostStoredRows(db);
+  const since = measuringSince(db);
+  db.close();
+  sessionsDb.close();
+  process.stdout.write(
+    `${new Date().toISOString()} sessions=${sessions} rows=${rows} ` +
+    `tool_rows=${toolRows} ` +
+    `missing_transcripts=${missing} uncosted_rows=${uncosted} ` +
+    `recosted_rows=${recosted} ` +
+    `earliest=${since ? new Date(since * 1000).toISOString().slice(0, 10) : "none"}\n`,
+  );
+}

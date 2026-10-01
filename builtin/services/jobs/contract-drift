@@ -1,0 +1,67 @@
+#!/bin/bash
+# Barry Contract Drift Monitor
+#
+# Runs the live contract suite against the RUNNING services and reports drift
+# as a barry event. Every generated client -- the Swift OpenAPI client in
+# BarryKit, the TS clients -- is built from the schemas this asserts, and they
+# are `.strict()`: a field a server starts returning is not a compatible
+# addition, it breaks every client at once. Nothing else catches that, because
+# CI runs on a hosted runner where these services do not exist.
+#
+# Reports through record_event only. Deliberately NOT `notify`: drift is a
+# "fix it this week" signal, not a page, and routing it to Slack/SMS alongside
+# the health check would train both to be ignored.
+#
+# Exit codes: 0 healthy, 1 drift found, 2 the check could not run.
+# A run that asserts nothing must exit 2 -- "no drift" and "never looked" are
+# the same green otherwise.
+
+set -uo pipefail
+source "$(dirname "$0")/lib.sh"
+
+STATE_KEY="contract-drift.status"
+SUITE="builtin/sessions/api/src/live-contract-drift.test.ts"
+
+cd "$BARRY_DIR" || { echo "BARRY_DIR unusable: $BARRY_DIR" >&2; exit 2; }
+[[ -f "$SUITE" ]] || { echo "suite missing: $SUITE" >&2; exit 2; }
+
+# The suite finds the services in the instance registry and reads the secret
+# from the instance env itself, so the only thing needed here is the opt-in
+# flag. Capture output: the per-case messages
+# name the offending keys, which is the whole value of the report.
+output=$(cd builtin/sessions/api && BARRY_LIVE_CONTRACT=1 \
+    timeout 300 pnpm exec vitest run "$(basename "$SUITE")" 2>&1)
+status=$?
+
+# A suite that ran but asserted nothing is the failure mode this job exists to
+# avoid. `describe.skipIf` prints skips, and a skip reads as a pass in the
+# summary, so assert we actually saw case results before trusting `status`.
+if ! grep -qE "Tests +[0-9]+ (passed|failed)" <<<"$output"; then
+    echo "$output" | tail -20 >&2
+    echo "contract-drift: the suite produced no case results -- treating as could-not-run" >&2
+    record_event "Contract drift check could not run" "system_alert" "error"
+    write_state "$STATE_KEY" "broken"
+    exit 2
+fi
+
+prev=$(read_state "$STATE_KEY"); [[ -z "$prev" ]] && prev="healthy"
+
+if (( status == 0 )); then
+    write_state "$STATE_KEY" "healthy"
+    if [[ "$prev" != "healthy" ]]; then
+        record_event "Contract drift resolved: live responses match their contracts again" \
+            "drift" "success"
+    fi
+    exit 0
+fi
+
+# Drift. Report only on transition, so a drift left unfixed for a day produces
+# one event rather than 288.
+failing=$(grep -E "^ +× " <<<"$output" | sed 's/^ *× */  /' | head -12)
+write_state "$STATE_KEY" "drift"
+if [[ "$prev" != "drift" ]]; then
+    record_event "Contract drift: live responses no longer match their strict contracts" \
+        "drift" "error"
+fi
+echo "contract drift:"; echo "$failing"
+exit 1

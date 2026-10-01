@@ -1,0 +1,28 @@
+{
+  "name": "@barry-rocks/sessions-search",
+  "version": "1.0.0",
+  "description": "Semantic search over session messages, indexed by a local embedding model",
+  "private": true,
+  "type": "module",
+  "main": "tools.ts",
+  "exports": {
+    ".": "./tools.ts",
+    "./sweep": "./src/sweep.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@barry-bags/embeddings": "workspace:*",
+    "@barry-rocks/sdk": "workspace:*",
+    "@barry-rocks/session-bag": "workspace:*",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

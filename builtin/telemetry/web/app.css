@@ -1,0 +1,191 @@
+  :root {
+    color-scheme: light dark;
+    /* Chart surface + ink from the reference design system. */
+    --bg: #f9f9f7; --panel: #fcfcfb; --line: #e6e4e0;
+    --ink: #0b0b0b; --muted: #52514e;
+    /* Status palette — fixed roles, never reused as series colors. Validated:
+       CVD separation PASS (worst adjacent dE 11.3 protan), normal-vision floor
+       PASS (27.6). The hand-picked set these replaced FAILED both: its green
+       read gray (chroma 0.1) and red/amber sat at dE 12.6 for normal vision.
+       Amber is sub-3:1 on the light surface BY DESIGN — every status here is
+       paired with a glyph and a text label, so colour never carries it alone. */
+    --ok: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+    /* Sequential / categorical slot 1. Validated on this surface: all checks pass. */
+    --series-1: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      /* Dark is SELECTED, not an automatic flip: surfaces and ink come from the
+         system's dark steps, while the status hues are the same four — they
+         already clear 3:1 on #1a1a19, so re-tinting them would only weaken the
+         one thing that is validated. */
+      --bg: #0d0d0d; --panel: #1a1a19; --line: #2f2f2d;
+      --ink: #ffffff; --muted: #c3c2b7;
+      /* The dark step of the same ramp, validated against #1a1a19. */
+      --series-1: #3987e5;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif;
+  }
+  header {
+    padding: 18px 22px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  h1 { margin: 0; font-size: 16px; font-weight: 620; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 12.5px; }
+
+  /* Tab bar. Lived inline in five pages before this, which is exactly how the
+     link order drifted between them and how the landing page ended up with no
+     nav at all. One definition, so a new page cannot ship a different one.
+     flex-wrap is not optional: seven tabs plus a window picker overflow a
+     narrow window, and two of the five copies already had it. */
+  nav { display: flex; gap: 14px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+  nav a { color: var(--muted); text-decoration: none; font-size: 12.5px; }
+  nav a[aria-current="page"] { color: var(--ink); font-weight: 620; }
+  /* Keyboard users get the same affordance the mouse gets. */
+  nav a:hover { color: var(--ink); }
+  nav a:focus-visible { outline: 2px solid var(--series-1); outline-offset: 3px; border-radius: 3px; }
+  main { padding: 20px 22px; max-width: 1180px; }
+  section { margin-bottom: 26px; }
+  h2 {
+    font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--muted); margin: 0 0 10px; font-weight: 600;
+  }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; }
+  .scroll { overflow-x: auto; }
+  /* tabular-nums ONLY here: columns of numbers must align vertically. On a
+     large standalone value it gives every digit the width of a 0, so "121"
+     reads loose — stat values below use proportional figures. */
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  .num { text-align: right; }
+  /* Status is never colour alone: the glyph shape differs (filled vs hollow)
+     and every one carries a title + aria-label, so it survives greyscale,
+     forced-colors and a screen reader. */
+  .state { display: inline-flex; align-items: center; gap: 7px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .dot.up { background: var(--ok); }
+  .dot.down { background: var(--panel); border: 2px solid var(--crit); }
+  /* Periodic job: idle between runs is its normal state, not a fault. Hollow so
+     it is distinguishable from both a live service and a dead one. */
+  .dot.idle { background: var(--panel); border: 2px solid var(--muted, #888); }
+  .bad { color: var(--crit); font-weight: 600; }
+  .warnv { color: var(--warn); font-weight: 600; }
+  .dim { color: var(--muted); }
+  .alert { padding: 11px 13px; border-bottom: 1px solid var(--line); }
+  .alert:last-child { border-bottom: 0; }
+  .alert .top { display: flex; gap: 9px; align-items: baseline; }
+  .tag {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 1px 6px; border-radius: 4px; font-weight: 650;
+  }
+  .tag.critical { background: color-mix(in srgb, var(--crit) 16%, transparent); color: var(--crit); }
+  .tag.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+  .why { color: var(--muted); font-size: 12.5px; margin-top: 5px; max-width: 76ch; white-space: normal; }
+  /* Marks the block below as fixed prose about the RULE, not a measurement of
+     this firing. Any figure inside it is history — see AlertSummary. */
+  .why-label { display: block; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; opacity: .65; margin-bottom: 2px; }
+  .empty { padding: 15px 13px; color: var(--muted); }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
+  .stat { padding: 13px 15px; }
+  .stat .k { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat .v {
+    font-size: 25px; font-weight: 620; margin-top: 3px; letter-spacing: -0.02em;
+    font-variant-numeric: proportional-nums;
+  }
+  /* Meter: a bounded ratio (used / ceiling) is a magnitude, and a bar reads it
+     faster than a number. The track is a tinted step of the surface so the
+     state reads across the whole bar, not just the filled part. */
+  .meter { height: 5px; border-radius: 3px; background: var(--line); margin-top: 9px; overflow: hidden; }
+  .meter > i { display: block; height: 100%; border-radius: 3px; background: var(--ok); }
+  .meter > i.warn { background: var(--warn); }
+  .meter > i.crit { background: var(--crit); }
+  .stat .n { color: var(--muted); font-size: 12px; }
+  code { font: 12px ui-monospace, "SF Mono", Menlo, monospace; color: var(--muted); }
+  footer { padding: 0 22px 30px; color: var(--muted); font-size: 12px; }
+  footer p { margin: 8px 0 0; }
+  .healthlink a { color: var(--muted); }
+  .healthlink a:hover, .healthlink a:focus-visible { color: var(--ink); }
+
+  /* Sparkline. One series per tile, so no legend — the tile's label names it.
+     The hue is the system's sequential/slot-1 blue, validated on both surfaces. */
+  .spark { position: relative; margin-top: 10px; height: 34px; }
+  /* overflow visible would spill the marker outside the card; the inset x-scale
+     keeps everything inside the box instead. */
+  .spark svg { display: block; width: 100%; height: 34px; }
+  .spark .line { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .spark .fill { fill: var(--series-1); opacity: 0.09; }
+  /* The last point is the current value — the one the tile's number states, so
+     it is the only point that earns a permanent marker. */
+  .spark .now { fill: var(--series-1); stroke: var(--panel); stroke-width: 2; }
+  .spark .cross { stroke: var(--muted); stroke-width: 1; opacity: 0; }
+  .spark .hit { fill: transparent; cursor: crosshair; }
+  .spark:hover .cross, .spark:focus-within .cross { opacity: 0.55; }
+  .spark .cursor { fill: var(--series-1); stroke: var(--panel); stroke-width: 2; opacity: 0; }
+  .spark:hover .cursor, .spark:focus-within .cursor { opacity: 1; }
+  .sparktip {
+    position: absolute; pointer-events: none; opacity: 0; transform: translate(-50%, -100%);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    padding: 4px 8px; white-space: nowrap; font-size: 11.5px; z-index: 5;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.10);
+  }
+  .spark:hover .sparktip, .spark:focus-within .sparktip { opacity: 1; }
+  /* Value leads, label follows: here the reader has the series and wants the number. */
+  .sparktip b { color: var(--ink); font-weight: 620; }
+  .sparktip span { color: var(--muted); }
+  .spark .hit:focus { outline: 2px solid var(--series-1); outline-offset: 2px; }
+
+  /* Forced-colors (Windows high contrast, some a11y modes) drops author colors
+     entirely. Every status here is already glyph + label, but the meter fill and
+     the hollow dot are pure colour, so give them a shape the OS palette keeps. */
+  @media (forced-colors: active) {
+    .meter { border: 1px solid CanvasText; }
+    .meter > i { background: Highlight; }
+    .spark .line { stroke: CanvasText; }
+    .spark .fill { opacity: 0; }
+    .spark .now, .spark .cursor { fill: CanvasText; stroke: Canvas; }
+    .dot.up { background: CanvasText; }
+    .dot.down { background: Canvas; border-color: CanvasText; }
+    /* Forced colours drop the grey, so idle and down would look identical.
+       Dashed keeps them apart without relying on hue. */
+    .dot.idle { background: Canvas; border-color: CanvasText; border-style: dashed; }
+  }
+
+  /* The tables ARE the table view: every value the meters and colours encode is
+     also present as text, so nothing is reachable by colour alone. Reduced
+     motion is respected for the refresh transition. */
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  /* Contributed panels.
+     `.down` and `.caveat` were defined inline in usage.html only, so a
+     contributed panel on any other page would have rendered its failure state
+     unstyled — a red warning with no red is just text, and the whole point is
+     that unavailable cannot be mistaken for empty. Shared here so all nine
+     pages fail visibly in the same way. */
+  section.contributed .from {
+    font-size: 11px; font-weight: 500; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em; margin-left: 7px;
+  }
+  .down {
+    padding: 11px 13px; border-left: 3px solid var(--crit);
+    background: color-mix(in srgb, var(--crit) 7%, transparent);
+  }
+  .down b { color: var(--crit); }
+  .caveat {
+    padding: 8px 13px; font-size: 12px; color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--warn) 9%, transparent);
+  }
+  @media (forced-colors: active) {
+    /* Colour is the only thing separating a failed panel from an empty one
+       above; in forced colours it is gone, so restore the distinction with a
+       border that survives. */
+    .down { border: 2px solid CanvasText; }
+  }

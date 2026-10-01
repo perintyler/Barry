@@ -1,0 +1,65 @@
+{
+  "healthy": {
+    "report": [
+      "codex:",
+      "  binary   ok  /usr/local/bin/codex",
+      "  version  ok  0.115.0",
+      "  pin      ok  pinned 0.115.0",
+      "  login    ok  logged in"
+    ],
+    "preflight": "codex 0.115.0: ok"
+  },
+  "binary missing": {
+    "report": [
+      "codex:",
+      "  binary   FAILED  codex not found on PATH",
+      "  version  unknown  not checked (binary missing)",
+      "  pin      unknown  not checked (binary missing)",
+      "  login    unknown  not checked (binary missing)",
+      "  fix      brew install codex"
+    ],
+    "preflight": "codex: codex not found on PATH — brew install codex"
+  },
+  "version unreadable": {
+    "report": [
+      "codex:",
+      "  binary   ok  /usr/local/bin/codex",
+      "  version  unknown  could not read a version from: codex unknown build",
+      "  pin      unknown  no observed version to compare",
+      "  login    ok  logged in"
+    ],
+    "preflight": "codex could not read a version from: codex unknown build: ok"
+  },
+  "binary will not run": {
+    "report": [
+      "codex:",
+      "  binary   ok  /usr/local/bin/codex",
+      "  version  unknown  could not run the binary",
+      "  pin      unknown  no observed version to compare",
+      "  login    ok  logged in"
+    ],
+    "preflight": "codex could not run the binary: ok"
+  },
+  "pin mismatch": {
+    "report": [
+      "codex:",
+      "  binary   ok  /usr/local/bin/codex",
+      "  version  ok  0.116.2",
+      "  pin      FAILED  running 0.116.2, pinned 0.115.0 — declared guarantees are unverified on this build",
+      "  login    ok  logged in",
+      "  fix      install 0.115.0, or re-verify this adapter's modes against 0.116.2"
+    ],
+    "preflight": "codex 0.116.2: running 0.116.2, pinned 0.115.0 — declared guarantees are unverified on this build"
+  },
+  "logged out": {
+    "report": [
+      "codex:",
+      "  binary   ok  /usr/local/bin/codex",
+      "  version  ok  0.115.0",
+      "  pin      ok  pinned 0.115.0",
+      "  login    FAILED  not logged in (an API key may serve instead)",
+      "  fix      codex login"
+    ],
+    "preflight": "codex 0.115.0: not logged in (an API key may serve instead)"
+  }
+}

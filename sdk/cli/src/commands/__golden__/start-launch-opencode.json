@@ -1,0 +1,195 @@
+{
+  "default": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=s\"}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  "one-shot": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "run",
+        "--auto",
+        "--format",
+        "json",
+        "--",
+        "do it"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=s\"}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  "resume by id": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--session",
+        "prior-conversation"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=s\"}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  "resume last": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--continue"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=s\"}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  "resume picker": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=s\"}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  "relax": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=s\"}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  "denied tools": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=s\"}}}"
+      },
+      "tmpDirs": [],
+      "warnings": [
+        "OpenCode cannot deny Bash, Glob — those stay available."
+      ]
+    },
+    "written": {}
+  },
+  "extra args": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--verbose"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=s\"}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  "skills": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=s\"}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  "own model": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--model",
+        "anthropic/claude-opus-5"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=s\"}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  "one-shot with model": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "run",
+        "--auto",
+        "--format",
+        "json",
+        "--model",
+        "anthropic/claude-opus-5",
+        "--",
+        "do it"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=s\"}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  }
+}

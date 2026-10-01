@@ -1,0 +1,56 @@
+{
+  "name": "@barry-rocks/session-bag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./bookkeeping": "./src/bookkeeping.ts",
+    "./client": "./src/client/index.ts",
+    "./client/terminal-relay": "./src/client/terminal-relay.ts",
+    "./capture": "./src/capture/index.ts",
+    "./client/drop-line": "./src/client/drop-line.ts",
+    "./delivery": "./src/delivery/index.ts",
+    "./engines": "./src/engines/index.ts",
+    "./lifecycle": "./src/lifecycle/index.ts",
+    "./process-liveness": "./src/process-liveness.ts",
+    "./settings": "./src/settings.ts",
+    "./store/messages": "./src/store/messages.ts",
+    "./store/models-registry": "./src/store/models-registry.ts",
+    "./store/session-helpers": "./src/store/session-helpers.ts",
+    "./store/session-records": "./src/store/session-records.ts",
+    "./store/sessions-contract": "./src/store/sessions-contract.ts",
+    "./store/sessions-db": "./src/store/sessions-db.ts",
+    "./store/sessions-json-plugin": "./src/store/sessions-json-plugin.ts",
+    "./store/sessions-sqlite-reads": "./src/store/sessions-sqlite-reads.ts",
+    "./store/sessions-sqlite-writes": "./src/store/sessions-sqlite-writes.ts",
+    "./store/sessions-store-api": "./src/store/sessions-store-api.ts",
+    "./store/sessions-types": "./src/store/sessions-types.ts",
+    "./renderer/acp-server": "./src/renderer/acp-server.ts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "1.5.0",
+    "@barry-rocks/actions-bag": "workspace:*",
+    "@barry-rocks/events-bag": "workspace:*",
+    "@barry-rocks/identities-bag": "workspace:*",
+    "@barry-rocks/sdk": "workspace:*",
+    "@barry-rocks/tracker-bag": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "dotenv": "16.4.5",
+    "express": "4.22.1",
+    "kysely": "0.28.17",
+    "yaml": "2.8.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/express": "4.17.21",
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

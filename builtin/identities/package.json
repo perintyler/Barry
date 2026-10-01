@@ -1,0 +1,45 @@
+{
+  "name": "@barry-rocks/identities-bag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    "./traits-catalog": "./src/traits-catalog.ts",
+    "./paths": "./src/paths.ts",
+    "./tokens": "./src/tokens.ts",
+    "./store/identities": "./src/store/identities.ts",
+    "./store/identities-db": "./src/store/identities-db.ts",
+    "./store/identities-types": "./src/store/identities-types.ts",
+    "./store/identity-bags": "./src/store/identity-bags.ts",
+    "./store/identity-files": "./src/store/identity-files.ts",
+    "./store/identity-resolution": "./src/store/identity-resolution.ts",
+    "./store/users": "./src/store/users.ts",
+    "./config/traits": "./src/config/traits.ts",
+    "./config/bounds": "./src/config/bounds.ts",
+    "./config/trait-bound-validation": "./src/config/trait-bound-validation.ts",
+    "./config/trait-namespace-reconcile": "./src/config/trait-namespace-reconcile.ts"
+  },
+  "dependencies": {
+    "@barry-rocks/events-bag": "workspace:*",
+    "@barry-rocks/logs-bag": "workspace:*",
+    "@barry-rocks/sdk": "workspace:*",
+    "@barry-rocks/session-bag": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "express": "4.22.1",
+    "kysely": "0.28.17",
+    "nanoid": "5.0.9",
+    "yaml": "2.8.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/express": "4.17.21",
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

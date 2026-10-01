@@ -1,0 +1,258 @@
+{
+  "default": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=s\"\n"
+    }
+  },
+  "one-shot": {
+    "kind": "server",
+    "prompt": "do it"
+  },
+  "resume by id": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "resume",
+        "prior-conversation"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=s\"\n"
+    }
+  },
+  "resume last": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "resume",
+        "--last"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=s\"\n"
+    }
+  },
+  "resume picker": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "resume"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=s\"\n"
+    }
+  },
+  "relax": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=s\"\n"
+    }
+  },
+  "denied tools": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261"
+      },
+      "tmpDirs": [],
+      "warnings": [
+        "Codex cannot deny Bash, Glob — those stay available."
+      ]
+    },
+    "written": {
+      "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=s\"\n"
+    }
+  },
+  "extra args": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "--verbose"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=s\"\n"
+    }
+  },
+  "skills": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=s\"\n"
+    }
+  },
+  "own model": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "--model",
+        "gpt-5.5"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=s\"\n"
+    }
+  },
+  "one-shot with resume": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "resume",
+        "--last"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=s\"\n"
+    }
+  }
+}

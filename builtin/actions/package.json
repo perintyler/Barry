@@ -1,0 +1,33 @@
+{
+  "name": "@barry-rocks/actions-bag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./tools.ts",
+    "./action-runs": "./src/action-runs.ts",
+    "./adhoc-actions": "./src/adhoc-actions.ts",
+    "./db": "./src/db.ts",
+    "./resolve-action": "./src/resolve-action.ts"
+  },
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*",
+    "@barry-rocks/session-bag": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "nanoid": "5.1.6",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "dev": "tsx --watch server/src/index.ts",
+    "start": "tsx server/src/index.ts",
+    "typecheck": "tsc --noEmit"
+  }
+}

@@ -1,0 +1,896 @@
+claude | model=- | via=- | identity=none => model=- vendor=-
+claude | model=- | via=zai | identity=none => model=glm-5.2 vendor=zai
+claude | model=- | via=ollama | identity=none => model=qwen3:4b vendor=ollama
+claude | model=- | via=unknown-provider | identity=none => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5 | via=- | identity=none => model=claude-opus-5 vendor=-
+claude | model=claude-opus-5 | via=zai | identity=none => model=claude-opus-5 vendor=zai
+claude | model=claude-opus-5 | via=ollama | identity=none => model=claude-opus-5 vendor=ollama
+claude | model=claude-opus-5 | via=unknown-provider | identity=none => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=gpt-5.5 | via=- | identity=none => model=gpt-5.5 vendor=-
+claude | model=gpt-5.5 | via=zai | identity=none => model=gpt-5.5 vendor=zai
+claude | model=gpt-5.5 | via=ollama | identity=none => model=gpt-5.5 vendor=ollama
+claude | model=gpt-5.5 | via=unknown-provider | identity=none => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5-high | via=- | identity=none => model=claude-opus-5-high vendor=-
+claude | model=claude-opus-5-high | via=zai | identity=none => model=claude-opus-5-high vendor=zai
+claude | model=claude-opus-5-high | via=ollama | identity=none => model=claude-opus-5-high vendor=ollama
+claude | model=claude-opus-5-high | via=unknown-provider | identity=none => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=anthropic/claude-opus-5 | via=- | identity=none => model=claude-opus-5 vendor=-
+claude | model=anthropic/claude-opus-5 | via=zai | identity=none => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+claude | model=anthropic/claude-opus-5 | via=ollama | identity=none => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+claude | model=anthropic/claude-opus-5 | via=unknown-provider | identity=none => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+claude | model=glm-5.2 | via=- | identity=none => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=zai | identity=none => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=ollama | identity=none => REFUSED: Model "glm-5.2" belongs to z.ai, not ollama.
+claude | model=glm-5.2 | via=unknown-provider | identity=none => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=qwen3:4b | via=- | identity=none => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=zai | identity=none => REFUSED: Model "qwen3:4b" belongs to Ollama (local), not zai.
+claude | model=qwen3:4b | via=ollama | identity=none => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=unknown-provider | identity=none => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=my-custom:7b | via=- | identity=none => model=my-custom:7b vendor=-
+claude | model=my-custom:7b | via=zai | identity=none => model=my-custom:7b vendor=zai
+claude | model=my-custom:7b | via=ollama | identity=none => model=my-custom:7b vendor=ollama
+claude | model=my-custom:7b | via=unknown-provider | identity=none => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=- | via=- | identity=(default)+glm-5.2 => model=glm-5.2 vendor=zai
+claude | model=- | via=zai | identity=(default)+glm-5.2 => model=glm-5.2 vendor=zai
+claude | model=- | via=ollama | identity=(default)+glm-5.2 => model=qwen3:4b vendor=ollama
+claude | model=- | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5 | via=- | identity=(default)+glm-5.2 => model=claude-opus-5 vendor=zai
+claude | model=claude-opus-5 | via=zai | identity=(default)+glm-5.2 => model=claude-opus-5 vendor=zai
+claude | model=claude-opus-5 | via=ollama | identity=(default)+glm-5.2 => model=claude-opus-5 vendor=ollama
+claude | model=claude-opus-5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=gpt-5.5 | via=- | identity=(default)+glm-5.2 => model=gpt-5.5 vendor=zai
+claude | model=gpt-5.5 | via=zai | identity=(default)+glm-5.2 => model=gpt-5.5 vendor=zai
+claude | model=gpt-5.5 | via=ollama | identity=(default)+glm-5.2 => model=gpt-5.5 vendor=ollama
+claude | model=gpt-5.5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5-high | via=- | identity=(default)+glm-5.2 => model=claude-opus-5-high vendor=zai
+claude | model=claude-opus-5-high | via=zai | identity=(default)+glm-5.2 => model=claude-opus-5-high vendor=zai
+claude | model=claude-opus-5-high | via=ollama | identity=(default)+glm-5.2 => model=claude-opus-5-high vendor=ollama
+claude | model=claude-opus-5-high | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=anthropic/claude-opus-5 | via=- | identity=(default)+glm-5.2 => model=claude-opus-5 vendor=zai
+claude | model=anthropic/claude-opus-5 | via=zai | identity=(default)+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+claude | model=anthropic/claude-opus-5 | via=ollama | identity=(default)+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+claude | model=anthropic/claude-opus-5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+claude | model=glm-5.2 | via=- | identity=(default)+glm-5.2 => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=zai | identity=(default)+glm-5.2 => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=ollama | identity=(default)+glm-5.2 => REFUSED: Model "glm-5.2" belongs to z.ai, not ollama.
+claude | model=glm-5.2 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=qwen3:4b | via=- | identity=(default)+glm-5.2 => REFUSED: Model "qwen3:4b" belongs to Ollama (local), not zai.
+claude | model=qwen3:4b | via=zai | identity=(default)+glm-5.2 => REFUSED: Model "qwen3:4b" belongs to Ollama (local), not zai.
+claude | model=qwen3:4b | via=ollama | identity=(default)+glm-5.2 => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=my-custom:7b | via=- | identity=(default)+glm-5.2 => model=my-custom:7b vendor=zai
+claude | model=my-custom:7b | via=zai | identity=(default)+glm-5.2 => model=my-custom:7b vendor=zai
+claude | model=my-custom:7b | via=ollama | identity=(default)+glm-5.2 => model=my-custom:7b vendor=ollama
+claude | model=my-custom:7b | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=- | via=- | identity=claude+claude-opus-5 => model=claude-opus-5 vendor=-
+claude | model=- | via=zai | identity=claude+claude-opus-5 => model=glm-5.2 vendor=zai
+claude | model=- | via=ollama | identity=claude+claude-opus-5 => model=qwen3:4b vendor=ollama
+claude | model=- | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5 | via=- | identity=claude+claude-opus-5 => model=claude-opus-5 vendor=-
+claude | model=claude-opus-5 | via=zai | identity=claude+claude-opus-5 => model=claude-opus-5 vendor=zai
+claude | model=claude-opus-5 | via=ollama | identity=claude+claude-opus-5 => model=claude-opus-5 vendor=ollama
+claude | model=claude-opus-5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=gpt-5.5 | via=- | identity=claude+claude-opus-5 => model=gpt-5.5 vendor=-
+claude | model=gpt-5.5 | via=zai | identity=claude+claude-opus-5 => model=gpt-5.5 vendor=zai
+claude | model=gpt-5.5 | via=ollama | identity=claude+claude-opus-5 => model=gpt-5.5 vendor=ollama
+claude | model=gpt-5.5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5-high | via=- | identity=claude+claude-opus-5 => model=claude-opus-5-high vendor=-
+claude | model=claude-opus-5-high | via=zai | identity=claude+claude-opus-5 => model=claude-opus-5-high vendor=zai
+claude | model=claude-opus-5-high | via=ollama | identity=claude+claude-opus-5 => model=claude-opus-5-high vendor=ollama
+claude | model=claude-opus-5-high | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=anthropic/claude-opus-5 | via=- | identity=claude+claude-opus-5 => model=claude-opus-5 vendor=-
+claude | model=anthropic/claude-opus-5 | via=zai | identity=claude+claude-opus-5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+claude | model=anthropic/claude-opus-5 | via=ollama | identity=claude+claude-opus-5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+claude | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+claude | model=glm-5.2 | via=- | identity=claude+claude-opus-5 => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=zai | identity=claude+claude-opus-5 => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=ollama | identity=claude+claude-opus-5 => REFUSED: Model "glm-5.2" belongs to z.ai, not ollama.
+claude | model=glm-5.2 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=qwen3:4b | via=- | identity=claude+claude-opus-5 => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=zai | identity=claude+claude-opus-5 => REFUSED: Model "qwen3:4b" belongs to Ollama (local), not zai.
+claude | model=qwen3:4b | via=ollama | identity=claude+claude-opus-5 => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=my-custom:7b | via=- | identity=claude+claude-opus-5 => model=my-custom:7b vendor=-
+claude | model=my-custom:7b | via=zai | identity=claude+claude-opus-5 => model=my-custom:7b vendor=zai
+claude | model=my-custom:7b | via=ollama | identity=claude+claude-opus-5 => model=my-custom:7b vendor=ollama
+claude | model=my-custom:7b | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=- | via=- | identity=claude+glm-5.2 => model=glm-5.2 vendor=zai
+claude | model=- | via=zai | identity=claude+glm-5.2 => model=glm-5.2 vendor=zai
+claude | model=- | via=ollama | identity=claude+glm-5.2 => model=qwen3:4b vendor=ollama
+claude | model=- | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5 | via=- | identity=claude+glm-5.2 => model=claude-opus-5 vendor=zai
+claude | model=claude-opus-5 | via=zai | identity=claude+glm-5.2 => model=claude-opus-5 vendor=zai
+claude | model=claude-opus-5 | via=ollama | identity=claude+glm-5.2 => model=claude-opus-5 vendor=ollama
+claude | model=claude-opus-5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=gpt-5.5 | via=- | identity=claude+glm-5.2 => model=gpt-5.5 vendor=zai
+claude | model=gpt-5.5 | via=zai | identity=claude+glm-5.2 => model=gpt-5.5 vendor=zai
+claude | model=gpt-5.5 | via=ollama | identity=claude+glm-5.2 => model=gpt-5.5 vendor=ollama
+claude | model=gpt-5.5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5-high | via=- | identity=claude+glm-5.2 => model=claude-opus-5-high vendor=zai
+claude | model=claude-opus-5-high | via=zai | identity=claude+glm-5.2 => model=claude-opus-5-high vendor=zai
+claude | model=claude-opus-5-high | via=ollama | identity=claude+glm-5.2 => model=claude-opus-5-high vendor=ollama
+claude | model=claude-opus-5-high | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=anthropic/claude-opus-5 | via=- | identity=claude+glm-5.2 => model=claude-opus-5 vendor=zai
+claude | model=anthropic/claude-opus-5 | via=zai | identity=claude+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+claude | model=anthropic/claude-opus-5 | via=ollama | identity=claude+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+claude | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+claude | model=glm-5.2 | via=- | identity=claude+glm-5.2 => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=zai | identity=claude+glm-5.2 => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=ollama | identity=claude+glm-5.2 => REFUSED: Model "glm-5.2" belongs to z.ai, not ollama.
+claude | model=glm-5.2 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=qwen3:4b | via=- | identity=claude+glm-5.2 => REFUSED: Model "qwen3:4b" belongs to Ollama (local), not zai.
+claude | model=qwen3:4b | via=zai | identity=claude+glm-5.2 => REFUSED: Model "qwen3:4b" belongs to Ollama (local), not zai.
+claude | model=qwen3:4b | via=ollama | identity=claude+glm-5.2 => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=my-custom:7b | via=- | identity=claude+glm-5.2 => model=my-custom:7b vendor=zai
+claude | model=my-custom:7b | via=zai | identity=claude+glm-5.2 => model=my-custom:7b vendor=zai
+claude | model=my-custom:7b | via=ollama | identity=claude+glm-5.2 => model=my-custom:7b vendor=ollama
+claude | model=my-custom:7b | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=- | via=- | identity=claude+qwen3:4b@ollama => model=qwen3:4b vendor=ollama
+claude | model=- | via=zai | identity=claude+qwen3:4b@ollama => model=glm-5.2 vendor=zai
+claude | model=- | via=ollama | identity=claude+qwen3:4b@ollama => model=qwen3:4b vendor=ollama
+claude | model=- | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5 | via=- | identity=claude+qwen3:4b@ollama => model=claude-opus-5 vendor=ollama
+claude | model=claude-opus-5 | via=zai | identity=claude+qwen3:4b@ollama => model=claude-opus-5 vendor=zai
+claude | model=claude-opus-5 | via=ollama | identity=claude+qwen3:4b@ollama => model=claude-opus-5 vendor=ollama
+claude | model=claude-opus-5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=gpt-5.5 | via=- | identity=claude+qwen3:4b@ollama => model=gpt-5.5 vendor=ollama
+claude | model=gpt-5.5 | via=zai | identity=claude+qwen3:4b@ollama => model=gpt-5.5 vendor=zai
+claude | model=gpt-5.5 | via=ollama | identity=claude+qwen3:4b@ollama => model=gpt-5.5 vendor=ollama
+claude | model=gpt-5.5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5-high | via=- | identity=claude+qwen3:4b@ollama => model=claude-opus-5-high vendor=ollama
+claude | model=claude-opus-5-high | via=zai | identity=claude+qwen3:4b@ollama => model=claude-opus-5-high vendor=zai
+claude | model=claude-opus-5-high | via=ollama | identity=claude+qwen3:4b@ollama => model=claude-opus-5-high vendor=ollama
+claude | model=claude-opus-5-high | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=anthropic/claude-opus-5 | via=- | identity=claude+qwen3:4b@ollama => model=claude-opus-5 vendor=ollama
+claude | model=anthropic/claude-opus-5 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+claude | model=anthropic/claude-opus-5 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+claude | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+claude | model=glm-5.2 | via=- | identity=claude+qwen3:4b@ollama => REFUSED: Model "glm-5.2" belongs to z.ai, not ollama.
+claude | model=glm-5.2 | via=zai | identity=claude+qwen3:4b@ollama => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: Model "glm-5.2" belongs to z.ai, not ollama.
+claude | model=glm-5.2 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=qwen3:4b | via=- | identity=claude+qwen3:4b@ollama => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: Model "qwen3:4b" belongs to Ollama (local), not zai.
+claude | model=qwen3:4b | via=ollama | identity=claude+qwen3:4b@ollama => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=my-custom:7b | via=- | identity=claude+qwen3:4b@ollama => model=my-custom:7b vendor=ollama
+claude | model=my-custom:7b | via=zai | identity=claude+qwen3:4b@ollama => model=my-custom:7b vendor=zai
+claude | model=my-custom:7b | via=ollama | identity=claude+qwen3:4b@ollama => model=my-custom:7b vendor=ollama
+claude | model=my-custom:7b | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=- | via=- | identity=codex+gpt-5.5 => model=- vendor=-
+claude | model=- | via=zai | identity=codex+gpt-5.5 => model=glm-5.2 vendor=zai
+claude | model=- | via=ollama | identity=codex+gpt-5.5 => model=qwen3:4b vendor=ollama
+claude | model=- | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5 | via=- | identity=codex+gpt-5.5 => model=claude-opus-5 vendor=-
+claude | model=claude-opus-5 | via=zai | identity=codex+gpt-5.5 => model=claude-opus-5 vendor=zai
+claude | model=claude-opus-5 | via=ollama | identity=codex+gpt-5.5 => model=claude-opus-5 vendor=ollama
+claude | model=claude-opus-5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=gpt-5.5 | via=- | identity=codex+gpt-5.5 => model=gpt-5.5 vendor=-
+claude | model=gpt-5.5 | via=zai | identity=codex+gpt-5.5 => model=gpt-5.5 vendor=zai
+claude | model=gpt-5.5 | via=ollama | identity=codex+gpt-5.5 => model=gpt-5.5 vendor=ollama
+claude | model=gpt-5.5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5-high | via=- | identity=codex+gpt-5.5 => model=claude-opus-5-high vendor=-
+claude | model=claude-opus-5-high | via=zai | identity=codex+gpt-5.5 => model=claude-opus-5-high vendor=zai
+claude | model=claude-opus-5-high | via=ollama | identity=codex+gpt-5.5 => model=claude-opus-5-high vendor=ollama
+claude | model=claude-opus-5-high | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=anthropic/claude-opus-5 | via=- | identity=codex+gpt-5.5 => model=claude-opus-5 vendor=-
+claude | model=anthropic/claude-opus-5 | via=zai | identity=codex+gpt-5.5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+claude | model=anthropic/claude-opus-5 | via=ollama | identity=codex+gpt-5.5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+claude | model=anthropic/claude-opus-5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+claude | model=glm-5.2 | via=- | identity=codex+gpt-5.5 => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=zai | identity=codex+gpt-5.5 => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=ollama | identity=codex+gpt-5.5 => REFUSED: Model "glm-5.2" belongs to z.ai, not ollama.
+claude | model=glm-5.2 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=qwen3:4b | via=- | identity=codex+gpt-5.5 => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=zai | identity=codex+gpt-5.5 => REFUSED: Model "qwen3:4b" belongs to Ollama (local), not zai.
+claude | model=qwen3:4b | via=ollama | identity=codex+gpt-5.5 => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=my-custom:7b | via=- | identity=codex+gpt-5.5 => model=my-custom:7b vendor=-
+claude | model=my-custom:7b | via=zai | identity=codex+gpt-5.5 => model=my-custom:7b vendor=zai
+claude | model=my-custom:7b | via=ollama | identity=codex+gpt-5.5 => model=my-custom:7b vendor=ollama
+claude | model=my-custom:7b | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=- | via=- | identity=opencode+smollm2:135m@ollama => model=- vendor=-
+claude | model=- | via=zai | identity=opencode+smollm2:135m@ollama => model=glm-5.2 vendor=zai
+claude | model=- | via=ollama | identity=opencode+smollm2:135m@ollama => model=qwen3:4b vendor=ollama
+claude | model=- | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5 | via=- | identity=opencode+smollm2:135m@ollama => model=claude-opus-5 vendor=-
+claude | model=claude-opus-5 | via=zai | identity=opencode+smollm2:135m@ollama => model=claude-opus-5 vendor=zai
+claude | model=claude-opus-5 | via=ollama | identity=opencode+smollm2:135m@ollama => model=claude-opus-5 vendor=ollama
+claude | model=claude-opus-5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=gpt-5.5 | via=- | identity=opencode+smollm2:135m@ollama => model=gpt-5.5 vendor=-
+claude | model=gpt-5.5 | via=zai | identity=opencode+smollm2:135m@ollama => model=gpt-5.5 vendor=zai
+claude | model=gpt-5.5 | via=ollama | identity=opencode+smollm2:135m@ollama => model=gpt-5.5 vendor=ollama
+claude | model=gpt-5.5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=claude-opus-5-high | via=- | identity=opencode+smollm2:135m@ollama => model=claude-opus-5-high vendor=-
+claude | model=claude-opus-5-high | via=zai | identity=opencode+smollm2:135m@ollama => model=claude-opus-5-high vendor=zai
+claude | model=claude-opus-5-high | via=ollama | identity=opencode+smollm2:135m@ollama => model=claude-opus-5-high vendor=ollama
+claude | model=claude-opus-5-high | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=anthropic/claude-opus-5 | via=- | identity=opencode+smollm2:135m@ollama => model=claude-opus-5 vendor=-
+claude | model=anthropic/claude-opus-5 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+claude | model=anthropic/claude-opus-5 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+claude | model=anthropic/claude-opus-5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+claude | model=glm-5.2 | via=- | identity=opencode+smollm2:135m@ollama => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=zai | identity=opencode+smollm2:135m@ollama => model=glm-5.2 vendor=zai
+claude | model=glm-5.2 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: Model "glm-5.2" belongs to z.ai, not ollama.
+claude | model=glm-5.2 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=qwen3:4b | via=- | identity=opencode+smollm2:135m@ollama => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: Model "qwen3:4b" belongs to Ollama (local), not zai.
+claude | model=qwen3:4b | via=ollama | identity=opencode+smollm2:135m@ollama => model=qwen3:4b vendor=ollama
+claude | model=qwen3:4b | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+claude | model=my-custom:7b | via=- | identity=opencode+smollm2:135m@ollama => model=my-custom:7b vendor=-
+claude | model=my-custom:7b | via=zai | identity=opencode+smollm2:135m@ollama => model=my-custom:7b vendor=zai
+claude | model=my-custom:7b | via=ollama | identity=opencode+smollm2:135m@ollama => model=my-custom:7b vendor=ollama
+claude | model=my-custom:7b | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: claude-code cannot use model provider "unknown-provider".
+codex | model=- | via=- | identity=none => model=- vendor=-
+codex | model=- | via=zai | identity=none => REFUSED: codex cannot use model provider "zai".
+codex | model=- | via=ollama | identity=none => REFUSED: codex cannot use model provider "ollama".
+codex | model=- | via=unknown-provider | identity=none => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5 | via=- | identity=none => model=claude-opus-5 vendor=-
+codex | model=claude-opus-5 | via=zai | identity=none => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5 | via=ollama | identity=none => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5 | via=unknown-provider | identity=none => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=gpt-5.5 | via=- | identity=none => model=gpt-5.5 vendor=-
+codex | model=gpt-5.5 | via=zai | identity=none => REFUSED: codex cannot use model provider "zai".
+codex | model=gpt-5.5 | via=ollama | identity=none => REFUSED: codex cannot use model provider "ollama".
+codex | model=gpt-5.5 | via=unknown-provider | identity=none => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5-high | via=- | identity=none => model=claude-opus-5-high vendor=-
+codex | model=claude-opus-5-high | via=zai | identity=none => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5-high | via=ollama | identity=none => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5-high | via=unknown-provider | identity=none => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=anthropic/claude-opus-5 | via=- | identity=none => REFUSED: codex cannot use model provider "anthropic".
+codex | model=anthropic/claude-opus-5 | via=zai | identity=none => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+codex | model=anthropic/claude-opus-5 | via=ollama | identity=none => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+codex | model=anthropic/claude-opus-5 | via=unknown-provider | identity=none => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+codex | model=glm-5.2 | via=- | identity=none => REFUSED: codex cannot run "glm-5.2": Barry cannot point codex at another vendor's endpoint, so z.ai is not reachable from it. Use a model codex serves itself.
+codex | model=glm-5.2 | via=zai | identity=none => REFUSED: codex cannot use model provider "zai".
+codex | model=glm-5.2 | via=ollama | identity=none => REFUSED: codex cannot use model provider "ollama".
+codex | model=glm-5.2 | via=unknown-provider | identity=none => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=qwen3:4b | via=- | identity=none => REFUSED: codex cannot run "qwen3:4b": Barry cannot point codex at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model codex serves itself.
+codex | model=qwen3:4b | via=zai | identity=none => REFUSED: codex cannot use model provider "zai".
+codex | model=qwen3:4b | via=ollama | identity=none => REFUSED: codex cannot use model provider "ollama".
+codex | model=qwen3:4b | via=unknown-provider | identity=none => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=my-custom:7b | via=- | identity=none => model=my-custom:7b vendor=-
+codex | model=my-custom:7b | via=zai | identity=none => REFUSED: codex cannot use model provider "zai".
+codex | model=my-custom:7b | via=ollama | identity=none => REFUSED: codex cannot use model provider "ollama".
+codex | model=my-custom:7b | via=unknown-provider | identity=none => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=- | via=- | identity=(default)+glm-5.2 => model=- vendor=-
+codex | model=- | via=zai | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=- | via=ollama | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=- | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5 | via=- | identity=(default)+glm-5.2 => model=claude-opus-5 vendor=-
+codex | model=claude-opus-5 | via=zai | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5 | via=ollama | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=gpt-5.5 | via=- | identity=(default)+glm-5.2 => model=gpt-5.5 vendor=-
+codex | model=gpt-5.5 | via=zai | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=gpt-5.5 | via=ollama | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=gpt-5.5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5-high | via=- | identity=(default)+glm-5.2 => model=claude-opus-5-high vendor=-
+codex | model=claude-opus-5-high | via=zai | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5-high | via=ollama | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5-high | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=anthropic/claude-opus-5 | via=- | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "anthropic".
+codex | model=anthropic/claude-opus-5 | via=zai | identity=(default)+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+codex | model=anthropic/claude-opus-5 | via=ollama | identity=(default)+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+codex | model=anthropic/claude-opus-5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+codex | model=glm-5.2 | via=- | identity=(default)+glm-5.2 => REFUSED: codex cannot run "glm-5.2": Barry cannot point codex at another vendor's endpoint, so z.ai is not reachable from it. Use a model codex serves itself.
+codex | model=glm-5.2 | via=zai | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=glm-5.2 | via=ollama | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=glm-5.2 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=qwen3:4b | via=- | identity=(default)+glm-5.2 => REFUSED: codex cannot run "qwen3:4b": Barry cannot point codex at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model codex serves itself.
+codex | model=qwen3:4b | via=zai | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=qwen3:4b | via=ollama | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=qwen3:4b | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=my-custom:7b | via=- | identity=(default)+glm-5.2 => model=my-custom:7b vendor=-
+codex | model=my-custom:7b | via=zai | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=my-custom:7b | via=ollama | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=my-custom:7b | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=- | via=- | identity=claude+claude-opus-5 => model=- vendor=-
+codex | model=- | via=zai | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "zai".
+codex | model=- | via=ollama | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=- | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5 | via=- | identity=claude+claude-opus-5 => model=claude-opus-5 vendor=-
+codex | model=claude-opus-5 | via=zai | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5 | via=ollama | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=gpt-5.5 | via=- | identity=claude+claude-opus-5 => model=gpt-5.5 vendor=-
+codex | model=gpt-5.5 | via=zai | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "zai".
+codex | model=gpt-5.5 | via=ollama | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=gpt-5.5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5-high | via=- | identity=claude+claude-opus-5 => model=claude-opus-5-high vendor=-
+codex | model=claude-opus-5-high | via=zai | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5-high | via=ollama | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5-high | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=anthropic/claude-opus-5 | via=- | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "anthropic".
+codex | model=anthropic/claude-opus-5 | via=zai | identity=claude+claude-opus-5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+codex | model=anthropic/claude-opus-5 | via=ollama | identity=claude+claude-opus-5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+codex | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+codex | model=glm-5.2 | via=- | identity=claude+claude-opus-5 => REFUSED: codex cannot run "glm-5.2": Barry cannot point codex at another vendor's endpoint, so z.ai is not reachable from it. Use a model codex serves itself.
+codex | model=glm-5.2 | via=zai | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "zai".
+codex | model=glm-5.2 | via=ollama | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=glm-5.2 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=qwen3:4b | via=- | identity=claude+claude-opus-5 => REFUSED: codex cannot run "qwen3:4b": Barry cannot point codex at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model codex serves itself.
+codex | model=qwen3:4b | via=zai | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "zai".
+codex | model=qwen3:4b | via=ollama | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=qwen3:4b | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=my-custom:7b | via=- | identity=claude+claude-opus-5 => model=my-custom:7b vendor=-
+codex | model=my-custom:7b | via=zai | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "zai".
+codex | model=my-custom:7b | via=ollama | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=my-custom:7b | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=- | via=- | identity=claude+glm-5.2 => model=- vendor=-
+codex | model=- | via=zai | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=- | via=ollama | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=- | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5 | via=- | identity=claude+glm-5.2 => model=claude-opus-5 vendor=-
+codex | model=claude-opus-5 | via=zai | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5 | via=ollama | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=gpt-5.5 | via=- | identity=claude+glm-5.2 => model=gpt-5.5 vendor=-
+codex | model=gpt-5.5 | via=zai | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=gpt-5.5 | via=ollama | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=gpt-5.5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5-high | via=- | identity=claude+glm-5.2 => model=claude-opus-5-high vendor=-
+codex | model=claude-opus-5-high | via=zai | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5-high | via=ollama | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5-high | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=anthropic/claude-opus-5 | via=- | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "anthropic".
+codex | model=anthropic/claude-opus-5 | via=zai | identity=claude+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+codex | model=anthropic/claude-opus-5 | via=ollama | identity=claude+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+codex | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+codex | model=glm-5.2 | via=- | identity=claude+glm-5.2 => REFUSED: codex cannot run "glm-5.2": Barry cannot point codex at another vendor's endpoint, so z.ai is not reachable from it. Use a model codex serves itself.
+codex | model=glm-5.2 | via=zai | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=glm-5.2 | via=ollama | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=glm-5.2 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=qwen3:4b | via=- | identity=claude+glm-5.2 => REFUSED: codex cannot run "qwen3:4b": Barry cannot point codex at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model codex serves itself.
+codex | model=qwen3:4b | via=zai | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=qwen3:4b | via=ollama | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=qwen3:4b | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=my-custom:7b | via=- | identity=claude+glm-5.2 => model=my-custom:7b vendor=-
+codex | model=my-custom:7b | via=zai | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "zai".
+codex | model=my-custom:7b | via=ollama | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "ollama".
+codex | model=my-custom:7b | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=- | via=- | identity=claude+qwen3:4b@ollama => model=- vendor=-
+codex | model=- | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=- | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=- | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5 | via=- | identity=claude+qwen3:4b@ollama => model=claude-opus-5 vendor=-
+codex | model=claude-opus-5 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=gpt-5.5 | via=- | identity=claude+qwen3:4b@ollama => model=gpt-5.5 vendor=-
+codex | model=gpt-5.5 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=gpt-5.5 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=gpt-5.5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5-high | via=- | identity=claude+qwen3:4b@ollama => model=claude-opus-5-high vendor=-
+codex | model=claude-opus-5-high | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5-high | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5-high | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=anthropic/claude-opus-5 | via=- | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "anthropic".
+codex | model=anthropic/claude-opus-5 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+codex | model=anthropic/claude-opus-5 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+codex | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+codex | model=glm-5.2 | via=- | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot run "glm-5.2": Barry cannot point codex at another vendor's endpoint, so z.ai is not reachable from it. Use a model codex serves itself.
+codex | model=glm-5.2 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=glm-5.2 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=glm-5.2 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=qwen3:4b | via=- | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot run "qwen3:4b": Barry cannot point codex at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model codex serves itself.
+codex | model=qwen3:4b | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=qwen3:4b | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=qwen3:4b | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=my-custom:7b | via=- | identity=claude+qwen3:4b@ollama => model=my-custom:7b vendor=-
+codex | model=my-custom:7b | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=my-custom:7b | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=my-custom:7b | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=- | via=- | identity=codex+gpt-5.5 => model=gpt-5.5 vendor=-
+codex | model=- | via=zai | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "zai".
+codex | model=- | via=ollama | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=- | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5 | via=- | identity=codex+gpt-5.5 => model=claude-opus-5 vendor=-
+codex | model=claude-opus-5 | via=zai | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5 | via=ollama | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=gpt-5.5 | via=- | identity=codex+gpt-5.5 => model=gpt-5.5 vendor=-
+codex | model=gpt-5.5 | via=zai | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "zai".
+codex | model=gpt-5.5 | via=ollama | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=gpt-5.5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5-high | via=- | identity=codex+gpt-5.5 => model=claude-opus-5-high vendor=-
+codex | model=claude-opus-5-high | via=zai | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5-high | via=ollama | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5-high | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=anthropic/claude-opus-5 | via=- | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "anthropic".
+codex | model=anthropic/claude-opus-5 | via=zai | identity=codex+gpt-5.5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+codex | model=anthropic/claude-opus-5 | via=ollama | identity=codex+gpt-5.5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+codex | model=anthropic/claude-opus-5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+codex | model=glm-5.2 | via=- | identity=codex+gpt-5.5 => REFUSED: codex cannot run "glm-5.2": Barry cannot point codex at another vendor's endpoint, so z.ai is not reachable from it. Use a model codex serves itself.
+codex | model=glm-5.2 | via=zai | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "zai".
+codex | model=glm-5.2 | via=ollama | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=glm-5.2 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=qwen3:4b | via=- | identity=codex+gpt-5.5 => REFUSED: codex cannot run "qwen3:4b": Barry cannot point codex at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model codex serves itself.
+codex | model=qwen3:4b | via=zai | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "zai".
+codex | model=qwen3:4b | via=ollama | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=qwen3:4b | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=my-custom:7b | via=- | identity=codex+gpt-5.5 => model=my-custom:7b vendor=-
+codex | model=my-custom:7b | via=zai | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "zai".
+codex | model=my-custom:7b | via=ollama | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "ollama".
+codex | model=my-custom:7b | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=- | via=- | identity=opencode+smollm2:135m@ollama => model=- vendor=-
+codex | model=- | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=- | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=- | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5 | via=- | identity=opencode+smollm2:135m@ollama => model=claude-opus-5 vendor=-
+codex | model=claude-opus-5 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=gpt-5.5 | via=- | identity=opencode+smollm2:135m@ollama => model=gpt-5.5 vendor=-
+codex | model=gpt-5.5 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=gpt-5.5 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=gpt-5.5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=claude-opus-5-high | via=- | identity=opencode+smollm2:135m@ollama => model=claude-opus-5-high vendor=-
+codex | model=claude-opus-5-high | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=claude-opus-5-high | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=claude-opus-5-high | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=anthropic/claude-opus-5 | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "anthropic".
+codex | model=anthropic/claude-opus-5 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+codex | model=anthropic/claude-opus-5 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+codex | model=anthropic/claude-opus-5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+codex | model=glm-5.2 | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot run "glm-5.2": Barry cannot point codex at another vendor's endpoint, so z.ai is not reachable from it. Use a model codex serves itself.
+codex | model=glm-5.2 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=glm-5.2 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=glm-5.2 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=qwen3:4b | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot run "qwen3:4b": Barry cannot point codex at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model codex serves itself.
+codex | model=qwen3:4b | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=qwen3:4b | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=qwen3:4b | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+codex | model=my-custom:7b | via=- | identity=opencode+smollm2:135m@ollama => model=my-custom:7b vendor=-
+codex | model=my-custom:7b | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "zai".
+codex | model=my-custom:7b | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "ollama".
+codex | model=my-custom:7b | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: codex cannot use model provider "unknown-provider".
+cursor | model=- | via=- | identity=none => model=- vendor=-
+cursor | model=- | via=zai | identity=none => REFUSED: cursor cannot use model provider "zai".
+cursor | model=- | via=ollama | identity=none => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=- | via=unknown-provider | identity=none => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5 | via=- | identity=none => model=claude-opus-5 vendor=-
+cursor | model=claude-opus-5 | via=zai | identity=none => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5 | via=ollama | identity=none => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5 | via=unknown-provider | identity=none => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=gpt-5.5 | via=- | identity=none => model=gpt-5.5 vendor=-
+cursor | model=gpt-5.5 | via=zai | identity=none => REFUSED: cursor cannot use model provider "zai".
+cursor | model=gpt-5.5 | via=ollama | identity=none => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=gpt-5.5 | via=unknown-provider | identity=none => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5-high | via=- | identity=none => model=claude-opus-5-high vendor=-
+cursor | model=claude-opus-5-high | via=zai | identity=none => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5-high | via=ollama | identity=none => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5-high | via=unknown-provider | identity=none => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=anthropic/claude-opus-5 | via=- | identity=none => REFUSED: cursor cannot use model provider "anthropic".
+cursor | model=anthropic/claude-opus-5 | via=zai | identity=none => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+cursor | model=anthropic/claude-opus-5 | via=ollama | identity=none => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+cursor | model=anthropic/claude-opus-5 | via=unknown-provider | identity=none => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+cursor | model=glm-5.2 | via=- | identity=none => REFUSED: cursor cannot run "glm-5.2": Barry cannot point cursor at another vendor's endpoint, so z.ai is not reachable from it. Use a model cursor serves itself.
+cursor | model=glm-5.2 | via=zai | identity=none => REFUSED: cursor cannot use model provider "zai".
+cursor | model=glm-5.2 | via=ollama | identity=none => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=glm-5.2 | via=unknown-provider | identity=none => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=qwen3:4b | via=- | identity=none => REFUSED: cursor cannot run "qwen3:4b": Barry cannot point cursor at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model cursor serves itself.
+cursor | model=qwen3:4b | via=zai | identity=none => REFUSED: cursor cannot use model provider "zai".
+cursor | model=qwen3:4b | via=ollama | identity=none => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=qwen3:4b | via=unknown-provider | identity=none => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=my-custom:7b | via=- | identity=none => model=my-custom:7b vendor=-
+cursor | model=my-custom:7b | via=zai | identity=none => REFUSED: cursor cannot use model provider "zai".
+cursor | model=my-custom:7b | via=ollama | identity=none => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=my-custom:7b | via=unknown-provider | identity=none => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=- | via=- | identity=(default)+glm-5.2 => model=- vendor=-
+cursor | model=- | via=zai | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=- | via=ollama | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=- | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5 | via=- | identity=(default)+glm-5.2 => model=claude-opus-5 vendor=-
+cursor | model=claude-opus-5 | via=zai | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5 | via=ollama | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=gpt-5.5 | via=- | identity=(default)+glm-5.2 => model=gpt-5.5 vendor=-
+cursor | model=gpt-5.5 | via=zai | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=gpt-5.5 | via=ollama | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=gpt-5.5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5-high | via=- | identity=(default)+glm-5.2 => model=claude-opus-5-high vendor=-
+cursor | model=claude-opus-5-high | via=zai | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5-high | via=ollama | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5-high | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=anthropic/claude-opus-5 | via=- | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "anthropic".
+cursor | model=anthropic/claude-opus-5 | via=zai | identity=(default)+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+cursor | model=anthropic/claude-opus-5 | via=ollama | identity=(default)+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+cursor | model=anthropic/claude-opus-5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+cursor | model=glm-5.2 | via=- | identity=(default)+glm-5.2 => REFUSED: cursor cannot run "glm-5.2": Barry cannot point cursor at another vendor's endpoint, so z.ai is not reachable from it. Use a model cursor serves itself.
+cursor | model=glm-5.2 | via=zai | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=glm-5.2 | via=ollama | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=glm-5.2 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=qwen3:4b | via=- | identity=(default)+glm-5.2 => REFUSED: cursor cannot run "qwen3:4b": Barry cannot point cursor at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model cursor serves itself.
+cursor | model=qwen3:4b | via=zai | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=qwen3:4b | via=ollama | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=qwen3:4b | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=my-custom:7b | via=- | identity=(default)+glm-5.2 => model=my-custom:7b vendor=-
+cursor | model=my-custom:7b | via=zai | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=my-custom:7b | via=ollama | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=my-custom:7b | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=- | via=- | identity=claude+claude-opus-5 => model=- vendor=-
+cursor | model=- | via=zai | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=- | via=ollama | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=- | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5 | via=- | identity=claude+claude-opus-5 => model=claude-opus-5 vendor=-
+cursor | model=claude-opus-5 | via=zai | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5 | via=ollama | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=gpt-5.5 | via=- | identity=claude+claude-opus-5 => model=gpt-5.5 vendor=-
+cursor | model=gpt-5.5 | via=zai | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=gpt-5.5 | via=ollama | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=gpt-5.5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5-high | via=- | identity=claude+claude-opus-5 => model=claude-opus-5-high vendor=-
+cursor | model=claude-opus-5-high | via=zai | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5-high | via=ollama | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5-high | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=anthropic/claude-opus-5 | via=- | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "anthropic".
+cursor | model=anthropic/claude-opus-5 | via=zai | identity=claude+claude-opus-5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+cursor | model=anthropic/claude-opus-5 | via=ollama | identity=claude+claude-opus-5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+cursor | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+cursor | model=glm-5.2 | via=- | identity=claude+claude-opus-5 => REFUSED: cursor cannot run "glm-5.2": Barry cannot point cursor at another vendor's endpoint, so z.ai is not reachable from it. Use a model cursor serves itself.
+cursor | model=glm-5.2 | via=zai | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=glm-5.2 | via=ollama | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=glm-5.2 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=qwen3:4b | via=- | identity=claude+claude-opus-5 => REFUSED: cursor cannot run "qwen3:4b": Barry cannot point cursor at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model cursor serves itself.
+cursor | model=qwen3:4b | via=zai | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=qwen3:4b | via=ollama | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=qwen3:4b | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=my-custom:7b | via=- | identity=claude+claude-opus-5 => model=my-custom:7b vendor=-
+cursor | model=my-custom:7b | via=zai | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=my-custom:7b | via=ollama | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=my-custom:7b | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=- | via=- | identity=claude+glm-5.2 => model=- vendor=-
+cursor | model=- | via=zai | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=- | via=ollama | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=- | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5 | via=- | identity=claude+glm-5.2 => model=claude-opus-5 vendor=-
+cursor | model=claude-opus-5 | via=zai | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5 | via=ollama | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=gpt-5.5 | via=- | identity=claude+glm-5.2 => model=gpt-5.5 vendor=-
+cursor | model=gpt-5.5 | via=zai | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=gpt-5.5 | via=ollama | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=gpt-5.5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5-high | via=- | identity=claude+glm-5.2 => model=claude-opus-5-high vendor=-
+cursor | model=claude-opus-5-high | via=zai | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5-high | via=ollama | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5-high | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=anthropic/claude-opus-5 | via=- | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "anthropic".
+cursor | model=anthropic/claude-opus-5 | via=zai | identity=claude+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+cursor | model=anthropic/claude-opus-5 | via=ollama | identity=claude+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+cursor | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+cursor | model=glm-5.2 | via=- | identity=claude+glm-5.2 => REFUSED: cursor cannot run "glm-5.2": Barry cannot point cursor at another vendor's endpoint, so z.ai is not reachable from it. Use a model cursor serves itself.
+cursor | model=glm-5.2 | via=zai | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=glm-5.2 | via=ollama | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=glm-5.2 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=qwen3:4b | via=- | identity=claude+glm-5.2 => REFUSED: cursor cannot run "qwen3:4b": Barry cannot point cursor at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model cursor serves itself.
+cursor | model=qwen3:4b | via=zai | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=qwen3:4b | via=ollama | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=qwen3:4b | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=my-custom:7b | via=- | identity=claude+glm-5.2 => model=my-custom:7b vendor=-
+cursor | model=my-custom:7b | via=zai | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=my-custom:7b | via=ollama | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=my-custom:7b | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=- | via=- | identity=claude+qwen3:4b@ollama => model=- vendor=-
+cursor | model=- | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=- | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=- | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5 | via=- | identity=claude+qwen3:4b@ollama => model=claude-opus-5 vendor=-
+cursor | model=claude-opus-5 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=gpt-5.5 | via=- | identity=claude+qwen3:4b@ollama => model=gpt-5.5 vendor=-
+cursor | model=gpt-5.5 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=gpt-5.5 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=gpt-5.5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5-high | via=- | identity=claude+qwen3:4b@ollama => model=claude-opus-5-high vendor=-
+cursor | model=claude-opus-5-high | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5-high | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5-high | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=anthropic/claude-opus-5 | via=- | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "anthropic".
+cursor | model=anthropic/claude-opus-5 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+cursor | model=anthropic/claude-opus-5 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+cursor | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+cursor | model=glm-5.2 | via=- | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot run "glm-5.2": Barry cannot point cursor at another vendor's endpoint, so z.ai is not reachable from it. Use a model cursor serves itself.
+cursor | model=glm-5.2 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=glm-5.2 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=glm-5.2 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=qwen3:4b | via=- | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot run "qwen3:4b": Barry cannot point cursor at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model cursor serves itself.
+cursor | model=qwen3:4b | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=qwen3:4b | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=qwen3:4b | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=my-custom:7b | via=- | identity=claude+qwen3:4b@ollama => model=my-custom:7b vendor=-
+cursor | model=my-custom:7b | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=my-custom:7b | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=my-custom:7b | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=- | via=- | identity=codex+gpt-5.5 => model=- vendor=-
+cursor | model=- | via=zai | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=- | via=ollama | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=- | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5 | via=- | identity=codex+gpt-5.5 => model=claude-opus-5 vendor=-
+cursor | model=claude-opus-5 | via=zai | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5 | via=ollama | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=gpt-5.5 | via=- | identity=codex+gpt-5.5 => model=gpt-5.5 vendor=-
+cursor | model=gpt-5.5 | via=zai | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=gpt-5.5 | via=ollama | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=gpt-5.5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5-high | via=- | identity=codex+gpt-5.5 => model=claude-opus-5-high vendor=-
+cursor | model=claude-opus-5-high | via=zai | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5-high | via=ollama | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5-high | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=anthropic/claude-opus-5 | via=- | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "anthropic".
+cursor | model=anthropic/claude-opus-5 | via=zai | identity=codex+gpt-5.5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+cursor | model=anthropic/claude-opus-5 | via=ollama | identity=codex+gpt-5.5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+cursor | model=anthropic/claude-opus-5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+cursor | model=glm-5.2 | via=- | identity=codex+gpt-5.5 => REFUSED: cursor cannot run "glm-5.2": Barry cannot point cursor at another vendor's endpoint, so z.ai is not reachable from it. Use a model cursor serves itself.
+cursor | model=glm-5.2 | via=zai | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=glm-5.2 | via=ollama | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=glm-5.2 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=qwen3:4b | via=- | identity=codex+gpt-5.5 => REFUSED: cursor cannot run "qwen3:4b": Barry cannot point cursor at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model cursor serves itself.
+cursor | model=qwen3:4b | via=zai | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=qwen3:4b | via=ollama | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=qwen3:4b | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=my-custom:7b | via=- | identity=codex+gpt-5.5 => model=my-custom:7b vendor=-
+cursor | model=my-custom:7b | via=zai | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "zai".
+cursor | model=my-custom:7b | via=ollama | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=my-custom:7b | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=- | via=- | identity=opencode+smollm2:135m@ollama => model=- vendor=-
+cursor | model=- | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=- | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=- | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5 | via=- | identity=opencode+smollm2:135m@ollama => model=claude-opus-5 vendor=-
+cursor | model=claude-opus-5 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=gpt-5.5 | via=- | identity=opencode+smollm2:135m@ollama => model=gpt-5.5 vendor=-
+cursor | model=gpt-5.5 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=gpt-5.5 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=gpt-5.5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=claude-opus-5-high | via=- | identity=opencode+smollm2:135m@ollama => model=claude-opus-5-high vendor=-
+cursor | model=claude-opus-5-high | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=claude-opus-5-high | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=claude-opus-5-high | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=anthropic/claude-opus-5 | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "anthropic".
+cursor | model=anthropic/claude-opus-5 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not zai.
+cursor | model=anthropic/claude-opus-5 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not ollama.
+cursor | model=anthropic/claude-opus-5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: Model "anthropic/claude-opus-5" names anthropic, not unknown-provider.
+cursor | model=glm-5.2 | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot run "glm-5.2": Barry cannot point cursor at another vendor's endpoint, so z.ai is not reachable from it. Use a model cursor serves itself.
+cursor | model=glm-5.2 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=glm-5.2 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=glm-5.2 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=qwen3:4b | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot run "qwen3:4b": Barry cannot point cursor at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model cursor serves itself.
+cursor | model=qwen3:4b | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=qwen3:4b | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=qwen3:4b | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+cursor | model=my-custom:7b | via=- | identity=opencode+smollm2:135m@ollama => model=my-custom:7b vendor=-
+cursor | model=my-custom:7b | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "zai".
+cursor | model=my-custom:7b | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "ollama".
+cursor | model=my-custom:7b | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: cursor cannot use model provider "unknown-provider".
+opencode | model=- | via=- | identity=none => model=- vendor=-
+opencode | model=- | via=zai | identity=none => REFUSED: opencode cannot use model provider "zai".
+opencode | model=- | via=ollama | identity=none => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=- | via=unknown-provider | identity=none => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5 | via=- | identity=none => model=claude-opus-5 vendor=-
+opencode | model=claude-opus-5 | via=zai | identity=none => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5 | via=ollama | identity=none => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5 | via=unknown-provider | identity=none => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=gpt-5.5 | via=- | identity=none => model=gpt-5.5 vendor=-
+opencode | model=gpt-5.5 | via=zai | identity=none => REFUSED: opencode cannot use model provider "zai".
+opencode | model=gpt-5.5 | via=ollama | identity=none => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=gpt-5.5 | via=unknown-provider | identity=none => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5-high | via=- | identity=none => model=claude-opus-5-high vendor=-
+opencode | model=claude-opus-5-high | via=zai | identity=none => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5-high | via=ollama | identity=none => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5-high | via=unknown-provider | identity=none => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=anthropic/claude-opus-5 | via=- | identity=none => model=anthropic/claude-opus-5 vendor=-
+opencode | model=anthropic/claude-opus-5 | via=zai | identity=none => REFUSED: opencode cannot use model provider "zai".
+opencode | model=anthropic/claude-opus-5 | via=ollama | identity=none => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=anthropic/claude-opus-5 | via=unknown-provider | identity=none => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=glm-5.2 | via=- | identity=none => REFUSED: opencode cannot run "glm-5.2": Barry cannot point opencode at another vendor's endpoint, so z.ai is not reachable from it. Use a model opencode serves itself.
+opencode | model=glm-5.2 | via=zai | identity=none => REFUSED: opencode cannot use model provider "zai".
+opencode | model=glm-5.2 | via=ollama | identity=none => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=glm-5.2 | via=unknown-provider | identity=none => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=qwen3:4b | via=- | identity=none => REFUSED: opencode cannot run "qwen3:4b": Barry cannot point opencode at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model opencode serves itself.
+opencode | model=qwen3:4b | via=zai | identity=none => REFUSED: opencode cannot use model provider "zai".
+opencode | model=qwen3:4b | via=ollama | identity=none => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=qwen3:4b | via=unknown-provider | identity=none => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=my-custom:7b | via=- | identity=none => model=my-custom:7b vendor=-
+opencode | model=my-custom:7b | via=zai | identity=none => REFUSED: opencode cannot use model provider "zai".
+opencode | model=my-custom:7b | via=ollama | identity=none => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=my-custom:7b | via=unknown-provider | identity=none => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=- | via=- | identity=(default)+glm-5.2 => model=- vendor=-
+opencode | model=- | via=zai | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=- | via=ollama | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=- | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5 | via=- | identity=(default)+glm-5.2 => model=claude-opus-5 vendor=-
+opencode | model=claude-opus-5 | via=zai | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5 | via=ollama | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=gpt-5.5 | via=- | identity=(default)+glm-5.2 => model=gpt-5.5 vendor=-
+opencode | model=gpt-5.5 | via=zai | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=gpt-5.5 | via=ollama | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=gpt-5.5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5-high | via=- | identity=(default)+glm-5.2 => model=claude-opus-5-high vendor=-
+opencode | model=claude-opus-5-high | via=zai | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5-high | via=ollama | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5-high | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=anthropic/claude-opus-5 | via=- | identity=(default)+glm-5.2 => model=anthropic/claude-opus-5 vendor=-
+opencode | model=anthropic/claude-opus-5 | via=zai | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=anthropic/claude-opus-5 | via=ollama | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=anthropic/claude-opus-5 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=glm-5.2 | via=- | identity=(default)+glm-5.2 => REFUSED: opencode cannot run "glm-5.2": Barry cannot point opencode at another vendor's endpoint, so z.ai is not reachable from it. Use a model opencode serves itself.
+opencode | model=glm-5.2 | via=zai | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=glm-5.2 | via=ollama | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=glm-5.2 | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=qwen3:4b | via=- | identity=(default)+glm-5.2 => REFUSED: opencode cannot run "qwen3:4b": Barry cannot point opencode at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model opencode serves itself.
+opencode | model=qwen3:4b | via=zai | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=qwen3:4b | via=ollama | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=qwen3:4b | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=my-custom:7b | via=- | identity=(default)+glm-5.2 => model=my-custom:7b vendor=-
+opencode | model=my-custom:7b | via=zai | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=my-custom:7b | via=ollama | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=my-custom:7b | via=unknown-provider | identity=(default)+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=- | via=- | identity=claude+claude-opus-5 => model=- vendor=-
+opencode | model=- | via=zai | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=- | via=ollama | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=- | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5 | via=- | identity=claude+claude-opus-5 => model=claude-opus-5 vendor=-
+opencode | model=claude-opus-5 | via=zai | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5 | via=ollama | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=gpt-5.5 | via=- | identity=claude+claude-opus-5 => model=gpt-5.5 vendor=-
+opencode | model=gpt-5.5 | via=zai | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=gpt-5.5 | via=ollama | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=gpt-5.5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5-high | via=- | identity=claude+claude-opus-5 => model=claude-opus-5-high vendor=-
+opencode | model=claude-opus-5-high | via=zai | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5-high | via=ollama | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5-high | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=anthropic/claude-opus-5 | via=- | identity=claude+claude-opus-5 => model=anthropic/claude-opus-5 vendor=-
+opencode | model=anthropic/claude-opus-5 | via=zai | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=anthropic/claude-opus-5 | via=ollama | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=glm-5.2 | via=- | identity=claude+claude-opus-5 => REFUSED: opencode cannot run "glm-5.2": Barry cannot point opencode at another vendor's endpoint, so z.ai is not reachable from it. Use a model opencode serves itself.
+opencode | model=glm-5.2 | via=zai | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=glm-5.2 | via=ollama | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=glm-5.2 | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=qwen3:4b | via=- | identity=claude+claude-opus-5 => REFUSED: opencode cannot run "qwen3:4b": Barry cannot point opencode at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model opencode serves itself.
+opencode | model=qwen3:4b | via=zai | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=qwen3:4b | via=ollama | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=qwen3:4b | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=my-custom:7b | via=- | identity=claude+claude-opus-5 => model=my-custom:7b vendor=-
+opencode | model=my-custom:7b | via=zai | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=my-custom:7b | via=ollama | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=my-custom:7b | via=unknown-provider | identity=claude+claude-opus-5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=- | via=- | identity=claude+glm-5.2 => model=- vendor=-
+opencode | model=- | via=zai | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=- | via=ollama | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=- | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5 | via=- | identity=claude+glm-5.2 => model=claude-opus-5 vendor=-
+opencode | model=claude-opus-5 | via=zai | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5 | via=ollama | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=gpt-5.5 | via=- | identity=claude+glm-5.2 => model=gpt-5.5 vendor=-
+opencode | model=gpt-5.5 | via=zai | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=gpt-5.5 | via=ollama | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=gpt-5.5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5-high | via=- | identity=claude+glm-5.2 => model=claude-opus-5-high vendor=-
+opencode | model=claude-opus-5-high | via=zai | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5-high | via=ollama | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5-high | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=anthropic/claude-opus-5 | via=- | identity=claude+glm-5.2 => model=anthropic/claude-opus-5 vendor=-
+opencode | model=anthropic/claude-opus-5 | via=zai | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=anthropic/claude-opus-5 | via=ollama | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=glm-5.2 | via=- | identity=claude+glm-5.2 => REFUSED: opencode cannot run "glm-5.2": Barry cannot point opencode at another vendor's endpoint, so z.ai is not reachable from it. Use a model opencode serves itself.
+opencode | model=glm-5.2 | via=zai | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=glm-5.2 | via=ollama | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=glm-5.2 | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=qwen3:4b | via=- | identity=claude+glm-5.2 => REFUSED: opencode cannot run "qwen3:4b": Barry cannot point opencode at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model opencode serves itself.
+opencode | model=qwen3:4b | via=zai | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=qwen3:4b | via=ollama | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=qwen3:4b | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=my-custom:7b | via=- | identity=claude+glm-5.2 => model=my-custom:7b vendor=-
+opencode | model=my-custom:7b | via=zai | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=my-custom:7b | via=ollama | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=my-custom:7b | via=unknown-provider | identity=claude+glm-5.2 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=- | via=- | identity=claude+qwen3:4b@ollama => model=- vendor=-
+opencode | model=- | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=- | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=- | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5 | via=- | identity=claude+qwen3:4b@ollama => model=claude-opus-5 vendor=-
+opencode | model=claude-opus-5 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=gpt-5.5 | via=- | identity=claude+qwen3:4b@ollama => model=gpt-5.5 vendor=-
+opencode | model=gpt-5.5 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=gpt-5.5 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=gpt-5.5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5-high | via=- | identity=claude+qwen3:4b@ollama => model=claude-opus-5-high vendor=-
+opencode | model=claude-opus-5-high | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5-high | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5-high | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=anthropic/claude-opus-5 | via=- | identity=claude+qwen3:4b@ollama => model=anthropic/claude-opus-5 vendor=-
+opencode | model=anthropic/claude-opus-5 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=anthropic/claude-opus-5 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=anthropic/claude-opus-5 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=glm-5.2 | via=- | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot run "glm-5.2": Barry cannot point opencode at another vendor's endpoint, so z.ai is not reachable from it. Use a model opencode serves itself.
+opencode | model=glm-5.2 | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=glm-5.2 | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=glm-5.2 | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=qwen3:4b | via=- | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot run "qwen3:4b": Barry cannot point opencode at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model opencode serves itself.
+opencode | model=qwen3:4b | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=qwen3:4b | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=qwen3:4b | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=my-custom:7b | via=- | identity=claude+qwen3:4b@ollama => model=my-custom:7b vendor=-
+opencode | model=my-custom:7b | via=zai | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=my-custom:7b | via=ollama | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=my-custom:7b | via=unknown-provider | identity=claude+qwen3:4b@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=- | via=- | identity=codex+gpt-5.5 => model=- vendor=-
+opencode | model=- | via=zai | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=- | via=ollama | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=- | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5 | via=- | identity=codex+gpt-5.5 => model=claude-opus-5 vendor=-
+opencode | model=claude-opus-5 | via=zai | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5 | via=ollama | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=gpt-5.5 | via=- | identity=codex+gpt-5.5 => model=gpt-5.5 vendor=-
+opencode | model=gpt-5.5 | via=zai | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=gpt-5.5 | via=ollama | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=gpt-5.5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5-high | via=- | identity=codex+gpt-5.5 => model=claude-opus-5-high vendor=-
+opencode | model=claude-opus-5-high | via=zai | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5-high | via=ollama | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5-high | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=anthropic/claude-opus-5 | via=- | identity=codex+gpt-5.5 => model=anthropic/claude-opus-5 vendor=-
+opencode | model=anthropic/claude-opus-5 | via=zai | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=anthropic/claude-opus-5 | via=ollama | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=anthropic/claude-opus-5 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=glm-5.2 | via=- | identity=codex+gpt-5.5 => REFUSED: opencode cannot run "glm-5.2": Barry cannot point opencode at another vendor's endpoint, so z.ai is not reachable from it. Use a model opencode serves itself.
+opencode | model=glm-5.2 | via=zai | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=glm-5.2 | via=ollama | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=glm-5.2 | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=qwen3:4b | via=- | identity=codex+gpt-5.5 => REFUSED: opencode cannot run "qwen3:4b": Barry cannot point opencode at another vendor's endpoint, so Ollama (local) is not reachable from it. Use a model opencode serves itself.
+opencode | model=qwen3:4b | via=zai | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=qwen3:4b | via=ollama | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=qwen3:4b | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=my-custom:7b | via=- | identity=codex+gpt-5.5 => model=my-custom:7b vendor=-
+opencode | model=my-custom:7b | via=zai | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "zai".
+opencode | model=my-custom:7b | via=ollama | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=my-custom:7b | via=unknown-provider | identity=codex+gpt-5.5 => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=- | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=- | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=- | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=- | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5 | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=gpt-5.5 | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=gpt-5.5 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=gpt-5.5 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=gpt-5.5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=claude-opus-5-high | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5-high | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=claude-opus-5-high | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=claude-opus-5-high | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=anthropic/claude-opus-5 | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=anthropic/claude-opus-5 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=anthropic/claude-opus-5 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=anthropic/claude-opus-5 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=glm-5.2 | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=glm-5.2 | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=glm-5.2 | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=glm-5.2 | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=qwen3:4b | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=qwen3:4b | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=qwen3:4b | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=qwen3:4b | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "unknown-provider".
+opencode | model=my-custom:7b | via=- | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=my-custom:7b | via=zai | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "zai".
+opencode | model=my-custom:7b | via=ollama | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "ollama".
+opencode | model=my-custom:7b | via=unknown-provider | identity=opencode+smollm2:135m@ollama => REFUSED: opencode cannot use model provider "unknown-provider".

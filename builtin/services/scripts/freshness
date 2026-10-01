@@ -1,0 +1,226 @@
+#!/usr/bin/env node
+/**
+ * Verify no source-run service is serving code older than its last commit.
+ *
+ * Services under launchd run their TypeScript directly (`node --import tsx
+ * src/index.ts`). There is no build step to go stale, which makes it easy to
+ * assume a landed change is live. It is not: the process loaded its modules at
+ * exec, so a commit landing afterwards is on disk and NOT being served until
+ * the service restarts.
+ *
+ * That failure is invisible from outside and looks like a code bug rather than
+ * a deployment one. It cost two debugging detours in a single session:
+ *
+ *   - a new field on `UpdateSessionRequestSchema` 400'd with "Unrecognized
+ *     keys" — the schema was correct on disk; the API had started 13 minutes
+ *     before the commit landed
+ *   - verifying a `packages/contracts` fix first required proving the running
+ *     API was new enough to contain it
+ *
+ * Both times the code was right and the process was old. This says so directly.
+ *
+ * A service is stale when the newest commit touching its own directory or any
+ * of its workspace dependencies is NEWER than the process start time.
+ *
+ * Fails loudly when:
+ *   - a running source-run service is older than its inputs
+ *   - a service's working directory does not exist
+ *   - NO services could be examined at all
+ *
+ * That last one matters most. Every other breakage here is silent by nature: if
+ * the supervisor reported nothing, or stopped reporting start times, this
+ * would examine zero services and print a clean pass — indistinguishable from
+ * a healthy machine. So examining nothing is itself a failure.
+ *
+ * The services, their directories, command lines and start times come from
+ * the instance's supervisor (`barry service status --json`).
+ *
+ * Usage: barry services freshness [--verbose]
+ */
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+
+const VERBOSE = process.argv.includes("--verbose");
+
+function sh(cmd, args, cwd) {
+  try {
+    return execFileSync(cmd, args, {
+      encoding: "utf8",
+      cwd,
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 8 * 1024 * 1024,
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Every service the supervisor runs. `barry service status` exits non-zero
+ * when a service needs attention, and still prints the status, which is all
+ * this needs; no output at all means the supervisor could not be asked.
+ */
+function supervisedServices() {
+  let out;
+  try {
+    out = execFileSync("barry", ["service", "status", "--json"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: 8 * 1024 * 1024,
+    });
+  } catch (error) {
+    out = error.stdout;
+    if (!out) {
+      console.error(`x could not ask the supervisor: ${String(error.stderr || error.message).trim()}`);
+      process.exit(1);
+    }
+  }
+  return JSON.parse(out).services;
+}
+
+/** Repo root for a directory, so services living in other repos still resolve. */
+function repoRoot(dir) {
+  return sh("git", ["rev-parse", "--show-toplevel"], dir) || null;
+}
+
+/** package.json name -> directory, for one repo. */
+function workspaceIndex(root) {
+  const index = new Map();
+  const walk = (dir, depth) => {
+    if (depth > 3 || !existsSync(dir)) return;
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      const child = join(dir, entry.name);
+      const pkg = join(child, "package.json");
+      if (existsSync(pkg)) {
+        try {
+          const name = JSON.parse(readFileSync(pkg, "utf8")).name;
+          if (name && !index.has(name)) index.set(name, child);
+        } catch {
+          /* an unreadable package.json is not this check's business */
+        }
+      }
+      walk(child, depth + 1);
+    }
+  };
+  for (const g of ["sdk", "adapters", "builtin", "packages", "apps"]) walk(join(root, g), 0);
+  return index;
+}
+
+/**
+ * Directories whose commits affect this service: its own, plus every workspace
+ * dependency, transitively. A change to `packages/contracts` is exactly as
+ * stale-making for the API as a change to `bags/sessions/api` itself — and that is
+ * the case that actually bit.
+ */
+function inputDirs(serviceDir, root, index) {
+  const dirs = new Set([serviceDir]);
+  const seen = new Set();
+  const visit = (dir) => {
+    const pkg = join(dir, "package.json");
+    if (seen.has(dir) || !existsSync(pkg)) return;
+    seen.add(dir);
+    let deps = {};
+    try {
+      const parsed = JSON.parse(readFileSync(pkg, "utf8"));
+      deps = { ...parsed.dependencies, ...parsed.devDependencies };
+    } catch {
+      return;
+    }
+    for (const [name, spec] of Object.entries(deps)) {
+      if (typeof spec !== "string" || !spec.startsWith("workspace:")) continue;
+      const target = index.get(name);
+      if (target) {
+        dirs.add(target);
+        visit(target);
+      }
+    }
+  };
+  visit(serviceDir);
+  return [...dirs].map((d) => d.replace(root + "/", ""));
+}
+
+/** Newest commit touching any of `dirs`, or null when git says nothing. */
+function newestCommit(root, dirs) {
+  const out = sh("git", ["log", "-1", "--format=%ct|%h|%s", "--", ...dirs], root);
+  if (!out) return null;
+  const [ts, hash, ...rest] = out.split("|");
+  const seconds = Number(ts);
+  if (!Number.isFinite(seconds)) return null;
+  return { seconds, hash, subject: rest.join("|") };
+}
+
+const services = supervisedServices();
+let examined = 0;
+let failures = 0;
+
+for (const service of services) {
+  const label = service.key;
+  // Only services executing TypeScript directly can go stale this way. A
+  // bundled service (the engine's dist/bundle.cjs) goes stale differently —
+  // `barry setup` rebuilds the bundle — so it is out of scope here rather than
+  // silently mishandled.
+  if (!service.argv.some((arg) => /\btsx\b/.test(arg))) continue;
+  if (!service.pid || !service.startedAt) continue; // not running; nothing to be stale
+
+  const workingDirectory = service.workingDirectory;
+  if (!existsSync(workingDirectory)) {
+    console.error(`x ${label}: its working directory does not exist (${workingDirectory})`);
+    failures++;
+    continue;
+  }
+
+  const root = repoRoot(workingDirectory);
+  if (!root) {
+    if (VERBOSE) console.log(`. ${label}: not in a git repo, skipped`);
+    continue;
+  }
+
+  const startedAt = Math.floor(Date.parse(service.startedAt) / 1000);
+  const commit = newestCommit(root, inputDirs(resolve(workingDirectory), root, workspaceIndex(root)));
+  if (!commit) {
+    if (VERBOSE) console.log(`. ${label}: no commits found for its inputs, skipped`);
+    continue;
+  }
+
+  examined++;
+
+  if (commit.seconds > startedAt) {
+    const minutes = Math.round((commit.seconds - startedAt) / 60);
+    console.error(
+      `x ${label}: serving code from before ${commit.hash} (${minutes} min stale)\n`
+        + `    ${commit.subject}\n`
+        + `    -> barry service restart ${label}`,
+    );
+    failures++;
+  } else if (VERBOSE) {
+    console.log(`ok ${label}: started after ${commit.hash}`);
+  }
+}
+
+// Examining nothing is a failure, not a pass. Every silent breakage of this
+// check — the supervisor listing nothing, or no start times — converges on
+// examined === 0, which would otherwise print the same clean output as a
+// perfectly fresh machine.
+if (examined === 0) {
+  console.error(
+    "x service-freshness examined ZERO services - the check itself is broken.\n"
+      + `    (${services.length} services supervised, ${services.filter((s) => s.pid).length} running)\n`
+      + "    Re-run with --verbose to see where each candidate was dropped.",
+  );
+  process.exit(1);
+}
+
+if (failures > 0) {
+  console.error(`\n${failures} problem(s) across ${examined} service(s) examined.`);
+  process.exit(1);
+}
+
+console.log(`ok service-freshness: ${examined} service(s) examined, all serving current code.`);

@@ -1,0 +1,197 @@
+#!/bin/bash
+# Barry Health Monitor
+# Checks critical services and alerts on state transitions.
+# Runs every 5 minutes on the services bag's schedule.
+#
+# Checks: API, MCP Barry, session store (liveness)
+#          every service listens on loopback only (from the supervisor)
+#
+# Alerts: on transition only (down/recovered), not on every check.
+#         SMS escalation when 3+ services fail simultaneously.
+
+set -euo pipefail
+source "$(dirname "$0")/lib.sh"
+
+# ── Service addresses ────────────────────────────────────────────────────────
+
+# From the instance's supervisor, asked once: every service's address and
+# state. No fallback ports: a service the supervisor does not list is down to
+# every client, so it is reported down here too. `status` exits non-zero when
+# a service needs attention and still prints the status.
+SUPERVISOR_STATUS=$(barry_cli service status --json 2>/dev/null) || true
+
+address_of() {
+    jq -r --arg k "$1" '.services[] | select(.key == $k) | .url // empty' <<<"$SUPERVISOR_STATUS" 2>/dev/null || true
+}
+
+API_URL=$(address_of sessions.api)
+MCP_URL=$(address_of barry.engine)
+STORE_URL=$(address_of sessions.store)
+
+CRITICAL_SERVICES=(api mcp-barry session-store)
+
+# ── Check functions ──────────────────────────────────────────────────────────
+
+check_api() {
+    local response
+    [[ -n "$API_URL" ]] || return 1
+    response=$(curl -sf --max-time 5 "${API_URL}/health" 2>/dev/null) || return 1
+    [[ "$response" == *'"ok":true'* ]] || return 1
+}
+
+check_mcp_barry() {
+    local response
+    [[ -n "$MCP_URL" ]] || return 1
+    response=$(curl -sf --max-time 5 "${MCP_URL}/health" 2>/dev/null) || return 1
+    # The old *"ok"* match passed on ANY body containing the letters "ok" —
+    # including {"ok":false}. Require the real field.
+    [[ "$response" == *'"ok":true'* ]] || return 1
+    # Since the readiness gate (2026-08-24) the port binds at boot and /health
+    # reports ready: loading|ready|failed. A booting server is healthy — /mcp
+    # requests park and then succeed — but a FAILED boot is not, even though
+    # it briefly serves ok:true during its 500ms flush-and-exit grace.
+    [[ "$response" == *'"ready":"failed"'* ]] && return 1
+    return 0
+}
+
+# The session store, which is what actually serves sessions and messages.
+check_session_store() {
+    local response
+    [[ -n "$STORE_URL" ]] || return 1
+    response=$(curl -sf --max-time 5 "${STORE_URL}/health" 2>/dev/null) || return 1
+    [[ "$response" == *'"status":"ok"'* ]] || return 1
+    return 0
+}
+
+check_service() {
+    local name="$1"
+    case "$name" in
+        api) check_api ;;
+        mcp-barry) check_mcp_barry ;;
+        session-store) check_session_store ;;
+        *) return 1 ;;
+    esac
+}
+
+# ── Loopback check ──────────────────────────────────────────────────────────
+# Every service must listen on loopback only: hosting providers are the only
+# way in from elsewhere. The supervisor inspects each service's sockets and
+# reports `loopbackOnly: false` for one bound beyond loopback.
+#
+# Fails when it cannot tell, too: a supervisor that answers nothing, or that
+# read no running service's sockets, would otherwise pass on every tick.
+
+check_loopback() {
+    local summary
+    [[ -n "$SUPERVISOR_STATUS" ]] || {
+        echo "the supervisor did not answer"
+        return 1
+    }
+    summary=$(jq -r '
+        [.services[] | select(.state == "running")] as $running
+        | [$running[] | select(.loopbackOnly != null)] as $checked
+        | [$running[] | select(.loopbackOnly == false) | .key] as $exposed
+        | if ($exposed | length) > 0 then "listening beyond loopback: \($exposed | join(", "))"
+          elif ($running | length) > 0 and ($checked | length) == 0 then "no running service has had its sockets checked"
+          else "" end' <<<"$SUPERVISOR_STATUS") || {
+        echo "the supervisor's status could not be read"
+        return 1
+    }
+    if [[ -n "$summary" ]]; then
+        echo "$summary"
+        return 1
+    fi
+    return 0
+}
+
+# ── Main loop ────────────────────────────────────────────────────────────────
+
+failed=()
+recovered=()
+still_down=()
+timestamp=$(now_iso)
+
+for svc in "${CRITICAL_SERVICES[@]}"; do
+    state_key="health-check.$svc"
+    prev_state=$(read_state "$state_key")
+    [[ -z "$prev_state" ]] && prev_state="healthy"
+
+    if check_service "$svc"; then
+        write_state "$state_key" "healthy"
+        if [[ "$prev_state" == "unhealthy" ]]; then
+            recovered+=("$svc")
+        fi
+    else
+        write_state "$state_key" "unhealthy"
+        if [[ "$prev_state" == "healthy" ]]; then
+            failed+=("$svc")
+        else
+            still_down+=("$svc")
+        fi
+    fi
+done
+
+loopback_state_key="health-check.loopback"
+loopback_prev=$(read_state "$loopback_state_key")
+[[ -z "$loopback_prev" ]] && loopback_prev="healthy"
+loopback_issues=""
+
+if loopback_issues=$(check_loopback); then
+    write_state "$loopback_state_key" "healthy"
+    if [[ "$loopback_prev" == "unhealthy" ]]; then
+        recovered+=("loopback")
+    fi
+else
+    write_state "$loopback_state_key" "unhealthy"
+    if [[ "$loopback_prev" == "healthy" ]]; then
+        failed+=("loopback")
+    fi
+fi
+
+# ── Alerting ─────────────────────────────────────────────────────────────────
+
+if (( ${#failed[@]} > 0 )); then
+    svc_list=$(printf ", %s" "${failed[@]}")
+    svc_list="${svc_list:2}"
+
+    msg=":rotating_light: *Barry Health Alert*"
+    msg+="\n${#failed[@]} check(s) just failed: *${svc_list}*"
+
+    if [[ -n "$loopback_issues" ]] && [[ " ${failed[*]} " == *" loopback "* ]]; then
+        msg+="\nSecurity: ${loopback_issues}"
+    fi
+
+    if (( ${#still_down[@]} > 0 )); then
+        down_list=$(printf ", %s" "${still_down[@]}")
+        down_list="${down_list:2}"
+        msg+="\nAlso still down: ${down_list}"
+    fi
+
+    msg+="\nTime: ${timestamp}"
+
+    notify "$msg" "" "system_alert" "error"
+
+    # SMS escalation: 3+ total failures is likely systemic
+    total_down=$(( ${#failed[@]} + ${#still_down[@]} ))
+    if (( total_down >= 3 )); then
+        notify_sms "Barry: ${total_down} services down (${svc_list}). Check immediately."
+    fi
+
+    echo "[$timestamp] ALERT: ${svc_list} went down"
+fi
+
+if (( ${#recovered[@]} > 0 )); then
+    svc_list=$(printf ", %s" "${recovered[@]}")
+    svc_list="${svc_list:2}"
+
+    msg=":white_check_mark: *Barry Recovery*"
+    msg+="\n${#recovered[@]} check(s) recovered: *${svc_list}*"
+    msg+="\nTime: ${timestamp}"
+
+    notify "$msg" "" "system_alert" "success"
+    echo "[$timestamp] RECOVERED: ${svc_list}"
+fi
+
+if (( ${#failed[@]} == 0 && ${#recovered[@]} == 0 )); then
+    echo "[$timestamp] OK: all checks passed"
+fi

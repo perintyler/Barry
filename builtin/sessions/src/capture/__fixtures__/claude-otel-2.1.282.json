@@ -1,0 +1,1579 @@
+[
+ {
+  "path": "/v1/logs",
+  "payload": {
+   "resourceLogs": [
+    {
+     "resource": {
+      "attributes": [
+       {
+        "key": "host.arch",
+        "value": {
+         "stringValue": "arm64"
+        }
+       },
+       {
+        "key": "os.type",
+        "value": {
+         "stringValue": "darwin"
+        }
+       },
+       {
+        "key": "os.version",
+        "value": {
+         "stringValue": "24.0.0"
+        }
+       },
+       {
+        "key": "service.name",
+        "value": {
+         "stringValue": "claude-code"
+        }
+       },
+       {
+        "key": "service.version",
+        "value": {
+         "stringValue": "2.1.282"
+        }
+       }
+      ],
+      "droppedAttributesCount": 0
+     },
+     "scopeLogs": [
+      {
+       "scope": {
+        "name": "com.anthropic.claude_code.events",
+        "version": "2.1.282"
+       },
+       "logRecords": [
+        {
+         "timeUnixNano": "1790700100822000000",
+         "observedTimeUnixNano": "1790700100822000000",
+         "body": {
+          "stringValue": "claude_code.user_prompt"
+         },
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "event.name",
+           "value": {
+            "stringValue": "user_prompt"
+           }
+          },
+          {
+           "key": "event.timestamp",
+           "value": {
+            "stringValue": "2026-09-29T16:41:40.822Z"
+           }
+          },
+          {
+           "key": "event.sequence",
+           "value": {
+            "intValue": 8
+           }
+          },
+          {
+           "key": "prompt.id",
+           "value": {
+            "stringValue": "96895d43-3728-4de0-98dd-d7e33c75ceeb"
+           }
+          },
+          {
+           "key": "prompt_length",
+           "value": {
+            "stringValue": "56"
+           }
+          },
+          {
+           "key": "prompt",
+           "value": {
+            "stringValue": "Run the shell command: echo probe-out \u2014 then reply DONE."
+           }
+          },
+          {
+           "key": "message.uuid",
+           "value": {
+            "stringValue": "d22c1a4a-054e-4077-be26-629dfa274c6f"
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "flags": 1,
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "bdeb7a68dd1f88ae"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "path": "/v1/logs",
+  "payload": {
+   "resourceLogs": [
+    {
+     "resource": {
+      "attributes": [
+       {
+        "key": "host.arch",
+        "value": {
+         "stringValue": "arm64"
+        }
+       },
+       {
+        "key": "os.type",
+        "value": {
+         "stringValue": "darwin"
+        }
+       },
+       {
+        "key": "os.version",
+        "value": {
+         "stringValue": "24.0.0"
+        }
+       },
+       {
+        "key": "service.name",
+        "value": {
+         "stringValue": "claude-code"
+        }
+       },
+       {
+        "key": "service.version",
+        "value": {
+         "stringValue": "2.1.282"
+        }
+       }
+      ],
+      "droppedAttributesCount": 0
+     },
+     "scopeLogs": [
+      {
+       "scope": {
+        "name": "com.anthropic.claude_code.events",
+        "version": "2.1.282"
+       },
+       "logRecords": [
+        {
+         "timeUnixNano": "1790700103979000000",
+         "observedTimeUnixNano": "1790700103979000000",
+         "body": {
+          "stringValue": "claude_code.tool_decision"
+         },
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "event.name",
+           "value": {
+            "stringValue": "tool_decision"
+           }
+          },
+          {
+           "key": "event.timestamp",
+           "value": {
+            "stringValue": "2026-09-29T16:41:43.979Z"
+           }
+          },
+          {
+           "key": "event.sequence",
+           "value": {
+            "intValue": 11
+           }
+          },
+          {
+           "key": "prompt.id",
+           "value": {
+            "stringValue": "96895d43-3728-4de0-98dd-d7e33c75ceeb"
+           }
+          },
+          {
+           "key": "decision",
+           "value": {
+            "stringValue": "accept"
+           }
+          },
+          {
+           "key": "source",
+           "value": {
+            "stringValue": "config"
+           }
+          },
+          {
+           "key": "tool_name",
+           "value": {
+            "stringValue": "Bash"
+           }
+          },
+          {
+           "key": "tool_use_id",
+           "value": {
+            "stringValue": "toolu_018z927FwoZPyrJrbzN7zZfU"
+           }
+          },
+          {
+           "key": "tool_source",
+           "value": {
+            "stringValue": "builtin"
+           }
+          },
+          {
+           "key": "tool_parameters",
+           "value": {
+            "stringValue": "{\"bash_command\":\"echo\",\"full_command\":\"echo probe-out\",\"description\":\"Print probe-out\"}"
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "flags": 1,
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "17cb12b49e463b1d"
+        },
+        {
+         "timeUnixNano": "1790700103988000000",
+         "observedTimeUnixNano": "1790700103988000000",
+         "body": {
+          "stringValue": "claude_code.api_request"
+         },
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "event.name",
+           "value": {
+            "stringValue": "api_request"
+           }
+          },
+          {
+           "key": "event.timestamp",
+           "value": {
+            "stringValue": "2026-09-29T16:41:43.988Z"
+           }
+          },
+          {
+           "key": "event.sequence",
+           "value": {
+            "intValue": 12
+           }
+          },
+          {
+           "key": "prompt.id",
+           "value": {
+            "stringValue": "96895d43-3728-4de0-98dd-d7e33c75ceeb"
+           }
+          },
+          {
+           "key": "model",
+           "value": {
+            "stringValue": "claude-opus-5-5"
+           }
+          },
+          {
+           "key": "input_tokens",
+           "value": {
+            "intValue": 2
+           }
+          },
+          {
+           "key": "output_tokens",
+           "value": {
+            "intValue": 78
+           }
+          },
+          {
+           "key": "cache_read_tokens",
+           "value": {
+            "intValue": 11557
+           }
+          },
+          {
+           "key": "cache_creation_tokens",
+           "value": {
+            "intValue": 6563
+           }
+          },
+          {
+           "key": "cost_usd",
+           "value": {
+            "doubleValue": 0.0366944
+           }
+          },
+          {
+           "key": "cost_usd_micros",
+           "value": {
+            "intValue": 36694
+           }
+          },
+          {
+           "key": "duration_ms",
+           "value": {
+            "intValue": 3149
+           }
+          },
+          {
+           "key": "ttft_ms",
+           "value": {
+            "intValue": 2068
+           }
+          },
+          {
+           "key": "request_id",
+           "value": {
+            "stringValue": "req_011CfY4ebkuVxRiLgMRHCxwL"
+           }
+          },
+          {
+           "key": "client_request_id",
+           "value": {
+            "stringValue": "ba0ef17e-026a-4cc9-bb63-f7bf9fa71e9b"
+           }
+          },
+          {
+           "key": "speed",
+           "value": {
+            "stringValue": "normal"
+           }
+          },
+          {
+           "key": "query_source",
+           "value": {
+            "stringValue": "sdk"
+           }
+          },
+          {
+           "key": "effort",
+           "value": {
+            "stringValue": "xhigh"
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "flags": 1,
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "bdeb7a68dd1f88ae"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "path": "/v1/logs",
+  "payload": {
+   "resourceLogs": [
+    {
+     "resource": {
+      "attributes": [
+       {
+        "key": "host.arch",
+        "value": {
+         "stringValue": "arm64"
+        }
+       },
+       {
+        "key": "os.type",
+        "value": {
+         "stringValue": "darwin"
+        }
+       },
+       {
+        "key": "os.version",
+        "value": {
+         "stringValue": "24.0.0"
+        }
+       },
+       {
+        "key": "service.name",
+        "value": {
+         "stringValue": "claude-code"
+        }
+       },
+       {
+        "key": "service.version",
+        "value": {
+         "stringValue": "2.1.282"
+        }
+       }
+      ],
+      "droppedAttributesCount": 0
+     },
+     "scopeLogs": [
+      {
+       "scope": {
+        "name": "com.anthropic.claude_code.events",
+        "version": "2.1.282"
+       },
+       "logRecords": [
+        {
+         "timeUnixNano": "1790700105826000000",
+         "observedTimeUnixNano": "1790700105826000000",
+         "body": {
+          "stringValue": "claude_code.tool_result"
+         },
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "event.name",
+           "value": {
+            "stringValue": "tool_result"
+           }
+          },
+          {
+           "key": "event.timestamp",
+           "value": {
+            "stringValue": "2026-09-29T16:41:45.826Z"
+           }
+          },
+          {
+           "key": "event.sequence",
+           "value": {
+            "intValue": 13
+           }
+          },
+          {
+           "key": "prompt.id",
+           "value": {
+            "stringValue": "96895d43-3728-4de0-98dd-d7e33c75ceeb"
+           }
+          },
+          {
+           "key": "tool_name",
+           "value": {
+            "stringValue": "Bash"
+           }
+          },
+          {
+           "key": "tool_use_id",
+           "value": {
+            "stringValue": "toolu_018z927FwoZPyrJrbzN7zZfU"
+           }
+          },
+          {
+           "key": "success",
+           "value": {
+            "stringValue": "true"
+           }
+          },
+          {
+           "key": "duration_ms",
+           "value": {
+            "stringValue": "1845"
+           }
+          },
+          {
+           "key": "tool_parameters",
+           "value": {
+            "stringValue": "{\"bash_command\":\"echo\",\"full_command\":\"echo probe-out\",\"description\":\"Print probe-out\"}"
+           }
+          },
+          {
+           "key": "tool_input",
+           "value": {
+            "stringValue": "{\"command\":\"echo probe-out\",\"description\":\"Print probe-out\"}"
+           }
+          },
+          {
+           "key": "tool_input_size_bytes",
+           "value": {
+            "stringValue": "60"
+           }
+          },
+          {
+           "key": "tool_result_size_bytes",
+           "value": {
+            "stringValue": "9"
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "flags": 1,
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "bdeb7a68dd1f88ae"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "path": "/v1/logs",
+  "payload": {
+   "resourceLogs": [
+    {
+     "resource": {
+      "attributes": [
+       {
+        "key": "host.arch",
+        "value": {
+         "stringValue": "arm64"
+        }
+       },
+       {
+        "key": "os.type",
+        "value": {
+         "stringValue": "darwin"
+        }
+       },
+       {
+        "key": "os.version",
+        "value": {
+         "stringValue": "24.0.0"
+        }
+       },
+       {
+        "key": "service.name",
+        "value": {
+         "stringValue": "claude-code"
+        }
+       },
+       {
+        "key": "service.version",
+        "value": {
+         "stringValue": "2.1.282"
+        }
+       }
+      ],
+      "droppedAttributesCount": 0
+     },
+     "scopeLogs": [
+      {
+       "scope": {
+        "name": "com.anthropic.claude_code.events",
+        "version": "2.1.282"
+       },
+       "logRecords": [
+        {
+         "timeUnixNano": "1790700107203000000",
+         "observedTimeUnixNano": "1790700107203000000",
+         "body": {
+          "stringValue": "claude_code.api_request"
+         },
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "event.name",
+           "value": {
+            "stringValue": "api_request"
+           }
+          },
+          {
+           "key": "event.timestamp",
+           "value": {
+            "stringValue": "2026-09-29T16:41:47.203Z"
+           }
+          },
+          {
+           "key": "event.sequence",
+           "value": {
+            "intValue": 15
+           }
+          },
+          {
+           "key": "prompt.id",
+           "value": {
+            "stringValue": "96895d43-3728-4de0-98dd-d7e33c75ceeb"
+           }
+          },
+          {
+           "key": "model",
+           "value": {
+            "stringValue": "claude-opus-5-5"
+           }
+          },
+          {
+           "key": "input_tokens",
+           "value": {
+            "intValue": 2
+           }
+          },
+          {
+           "key": "output_tokens",
+           "value": {
+            "intValue": 17
+           }
+          },
+          {
+           "key": "cache_read_tokens",
+           "value": {
+            "intValue": 18120
+           }
+          },
+          {
+           "key": "cache_creation_tokens",
+           "value": {
+            "intValue": 111
+           }
+          },
+          {
+           "key": "cost_usd",
+           "value": {
+            "doubleValue": 0.004527000000000001
+           }
+          },
+          {
+           "key": "cost_usd_micros",
+           "value": {
+            "intValue": 4527
+           }
+          },
+          {
+           "key": "duration_ms",
+           "value": {
+            "intValue": 1369
+           }
+          },
+          {
+           "key": "ttft_ms",
+           "value": {
+            "intValue": 1347
+           }
+          },
+          {
+           "key": "request_id",
+           "value": {
+            "stringValue": "req_011CfY4exutSfwnvfK8uc6zt"
+           }
+          },
+          {
+           "key": "client_request_id",
+           "value": {
+            "stringValue": "5eba6230-f4b4-468d-8d4c-58abde5f18f5"
+           }
+          },
+          {
+           "key": "speed",
+           "value": {
+            "stringValue": "normal"
+           }
+          },
+          {
+           "key": "query_source",
+           "value": {
+            "stringValue": "sdk"
+           }
+          },
+          {
+           "key": "effort",
+           "value": {
+            "stringValue": "xhigh"
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "flags": 1,
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "bdeb7a68dd1f88ae"
+        },
+        {
+         "timeUnixNano": "1790700107203000000",
+         "observedTimeUnixNano": "1790700107203000000",
+         "body": {
+          "stringValue": "claude_code.assistant_response"
+         },
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "event.name",
+           "value": {
+            "stringValue": "assistant_response"
+           }
+          },
+          {
+           "key": "event.timestamp",
+           "value": {
+            "stringValue": "2026-09-29T16:41:47.203Z"
+           }
+          },
+          {
+           "key": "event.sequence",
+           "value": {
+            "intValue": 16
+           }
+          },
+          {
+           "key": "prompt.id",
+           "value": {
+            "stringValue": "96895d43-3728-4de0-98dd-d7e33c75ceeb"
+           }
+          },
+          {
+           "key": "response_length",
+           "value": {
+            "intValue": 38
+           }
+          },
+          {
+           "key": "response",
+           "value": {
+            "stringValue": "The command printed `probe-out`.\n\nDONE"
+           }
+          },
+          {
+           "key": "request_id",
+           "value": {
+            "stringValue": "req_011CfY4exutSfwnvfK8uc6zt"
+           }
+          },
+          {
+           "key": "message.uuid",
+           "value": {
+            "stringValue": "7091de43-b4de-49b6-a4ee-54fe9002ebc6"
+           }
+          },
+          {
+           "key": "model",
+           "value": {
+            "stringValue": "claude-opus-5-5"
+           }
+          },
+          {
+           "key": "query_source",
+           "value": {
+            "stringValue": "sdk"
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "flags": 1,
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "bdeb7a68dd1f88ae"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "path": "/v1/traces",
+  "payload": {
+   "resourceSpans": [
+    {
+     "resource": {
+      "attributes": [
+       {
+        "key": "host.arch",
+        "value": {
+         "stringValue": "arm64"
+        }
+       },
+       {
+        "key": "os.type",
+        "value": {
+         "stringValue": "darwin"
+        }
+       },
+       {
+        "key": "os.version",
+        "value": {
+         "stringValue": "24.0.0"
+        }
+       },
+       {
+        "key": "service.name",
+        "value": {
+         "stringValue": "claude-code"
+        }
+       },
+       {
+        "key": "service.version",
+        "value": {
+         "stringValue": "2.1.282"
+        }
+       }
+      ],
+      "droppedAttributesCount": 0
+     },
+     "scopeSpans": [
+      {
+       "scope": {
+        "name": "com.anthropic.claude_code.tracing",
+        "version": "1.0.0"
+       },
+       "spans": [
+        {
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "17cb12b49e463b1d",
+         "parentSpanId": "d31139832f2f7930",
+         "name": "claude_code.tool.blocked_on_user",
+         "kind": 1,
+         "startTimeUnixNano": "1790700103976000000",
+         "endTimeUnixNano": "1790700103979443041",
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "span.type",
+           "value": {
+            "stringValue": "tool.blocked_on_user"
+           }
+          },
+          {
+           "key": "duration_ms",
+           "value": {
+            "intValue": 3
+           }
+          },
+          {
+           "key": "decision",
+           "value": {
+            "stringValue": "unknown"
+           }
+          },
+          {
+           "key": "source",
+           "value": {
+            "stringValue": "unknown"
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "events": [],
+         "droppedEventsCount": 0,
+         "status": {
+          "code": 0
+         },
+         "links": [],
+         "droppedLinksCount": 0,
+         "flags": 257
+        },
+        {
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "7af6f03ab92d03c8",
+         "parentSpanId": "bdeb7a68dd1f88ae",
+         "name": "claude_code.llm_request",
+         "kind": 1,
+         "startTimeUnixNano": "1790700100837000000",
+         "endTimeUnixNano": "1790700103987559000",
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "span.type",
+           "value": {
+            "stringValue": "llm_request"
+           }
+          },
+          {
+           "key": "model",
+           "value": {
+            "stringValue": "claude-opus-5-5[1m]"
+           }
+          },
+          {
+           "key": "gen_ai.system",
+           "value": {
+            "stringValue": "anthropic"
+           }
+          },
+          {
+           "key": "gen_ai.request.model",
+           "value": {
+            "stringValue": "claude-opus-5-5[1m]"
+           }
+          },
+          {
+           "key": "llm_request.context",
+           "value": {
+            "stringValue": "interaction"
+           }
+          },
+          {
+           "key": "speed",
+           "value": {
+            "stringValue": "normal"
+           }
+          },
+          {
+           "key": "query_source_safe",
+           "value": {
+            "stringValue": "sdk"
+           }
+          },
+          {
+           "key": "duration_ms",
+           "value": {
+            "intValue": 3150
+           }
+          },
+          {
+           "key": "input_tokens",
+           "value": {
+            "intValue": 2
+           }
+          },
+          {
+           "key": "output_tokens",
+           "value": {
+            "intValue": 78
+           }
+          },
+          {
+           "key": "cache_read_tokens",
+           "value": {
+            "intValue": 11557
+           }
+          },
+          {
+           "key": "cache_creation_tokens",
+           "value": {
+            "intValue": 6563
+           }
+          },
+          {
+           "key": "success",
+           "value": {
+            "boolValue": true
+           }
+          },
+          {
+           "key": "attempt",
+           "value": {
+            "intValue": 1
+           }
+          },
+          {
+           "key": "request_id",
+           "value": {
+            "stringValue": "req_011CfY4ebkuVxRiLgMRHCxwL"
+           }
+          },
+          {
+           "key": "gen_ai.response.id",
+           "value": {
+            "stringValue": "req_011CfY4ebkuVxRiLgMRHCxwL"
+           }
+          },
+          {
+           "key": "client_request_id",
+           "value": {
+            "stringValue": "ba0ef17e-026a-4cc9-bb63-f7bf9fa71e9b"
+           }
+          },
+          {
+           "key": "ttft_ms",
+           "value": {
+            "intValue": 2068
+           }
+          },
+          {
+           "key": "first_content_ms",
+           "value": {
+            "intValue": 2069
+           }
+          },
+          {
+           "key": "effort",
+           "value": {
+            "stringValue": "xhigh"
+           }
+          },
+          {
+           "key": "stop_reason",
+           "value": {
+            "stringValue": "tool_use"
+           }
+          },
+          {
+           "key": "gen_ai.response.finish_reasons",
+           "value": {
+            "arrayValue": {
+             "values": [
+              {
+               "stringValue": "tool_use"
+              }
+             ]
+            }
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "events": [
+          {
+           "attributes": [
+            {
+             "key": "attempt",
+             "value": {
+              "intValue": 1
+             }
+            },
+            {
+             "key": "client_request_id",
+             "value": {
+              "stringValue": "ba0ef17e-026a-4cc9-bb63-f7bf9fa71e9b"
+             }
+            }
+           ],
+           "name": "gen_ai.request.attempt",
+           "timeUnixNano": "1790700100838295833",
+           "droppedAttributesCount": 0
+          }
+         ],
+         "droppedEventsCount": 0,
+         "status": {
+          "code": 0
+         },
+         "links": [
+          {
+           "attributes": [
+            {
+             "key": "link.type",
+             "value": {
+              "stringValue": "parent_of"
+             }
+            }
+           ],
+           "spanId": "fa4eda7c61d0eb6c",
+           "traceId": "af0264386c3409fe610ea60661f69b13",
+           "droppedAttributesCount": 0,
+           "flags": 769
+          }
+         ],
+         "droppedLinksCount": 0,
+         "flags": 257
+        },
+        {
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "f081bec262cf28a7",
+         "parentSpanId": "d31139832f2f7930",
+         "name": "claude_code.tool.execution",
+         "kind": 1,
+         "startTimeUnixNano": "1790700103980000000",
+         "endTimeUnixNano": "1790700105825240458",
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "span.type",
+           "value": {
+            "stringValue": "tool.execution"
+           }
+          },
+          {
+           "key": "tool_use_id",
+           "value": {
+            "stringValue": "toolu_018z927FwoZPyrJrbzN7zZfU"
+           }
+          },
+          {
+           "key": "gen_ai.tool.call.id",
+           "value": {
+            "stringValue": "toolu_018z927FwoZPyrJrbzN7zZfU"
+           }
+          },
+          {
+           "key": "duration_ms",
+           "value": {
+            "intValue": 1845
+           }
+          },
+          {
+           "key": "success",
+           "value": {
+            "boolValue": true
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "events": [],
+         "droppedEventsCount": 0,
+         "status": {
+          "code": 0
+         },
+         "links": [],
+         "droppedLinksCount": 0,
+         "flags": 257
+        },
+        {
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "d31139832f2f7930",
+         "parentSpanId": "bdeb7a68dd1f88ae",
+         "name": "claude_code.tool",
+         "kind": 1,
+         "startTimeUnixNano": "1790700103976000000",
+         "endTimeUnixNano": "1790700105824919500",
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "span.type",
+           "value": {
+            "stringValue": "tool"
+           }
+          },
+          {
+           "key": "tool_name",
+           "value": {
+            "stringValue": "Bash"
+           }
+          },
+          {
+           "key": "tool_name_safe",
+           "value": {
+            "stringValue": "Bash"
+           }
+          },
+          {
+           "key": "full_command",
+           "value": {
+            "stringValue": "echo probe-out"
+           }
+          },
+          {
+           "key": "bash_command_class",
+           "value": {
+            "stringValue": "shell_builtin"
+           }
+          },
+          {
+           "key": "bash_argv0",
+           "value": {
+            "stringValue": "echo"
+           }
+          },
+          {
+           "key": "tool_use_id",
+           "value": {
+            "stringValue": "toolu_018z927FwoZPyrJrbzN7zZfU"
+           }
+          },
+          {
+           "key": "gen_ai.tool.call.id",
+           "value": {
+            "stringValue": "toolu_018z927FwoZPyrJrbzN7zZfU"
+           }
+          },
+          {
+           "key": "duration_ms",
+           "value": {
+            "intValue": 1849
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "events": [
+          {
+           "attributes": [
+            {
+             "key": "bash_command",
+             "value": {
+              "stringValue": "echo probe-out"
+             }
+            },
+            {
+             "key": "output",
+             "value": {
+              "stringValue": "probe-out"
+             }
+            }
+           ],
+           "name": "tool.output",
+           "timeUnixNano": "1790700105824856625",
+           "droppedAttributesCount": 0
+          }
+         ],
+         "droppedEventsCount": 0,
+         "status": {
+          "code": 0
+         },
+         "links": [],
+         "droppedLinksCount": 0,
+         "flags": 257
+        },
+        {
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "23e272d31f897665",
+         "parentSpanId": "bdeb7a68dd1f88ae",
+         "name": "claude_code.llm_request",
+         "kind": 1,
+         "startTimeUnixNano": "1790700105833000000",
+         "endTimeUnixNano": "1790700107202844458",
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "span.type",
+           "value": {
+            "stringValue": "llm_request"
+           }
+          },
+          {
+           "key": "model",
+           "value": {
+            "stringValue": "claude-opus-5-5[1m]"
+           }
+          },
+          {
+           "key": "gen_ai.system",
+           "value": {
+            "stringValue": "anthropic"
+           }
+          },
+          {
+           "key": "gen_ai.request.model",
+           "value": {
+            "stringValue": "claude-opus-5-5[1m]"
+           }
+          },
+          {
+           "key": "llm_request.context",
+           "value": {
+            "stringValue": "interaction"
+           }
+          },
+          {
+           "key": "speed",
+           "value": {
+            "stringValue": "normal"
+           }
+          },
+          {
+           "key": "query_source_safe",
+           "value": {
+            "stringValue": "sdk"
+           }
+          },
+          {
+           "key": "duration_ms",
+           "value": {
+            "intValue": 1370
+           }
+          },
+          {
+           "key": "input_tokens",
+           "value": {
+            "intValue": 2
+           }
+          },
+          {
+           "key": "output_tokens",
+           "value": {
+            "intValue": 17
+           }
+          },
+          {
+           "key": "cache_read_tokens",
+           "value": {
+            "intValue": 18120
+           }
+          },
+          {
+           "key": "cache_creation_tokens",
+           "value": {
+            "intValue": 111
+           }
+          },
+          {
+           "key": "success",
+           "value": {
+            "boolValue": true
+           }
+          },
+          {
+           "key": "attempt",
+           "value": {
+            "intValue": 1
+           }
+          },
+          {
+           "key": "request_id",
+           "value": {
+            "stringValue": "req_011CfY4exutSfwnvfK8uc6zt"
+           }
+          },
+          {
+           "key": "gen_ai.response.id",
+           "value": {
+            "stringValue": "req_011CfY4exutSfwnvfK8uc6zt"
+           }
+          },
+          {
+           "key": "client_request_id",
+           "value": {
+            "stringValue": "5eba6230-f4b4-468d-8d4c-58abde5f18f5"
+           }
+          },
+          {
+           "key": "ttft_ms",
+           "value": {
+            "intValue": 1347
+           }
+          },
+          {
+           "key": "first_content_ms",
+           "value": {
+            "intValue": 1347
+           }
+          },
+          {
+           "key": "effort",
+           "value": {
+            "stringValue": "xhigh"
+           }
+          },
+          {
+           "key": "stop_reason",
+           "value": {
+            "stringValue": "end_turn"
+           }
+          },
+          {
+           "key": "gen_ai.response.finish_reasons",
+           "value": {
+            "arrayValue": {
+             "values": [
+              {
+               "stringValue": "end_turn"
+              }
+             ]
+            }
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "events": [
+          {
+           "attributes": [
+            {
+             "key": "attempt",
+             "value": {
+              "intValue": 1
+             }
+            },
+            {
+             "key": "client_request_id",
+             "value": {
+              "stringValue": "5eba6230-f4b4-468d-8d4c-58abde5f18f5"
+             }
+            }
+           ],
+           "name": "gen_ai.request.attempt",
+           "timeUnixNano": "1790700105833645916",
+           "droppedAttributesCount": 0
+          }
+         ],
+         "droppedEventsCount": 0,
+         "status": {
+          "code": 0
+         },
+         "links": [
+          {
+           "attributes": [
+            {
+             "key": "link.type",
+             "value": {
+              "stringValue": "parent_of"
+             }
+            }
+           ],
+           "spanId": "e914f7c72e883921",
+           "traceId": "231c55d1f7ed6a96c584e235695d60a5",
+           "droppedAttributesCount": 0,
+           "flags": 769
+          }
+         ],
+         "droppedLinksCount": 0,
+         "flags": 257
+        },
+        {
+         "traceId": "e14052055d6f40827740db53d6ab47fc",
+         "spanId": "bdeb7a68dd1f88ae",
+         "name": "claude_code.interaction",
+         "kind": 1,
+         "startTimeUnixNano": "1790700100814000000",
+         "endTimeUnixNano": "1790700107204328292",
+         "attributes": [
+          {
+           "key": "session.id",
+           "value": {
+            "stringValue": "48a1b4de-0adb-4023-b9dc-8da5697660ec"
+           }
+          },
+          {
+           "key": "terminal.type",
+           "value": {
+            "stringValue": "iTerm.app"
+           }
+          },
+          {
+           "key": "span.type",
+           "value": {
+            "stringValue": "interaction"
+           }
+          },
+          {
+           "key": "user_prompt",
+           "value": {
+            "stringValue": "Run the shell command: echo probe-out \u2014 then reply DONE."
+           }
+          },
+          {
+           "key": "user_prompt_length",
+           "value": {
+            "intValue": 56
+           }
+          },
+          {
+           "key": "interaction.sequence",
+           "value": {
+            "intValue": 1
+           }
+          },
+          {
+           "key": "parent.source",
+           "value": {
+            "stringValue": "none"
+           }
+          },
+          {
+           "key": "queued_sends",
+           "value": {
+            "intValue": 0
+           }
+          },
+          {
+           "key": "interaction.duration_ms",
+           "value": {
+            "intValue": 6390
+           }
+          }
+         ],
+         "droppedAttributesCount": 0,
+         "events": [],
+         "droppedEventsCount": 0,
+         "status": {
+          "code": 0
+         },
+         "links": [],
+         "droppedLinksCount": 0,
+         "flags": 257
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ }
+]

@@ -1,0 +1,387 @@
+[
+  {
+    "case": "default",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-default",
+        "CODEX_HOME": "<CODEX_HOME>/c773de303fbf",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  },
+  {
+    "case": "prompt",
+    "plan": {
+      "kind": "server",
+      "prompt": "do it"
+    },
+    "written": {}
+  },
+  {
+    "case": "resume-by-id",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "resume",
+        "prior-conversation"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-resume-by-id",
+        "CODEX_HOME": "<CODEX_HOME>/1384cadb6454",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  },
+  {
+    "case": "resume-last",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "resume",
+        "--last"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-resume-last",
+        "CODEX_HOME": "<CODEX_HOME>/d24f23261359",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  },
+  {
+    "case": "resume-picker",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "resume"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-resume-picker",
+        "CODEX_HOME": "<CODEX_HOME>/7153d3b3f3d5",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  },
+  {
+    "case": "denied-tools",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-denied-tools",
+        "CODEX_HOME": "<CODEX_HOME>/8a873e86ddf7",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": [
+        "Codex cannot deny Bash, Glob, WebFetch — those stay available."
+      ]
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  },
+  {
+    "case": "plugins-and-roots",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-plugins-and-roots",
+        "CODEX_HOME": "<CODEX_HOME>/6d70ef9a67d4",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  },
+  {
+    "case": "relax",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-relax",
+        "CODEX_HOME": "<CODEX_HOME>/3a30a95967be",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  },
+  {
+    "case": "system-prompt",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-system-prompt",
+        "CODEX_HOME": "<CODEX_HOME>/e2aaa44760a3",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  },
+  {
+    "case": "extra-args",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "--verbose"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-extra-args",
+        "CODEX_HOME": "<CODEX_HOME>/c1443f815862",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  },
+  {
+    "case": "no-mcp-servers",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-no-mcp-servers",
+        "CODEX_HOME": "<CODEX_HOME>/9206b8554fbc"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n"
+      }
+    }
+  },
+  {
+    "case": "own-model",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "--model",
+        "gpt-5.5"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-own-model",
+        "CODEX_HOME": "<CODEX_HOME>/1bd54a30ee64",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  },
+  {
+    "case": "prompt-with-resume",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "resume",
+        "--last"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-prompt-with-resume",
+        "CODEX_HOME": "<CODEX_HOME>/c0f86661e0e8",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  },
+  {
+    "case": "openai-key",
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<REPO>",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-codex-openai-key",
+        "CODEX_HOME": "<CODEX_HOME>/340cb5236648",
+        "OPENAI_API_KEY": "sk-golden",
+        "CODEX_API_KEY": "sk-golden",
+        "BARRY_CODEX_MCP_BARRY_BEARER_TOKEN": "golden-token"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {
+      "<CODEX_HOME>": {
+        "config.toml": "daemon_auto_start = false\ncheck_for_update_on_startup = false\n\n[mcp_servers.barry]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=golden\"\nbearer_token_env_var = \"BARRY_CODEX_MCP_BARRY_BEARER_TOKEN\"\n\n[mcp_servers.local]\ncommand = \"node\"\nargs = [\"server.js\"]\n\n[mcp_servers.local.env]\nLOCAL_FLAG = \"1\"\n"
+      }
+    }
+  }
+]

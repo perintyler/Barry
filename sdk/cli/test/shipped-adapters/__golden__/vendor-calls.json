@@ -1,0 +1,901 @@
+[
+  {
+    "scenario": "anthropic complete, minimal",
+    "requests": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "x-api-key": "ak-golden",
+          "anthropic-version": "2023-06-01"
+        },
+        "body": {
+          "model": "claude-haiku-4-5",
+          "max_tokens": 2048,
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ]
+        }
+      }
+    ],
+    "result": {
+      "text": "Hello world",
+      "servedModel": "claude-haiku-4-5-20251001",
+      "usage": {
+        "inputTokens": 12,
+        "outputTokens": 34
+      }
+    }
+  },
+  {
+    "scenario": "anthropic complete, every option",
+    "requests": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "x-api-key": "ak-golden",
+          "anthropic-version": "2023-06-01"
+        },
+        "body": {
+          "model": "claude-sonnet-5",
+          "max_tokens": 100,
+          "system": "Be brief.",
+          "temperature": 0.3,
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ]
+        }
+      }
+    ],
+    "result": {
+      "text": "Hello world",
+      "servedModel": "claude-haiku-4-5-20251001",
+      "usage": {
+        "inputTokens": 12,
+        "outputTokens": 34
+      }
+    }
+  },
+  {
+    "scenario": "anthropic answer, by prompting",
+    "requests": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "x-api-key": "ak-golden",
+          "anthropic-version": "2023-06-01"
+        },
+        "body": {
+          "model": "claude-haiku-4-5",
+          "max_tokens": 2048,
+          "system": "Answer the questions about the input below.\nReply with ONLY a JSON object. Each key below must appear exactly once.\n\n\"ok\": true or false — Is the change safe?\n\"color\": exactly one of \"red\", \"blue\" — Which colour?\n\"quality\": an integer from 0 to 2 (0 = bad; 1 = ok; 2 = good) — How good is it?",
+          "temperature": 0,
+          "messages": [
+            {
+              "role": "user",
+              "content": "{\"diff\":\"+ one line\"}"
+            }
+          ]
+        }
+      }
+    ],
+    "result": {
+      "answers": {
+        "ok": {
+          "type": "boolean",
+          "value": true,
+          "probability": 1
+        },
+        "color": {
+          "type": "choice",
+          "value": "blue"
+        },
+        "quality": {
+          "type": "score",
+          "value": 2,
+          "legend": "good"
+        }
+      },
+      "servedModel": "claude-haiku-4-5"
+    }
+  },
+  {
+    "scenario": "anthropic rejected key",
+    "requests": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "x-api-key": "ak-golden",
+          "anthropic-version": "2023-06-01"
+        },
+        "body": {
+          "model": "claude-haiku-4-5",
+          "max_tokens": 2048,
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ]
+        }
+      }
+    ],
+    "error": {
+      "name": "ModelUnavailableError",
+      "message": "Anthropic: ANTHROPIC_API_KEY was rejected (401)."
+    }
+  },
+  {
+    "scenario": "anthropic rate limited",
+    "requests": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "x-api-key": "ak-golden",
+          "anthropic-version": "2023-06-01"
+        },
+        "body": {
+          "model": "claude-haiku-4-5",
+          "max_tokens": 2048,
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ]
+        }
+      }
+    ],
+    "error": {
+      "name": "Error",
+      "message": "HTTP 429 from https://api.anthropic.com/v1/messages: rate_limit_error"
+    }
+  },
+  {
+    "scenario": "anthropic unreachable",
+    "requests": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "x-api-key": "ak-golden",
+          "anthropic-version": "2023-06-01"
+        },
+        "body": {
+          "model": "claude-haiku-4-5",
+          "max_tokens": 2048,
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ]
+        }
+      }
+    ],
+    "error": {
+      "name": "ModelUnavailableError",
+      "message": "Request to https://api.anthropic.com/v1/messages failed: fetch failed"
+    }
+  },
+  {
+    "scenario": "anthropic without a key",
+    "requests": [],
+    "error": {
+      "name": "ModelUnavailableError",
+      "message": "Anthropic: ANTHROPIC_API_KEY is not set."
+    }
+  },
+  {
+    "scenario": "jev answer",
+    "requests": [
+      {
+        "url": "https://api.typesafe.ai/v1/systemone",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer tk-golden"
+        },
+        "body": {
+          "state": {
+            "diff": "+ one line"
+          },
+          "model": "jev-latest",
+          "questions": {
+            "ok": {
+              "type": "noul",
+              "instructions": "Is the change safe?"
+            },
+            "color": {
+              "type": "choice",
+              "instructions": "Which colour?",
+              "criteria": {
+                "red": null,
+                "blue": null
+              }
+            },
+            "quality": {
+              "type": "score",
+              "instructions": "How good is it?",
+              "criteria": [
+                "bad",
+                "ok",
+                "good"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "result": {
+      "answers": {
+        "ok": {
+          "type": "boolean",
+          "value": true,
+          "probability": 0.83
+        },
+        "color": {
+          "type": "choice",
+          "value": "blue",
+          "probabilities": {
+            "red": 0.1,
+            "blue": 0.9
+          },
+          "confidence": 0.8
+        },
+        "quality": {
+          "type": "score",
+          "value": 1.6,
+          "legend": "good",
+          "confidence": 0.7
+        }
+      },
+      "servedModel": "jev-2026-09",
+      "usage": {
+        "inputTokens": 40,
+        "outputTokens": 3
+      }
+    }
+  },
+  {
+    "scenario": "jev rejected key",
+    "requests": [
+      {
+        "url": "https://api.typesafe.ai/v1/systemone",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer tk-golden"
+        },
+        "body": {
+          "state": {
+            "diff": "+ one line"
+          },
+          "model": "jev-latest",
+          "questions": {
+            "ok": {
+              "type": "noul",
+              "instructions": "Is the change safe?"
+            },
+            "color": {
+              "type": "choice",
+              "instructions": "Which colour?",
+              "criteria": {
+                "red": null,
+                "blue": null
+              }
+            },
+            "quality": {
+              "type": "score",
+              "instructions": "How good is it?",
+              "criteria": [
+                "bad",
+                "ok",
+                "good"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "error": {
+      "name": "ModelUnavailableError",
+      "message": "Jev: TYPESAFE_API_KEY was rejected (401)."
+    }
+  },
+  {
+    "scenario": "jev rejected request",
+    "requests": [
+      {
+        "url": "https://api.typesafe.ai/v1/systemone",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer tk-golden"
+        },
+        "body": {
+          "state": {
+            "diff": "+ one line"
+          },
+          "model": "jev-latest",
+          "questions": {
+            "ok": {
+              "type": "noul",
+              "instructions": "Is the change safe?"
+            },
+            "color": {
+              "type": "choice",
+              "instructions": "Which colour?",
+              "criteria": {
+                "red": null,
+                "blue": null
+              }
+            },
+            "quality": {
+              "type": "score",
+              "instructions": "How good is it?",
+              "criteria": [
+                "bad",
+                "ok",
+                "good"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "error": {
+      "name": "ModelUnavailableError",
+      "message": "Jev rejected the request (422): criteria must be unique"
+    }
+  },
+  {
+    "scenario": "jev answer missing for a question",
+    "requests": [
+      {
+        "url": "https://api.typesafe.ai/v1/systemone",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer tk-golden"
+        },
+        "body": {
+          "state": {
+            "diff": "+ one line"
+          },
+          "model": "jev-latest",
+          "questions": {
+            "ok": {
+              "type": "noul",
+              "instructions": "Is the change safe?"
+            },
+            "color": {
+              "type": "choice",
+              "instructions": "Which colour?",
+              "criteria": {
+                "red": null,
+                "blue": null
+              }
+            },
+            "quality": {
+              "type": "score",
+              "instructions": "How good is it?",
+              "criteria": [
+                "bad",
+                "ok",
+                "good"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "error": {
+      "name": "Error",
+      "message": "Jev returned no answer for question \"color\"."
+    }
+  },
+  {
+    "scenario": "jev refuses a one-option choice before sending",
+    "requests": [],
+    "error": {
+      "name": "Error",
+      "message": "Jev: choice question \"color\" needs at least 2 options."
+    }
+  },
+  {
+    "scenario": "jev without a key",
+    "requests": [],
+    "error": {
+      "name": "ModelUnavailableError",
+      "message": "Jev: TYPESAFE_API_KEY is not set (early access: console.typesafe.ai)."
+    }
+  },
+  {
+    "scenario": "von answer, without a key",
+    "requests": [
+      {
+        "url": "http://localhost:8000/systemone",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "state": {
+            "diff": "+ one line"
+          },
+          "model": "von-latest",
+          "questions": {
+            "ok": {
+              "type": "noul",
+              "instructions": "Is the change safe?"
+            },
+            "color": {
+              "type": "choice",
+              "instructions": "Which colour?",
+              "criteria": {
+                "red": null,
+                "blue": null
+              }
+            },
+            "quality": {
+              "type": "score",
+              "instructions": "How good is it?",
+              "criteria": [
+                "bad",
+                "ok",
+                "good"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "result": {
+      "answers": {
+        "ok": {
+          "type": "boolean",
+          "value": true,
+          "probability": 0.91
+        },
+        "color": {
+          "type": "choice",
+          "value": "red",
+          "probabilities": {
+            "red": 0.88,
+            "blue": 0.12
+          },
+          "confidence": 0.75
+        },
+        "quality": {
+          "type": "score",
+          "value": 2,
+          "confidence": 0.66
+        }
+      },
+      "servedModel": "von-1.3.0",
+      "usage": {
+        "inputTokens": 38,
+        "outputTokens": 0
+      }
+    }
+  },
+  {
+    "scenario": "von rejected key",
+    "requests": [
+      {
+        "url": "http://localhost:8000/systemone",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer vk-golden"
+        },
+        "body": {
+          "state": {
+            "diff": "+ one line"
+          },
+          "model": "von-latest",
+          "questions": {
+            "ok": {
+              "type": "noul",
+              "instructions": "Is the change safe?"
+            },
+            "color": {
+              "type": "choice",
+              "instructions": "Which colour?",
+              "criteria": {
+                "red": null,
+                "blue": null
+              }
+            },
+            "quality": {
+              "type": "score",
+              "instructions": "How good is it?",
+              "criteria": [
+                "bad",
+                "ok",
+                "good"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "error": {
+      "name": "ModelUnavailableError",
+      "message": "Von: VON_API_KEY was rejected (401)."
+    }
+  },
+  {
+    "scenario": "ollama complete, minimal",
+    "requests": [
+      {
+        "url": "http://ollama.test:11434/api/chat",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "qwen3:4b",
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ],
+          "stream": false,
+          "think": false,
+          "keep_alive": "60s",
+          "options": {}
+        }
+      }
+    ],
+    "result": {
+      "text": "hello",
+      "servedModel": "qwen3:4b",
+      "usage": {
+        "inputTokens": 7,
+        "outputTokens": 2
+      }
+    }
+  },
+  {
+    "scenario": "ollama complete, JSON mode and options",
+    "requests": [
+      {
+        "url": "http://ollama.test:11434/api/chat",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "qwen3:8b",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Reply in JSON."
+            },
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ],
+          "stream": false,
+          "think": false,
+          "format": "json",
+          "keep_alive": "600s",
+          "options": {
+            "temperature": 0.2,
+            "num_predict": 64
+          }
+        }
+      }
+    ],
+    "result": {
+      "text": "{\"a\":1}",
+      "servedModel": "qwen3:8b"
+    }
+  },
+  {
+    "scenario": "ollama answer, by prompting",
+    "requests": [
+      {
+        "url": "http://ollama.test:11434/api/chat",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "qwen3:4b",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Answer the questions about the input below.\nReply with ONLY a JSON object. Each key below must appear exactly once.\n\n\"ok\": true or false — Is the change safe?\n\"color\": exactly one of \"red\", \"blue\" — Which colour?\n\"quality\": an integer from 0 to 2 (0 = bad; 1 = ok; 2 = good) — How good is it?"
+            },
+            {
+              "role": "user",
+              "content": "some text"
+            }
+          ],
+          "stream": false,
+          "think": false,
+          "format": "json",
+          "keep_alive": "60s",
+          "options": {
+            "temperature": 0.2
+          }
+        }
+      }
+    ],
+    "result": {
+      "answers": {
+        "ok": {
+          "type": "boolean",
+          "value": true,
+          "probability": 1
+        },
+        "color": {
+          "type": "choice",
+          "value": "blue"
+        },
+        "quality": {
+          "type": "score",
+          "value": 2,
+          "legend": "good"
+        }
+      },
+      "servedModel": "qwen3:4b"
+    }
+  },
+  {
+    "scenario": "ollama model not pulled",
+    "requests": [
+      {
+        "url": "http://ollama.test:11434/api/chat",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "absent:1b",
+          "messages": [
+            {
+              "role": "user",
+              "content": "hi"
+            }
+          ],
+          "stream": false,
+          "think": false,
+          "keep_alive": "60s",
+          "options": {}
+        }
+      }
+    ],
+    "error": {
+      "name": "ModelUnavailableError",
+      "message": "Ollama: model \"absent:1b\" is not pulled — run `ollama pull absent:1b`."
+    }
+  },
+  {
+    "scenario": "ollama embed",
+    "requests": [
+      {
+        "url": "http://ollama.test:11434/api/embed",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "nomic-embed-text",
+          "input": [
+            "one",
+            "two"
+          ],
+          "keep_alive": "60s"
+        }
+      }
+    ],
+    "result": {
+      "embeddings": [
+        [
+          0.1,
+          0.2
+        ],
+        [
+          0.3,
+          0.4
+        ]
+      ],
+      "servedModel": "nomic-embed-text"
+    }
+  },
+  {
+    "scenario": "ollama embed, wrong count",
+    "requests": [
+      {
+        "url": "http://ollama.test:11434/api/embed",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "nomic-embed-text",
+          "input": [
+            "one",
+            "two"
+          ],
+          "keep_alive": "60s"
+        }
+      }
+    ],
+    "error": {
+      "name": "Error",
+      "message": "Ollama returned 1 embeddings for 2 inputs."
+    }
+  },
+  {
+    "scenario": "ollama embed, model not pulled",
+    "requests": [
+      {
+        "url": "http://ollama.test:11434/api/embed",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "absent-embed",
+          "input": [
+            "one"
+          ],
+          "keep_alive": "60s"
+        }
+      }
+    ],
+    "error": {
+      "name": "ModelUnavailableError",
+      "message": "Model \"absent-embed\" not found in Ollama — run `ollama pull absent-embed`."
+    }
+  },
+  {
+    "scenario": "ollama embed, unreachable",
+    "requests": [
+      {
+        "url": "http://ollama.test:11434/api/embed",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "nomic-embed-text",
+          "input": [
+            "one"
+          ],
+          "keep_alive": "60s"
+        }
+      }
+    ],
+    "error": {
+      "name": "ModelUnavailableError",
+      "message": "Ollama unreachable at http://ollama.test:11434 (is `ollama serve` running?)"
+    }
+  },
+  {
+    "scenario": "ollama list models",
+    "requests": [
+      {
+        "url": "http://ollama.test:11434/api/tags",
+        "method": "GET",
+        "headers": {}
+      }
+    ],
+    "result": [
+      {
+        "name": "qwen3:4b",
+        "parameterSize": "4.0B",
+        "sizeBytes": 2500000000
+      },
+      {
+        "name": "nomic-embed-text",
+        "sizeBytes": 274000000
+      }
+    ]
+  },
+  {
+    "scenario": "ollama list models, unreachable",
+    "requests": [
+      {
+        "url": "http://ollama.test:11434/api/tags",
+        "method": "GET",
+        "headers": {}
+      }
+    ],
+    "error": {
+      "name": "ModelUnavailableError",
+      "message": "Ollama unreachable at http://ollama.test:11434 (is `ollama serve` running?)"
+    }
+  },
+  {
+    "scenario": "ollama check, tool call ok",
+    "requests": [
+      {
+        "url": "http://ollama.test:11434/v1/messages",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "x-api-key": "ollama-local"
+        },
+        "body": {
+          "model": "qwen3:4b",
+          "max_tokens": 512,
+          "tools": [
+            {
+              "name": "get_weather",
+              "description": "Get the current weather for a city. Call this to answer any weather question.",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string",
+                    "description": "City name"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              }
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "content": "What is the weather in Paris right now?"
+            }
+          ]
+        }
+      },
+      {
+        "url": "http://ollama.test:11434/api/tags",
+        "method": "GET",
+        "headers": {}
+      },
+      {
+        "url": "http://ollama.test:11434/api/ps",
+        "method": "GET",
+        "headers": {}
+      }
+    ],
+    "result": [
+      {
+        "name": "tool call",
+        "status": "ok",
+        "observed": "tool call ok (0.0s)"
+      },
+      {
+        "name": "size",
+        "status": "failed",
+        "observed": "⚠ ollama/qwen3:4b (4.0B): local models this size have been observed to describe actions instead of performing them — they may report edits and commands they never ran. Verify the work. Local models remain proven for auxiliary inference (bookkeeping, summarization)."
+      },
+      {
+        "name": "context window",
+        "status": "ok",
+        "observed": "context window 64000 tokens"
+      }
+    ]
+  }
+]

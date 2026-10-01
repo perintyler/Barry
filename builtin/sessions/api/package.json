@@ -1,0 +1,45 @@
+{
+  "name": "@barry-rocks/sessions-api",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "exports": {
+    "./telemetry": "./src/telemetry.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx --watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "start:prod": "node --import tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@barry-rocks/actions-bag": "workspace:*",
+    "@barry-rocks/events-bag": "workspace:*",
+    "@barry-rocks/identities-bag": "workspace:*",
+    "@barry-rocks/logs-bag": "workspace:*",
+    "@barry-rocks/completion": "workspace:*",
+    "@barry-rocks/decisions": "workspace:*",
+    "@barry-rocks/embeddings": "workspace:*",
+    "@barry-rocks/schedules-bag": "workspace:*",
+    "@barry-rocks/sdk": "workspace:*",
+    "@barry-rocks/session-bag": "workspace:*",
+    "@barry-rocks/sessions-search": "workspace:*",
+    "@barry-rocks/tracker-bag": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "express": "4.22.1",
+    "ws": "8.21.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/express": "4.17.21",
+    "@types/node": "22.15.0",
+    "@types/ws": "8.5.13",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "private": true
+}

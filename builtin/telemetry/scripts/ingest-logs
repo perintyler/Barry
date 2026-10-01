@@ -1,0 +1,34 @@
+#!/usr/bin/env node
+/**
+ * Ingest every service log at every level.
+ *
+ * Separate from `ingest-errors`, which keeps level >= 40 in its own store. This
+ * is ~270x the volume, so it runs on its own schedule, prunes per level, and
+ * reads only new bytes.
+ */
+import { openLogsDb, defaultLogSources, ingestLog, prune, coverage } from "../src/logs.js";
+
+const db = openLogsDb();
+// Two totals: `read` proves the pass parsed lines, `inserted` proves they were
+// new. This store has no watermark, so INSERT OR IGNORE is the only dedupe and
+// a re-read inserting nothing is entirely normal.
+let totalRead = 0;
+let totalInserted = 0;
+let files = 0;
+
+for (const { service, file } of defaultLogSources()) {
+  files++;
+  const result = await ingestLog(db, file, service);
+  totalRead += result.read;
+  totalInserted += result.inserted;
+}
+
+const pruned = prune(db);
+const cov = coverage(db);
+db.close();
+
+const dropped = pruned.map((p) => `${p.minLevel}:${p.deleted}`).join(" ");
+process.stdout.write(
+  `${new Date().toISOString()} files=${files} read=${totalRead} inserted=${totalInserted} pruned=${dropped} ` +
+    `total=${cov.events} services=${cov.services}\n`,
+);

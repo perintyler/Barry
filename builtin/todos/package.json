@@ -1,0 +1,30 @@
+{
+  "name": "@barry-rocks/todos-bag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "main": "tools.ts",
+  "exports": {
+    ".": "./tools.ts",
+    "./store": "./src/store.ts",
+    "./db": "./src/db.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

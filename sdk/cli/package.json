@@ -1,0 +1,49 @@
+{
+  "name": "barry",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "description": "Barry - personal AI coding agent CLI",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "barry": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "seed:bags": "tsx scripts/seed-bag-registry.mts"
+  },
+  "dependencies": {
+    "@barry-rocks/actions-bag": "workspace:*",
+    "@barry-rocks/schedules-bag": "workspace:*",
+    "@barry-rocks/cursor": "workspace:*",
+    "@barry-rocks/events-bag": "workspace:*",
+    "@barry-rocks/identities-bag": "workspace:*",
+    "@barry-rocks/completion": "workspace:*",
+    "@barry-rocks/decisions": "workspace:*",
+    "@barry-rocks/embeddings": "workspace:*",
+    "@barry-rocks/sdk": "workspace:*",
+    "@barry-rocks/session-bag": "workspace:*",
+    "@barry-rocks/tracker-bag": "workspace:*",
+    "@inquirer/core": "11.1.1",
+    "@inquirer/figures": "2.0.3",
+    "@inquirer/prompts": "8.2.0",
+    "better-sqlite3": "12.10.0",
+    "commander": "12.0.0",
+    "dotenv": "16.0.0",
+    "kysely": "0.28.17",
+    "ws": "8.21.0",
+    "yaml": "2.8.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.15.0",
+    "@types/ws": "8.18.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0",
+    "@barry-rocks/claude": "workspace:*",
+    "@barry-rocks/codex": "workspace:*",
+    "@barry-rocks/opencode": "workspace:*"
+  }
+}

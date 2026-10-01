@@ -1,0 +1,116 @@
+{
+  "native payload": {
+    "sent": [
+      {
+        "prompt": "Judge it.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "verdict": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "verdict"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "outcome": {
+      "data": {
+        "verdict": "ok"
+      },
+      "raw": "{\"verdict\":\"ok\"}",
+      "id": "h0"
+    }
+  },
+  "native ignored, prompted answers": {
+    "sent": [
+      {
+        "prompt": "Judge it.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "verdict": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "verdict"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "prompt": "Judge it.\n\n---\n\nOutput contract: your FINAL message must contain exactly one fenced code\nblock labeled OUTPUT whose content is JSON conforming to this JSON Schema:\n\n```json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"verdict\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"verdict\"\n  ],\n  \"additionalProperties\": false\n}\n```\n\nLike this:\n\n````OUTPUT\n{ ... }\n````\n\nDo not put any other text inside the block. Prose outside the block is ignored."
+      }
+    ],
+    "outcome": {
+      "data": {
+        "verdict": "fine"
+      },
+      "raw": "Here:\n````OUTPUT\n{\"verdict\":\"fine\"}\n````",
+      "id": "h1"
+    }
+  },
+  "native invalid, prompted answers": {
+    "sent": [
+      {
+        "prompt": "Judge it.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "verdict": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "verdict"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "prompt": "Judge it.\n\n---\n\nOutput contract: your FINAL message must contain exactly one fenced code\nblock labeled OUTPUT whose content is JSON conforming to this JSON Schema:\n\n```json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"verdict\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"verdict\"\n  ],\n  \"additionalProperties\": false\n}\n```\n\nLike this:\n\n````OUTPUT\n{ ... }\n````\n\nDo not put any other text inside the block. Prose outside the block is ignored."
+      }
+    ],
+    "outcome": {
+      "data": {
+        "verdict": "late"
+      },
+      "raw": "{\"verdict\":\"late\"}",
+      "id": "h1"
+    }
+  },
+  "prompted, corrected on retry": {
+    "sent": [
+      {
+        "prompt": "Judge it.\n\n---\n\nOutput contract: your FINAL message must contain exactly one fenced code\nblock labeled OUTPUT whose content is JSON conforming to this JSON Schema:\n\n```json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"verdict\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"verdict\"\n  ],\n  \"additionalProperties\": false\n}\n```\n\nLike this:\n\n````OUTPUT\n{ ... }\n````\n\nDo not put any other text inside the block. Prose outside the block is ignored."
+      },
+      {
+        "prompt": "Your previous attempt at this task produced output that failed schema validation.\n\nPrevious output:\n\n````OUTPUT\n{\"nope\":1}\n````\n\nValidation errors:\n- (root) must have required property 'verdict'\n- (root) must NOT have additional properties\n\nRedo the task and fix the output so it validates.\n\n---\nJudge it.\n\n---\n\nOutput contract: your FINAL message must contain exactly one fenced code\nblock labeled OUTPUT whose content is JSON conforming to this JSON Schema:\n\n```json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"verdict\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"verdict\"\n  ],\n  \"additionalProperties\": false\n}\n```\n\nLike this:\n\n````OUTPUT\n{ ... }\n````\n\nDo not put any other text inside the block. Prose outside the block is ignored."
+      }
+    ],
+    "outcome": {
+      "data": {
+        "verdict": "fixed"
+      },
+      "raw": "````OUTPUT\n{\"verdict\":\"fixed\"}\n````",
+      "id": "h1"
+    }
+  },
+  "prompted, never valid": {
+    "sent": [
+      {
+        "prompt": "Judge it.\n\n---\n\nOutput contract: your FINAL message must contain exactly one fenced code\nblock labeled OUTPUT whose content is JSON conforming to this JSON Schema:\n\n```json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"verdict\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"verdict\"\n  ],\n  \"additionalProperties\": false\n}\n```\n\nLike this:\n\n````OUTPUT\n{ ... }\n````\n\nDo not put any other text inside the block. Prose outside the block is ignored."
+      },
+      {
+        "prompt": "Your previous attempt at this task produced output that failed schema validation.\n\nPrevious output:\n\nno json here\n\nValidation errors:\n- no OUTPUT block found and the raw output is not valid JSON\n\nRedo the task and fix the output so it validates.\n\n---\nJudge it.\n\n---\n\nOutput contract: your FINAL message must contain exactly one fenced code\nblock labeled OUTPUT whose content is JSON conforming to this JSON Schema:\n\n```json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"verdict\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"verdict\"\n  ],\n  \"additionalProperties\": false\n}\n```\n\nLike this:\n\n````OUTPUT\n{ ... }\n````\n\nDo not put any other text inside the block. Prose outside the block is ignored."
+      }
+    ],
+    "outcome": {
+      "thrown": "structured run failed schema validation after 2 prompted attempt(s): turn failed"
+    }
+  }
+}

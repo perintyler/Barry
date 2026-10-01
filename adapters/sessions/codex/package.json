@@ -1,0 +1,32 @@
+{
+  "name": "@barry-rocks/codex",
+  "version": "1.0.0",
+  "description": "OpenAI Codex agent adapter for Barry",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./runtime": "./src/runtime.ts",
+    "./launch": "./src/launch.ts",
+    "./transcript": "./src/transcript.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*",
+    "ws": "8.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "@types/ws": "8.18.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

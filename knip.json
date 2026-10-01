@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "eslint.config.js",
-    "scripts/**/*.{js,mjs,ts}"
+    ".github/ci/**/*.{js,mjs,ts}"
   ],
   "include": [
     "files",
@@ -12,68 +12,75 @@
     "unresolved"
   ],
   "ignoreDependencies": [
-    "@anthropic-ai/sdk",
-    "@cloudflare/workers-oauth-provider",
-    "@inquirer/prompts",
-    "@slack/web-api",
     "cloudflare"
   ],
   "ignoreUnresolved": [
-    "^cloudflare:",
-    "/usr/bin/plutil",
-    "/bin/launchctl"
-  ],
-  "ignore": [
-    ".experimental/**"
+    "^/spark\\.js$",
+    "^/usr/bin/plutil$",
+    "^/bin/launchctl$"
   ],
   "ignoreFiles": [
-    ".experimental/**",
     "**/public/vendor/**",
     "**/*.generated.*",
     "**/generated/**",
-    "packages/ui/src/index.d.ts",
-    "packages/ui/dist/css.d.ts",
-    "packages/db/src/config.ts",
-    "packages/job-telemetry/run-job.mjs",
-    "scripts/audit-identity.ts",
-    "scripts/generate-caddy-config.ts",
-    "scripts/generate-firewall-config.ts",
-    "packages/bags/src/hook-dispatch.ts",
-    "scripts/generate-tunnel-ingress.ts",
-    "scripts/jobs/profile-node-spin.mjs"
+    "sdk/lib/src/host/hook-dispatch.ts",
+    "builtin/identities/scripts/audit-identity.ts",
+    "builtin/actions/scripts/sync-skills.ts",
+    "builtin/sessions/api/src/jobs/bookkeeping.ts",
+    "**/*.test-d.ts"
   ],
   "workspaces": {
-    "cli": {
+    ".": {
+      "entry": [
+        "eslint.config.js",
+        ".github/ci/**/*.{js,mjs,ts}",
+        "plans/**/acceptance/*.{mjs,mts}"
+      ]
+    },
+    "adapters/sessions/claude": {
       "entry": [
         "src/index.ts",
-        "scripts/**/*.{js,mjs,mts,ts}"
+        "src/provider.ts",
+        "src/cli-provider.ts",
+        "src/endpoint.ts",
+        "src/anthropic-compatible/*.ts",
+        "src/sandbox/*.ts"
       ]
     },
-    "packages/agent-runtime": {
-      "entry": [
-        "src/index.ts"
-      ]
-    },
-    "packages/logger": {
-      "ignoreDependencies": [
-        "express"
-      ]
-    },
-    "packages/bags": {
+    "adapters/sessions/codex": {
       "entry": [
         "src/index.ts",
-        "qa/mock-bag-server/server.ts"
+        "src/agent.ts",
+        "src/provider.ts",
+        "src/sdk-provider.ts",
+        "src/runtime.ts",
+        "src/launch.ts"
       ]
     },
-    "packages/syntax": {
-      "ignore": [
-        "src/__tests__/fixtures/**"
+    "adapters/sessions/cursor": {
+      "entry": [
+        "src/index.ts",
+        "src/provider.ts",
+        "src/permissions.ts",
+        "src/bin.ts",
+        "src/launch.ts",
+        "src/event-mapping.ts",
+        "src/workspace.ts"
       ]
     },
-    "bags/*": {
+    "adapters/sessions/opencode": {
+      "entry": [
+        "src/index.ts",
+        "src/provider.ts",
+        "src/mcp-config.ts",
+        "src/launch.ts"
+      ]
+    },
+    "builtin/*": {
       "entry": [
         "tools.ts",
         "skills/**/scripts/**/*.{js,mjs,ts}",
+        "actions/**/*.{js,mjs,ts}",
         "src/*.{js,mjs,ts}",
         "web/**/*.{js,mjs}",
         "hooks/*/index.ts",
@@ -86,7 +93,35 @@
         "tsx"
       ]
     },
-    "bags/system/*": {
+    "builtin/sessions": {
+      "entry": [
+        "tools.ts",
+        "actions/**/*.{js,mjs,ts}",
+        "scripts/*.ts",
+        "src/*.{js,mjs,ts}",
+        "hooks/*/index.ts",
+        "server/src/index.ts"
+      ],
+      "ignoreDependencies": [
+        "dotenv",
+        "express",
+        "@types/express",
+        "tsx"
+      ]
+    },
+    "adapters/decisions": {},
+    "adapters/embeddings": {},
+    "adapters/sessions/completion": {},
+"builtin/sessions/sessions-search": {
+      "entry": [
+        "tools.ts",
+        "src/*.{js,mjs,ts}"
+      ],
+      "ignoreDependencies": [
+        "tsx"
+      ]
+    },
+    "builtin/filesystem/*": {
       "entry": [
         "tools.ts",
         "skills/**/scripts/**/*.{js,mjs,ts}",
@@ -98,57 +133,68 @@
         "tsx"
       ]
     },
-    "servers/api": {
+    "sdk/cli": {
       "entry": [
         "src/index.ts",
-        "qa/**/*.{js,cjs,mjs,ts}"
+        "scripts/**/*.{js,mjs,mts,ts}"
       ]
     },
-    "packages/bags-sdk": {
+    "sdk/actions": {
+      "entry": [
+        "src/index.ts",
+        "src/skill-catalog.ts",
+        "src/action-catalog.ts",
+        "src/action-commands.ts",
+        "src/action-index.ts",
+        "src/instruction-catalog.ts",
+        "src/instruction-index.ts",
+        "src/plugin-mount.ts"
+      ]
+    },
+    "sdk/auth": {
+      "entry": [
+        "src/index.ts"
+      ]
+    },
+    "sdk/services": {
+      "entry": [
+        "src/index.ts"
+      ]
+    },
+    "sdk/adapters/agents": {
+      "entry": [
+        "src/index.ts"
+      ]
+    },
+    "sdk/adapters/llms": {
+      "entry": [
+        "src/index.ts",
+        "src/types.ts",
+        "src/http.ts",
+        "src/prompted-questions.ts"
+      ]
+    },
+    "builtin/sessions/api": {
+      "entry": [
+        "src/index.ts",
+        "src/jobs/*.ts",
+        "qa/**/*.{js,cjs,mjs,ts}",
+        "scripts/**/*.{ts,mts}"
+      ]
+    },
+    "sdk/engine": {
+      "ignoreDependencies": [
+        "better-sqlite3"
+      ]
+    },
+    "sdk/lib": {
       "ignoreDependencies": [
         "zod"
-      ]
-    },
-    "servers/mcp": {
-      "ignoreDependencies": [
-        "better-sqlite3",
-        "@barry-rocks/system-bag"
-      ]
-    },
-    "bags/artifacts": {
+      ],
       "entry": [
-        "tools.ts",
-        "src/*.{js,mjs,ts}",
-        "deploy/app/index.ts",
-        "deploy/backend/entry.ts",
-        "src/artifacts/index.js",
-        "src/artifacts/mcp/cloudflare.ts",
-        "src/artifacts/mcp-app/viewer-entry.js",
-        "src/artifacts/mcp-app/vite.config.ts"
-      ],
-      "ignoreDependencies": [
-        "@barry/google-auth",
-        "@barry/logger",
-        "@barry/ui",
-        "@cloudflare/workers-types",
-        "wrangler"
-      ],
-      "ignoreFiles": [
-        "src/syntax/__tests__/fixtures/**"
-      ]
-    },
-    "bags/sessions": {
-      "entry": [
-        "tools.ts",
-        "src/*.{js,mjs,ts}",
-        "hooks/*/index.ts",
-        "server/src/index.ts"
-      ],
-      "ignoreDependencies": [
-        "dotenv",
-        "express",
-        "@types/express",
-        "tsx"
+        "src/bounds/index.ts",
+        "src/host/index.ts",
+        "qa/mock-bag-server/server.ts"
       ]
     }
   }

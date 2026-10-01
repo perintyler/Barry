@@ -1,0 +1,3303 @@
+[
+  {
+    "case": "default",
+    "firstTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "spawns": [
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--",
+          "first message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-0",
+          "GOLDEN_OUT": "<SCRATCH>/out/0",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      },
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--resume",
+          "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "--",
+          "second message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-0",
+          "GOLDEN_OUT": "<SCRATCH>/out/0",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      }
+    ],
+    "warnings": [],
+    "workspaces": [
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      },
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      }
+    ]
+  },
+  {
+    "case": "own model",
+    "firstTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "spawns": [
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--model",
+          "claude-opus-5-high",
+          "--",
+          "first message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-1",
+          "GOLDEN_OUT": "<SCRATCH>/out/1",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      },
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--model",
+          "claude-opus-5-high",
+          "--resume",
+          "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "--",
+          "second message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-1",
+          "GOLDEN_OUT": "<SCRATCH>/out/1",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      }
+    ],
+    "warnings": [],
+    "workspaces": [
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      },
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      }
+    ]
+  },
+  {
+    "case": "scoped session",
+    "firstTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "spawns": [
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--plugin-dir",
+          "/plugins/skills",
+          "--add-dir",
+          "/extra/root",
+          "--",
+          "first message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-2",
+          "GOLDEN_OUT": "<SCRATCH>/out/2",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      },
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--plugin-dir",
+          "/plugins/skills",
+          "--add-dir",
+          "/extra/root",
+          "--resume",
+          "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "--",
+          "second message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-2",
+          "GOLDEN_OUT": "<SCRATCH>/out/2",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      }
+    ],
+    "warnings": [
+      "[cursor] no Cursor permission kind for Glob — those denials are not enforced",
+      "[cursor] no Cursor permission kind for Glob — those denials are not enforced"
+    ],
+    "workspaces": [
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": [\n      \"Shell(*)\",\n      \"WebFetch(*)\"\n    ]\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {\n    \"postToolUse\": [\n      {\n        \"command\": \"barry hook post-tool\",\n        \"timeout\": 30\n      }\n    ]\n  }\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "Follow the bags.\n\n## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      },
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": [\n      \"Shell(*)\",\n      \"WebFetch(*)\"\n    ]\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {\n    \"postToolUse\": [\n      {\n        \"command\": \"barry hook post-tool\",\n        \"timeout\": 30\n      }\n    ]\n  }\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "Follow the bags.\n\n## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      }
+    ]
+  },
+  {
+    "case": "sandbox enabled",
+    "firstTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "spawns": [
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--sandbox",
+          "enabled",
+          "--",
+          "first message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-3",
+          "GOLDEN_OUT": "<SCRATCH>/out/3",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      },
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--sandbox",
+          "enabled",
+          "--resume",
+          "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "--",
+          "second message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-3",
+          "GOLDEN_OUT": "<SCRATCH>/out/3",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      }
+    ],
+    "warnings": [],
+    "workspaces": [
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      },
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      }
+    ]
+  },
+  {
+    "case": "resumed",
+    "firstTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "spawns": [
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--resume",
+          "prior-cursor-chat",
+          "--",
+          "first message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-4",
+          "GOLDEN_OUT": "<SCRATCH>/out/4",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      },
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--resume",
+          "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "--",
+          "second message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-4",
+          "GOLDEN_OUT": "<SCRATCH>/out/4",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      }
+    ],
+    "warnings": [],
+    "workspaces": [
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      },
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      }
+    ]
+  },
+  {
+    "case": "permission denied stream",
+    "firstTurn": [
+      {
+        "harnessSessionId": "158fb651-ced8-4b9d-8205-0ce48397d7e6",
+        "type": "init"
+      },
+      {
+        "id": "tool_f718f3ba-d0ed-4b41-a97a-735af25cc68",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "ls -la",
+          "conversationId": "158fb651-ced8-4b9d-8205-0ce48397d7e6",
+          "description": "List all files with details",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "-la"
+                  }
+                ],
+                "fullText": "ls -la",
+                "name": "ls"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "88d4cf48-78ac-497a-b289-30baff5d5c49",
+          "simpleCommands": [
+            "ls"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_f718f3ba-d0ed-4b41-a97a-735af25cc68",
+          "workingDirectory": "/tmp/cursor-deny-fixture"
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f718f3ba-d0ed-4b41-a97a-735af25cc68",
+        "result": {
+          "permissionDenied": {
+            "command": "ls -la",
+            "error": "Command blocked by permissions configuration",
+            "isReadonly": false,
+            "workingDirectory": "/tmp/cursor-deny-fixture"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "Retrying with approval — the command was blocked by permissions.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_b90446eb-6d9b-45f8-aa52-652b9d0ad09",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "ls -la",
+          "conversationId": "158fb651-ced8-4b9d-8205-0ce48397d7e6",
+          "description": "List all files with details",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "-la"
+                  }
+                ],
+                "fullText": "ls -la",
+                "name": "ls"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "88d4cf48-78ac-497a-b289-30baff5d5c49",
+          "simpleCommands": [
+            "ls"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_b90446eb-6d9b-45f8-aa52-652b9d0ad09",
+          "workingDirectory": "/tmp/cursor-deny-fixture"
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_b90446eb-6d9b-45f8-aa52-652b9d0ad09",
+        "result": {
+          "permissionDenied": {
+            "command": "ls -la",
+            "error": "Command blocked by permissions configuration",
+            "isReadonly": false,
+            "workingDirectory": "/tmp/cursor-deny-fixture"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "The `ls -la` command did not run. It was rejected twice with:\n\n**Permission denied: Command blocked by permissions configuration**\n\nThat usually means Cursor’s permissions or sandbox rules for this workspace (`/tmp/cursor-deny-fixture`) block shell execution — which fits a “deny fixture” setup.\n\nTo run it yourself in a terminal:\n\n```bash\ncd /tmp/cursor-deny-fixture && ls -la\n```\n\nIf you want the agent to run shell commands here, adjust the project’s command allow/deny settings (for example in `.cursor/cli-config.json` or workspace hooks) so basic commands like `ls` are permitted.",
+        "type": "text"
+      },
+      {
+        "result": "Retrying with approval — the command was blocked by permissions.\nThe `ls -la` command did not run. It was rejected twice with:\n\n**Permission denied: Command blocked by permissions configuration**\n\nThat usually means Cursor’s permissions or sandbox rules for this workspace (`/tmp/cursor-deny-fixture`) block shell execution — which fits a “deny fixture” setup.\n\nTo run it yourself in a terminal:\n\n```bash\ncd /tmp/cursor-deny-fixture && ls -la\n```\n\nIf you want the agent to run shell commands here, adjust the project’s command allow/deny settings (for example in `.cursor/cli-config.json` or workspace hooks) so basic commands like `ls` are permitted.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28064,
+          "cacheWriteTokens": 0,
+          "inputTokens": 9311,
+          "outputTokens": 475,
+          "totalTokens": 9786
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "158fb651-ced8-4b9d-8205-0ce48397d7e6",
+        "type": "init"
+      },
+      {
+        "id": "tool_f718f3ba-d0ed-4b41-a97a-735af25cc68",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "ls -la",
+          "conversationId": "158fb651-ced8-4b9d-8205-0ce48397d7e6",
+          "description": "List all files with details",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "-la"
+                  }
+                ],
+                "fullText": "ls -la",
+                "name": "ls"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "88d4cf48-78ac-497a-b289-30baff5d5c49",
+          "simpleCommands": [
+            "ls"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_f718f3ba-d0ed-4b41-a97a-735af25cc68",
+          "workingDirectory": "/tmp/cursor-deny-fixture"
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f718f3ba-d0ed-4b41-a97a-735af25cc68",
+        "result": {
+          "permissionDenied": {
+            "command": "ls -la",
+            "error": "Command blocked by permissions configuration",
+            "isReadonly": false,
+            "workingDirectory": "/tmp/cursor-deny-fixture"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "Retrying with approval — the command was blocked by permissions.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_b90446eb-6d9b-45f8-aa52-652b9d0ad09",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "ls -la",
+          "conversationId": "158fb651-ced8-4b9d-8205-0ce48397d7e6",
+          "description": "List all files with details",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "-la"
+                  }
+                ],
+                "fullText": "ls -la",
+                "name": "ls"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "88d4cf48-78ac-497a-b289-30baff5d5c49",
+          "simpleCommands": [
+            "ls"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_b90446eb-6d9b-45f8-aa52-652b9d0ad09",
+          "workingDirectory": "/tmp/cursor-deny-fixture"
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_b90446eb-6d9b-45f8-aa52-652b9d0ad09",
+        "result": {
+          "permissionDenied": {
+            "command": "ls -la",
+            "error": "Command blocked by permissions configuration",
+            "isReadonly": false,
+            "workingDirectory": "/tmp/cursor-deny-fixture"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "The `ls -la` command did not run. It was rejected twice with:\n\n**Permission denied: Command blocked by permissions configuration**\n\nThat usually means Cursor’s permissions or sandbox rules for this workspace (`/tmp/cursor-deny-fixture`) block shell execution — which fits a “deny fixture” setup.\n\nTo run it yourself in a terminal:\n\n```bash\ncd /tmp/cursor-deny-fixture && ls -la\n```\n\nIf you want the agent to run shell commands here, adjust the project’s command allow/deny settings (for example in `.cursor/cli-config.json` or workspace hooks) so basic commands like `ls` are permitted.",
+        "type": "text"
+      },
+      {
+        "result": "Retrying with approval — the command was blocked by permissions.\nThe `ls -la` command did not run. It was rejected twice with:\n\n**Permission denied: Command blocked by permissions configuration**\n\nThat usually means Cursor’s permissions or sandbox rules for this workspace (`/tmp/cursor-deny-fixture`) block shell execution — which fits a “deny fixture” setup.\n\nTo run it yourself in a terminal:\n\n```bash\ncd /tmp/cursor-deny-fixture && ls -la\n```\n\nIf you want the agent to run shell commands here, adjust the project’s command allow/deny settings (for example in `.cursor/cli-config.json` or workspace hooks) so basic commands like `ls` are permitted.",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28064,
+          "cacheWriteTokens": 0,
+          "inputTokens": 9311,
+          "outputTokens": 475,
+          "totalTokens": 9786
+        }
+      }
+    ],
+    "spawns": [
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--",
+          "first message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-5",
+          "GOLDEN_OUT": "<SCRATCH>/out/5",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/permission-denied.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      },
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--resume",
+          "158fb651-ced8-4b9d-8205-0ce48397d7e6",
+          "--",
+          "second message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-5",
+          "GOLDEN_OUT": "<SCRATCH>/out/5",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/permission-denied.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      }
+    ],
+    "warnings": [],
+    "workspaces": [
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      },
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      }
+    ]
+  },
+  {
+    "case": "partial output stream",
+    "firstTurn": [
+      {
+        "harnessSessionId": "c2eca226-f027-49b5-96ee-2003326c2ebe",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "hello",
+        "type": "text"
+      },
+      {
+        "role": "assistant",
+        "text": " world",
+        "type": "text"
+      },
+      {
+        "role": "assistant",
+        "text": "hello world",
+        "type": "text"
+      },
+      {
+        "result": "hello world",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 3872,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8435,
+          "outputTokens": 26,
+          "totalTokens": 8461
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "c2eca226-f027-49b5-96ee-2003326c2ebe",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "hello",
+        "type": "text"
+      },
+      {
+        "role": "assistant",
+        "text": " world",
+        "type": "text"
+      },
+      {
+        "role": "assistant",
+        "text": "hello world",
+        "type": "text"
+      },
+      {
+        "result": "hello world",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 3872,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8435,
+          "outputTokens": 26,
+          "totalTokens": 8461
+        }
+      }
+    ],
+    "spawns": [
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--",
+          "first message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-6",
+          "GOLDEN_OUT": "<SCRATCH>/out/6",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/partial-output.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      },
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--resume",
+          "c2eca226-f027-49b5-96ee-2003326c2ebe",
+          "--",
+          "second message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-6",
+          "GOLDEN_OUT": "<SCRATCH>/out/6",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/partial-output.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      }
+    ],
+    "warnings": [],
+    "workspaces": [
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      },
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      }
+    ]
+  },
+  {
+    "case": "cursor exits non-zero",
+    "firstTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "error": "Cursor agent exited with code 1",
+        "type": "error"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Running those steps in parallel, then appending to `notes.txt`.\n",
+        "type": "text"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "input": {
+          "caseInsensitive": false,
+          "multiline": false,
+          "offset": 0,
+          "path": "/private/tmp/cursor-fixture-repo",
+          "pattern": "beta",
+          "toolCallId": "tool_f8de8a79-0794-4789-ab95-958b1455492"
+        },
+        "tool": "Grep",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "input": {
+          "adminCommandDenylist": [],
+          "closeStdin": true,
+          "command": "echo hi",
+          "conversationId": "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "description": "Run echo hi shell command",
+          "fileOutputThresholdBytes": "40000",
+          "hardTimeout": 86400000,
+          "hasInputRedirect": false,
+          "hasOutputRedirect": false,
+          "isBackground": false,
+          "parsingResult": {
+            "executableCommands": [
+              {
+                "args": [
+                  {
+                    "type": "word",
+                    "value": "hi"
+                  }
+                ],
+                "fullText": "echo hi",
+                "name": "echo"
+              }
+            ],
+            "hasCommandSubstitution": false,
+            "hasRedirects": false,
+            "parsingFailed": false,
+            "redirects": []
+          },
+          "requestId": "c65489e4-a956-4f5a-b9cb-de162d7c48bf",
+          "simpleCommands": [
+            "echo"
+          ],
+          "skipApproval": false,
+          "timeout": 30000,
+          "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+          "toolCallId": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+          "workingDirectory": ""
+        },
+        "tool": "Bash",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_f8de8a79-0794-4789-ab95-958b1455492",
+        "result": {
+          "success": {
+            "outputMode": "content",
+            "path": "/private/tmp/cursor-fixture-repo",
+            "pattern": "beta",
+            "workspaceResults": {
+              "/private/tmp/cursor-fixture-repo": {
+                "content": {
+                  "clientTruncated": false,
+                  "matches": [
+                    {
+                      "file": "./notes.txt",
+                      "matches": [
+                        {
+                          "content": "beta",
+                          "contentTruncated": false,
+                          "isContextLine": false,
+                          "lineNumber": 2
+                        }
+                      ]
+                    }
+                  ],
+                  "ripgrepTruncated": false,
+                  "totalLines": 1,
+                  "totalMatchedLines": 1
+                }
+              }
+            }
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_1b06c92f-ba7e-4dae-80b0-3c297f764f7",
+        "result": {
+          "success": {
+            "content": "alpha\nbeta\ngamma\n",
+            "exceededLimit": false,
+            "fileSize": 17,
+            "isEmpty": false,
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+            "readRange": {
+              "endLine": 4,
+              "startLine": 1
+            },
+            "relatedCursorRulePaths": [],
+            "relatedCursorRules": [],
+            "totalLines": 4
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_87850785-0853-4f9c-9f8f-fbbeee9d282",
+        "result": {
+          "isBackground": false,
+          "success": {
+            "command": "echo hi",
+            "executionTime": 14718,
+            "exitCode": 0,
+            "interleavedOutput": "hi\n",
+            "localExecutionTimeMs": 1054,
+            "signal": "",
+            "stderr": "",
+            "stdout": "hi\n",
+            "workingDirectory": ""
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "input": {
+          "path": "/private/tmp/cursor-fixture-repo/notes.txt",
+          "streamContent": "gamma\ndelta\n"
+        },
+        "tool": "Edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool_d916d48f-8992-4e66-8388-28d0bee9743",
+        "result": {
+          "success": {
+            "afterFullFileContent": "alpha\nbeta\ngamma\ndelta\n",
+            "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+            "diffString": "--- a//private/tmp/cursor-fixture-repo/notes.txt\n+++ b//private/tmp/cursor-fixture-repo/notes.txt\n@@ -1,3 +1,4 @@\n alpha\n beta\n gamma\n+delta",
+            "linesAdded": 1,
+            "linesRemoved": 0,
+            "message": "The file /private/tmp/cursor-fixture-repo/notes.txt has been updated.",
+            "path": "/private/tmp/cursor-fixture-repo/notes.txt"
+          }
+        },
+        "type": "tool_result"
+      },
+      {
+        "role": "assistant",
+        "text": "**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "text"
+      },
+      {
+        "result": "Running those steps in parallel, then appending to `notes.txt`.\n**Summary:** `notes.txt` originally listed alpha, beta, and gamma; grep found only `beta` in that file; `echo hi` printed `hi`; and `delta` was appended so the file now has four lines.",
+        "type": "result"
+      },
+      {
+        "error": "Cursor agent exited with code 1",
+        "type": "error"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 28976,
+          "cacheWriteTokens": 0,
+          "inputTokens": 8898,
+          "outputTokens": 367,
+          "totalTokens": 9265
+        }
+      }
+    ],
+    "spawns": [
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--",
+          "first message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-7",
+          "GOLDEN_EXIT": "1",
+          "GOLDEN_OUT": "<SCRATCH>/out/7",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      },
+      {
+        "args": [
+          "agent",
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--workspace",
+          "<WORKSPACE>",
+          "--add-dir",
+          "/fixture/session-repo",
+          "--resume",
+          "4b2edea1-8031-4d8c-8d89-0e280bac0f87",
+          "--",
+          "second message"
+        ],
+        "bin": "<SCRATCH>/bin/cursor",
+        "cwd": "<WORKSPACE>",
+        "env": {
+          "BARRY_PROVIDER": "cursor",
+          "BARRY_SESSION_ID": "golden-7",
+          "GOLDEN_EXIT": "1",
+          "GOLDEN_OUT": "<SCRATCH>/out/7",
+          "GOLDEN_STREAM": "<REPO_ROOT>/adapters/sessions/cursor/src/__fixtures__/tool-run.stream.jsonl",
+          "HOME": "/home/golden",
+          "PATH": "<REPO_ROOT>/sdk/cli/node_modules/.bin:/usr/bin:/bin",
+          "SHELL": "/bin/sh",
+          "USER": "golden"
+        }
+      }
+    ],
+    "warnings": [],
+    "workspaces": [
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      },
+      {
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {}\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden\",\n      \"headers\": {\n        \"Authorization\": \"Bearer t\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `/fixture/session-repo`. Run commands and edit files there, not in this session directory.\n"
+      }
+    ]
+  }
+]

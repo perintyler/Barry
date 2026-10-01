@@ -1,0 +1,36 @@
+{
+  "name": "@barry-rocks/schedules-bag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./tools.ts",
+    "./catalog": "./src/catalog.ts",
+    "./db": "./src/db.ts",
+    "./store": "./src/store.ts",
+    "./health": "./src/health.ts",
+    "./next-fire": "./src/next-fire.ts",
+    "./one-offs": "./src/one-offs.ts",
+    "./runners": "./src/runners.ts",
+    "./scheduler": "./src/scheduler.ts"
+  },
+  "dependencies": {
+    "@barry-rocks/actions-bag": "workspace:*",
+    "@barry-rocks/sdk": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "croner": "10.0.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "start": "tsx src/service.ts",
+    "typecheck": "tsc --noEmit"
+  }
+}

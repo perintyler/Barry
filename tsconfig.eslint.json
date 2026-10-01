@@ -7,19 +7,27 @@
     ]
   },
   "include": [
-    "cli/test/**/*.ts",
-    "cli/src/**/*.test.ts",
+    "sdk/cli/test/**/*.ts",
+    "sdk/cli/src/**/*.test.ts",
     "packages/**/*.test.ts",
     // Type-level tests. `*.test-d.ts` does not match `*.test.ts`, so without
     // this the file parses outside any project and eslint fails the whole run
     // with "not found in any of the provided project(s)" rather than linting it.
     "packages/**/*.test-d.ts",
     "packages/**/tests/**/*.ts",
-    "bags/**/*.test.ts",
-    "bags/**/tests/**/*.ts",
-    "sdks/**/*.test.ts",
-    "sdks/**/tests/**/*.ts",
-    "servers/**/*.test.ts",
+    "builtin/**/*.test.ts",
+    "builtin/**/tests/**/*.ts",
+    // `sdk/`, not `sdks/`. The plural was this repo's layout before the SDK
+    // restructure split it into sdk/ and adapters/; the glob outlived the
+    // directory and silently matched nothing, so 31 test files parsed outside
+    // any project and eslint failed the whole run with "not found in any of
+    // the provided project(s)" rather than linting them.
+    "sdk/**/*.test.ts",
+    "sdk/**/*.test-d.ts",
+    "sdk/**/tests/**/*.ts",
+    "adapters/**/*.test.ts",
+    "adapters/**/tests/**/*.ts",
+    "sdk/engine/**/*.test.ts",
     "hooks/**/*.test.ts",
     "hooks/**/test/**/*.ts"
   ],

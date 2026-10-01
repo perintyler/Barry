@@ -1,0 +1,49 @@
+#!/usr/bin/env node
+/**
+ * Ingest request logs into the local store.
+ *
+ * Runs on a schedule because the log files are not durable: the supervisor
+ * rotates a service's log once it passes 10MB and keeps only a few rotations.
+ * Whatever has not been ingested by then is gone.
+ */
+import { openRequestsDb, ingestLog, defaultLogSources, coverage, logSizeMb, pruneRequests } from "../src/usage/requests.js";
+
+const RETENTION_DAYS = 400;
+
+const db = openRequestsDb();
+// Two totals: `read` proves the pass parsed lines, `inserted` proves they were
+// new. A truncation-driven re-read legitimately inserts nothing, and reporting
+// only that would look identical to a collector reading a stale path.
+let totalRead = 0;
+let totalInserted = 0;
+const warnings = [];
+
+const sources = defaultLogSources();
+for (const { service, file } of sources) {
+  try {
+    const result = await ingestLog(db, file, service);
+    totalRead += result.read;
+    totalInserted += result.inserted;
+  } catch (err) {
+    // One unreadable log must not stop the others.
+    warnings.push(`${service}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const mb = logSizeMb(file);
+  // The truncation threshold is 10MB. Say so BEFORE history is lost, not after.
+  if (mb !== undefined && mb > 8) warnings.push(`${service} log at ${mb.toFixed(1)}MB, truncated at 10MB`);
+}
+
+// A collector that reads nothing must not report success. Zero sources means
+// the log layout moved underneath us — which is exactly what happened when
+// barry.works became a bag and this job kept printing ok while ingesting
+// nothing from it for a week.
+if (sources.length === 0) warnings.push("no log sources found — log layout may have changed");
+
+const pruned = pruneRequests(db, Math.floor(Date.now() / 1000) - RETENTION_DAYS * 86400);
+const c = coverage(db);
+db.close();
+
+process.stdout.write(
+  `${new Date().toISOString()} sources=${sources.length} read=${totalRead} inserted=${totalInserted} pruned=${pruned} stored=${c.total}` +
+  (warnings.length ? ` warnings=${JSON.stringify(warnings)}` : "") + "\n",
+);

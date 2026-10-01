@@ -1,0 +1,237 @@
+[
+  {
+    "case": "default",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-default",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  {
+    "case": "prompt",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "run",
+        "--auto",
+        "--format",
+        "json",
+        "--",
+        "do it"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-prompt",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  {
+    "case": "resume-by-id",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--session",
+        "prior-conversation"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-resume-by-id",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  {
+    "case": "resume-last",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--continue"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-resume-last",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  {
+    "case": "resume-picker",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-resume-picker",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  {
+    "case": "denied-tools",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-denied-tools",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": [
+        "OpenCode cannot deny Bash, Glob, WebFetch — those stay available."
+      ]
+    },
+    "written": {}
+  },
+  {
+    "case": "plugins-and-roots",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-plugins-and-roots",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  {
+    "case": "relax",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-relax",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  {
+    "case": "system-prompt",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-system-prompt",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  {
+    "case": "extra-args",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--verbose"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-extra-args",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  {
+    "case": "no-mcp-servers",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-no-mcp-servers"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  {
+    "case": "own-model",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--model",
+        "anthropic/claude-opus-5"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-own-model",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  },
+  {
+    "case": "prompt-with-model",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "run",
+        "--auto",
+        "--format",
+        "json",
+        "--model",
+        "anthropic/claude-opus-5",
+        "--",
+        "do it"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-prompt-with-model",
+        "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden\",\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"environment\":{\"LOCAL_FLAG\":\"1\"}}}}"
+      },
+      "tmpDirs": [],
+      "warnings": []
+    },
+    "written": {}
+  }
+]

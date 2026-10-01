@@ -1,0 +1,28 @@
+{
+  "name": "@barry-rocks/embeddings",
+  "version": "1.0.0",
+  "description": "Embedding call code — vendors turning text into vectors",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@barry-rocks/completion": "workspace:*",
+    "@barry-rocks/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "@barry-rocks/events-bag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@barry-rocks/logs-bag": "workspace:*",
+    "@barry-rocks/sdk": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "express": "4.22.1",
+    "nanoid": "5.1.6",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/express": "4.17.21",
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "main": "tools.ts",
+  "exports": {
+    ".": "./tools.ts",
+    "./store": "./src/store.ts",
+    "./db": "./src/db.ts",
+    "./routes": "./src/routes.ts",
+    "./cli": "./src/cli.ts",
+    "./announce": "./src/announce.ts",
+    "./hooks": "./src/hooks.ts",
+    "./dispatch": "./src/dispatch.ts",
+    "./bus": "./src/bus.ts"
+  }
+}

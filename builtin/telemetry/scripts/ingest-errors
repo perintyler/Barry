@@ -1,0 +1,90 @@
+#!/usr/bin/env node
+/**
+ * Ingest warn/error events from service logs into the local errors store.
+ *
+ * Runs on a schedule because the log files are not durable: the supervisor
+ * rotates a service's log once it passes 10MB and keeps only a few rotations.
+ * Whatever has not been ingested by then is gone.
+ *
+ * This is the replacement for Axiom's log ingest. It reads the same stream
+ * from disk instead of over the network, which is why it cannot fail silently
+ * the way that did.
+ */
+import {
+  openErrorsDb,
+  ingestLog,
+  defaultLogSources,
+  coverage,
+  logSizeMb,
+  pruneErrors,
+  errorCounters,
+} from "../src/usage/errors.js";
+import { openDb, writePoints } from "../src/store.js";
+import { METRICS } from "../src/schema.js";
+
+// Longer than requests' 400 days: errors are ~200/day against ~30k requests/day,
+// so the whole history costs little and old incidents are what you compare against.
+const RETENTION_DAYS = 400;
+
+const db = openErrorsDb();
+// Two totals, not one. `read` says the pass actually parsed lines; `inserted`
+// says how many were new. After a truncation the offset resets, the retained
+// tail is re-read, and inserted is legitimately 0 — reporting only that would
+// make a healthy pass look exactly like one that read nothing.
+let totalRead = 0;
+let totalInserted = 0;
+const warnings = [];
+const sources = defaultLogSources();
+
+for (const { service, file } of sources) {
+  try {
+    const result = await ingestLog(db, file, service);
+    totalRead += result.read;
+    totalInserted += result.inserted;
+  } catch (err) {
+    // One unreadable log must not stop the others.
+    warnings.push(`${service}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const mb = logSizeMb(file);
+  // The truncation threshold is 10MB. Say so BEFORE history is lost, not after.
+  if (mb !== undefined && mb > 8) warnings.push(`${service} log at ${mb.toFixed(1)}MB, truncated at 10MB`);
+}
+
+// A collector that reads nothing must not report success. Zero sources means
+// the log layout moved underneath us — the exact failure that left the requests
+// collector pointed at apps/web/barry.works for months without complaint.
+if (sources.length === 0) warnings.push("no log sources found — log layout may have changed");
+
+const pruned = pruneErrors(db, Math.floor(Date.now() / 1000) - RETENTION_DAYS * 86400);
+const c = coverage(db);
+
+// Publish the counts as a metric so the alerting rules can see them. Derived
+// from the same rows the search surface reads, so the two cannot disagree.
+//
+// SECONDS, not Date.now(): metric_point.ts is a unix second, and a millisecond
+// value writes a timestamp a thousandfold in the future that every window query
+// then silently misses — the store documents this trap at writePoints.
+const ts = Math.floor(Date.now() / 1000);
+const counters = errorCounters(db);
+db.close();
+
+const mdb = openDb();
+try {
+  writePoints(
+    mdb,
+    counters.map((row) => ({
+      ts,
+      metric: METRICS.errorEvents.name,
+      value: row.count,
+      labels: { service: row.service, level: row.level },
+    })),
+  );
+} finally {
+  mdb.close();
+}
+
+process.stdout.write(
+  `${new Date().toISOString()} sources=${sources.length} read=${totalRead} inserted=${totalInserted} pruned=${pruned} stored=${c.events}` +
+    (warnings.length ? ` warnings=${JSON.stringify(warnings)}` : "") +
+    "\n",
+);

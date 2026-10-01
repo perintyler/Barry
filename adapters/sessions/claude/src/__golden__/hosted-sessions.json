@@ -1,0 +1,2000 @@
+[
+  {
+    "calls": [
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "first message"
+      },
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "resume": "claude-session-1",
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "second message"
+      }
+    ],
+    "case": "default",
+    "firstTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ]
+  },
+  {
+    "calls": [
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "model": "claude-opus-5",
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "first message"
+      },
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "model": "claude-opus-5",
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "resume": "claude-session-1",
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "second message"
+      }
+    ],
+    "case": "own model",
+    "firstTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ]
+  },
+  {
+    "calls": [
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "ANTHROPIC_API_KEY": "zk",
+            "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden",
+            "Z_AI_API_KEY": "zk"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "model": "glm-5.2",
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          }
+        },
+        "prompt": "first message"
+      },
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "ANTHROPIC_API_KEY": "zk",
+            "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden",
+            "Z_AI_API_KEY": "zk"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "model": "glm-5.2",
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "resume": "claude-session-1",
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          }
+        },
+        "prompt": "second message"
+      }
+    ],
+    "case": "routed to z.ai",
+    "firstTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ]
+  },
+  {
+    "calls": [
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "ANTHROPIC_API_KEY": "ollama-local",
+            "ANTHROPIC_BASE_URL": "http://127.0.0.1:11434",
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "model": "qwen3:4b",
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          }
+        },
+        "prompt": "first message"
+      },
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "ANTHROPIC_API_KEY": "ollama-local",
+            "ANTHROPIC_BASE_URL": "http://127.0.0.1:11434",
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "model": "qwen3:4b",
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "resume": "claude-session-1",
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          }
+        },
+        "prompt": "second message"
+      }
+    ],
+    "case": "routed to ollama",
+    "firstTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ]
+  },
+  {
+    "calls": [
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "ANTHROPIC_API_KEY": "ollama-local",
+            "ANTHROPIC_BASE_URL": "http://10.0.0.5:11434",
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "model": "my-custom:7b",
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          }
+        },
+        "prompt": "first message"
+      },
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "ANTHROPIC_API_KEY": "ollama-local",
+            "ANTHROPIC_BASE_URL": "http://10.0.0.5:11434",
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "model": "my-custom:7b",
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "resume": "claude-session-1",
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          }
+        },
+        "prompt": "second message"
+      }
+    ],
+    "case": "ollama custom model at a base url",
+    "firstTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ]
+  },
+  {
+    "calls": [
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet",
+            "Bash",
+            "WebFetch"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 12,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "permissionMode": "bypassPermissions",
+          "plugins": [
+            {
+              "path": "/plugins/skills",
+              "type": "local"
+            }
+          ],
+          "promptSuggestions": false,
+          "sandbox": {
+            "allowUnsandboxedCommands": false,
+            "autoAllowBashIfSandboxed": true,
+            "enabled": true,
+            "failIfUnavailable": true,
+            "network": {
+              "allowedDomains": [
+                "github.com"
+              ],
+              "allowLocalBinding": true
+            }
+          },
+          "settingSources": [],
+          "systemPrompt": {
+            "append": "Follow the bags.",
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "first message"
+      },
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet",
+            "Bash",
+            "WebFetch"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 12,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "permissionMode": "bypassPermissions",
+          "plugins": [
+            {
+              "path": "/plugins/skills",
+              "type": "local"
+            }
+          ],
+          "promptSuggestions": false,
+          "resume": "claude-session-1",
+          "sandbox": {
+            "allowUnsandboxedCommands": false,
+            "autoAllowBashIfSandboxed": true,
+            "enabled": true,
+            "failIfUnavailable": true,
+            "network": {
+              "allowedDomains": [
+                "github.com"
+              ],
+              "allowLocalBinding": true
+            }
+          },
+          "settingSources": [],
+          "systemPrompt": {
+            "append": "Follow the bags.",
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "second message"
+      }
+    ],
+    "case": "scoped session",
+    "firstTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ]
+  },
+  {
+    "calls": [
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "resume": "prior-claude-session",
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "first message"
+      },
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "resume": "claude-session-1",
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "second message"
+      }
+    ],
+    "case": "resumed",
+    "firstTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ]
+  },
+  {
+    "calls": [
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "first message"
+      },
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "resume": "claude-session-2",
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "second message"
+      }
+    ],
+    "case": "api error ends the turn",
+    "firstTurn": [
+      {
+        "harnessSessionId": "claude-session-2",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Invalid API key",
+        "type": "text"
+      },
+      {
+        "result": "never reached",
+        "type": "result"
+      },
+      {
+        "type": "done"
+      }
+    ],
+    "secondTurn": [
+      {
+        "harnessSessionId": "claude-session-2",
+        "type": "init"
+      },
+      {
+        "role": "assistant",
+        "text": "Invalid API key",
+        "type": "text"
+      },
+      {
+        "result": "never reached",
+        "type": "result"
+      },
+      {
+        "type": "done"
+      }
+    ]
+  },
+  {
+    "calls": [
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "first message"
+      }
+    ],
+    "case": "failed result",
+    "firstTurn": [
+      {
+        "error": "tool crashed",
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "inputTokens": 1,
+          "outputTokens": 0,
+          "totalTokens": 1
+        }
+      }
+    ],
+    "secondTurn": [
+      {
+        "error": "Session not started. Call start() first.",
+        "type": "error"
+      },
+      {
+        "type": "done"
+      }
+    ]
+  },
+  {
+    "calls": [
+      {
+        "options": {
+          "abortController": "<AbortController>",
+          "agentProgressSummaries": false,
+          "allowDangerouslySkipPermissions": true,
+          "cwd": "/repo",
+          "disallowedTools": [
+            "Write",
+            "Edit",
+            "AskUserQuestion",
+            "NotebookEdit",
+            "NotebookRead",
+            "ToolSearch",
+            "EnterWorktree",
+            "ExitWorktree",
+            "TodoWrite",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet"
+          ],
+          "env": {
+            "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+            "DISABLE_AUTOUPDATER": "1",
+            "HOME": "/home/golden",
+            "PATH": "/usr/bin",
+            "USER": "golden"
+          },
+          "includePartialMessages": true,
+          "maxTurns": 50,
+          "mcpServers": {
+            "barry": {
+              "headers": {
+                "Authorization": "Bearer t"
+              },
+              "type": "http",
+              "url": "http://127.0.0.1:4510/mcp?sessionId=golden"
+            }
+          },
+          "model": "claude-opus-5",
+          "outputFormat": {
+            "schema": {
+              "type": "object"
+            },
+            "type": "json_schema"
+          },
+          "permissionMode": "bypassPermissions",
+          "promptSuggestions": false,
+          "settingSources": [],
+          "systemPrompt": {
+            "preset": "claude_code",
+            "type": "preset"
+          },
+          "thinking": {
+            "type": "adaptive"
+          }
+        },
+        "prompt": "one shot"
+      }
+    ],
+    "case": "one-shot with output schema",
+    "events": [
+      {
+        "harnessSessionId": "claude-session-1",
+        "type": "init"
+      },
+      {
+        "text": "Look",
+        "type": "partial"
+      },
+      {
+        "role": "assistant",
+        "text": "Looking at the file.",
+        "type": "text"
+      },
+      {
+        "id": "tool-1",
+        "input": {
+          "path": "a.ts"
+        },
+        "tool": "Read",
+        "type": "tool_use"
+      },
+      {
+        "id": "tool-1",
+        "result": "{\n  \"stdout\": \"file body\"\n}",
+        "type": "tool_result"
+      },
+      {
+        "elapsedSeconds": 3,
+        "id": "tool-2",
+        "tool": "Bash",
+        "type": "tool_progress"
+      },
+      {
+        "parentToolUseId": "task-1",
+        "role": "assistant",
+        "text": "subagent says hi",
+        "type": "text"
+      },
+      {
+        "result": "done",
+        "structured": {
+          "ok": true
+        },
+        "type": "result"
+      },
+      {
+        "type": "done",
+        "usage": {
+          "cacheReadTokens": 900,
+          "cacheWriteTokens": 50,
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "totalTokens": 120
+        }
+      }
+    ]
+  }
+]
