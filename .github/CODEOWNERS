@@ -1,0 +1,10 @@
+# Install, release, and distributed execution review
+/cli/src/releases/ @perintyler
+/cli/src/services/ @perintyler
+/cli/src/commands/setup.ts @perintyler
+/cli/src/commands/uninstall.ts @perintyler
+/sdk/src/workflows/ @perintyler
+/sdk/src/nodes/ @perintyler
+/bags/workflows/ @perintyler
+/bags/nodes/ @perintyler
+/.github/ @perintyler

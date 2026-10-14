@@ -1,0 +1,8 @@
+name: logs
+description: The log line format, the emitters that write it, and the store that keeps it
+
+stores:
+  logs:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/logs

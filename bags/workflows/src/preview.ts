@@ -1,0 +1,28 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { ActivityWorker, WorkflowOwner, ProcessExecutor, inspectArtifact, connectOwnerV2, dispatchWorkerRequest } from "@barry-rocks/sdk/internal/workflows";
+import { listenOnAssignedPort } from "@barry-rocks/sdk/services";
+import { createWorkflowServer } from "./server.js";
+import { approveExecutionScope } from "@barry-rocks/sdk/bounds";
+
+const directory = mkdtempSync(join(tmpdir(), "barry-workflows-preview-"));
+const artifactPath = fileURLToPath(new URL("./builtin-artifact.mjs", import.meta.url));
+const artifact = inspectArtifact(artifactPath, "echo", "1"), activityArtifact = inspectArtifact(artifactPath, "echo@1", "1", false);
+const executor = new ProcessExecutor(), activityExecutor = new ProcessExecutor({ heapMiB: 256 });
+const owner = new WorkflowOwner({ id: "local-preview", path: join(directory, "workflows.db"), artifacts: [artifact], activityArtifacts: { "echo@1": activityArtifact.digest }, executor });
+const worker = new ActivityWorker({ connections: [connectOwnerV2(owner.id, async request => dispatchWorkerRequest(owner, "local-worker", request))], activities: { "echo@1": activityExecutor.activity(activityArtifact) }, artifacts: { "echo@1": activityArtifact.digest }, labels: { os: process.platform, arch: process.arch } });
+owner.start({ id: "welcome-message", type: "echo", version: "1", input: { message: "A durable hello from Barry" } });
+owner.start({ id: "waiting-for-approval", type: "echo", version: "1", input: { message: "Approved", waitForSignal: true } });
+owner.start({ id: "scheduled-follow-up", type: "echo", version: "1", input: { message: "Time to follow up", delayMs: 3_600_000 } });
+owner.start({ id: "invalid-input", type: "echo", version: "1", input: {} });
+owner.start({ id: "cancelled-example", type: "echo", version: "1", input: { message: "unused", waitForSignal: true } });
+owner.cancel("cancelled-example");
+const previewAuthorization = async (job: { traits: string[]; identity?: string; harness?: string }) => approveExecutionScope({ identity: job.identity, harness: job.harness, traitNames: job.traits, traits: {}, tools: [], boundByName: async () => undefined });
+const server = createWorkflowServer({ owner, secret: "local-preview", authenticateWorker: () => null, runAuthorization: previewAuthorization, currentRunScope: previewAuthorization });
+await listenOnAssignedPort(server, { PORT: "0" });
+process.stdout.write(`Workflows preview: http://127.0.0.1:${(server.address() as { port: number }).port}\nSign-in secret: local-preview\nScratch database: ${directory}\n`);
+const timer = setInterval(() => { void owner.pump().catch(console.error); void worker.tick().catch(console.error); }, 100);
+const stop = async () => { clearInterval(timer); await worker.drain(); await activityExecutor.close(); await owner.drain(); server.close(() => { owner.close(); process.exit(0); }); };
+process.once("SIGINT", stop); process.once("SIGTERM", stop);

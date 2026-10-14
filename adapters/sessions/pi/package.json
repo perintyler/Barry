@@ -1,0 +1,53 @@
+{
+  "name": "@barry-rocks/session-pi",
+  "version": "0.0.0",
+  "description": "Pi agent adapter for Barry \u2014 the pi coding-agent SDK, in-process",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./native-tools": {
+      "types": "./dist/native-tools.d.ts",
+      "import": "./dist/native-tools.js"
+    },
+    "./transcript": {
+      "types": "./dist/transcript.d.ts",
+      "import": "./dist/transcript.js"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "node ../../scripts/build-package.mjs",
+    "prepack": "node ../../../.github/ci/prepare-package-license.mjs && node ../../scripts/build-package.mjs"
+  },
+  "engines": {
+    "node": "26.x"
+  },
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*",
+    "@earendil-works/pi-agent-core": "0.99.2",
+    "@earendil-works/pi-ai": "0.99.2",
+    "@earendil-works/pi-coding-agent": "0.99.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "files": [
+    "dist",
+    "bag.yaml",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "barry": {
+    "sessionAdapter": {
+      "contractVersion": 1
+    }
+  },
+  "private": true
+}

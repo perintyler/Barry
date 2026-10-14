@@ -1,0 +1,70 @@
+name: base
+displayName: Base
+description: Base bags, traits every session starts with, and bounds Barry ships
+
+bags:
+  - actions
+  - artifacts
+  - bash
+  - decisions
+  - embeddings
+  - events
+  - filesystem
+  - identities
+  - instructions
+  - mcp
+  - memory
+  - nodes
+  - schedules
+  - sessions:
+      extensions: [search]
+  - telemetry
+
+traits:
+  - artifacts
+  - bash
+  - filesystem
+  - instructions
+  - sessions
+
+bounds:
+  - readonly:
+      optional: true
+      description: "Denies supported write tools, Bash, and recognized network writes; best effort, not a sandbox"
+      deniedTools: [Bash, Write, Edit]
+      deniedAccess: [write]
+      network:
+        actions: [write]
+
+  - no-secrets:
+      optional: true
+      description: "Guards structured filesystem tools on common secret paths and withholds Bash and supported native file/shell tools; best effort, not a filesystem sandbox"
+      files:
+        deny: ["*.env", ".env.*", ".ssh/**", "*.pem", "*.key", "*.p12", "*.pfx"]
+
+  - no-network:
+      optional: true
+      description: "Denies recognized network commands and tools; best effort, not a sandbox"
+      network:
+        actions: [all]
+
+  - no-network-write:
+      optional: true
+      description: "Denies recognized network writes while allowing reads; best effort, not a sandbox"
+      network:
+        actions: [write]
+
+  - sandboxed-offline:
+      optional: true
+      description: "Requests proxy enforcement on supported harnesses; others fall back to guards with a diagnostic"
+      network:
+        actions: [all]
+        enforce: sandbox
+        allowDomains: []
+
+bag_grant: session
+tool_discovery: provider
+
+adapters:
+  claude-code:
+    default: true

@@ -1,0 +1,8 @@
+name: nodes
+description: This installation's id, identity folders, and the workers and owners it is linked to
+
+stores:
+  peers:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/peers

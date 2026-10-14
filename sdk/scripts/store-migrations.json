@@ -1,0 +1,97 @@
+[
+  {
+    "root": "bags/actions",
+    "directory": "bags/actions/migrations/actions",
+    "output": "bags/actions/src/generated/actions-migrations.ts"
+  },
+  {
+    "root": "bags/decisions",
+    "directory": "bags/decisions/migrations/decisions",
+    "output": "bags/decisions/src/generated/decisions-migrations.ts"
+  },
+  {
+    "root": "bags/embeddings",
+    "directory": "bags/embeddings/migrations/embeddings",
+    "output": "bags/embeddings/src/generated/embeddings-migrations.ts"
+  },
+  {
+    "root": "bags/events",
+    "directory": "bags/events/migrations/events",
+    "output": "bags/events/src/generated/events-migrations.ts"
+  },
+  {
+    "root": "bags/filesystem/locks",
+    "directory": "bags/filesystem/locks/migrations/locks",
+    "output": "bags/filesystem/locks/src/generated/locks-migrations.ts"
+  },
+  {
+    "root": "bags/filesystem/tracker",
+    "directory": "bags/filesystem/tracker/migrations/file-tracker",
+    "output": "bags/filesystem/tracker/src/generated/file-tracker-migrations.ts"
+  },
+  {
+    "root": "bags/identities",
+    "directory": "bags/identities/migrations/identities",
+    "output": "bags/identities/src/generated/identities-migrations.ts"
+  },
+  {
+    "root": "bags/memory",
+    "directory": "bags/memory/migrations/memory",
+    "output": "bags/memory/src/generated/memory-migrations.ts"
+  },
+  {
+    "root": "bags/nodes",
+    "directory": "bags/nodes/migrations/peers",
+    "output": "sdk/src/nodes/generated/registry-migrations.ts"
+  },
+  {
+    "root": "bags/schedules",
+    "directory": "bags/schedules/migrations/schedules",
+    "output": "bags/schedules/src/generated/schedules-migrations.ts"
+  },
+  {
+    "root": "bags/sessions",
+    "directory": "bags/sessions/migrations/sessions",
+    "output": "bags/sessions/src/generated/sessions-migrations.ts"
+  },
+  {
+    "root": "bags/telemetry",
+    "directory": "bags/telemetry/migrations/metrics",
+    "output": "bags/telemetry/src/generated/metrics-migrations.ts"
+  },
+  {
+    "root": "bags/telemetry",
+    "directory": "bags/telemetry/migrations/requests",
+    "output": "bags/telemetry/src/generated/requests-migrations.ts"
+  },
+  {
+    "root": "bags/telemetry",
+    "directory": "bags/telemetry/migrations/errors",
+    "output": "bags/telemetry/src/generated/errors-migrations.ts"
+  },
+  {
+    "root": "bags/telemetry",
+    "directory": "bags/telemetry/migrations/usage",
+    "output": "bags/telemetry/src/generated/usage-migrations.ts"
+  },
+  {
+    "root": "bags/telemetry/logs",
+    "directory": "bags/telemetry/logs/migrations/logs",
+    "output": "bags/telemetry/logs/src/generated/logs-migrations.ts"
+  },
+  {
+    "root": "",
+    "directory": "cli/src/services/configuration/migrations",
+    "output": "cli/src/services/configuration/generated/migrations.ts"
+  },
+  {
+    "root": "bags/workflows",
+    "directory": "bags/workflows/migrations/workflows",
+    "output": "sdk/src/workflows/generated/migrations.ts"
+  },
+  {
+    "root": "bags/artifacts",
+    "directory": "bags/artifacts/migrations/artifacts",
+    "output": "bags/artifacts/src/generated/artifacts-migrations.ts"
+  }
+]

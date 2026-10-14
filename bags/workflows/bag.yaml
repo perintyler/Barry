@@ -1,0 +1,23 @@
+name: workflows
+description: Durable workflow runs, distributed activities, and a live runs console
+services:
+  runtime:
+    description: Owns workflow history, executes activities, and serves the runs console
+    entry: runtime/src/service.ts
+    working-directory: .
+    serves: http
+    health: /health
+    secrets: [BARRY_SECRET]
+    env:
+      - BARRY_WORKFLOW_MODULE=
+      - BARRY_WORKFLOW_CAPACITY=4
+      - BARRY_WORKFLOW_LABELS=
+      - BARRY_WORKFLOW_DRAIN_MS=30000
+      - BARRY_WORKFLOW_POLICY=
+      - BARRY_WORKFLOW_ARCHIVE_DIR=
+
+stores:
+  workflows:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/workflows

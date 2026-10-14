@@ -1,0 +1,38 @@
+{
+  "fixture.source": {
+    "key": "fixture.source",
+    "bag": "fixture",
+    "name": "source",
+    "description": "Source service",
+    "command": "<NODE>",
+    "args": [
+      "--import",
+      "<SCRATCH>/checkout/node_modules/tsx/dist/loader.mjs",
+      "<SCRATCH>/checkout/bags/fixture/src/main.ts"
+    ],
+    "cwd": "<SCRATCH>/checkout/bags/fixture",
+    "entry": "<SCRATCH>/checkout/bags/fixture/src/main.ts",
+    "env": [],
+    "autostart": "login",
+    "localOnly": false,
+    "injects": [],
+    "shutdownMs": 40000
+  },
+  "fixture.built": {
+    "key": "fixture.built",
+    "bag": "fixture",
+    "name": "built",
+    "description": "Built service",
+    "command": "<NODE>",
+    "args": [
+      "<SCRATCH>/checkout/bags/fixture/dist/main.js"
+    ],
+    "cwd": "<SCRATCH>/checkout/bags/fixture",
+    "entry": "<SCRATCH>/checkout/bags/fixture/dist/main.js",
+    "env": [],
+    "autostart": "login",
+    "localOnly": false,
+    "injects": [],
+    "shutdownMs": 40000
+  }
+}

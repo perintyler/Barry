@@ -1,0 +1,90 @@
+{
+  "check:monorepo": [
+    {
+      "command": "node",
+      "args": [
+        "monorepo-policy.mjs"
+      ]
+    }
+  ],
+  "check:identity-residue": [
+    {
+      "command": "node",
+      "args": [
+        "identity-residue.mjs"
+      ]
+    }
+  ],
+  "check:bound-vocabulary": [
+    {
+      "command": "node",
+      "args": [
+        "bound-vocabulary.mjs"
+      ]
+    }
+  ],
+  "test:ci:unit": [
+    {
+      "command": "node",
+      "args": [
+        "ci/run-unit-tests.mjs"
+      ]
+    }
+  ],
+  "lint:eslint:ci": [
+    {
+      "command": "pnpm",
+      "args": [
+        "exec",
+        "eslint",
+        ".",
+        "--max-warnings=0"
+      ]
+    },
+    {
+      "command": "node",
+      "args": [
+        "lint-checks.mjs"
+      ]
+    },
+    {
+      "command": "node",
+      "args": [
+        "--test",
+        "lint-config.test.mjs"
+      ]
+    }
+  ],
+  "security:dependencies": [
+    {
+      "command": "node",
+      "args": [
+        "security-audit.mjs"
+      ]
+    }
+  ],
+  "security:licenses": [
+    {
+      "command": "node",
+      "args": [
+        "license-audit.mjs"
+      ]
+    }
+  ],
+  "security:secrets": [
+    {
+      "command": "node",
+      "args": [
+        "credential-audit.mjs"
+      ]
+    }
+  ],
+  "install:osv": [
+    {
+      "command": "bash",
+      "args": [
+        "ci/install-osv-scanner"
+      ]
+    }
+  ]
+}

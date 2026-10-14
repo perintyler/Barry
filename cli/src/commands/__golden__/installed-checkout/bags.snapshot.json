@@ -1,0 +1,11 @@
+{
+  "generated": "<TIME>",
+  "source": "config.db",
+  "note": "GENERATED from the bags table. Do not edit — run `barry bag doctor --fix` to rebuild.",
+  "bags": {
+    "fixture": {
+      "type": "local",
+      "path": "<SCRATCH>/checkout/bags/fixture"
+    }
+  }
+}

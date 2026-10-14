@@ -1,0 +1,44 @@
+name: distributed soak
+on:
+  schedule:
+    - cron: '23 3 * * 1-6'
+    - cron: '23 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Required full run duration (3600 or 28800)
+        default: '3600'
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: distributed-soak
+  cancel-in-progress: false
+jobs:
+  soak:
+    if: github.repository != 'perintyler/barry-dev' && github.event.repository.private == false && (vars.BARRY_SOAK_ENABLED == 'true')
+    runs-on: [self-hosted, macOS, ARM64, barry-soak]
+    timeout-minutes: 540
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup
+      - name: Run and retain the full declared network workload
+        env:
+          SOAK_SECONDS: ${{ inputs.seconds || (github.event.schedule == '23 3 * * 0' && '28800' || '3600') }}
+        run: |
+          if [ "$SOAK_SECONDS" != 3600 ] && [ "$SOAK_SECONDS" != 28800 ]; then exit 1; fi
+          pnpm exec tsx bags/workflows/src/network-load-probe.ts "$SOAK_SECONDS" "$RUNNER_TEMP/barry-network-soak" > "$RUNNER_TEMP/network-soak.log" 2>&1
+      - name: Compare recent matching receipts
+        run: |
+          history="$HOME/.barry-soak-history"
+          mkdir -p "$history"
+          node .github/ci/checks/soak-trend.mjs "$RUNNER_TEMP/barry-network-soak/report.json" "$history"
+          cp "$RUNNER_TEMP/barry-network-soak/report.json" "$history/${{ github.run_id }}-${{ github.run_attempt }}.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: network-soak-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/barry-network-soak
+            ${{ runner.temp }}/network-soak.log
+          retention-days: 90

@@ -1,0 +1,41 @@
+{
+  "name": "@barry-rocks/decision-typesafe",
+  "version": "0.0.0",
+  "description": "Barry typesafe decision adapter",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build-package.mjs",
+    "prepack": "node ../../../.github/ci/prepare-package-license.mjs && node ../../scripts/build-package.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": "26.x"
+  },
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*",
+    "@barry-rocks/decision-systemone": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3"
+  },
+  "barry": {
+    "modelProvider": {
+      "contractVersion": 1,
+      "factoryExport": "DECISION_FACTORIES"
+    }
+  },
+  "private": true
+}

@@ -1,0 +1,77 @@
+name: cursor
+description: Native tools and traits for cursor
+credentials:
+  CURSOR_API_KEY: { source: vault, item: cursor-api-key, field: password }
+bounds:
+  no-shell:
+    description: Disable native shell
+    bound:
+      nativeTools:
+        cursor:
+          - Shell
+          - WriteShellStdin
+  no-file-reads:
+    description: Disable native file-reads
+    bound:
+      nativeTools:
+        cursor:
+          - Read
+          - Glob
+          - Grep
+          - List
+          - SemanticSearch
+  no-file-writes:
+    description: Disable native file-writes
+    bound:
+      nativeTools:
+        cursor:
+          - Write
+          - Edit
+          - Delete
+  no-network:
+    description: Disable native network
+    bound:
+      nativeTools:
+        cursor:
+          - WebFetch
+          - WebSearch
+          - Fetch
+  no-tasks:
+    description: Disable native tasks
+    bound:
+      nativeTools:
+        cursor:
+          - Task
+traits:
+  native-shell:
+    description: Grant native shell
+    access: readwrite
+    nativeTools:
+      cursor:
+        - Shell
+        - WriteShellStdin
+  native-file-reads:
+    description: Grant native file-reads
+    access: read
+    nativeTools:
+      cursor:
+        - Read
+        - Grep
+        - List
+        - Glob
+  native-file-writes:
+    description: Grant native file-writes
+    access: readwrite
+    nativeTools:
+      cursor:
+        - Write
+        - Edit
+        - Delete
+  native-network:
+    description: Grant native network
+    access: read
+    nativeTools:
+      cursor:
+        - WebFetch
+        - WebSearch
+        - Fetch

@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "tools.ts",
+    "src/**/*.ts",
+    "browser/**/*.ts",
+    "playwright.config.ts",
+    "runtime/**/*.ts"
+  ],
+  "exclude": [
+    "runtime/vitest.config.ts"
+  ]
+}

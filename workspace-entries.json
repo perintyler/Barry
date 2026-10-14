@@ -1,121 +1,187 @@
 {
+  "adapters/completions/anthropic": {
+    "name": "@barry-rocks/completion-anthropic",
+    "class": "internal-package",
+    "mode": "compiled"
+  },
+  "adapters/completions/llamacpp": {
+    "name": "@barry-rocks/completion-llamacpp",
+    "class": "internal-package",
+    "mode": "compiled"
+  },
+  "adapters/completions/ollama": {
+    "name": "@barry-rocks/completion-ollama",
+    "class": "internal-package",
+    "mode": "compiled"
+  },
+  "adapters/decisions/anthropic": {
+    "name": "@barry-rocks/decision-anthropic",
+    "class": "internal-package",
+    "mode": "compiled"
+  },
+  "adapters/decisions/ollama": {
+    "name": "@barry-rocks/decision-ollama",
+    "class": "internal-package",
+    "mode": "compiled"
+  },
+  "adapters/decisions/systemone": {
+    "name": "@barry-rocks/decision-systemone",
+    "class": "internal-package",
+    "mode": "compiled"
+  },
+  "adapters/decisions/typesafe": {
+    "name": "@barry-rocks/decision-typesafe",
+    "class": "internal-package",
+    "mode": "compiled"
+  },
+  "adapters/decisions/von": {
+    "name": "@barry-rocks/decision-von",
+    "class": "internal-package",
+    "mode": "compiled"
+  },
+  "adapters/embeddings/ollama": {
+    "name": "@barry-rocks/embedding-ollama",
+    "class": "internal-package",
+    "mode": "compiled"
+  },
+  "adapters/sessions/antigravity": {
+    "name": "@barry-rocks/session-antigravity",
+    "class": "bag",
+    "mode": "compiled"
+  },
+  "adapters/sessions/claude": {
+    "name": "@barry-rocks/session-claude",
+    "class": "bag",
+    "mode": "compiled"
+  },
   "adapters/sessions/codex": {
-    "name": "@barry-rocks/codex",
-    "class": "internal-package"
+    "name": "@barry-rocks/session-codex",
+    "class": "bag",
+    "mode": "compiled"
   },
   "adapters/sessions/cursor": {
-    "name": "@barry-rocks/cursor",
-    "class": "internal-package"
+    "name": "@barry-rocks/session-cursor",
+    "class": "bag",
+    "mode": "compiled"
   },
   "adapters/sessions/opencode": {
-    "name": "@barry-rocks/opencode",
-    "class": "internal-package"
+    "name": "@barry-rocks/session-opencode",
+    "class": "bag",
+    "mode": "compiled"
   },
-  "adapters/decisions": {
-    "name": "@barry-rocks/decisions",
-    "class": "internal-package"
+  "adapters/sessions/pi": {
+    "name": "@barry-rocks/session-pi",
+    "class": "bag",
+    "mode": "compiled"
   },
-  "adapters/embeddings": {
-    "name": "@barry-rocks/embeddings",
-    "class": "internal-package"
-  },
-  "adapters/sessions/completion": {
-    "name": "@barry-rocks/completion",
-    "class": "internal-package"
-  },
-  "builtin/actions": {
+  "bags/actions": {
     "name": "@barry-rocks/actions-bag",
     "class": "bag"
   },
-  "builtin/bash": {
+  "bags/artifacts": {
+    "name": "@barry-rocks/artifacts-bag",
+    "class": "bag",
+    "mode": "compiled"
+  },
+  "bags/bash": {
     "name": "@barry-rocks/bash-bag",
     "class": "bag"
   },
-  "builtin/decisions": {
-    "name": "@barry-bags/decisions",
+  "bags/decisions": {
+    "name": "@barry-rocks/decisions-bag",
     "class": "bag"
   },
-  "builtin/events": {
+  "bags/embeddings": {
+    "name": "@barry-rocks/embeddings-bag",
+    "class": "bag"
+  },
+  "bags/events": {
     "name": "@barry-rocks/events-bag",
     "class": "bag"
   },
-  "builtin/todos": {
-    "name": "@barry-rocks/todos-bag",
-    "class": "bag"
-  },
-  "builtin/filesystem": {
+  "bags/filesystem": {
     "name": "@barry-rocks/filesystem-bag",
     "class": "bag"
   },
-  "builtin/filesystem/locks": {
+  "bags/filesystem/locks": {
     "name": "@barry-rocks/locks-bag",
     "class": "bag"
   },
-  "builtin/filesystem/tracker": {
+  "bags/filesystem/tracker": {
     "name": "@barry-rocks/tracker-bag",
     "class": "bag"
   },
-  "builtin/identities": {
+  "bags/identities": {
     "name": "@barry-rocks/identities-bag",
     "class": "bag"
   },
-  "builtin/instructions": {
+  "bags/identities/server": {
+    "name": "@barry-rocks/identities-service",
+    "class": "internal-package"
+  },
+  "bags/instructions": {
     "name": "@barry-rocks/instructions-bag",
     "class": "bag"
   },
-  "builtin/memory": {
+  "bags/mcp": {
+    "name": "@barry-rocks/mcp-bag",
+    "class": "bag"
+  },
+  "bags/memory": {
     "name": "@barry-rocks/memory-bag",
     "class": "bag"
   },
-  "builtin/schedules": {
+  "bags/nodes": {
+    "name": "@barry-rocks/nodes-bag",
+    "class": "bag"
+  },
+  "bags/schedules": {
     "name": "@barry-rocks/schedules-bag",
     "class": "bag"
   },
-  "builtin/sessions": {
-    "name": "@barry-rocks/session-bag",
+  "bags/schedules/scheduler": {
+    "name": "@barry-rocks/scheduler-service",
+    "class": "internal-package"
+  },
+  "bags/sessions": {
+    "name": "@barry-rocks/sessions-bag",
     "class": "bag"
   },
-  "builtin/sessions/api": {
+  "bags/sessions/api": {
     "name": "@barry-rocks/sessions-api",
-    "class": "runtime-edge",
-    "mode": "source-start"
+    "class": "internal-package"
   },
-  "builtin/sessions/sessions-search": {
-    "name": "@barry-rocks/sessions-search",
+  "bags/sessions/extensions/search": {
+    "name": "@barry-rocks/search-bag",
     "class": "bag"
   },
-  "builtin/telemetry": {
+  "bags/telemetry": {
     "name": "@barry-rocks/telemetry-bag",
     "class": "bag"
   },
-  "builtin/telemetry/logs": {
+  "bags/telemetry/logs": {
     "name": "@barry-rocks/logs-bag",
     "class": "bag"
   },
-  "builtin/vault": {
+  "bags/vault": {
     "name": "@barry-rocks/vault-bag",
     "class": "bag"
   },
-  "builtin/embeddings": {
-    "name": "@barry-bags/embeddings",
+  "bags/workflows": {
+    "name": "@barry-rocks/workflows-bag",
     "class": "bag"
   },
-  "sdk/cli": {
-    "name": "barry",
-    "class": "runtime-edge",
-    "mode": "source-bin"
+  "bags/workflows/runtime": {
+    "name": "@barry-rocks/workflows-runtime",
+    "class": "internal-package"
   },
-  "sdk/engine": {
-    "name": "@barry-rocks/engine",
-    "class": "runtime-edge",
-    "mode": "bundle-source"
+  "cli": {
+    "name": "@barry-rocks/cli",
+    "class": "internal-package"
   },
-  "sdk/lib": {
+  "sdk": {
     "name": "@barry-rocks/sdk",
-    "class": "internal-package"
-  },
-  "adapters/sessions/claude": {
-    "name": "@barry-rocks/claude",
-    "class": "internal-package"
+    "class": "internal-package",
+    "mode": "compiled"
   }
 }

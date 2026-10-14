@@ -1,0 +1,1 @@
+<NODE> <ROOT>/cli/bin/barry-hook.js

@@ -1,0 +1,46 @@
+[
+  {
+    "name": "fixture.source",
+    "directory": "<SCRATCH>/instance/app-support/current/bags/fixture",
+    "domain": "gui/<UID>",
+    "plistDirectory": "<SCRATCH>/home/Library/LaunchAgents",
+    "logDirectory": "<SCRATCH>/instance/logs/fixture",
+    "shutdownMs": 40000,
+    "command": [
+      "<SCRATCH>/instance/app-support/current/bin/barry-service",
+      "<SCRATCH>/instance/app-support",
+      "fixture.source"
+    ],
+    "environment": {
+      "HOME": "<SCRATCH>/home",
+      "PATH": "<NODE_DIR>:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+      "BARRY_HOME": "<SCRATCH>/instance",
+      "BARRY_DIR": "<SCRATCH>/instance/app-support/current",
+      "BARRY_HOOK_DISPATCHER": "<SCRATCH>/instance/app-support/current/cli/bin/barry-hook.js",
+      "BARRY_NODE": "<NODE>"
+    },
+    "automatic": true
+  },
+  {
+    "name": "fixture.built",
+    "directory": "<SCRATCH>/instance/app-support/current/bags/fixture",
+    "domain": "gui/<UID>",
+    "plistDirectory": "<SCRATCH>/home/Library/LaunchAgents",
+    "logDirectory": "<SCRATCH>/instance/logs/fixture",
+    "shutdownMs": 40000,
+    "command": [
+      "<SCRATCH>/instance/app-support/current/bin/barry-service",
+      "<SCRATCH>/instance/app-support",
+      "fixture.built"
+    ],
+    "environment": {
+      "HOME": "<SCRATCH>/home",
+      "PATH": "<NODE_DIR>:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+      "BARRY_HOME": "<SCRATCH>/instance",
+      "BARRY_DIR": "<SCRATCH>/instance/app-support/current",
+      "BARRY_HOOK_DISPATCHER": "<SCRATCH>/instance/app-support/current/cli/bin/barry-hook.js",
+      "BARRY_NODE": "<NODE>"
+    },
+    "automatic": true
+  }
+]

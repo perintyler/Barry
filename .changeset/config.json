@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
+  "baseBranch": "master",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "format": false,
+  "ignore": [
+    "**",
+    "!@barry-rocks/sdk",
+    "!@barry-rocks/cli"
+  ],
+  "privatePackages": {
+    "version": true,
+    "tag": false
+  },
+  "changedFilePatterns": [
+    "src/**",
+    "generated/**",
+    "package.json",
+    "!**/*.test.ts",
+    "!**/*.test-d.ts",
+    "!**/__tests__/**",
+    "!**/__fixtures__/**",
+    "!**/__golden__/**",
+    "!**/test-helpers/**"
+  ]
+}

@@ -1,0 +1,1 @@
+ALTER TABLE one_off ADD COLUMN permissions_json TEXT NOT NULL DEFAULT '{}';

@@ -1,0 +1,70 @@
+{
+  "name": "@barry-rocks/session-antigravity",
+  "version": "0.0.0",
+  "description": "Antigravity agent adapter for Barry \u2014 the Google Antigravity CLI and Gemini models",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./native-tools": {
+      "types": "./dist/native-tools.d.ts",
+      "import": "./dist/native-tools.js"
+    },
+    "./transcript": {
+      "types": "./dist/transcript.d.ts",
+      "import": "./dist/transcript.js"
+    },
+    "./bin": {
+      "types": "./dist/bin.d.ts",
+      "import": "./dist/bin.js"
+    },
+    "./launch": {
+      "types": "./dist/launch.d.ts",
+      "import": "./dist/launch.js"
+    },
+    "./modes": {
+      "types": "./dist/modes.d.ts",
+      "import": "./dist/modes.js"
+    },
+    "./event-mapping": {
+      "types": "./dist/event-mapping.d.ts",
+      "import": "./dist/event-mapping.js"
+    },
+    "./workspace": {
+      "types": "./dist/workspace.d.ts",
+      "import": "./dist/workspace.js"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "node ../../scripts/build-package.mjs",
+    "prepack": "node ../../../.github/ci/prepare-package-license.mjs && node ../../scripts/build-package.mjs"
+  },
+  "engines": {
+    "node": "26.x"
+  },
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "files": [
+    "dist",
+    "bag.yaml",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "barry": {
+    "sessionAdapter": {
+      "contractVersion": 1
+    }
+  },
+  "private": true
+}

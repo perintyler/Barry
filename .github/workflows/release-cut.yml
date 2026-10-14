@@ -1,0 +1,76 @@
+name: cut release
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: [cli/version.json]
+permissions:
+  contents: read
+concurrency:
+  group: cut-release
+  cancel-in-progress: false
+jobs:
+  version:
+    if: github.repository != 'perintyler/barry-dev' && github.event.repository.private == false && (github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: master
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - name: Prepare a version pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pnpm changeset version
+          if git diff --quiet; then
+            echo "No pending changesets; refusing an empty release."
+            exit 1
+          fi
+          version=$(node -p 'require("./cli/version.json").version')
+          branch="release/version-${{ github.run_id }}"
+          git checkout -b "$branch"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add cli/version.json cli/package.json cli/CHANGELOG.md sdk/package.json sdk/CHANGELOG.md .changeset pnpm-lock.yaml
+          git commit -m "chore(release): version $version"
+          git push origin "$branch"
+          cat > "$RUNNER_TEMP/version-body.md" <<'BODY'
+          Update package versions and changelogs from the reviewed changesets.
+
+          Verification: the normal pull request lanes must pass before merge. After merge, cut-release tags the merged version commit and dispatches the release acceptance and publishing pipeline.
+          BODY
+          gh pr create --base master --head "$branch" --title "chore(release): version $version" --body-file "$RUNNER_TEMP/version-body.md"
+          # GITHUB_TOKEN-created PRs require approval before their PR runs start.
+          # Dispatch the required lanes explicitly against the version SHA.
+          for workflow in lint.yml verify.yml test-packages.yml test-bags.yml test-adapters.yml test-workflows.yml test-install.yml; do
+            gh workflow run "$workflow" --ref "$branch"
+          done
+  tag:
+    if: github.repository != 'perintyler/barry-dev' && github.event.repository.private == false && (github.event_name == 'push')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - name: Tag the merged version and dispatch acceptance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p 'require("./cli/version.json").version')
+          package_version=$(node -p 'require("./cli/package.json").version')
+          # The committed -dev bootstrap is not a released package version.
+          if [ "$version" != "$package_version" ]; then exit 0; fi
+          if git rev-parse --verify "refs/tags/v$version" >/dev/null 2>&1; then exit 0; fi
+          test -f cli/CHANGELOG.md
+          git tag "v$version"
+          git push origin "v$version"
+          gh workflow run release.yml --ref "v$version"

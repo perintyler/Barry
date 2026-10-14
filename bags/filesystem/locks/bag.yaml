@@ -1,0 +1,18 @@
+name: locks
+description: File locks for parallel Barry sessions — editing a file claims it,
+  and claiming requires saying why
+
+requires:
+  sessions:
+    reason: file claims are held and released per session
+
+tools:
+  - locks_contention: deferred
+  - locks_history: deferred
+  - locks_unclaimed: deferred
+
+stores:
+  locks:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/locks

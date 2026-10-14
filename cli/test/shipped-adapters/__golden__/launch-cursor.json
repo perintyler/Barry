@@ -1,0 +1,408 @@
+[
+  {
+    "case": "default",
+    "plan": {
+      "kind": "cli",
+      "command": "<CURSOR_BIN>",
+      "args": [
+        "--disable-auto-update",
+        "--force",
+        "--approve-mcps",
+        "--trust",
+        "--workspace",
+        "<TMP_DIR>",
+        "--add-dir",
+        "<REPO>",
+        "--resume",
+        "<RESERVED_ID>"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-cursor-default",
+        "CURSOR_API_KEY": "crsr-golden",
+        "HOME": "<BARRY_HOME>/cache/cursor-homes/6f990970db25",
+        "AGENT_CLI_CREDENTIAL_STORE": "memory",
+        "BARRY_PROVIDER": "cursor"
+      },
+      "cwd": "<TMP_DIR>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+      ],
+      "providerSessionId": "<RESERVED_ID>"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        ".cursor/barry-tool-gate.cjs": "const servers = new Set([\"barry\",\"local\"]);\nconst denied = new Set([\"Read\",\"Edit\",\"Write\",\"Glob\",\"Grep\",\"Shell\",\"Task\",\"WebFetch\",\"WebSearch\",\"Delete\",\"List\",\"Fetch\",\"WriteShellStdin\",\"SemanticSearch\",\"ReadLints\",\"GenerateImage\",\"ComputerUse\",\"RecordScreen\",\"ListMcpResources\",\"FetchMcpResource\",\"AskQuestion\",\"CreatePlan\",\"SwitchMode\",\"UpdateTodos\",\"ReadTodos\",\"ApplyAgentDiff\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    const tool = typeof input.tool_name === 'string' ? input.tool_name : '';\n    const server = typeof input.mcp_server_name === 'string' ? input.mcp_server_name : '';\n    if (input.hook_event_name === 'preToolUse') allowed = tool.startsWith('MCP:') && tool.length > 4 || native.has(tool) && !denied.has(tool) && (tool !== 'Write' || native.has('Edit') && !denied.has('Edit'));\n    if (input.hook_event_name === 'beforeMCPExecution') {\n      allowed = servers.has(server) && tool !== '' && !denied.has('mcp__' + server + '__' + tool) && !denied.has('mcp__' + server.replace(/-/g, '_') + '__' + tool);\n    }\n  } catch {}\n  console.log(JSON.stringify(allowed ? { permission: 'allow' } : { permission: 'deny', agent_message: 'Barry tools only' }));\n});\n",
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": [\n      \"Read(*)\",\n      \"Shell(*)\",\n      \"WebFetch(*)\",\n      \"Write(*)\"\n    ]\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {\n    \"preToolUse\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ],\n    \"beforeMCPExecution\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ]\n  }\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden-cursor-default\",\n      \"headers\": {\n        \"Authorization\": \"Bearer golden-token\"\n      }\n    },\n    \"local\": {\n      \"command\": \"node\",\n      \"args\": [\n        \"server.js\"\n      ],\n      \"env\": {\n        \"HOME\": \"<USER_HOME>\",\n        \"LOCAL_FLAG\": \"1\",\n        \"BARRY_SESSION_ID\": \"golden-cursor-default\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `<REPO>`. Run commands and edit files there, not in this session directory.\n"
+      },
+      "<CURSOR_HOME>": {
+        ".cursor/cli-config.json": "{\n  \"version\": 1,\n  \"channel\": \"static\",\n  \"approvalMode\": \"allowlist\",\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}\n"
+      }
+    }
+  },
+  {
+    "case": "resume-by-id",
+    "plan": {
+      "kind": "cli",
+      "command": "<CURSOR_BIN>",
+      "args": [
+        "--disable-auto-update",
+        "--force",
+        "--approve-mcps",
+        "--trust",
+        "--workspace",
+        "<TMP_DIR>",
+        "--add-dir",
+        "<REPO>",
+        "--resume",
+        "<RESERVED_ID>"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-cursor-resume-by-id",
+        "CURSOR_API_KEY": "crsr-golden",
+        "HOME": "<BARRY_HOME>/cache/cursor-homes/b0334494be2d",
+        "AGENT_CLI_CREDENTIAL_STORE": "memory",
+        "BARRY_PROVIDER": "cursor"
+      },
+      "cwd": "<TMP_DIR>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff",
+        "The recorded conversation ran hosted, which cursor's TUI cannot open; this launch starts a new chat, and Barry's transcript keeps the earlier turns."
+      ],
+      "providerSessionId": "<RESERVED_ID>"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        ".cursor/barry-tool-gate.cjs": "const servers = new Set([\"barry\",\"local\"]);\nconst denied = new Set([\"Read\",\"Edit\",\"Write\",\"Glob\",\"Grep\",\"Shell\",\"Task\",\"WebFetch\",\"WebSearch\",\"Delete\",\"List\",\"Fetch\",\"WriteShellStdin\",\"SemanticSearch\",\"ReadLints\",\"GenerateImage\",\"ComputerUse\",\"RecordScreen\",\"ListMcpResources\",\"FetchMcpResource\",\"AskQuestion\",\"CreatePlan\",\"SwitchMode\",\"UpdateTodos\",\"ReadTodos\",\"ApplyAgentDiff\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    const tool = typeof input.tool_name === 'string' ? input.tool_name : '';\n    const server = typeof input.mcp_server_name === 'string' ? input.mcp_server_name : '';\n    if (input.hook_event_name === 'preToolUse') allowed = tool.startsWith('MCP:') && tool.length > 4 || native.has(tool) && !denied.has(tool) && (tool !== 'Write' || native.has('Edit') && !denied.has('Edit'));\n    if (input.hook_event_name === 'beforeMCPExecution') {\n      allowed = servers.has(server) && tool !== '' && !denied.has('mcp__' + server + '__' + tool) && !denied.has('mcp__' + server.replace(/-/g, '_') + '__' + tool);\n    }\n  } catch {}\n  console.log(JSON.stringify(allowed ? { permission: 'allow' } : { permission: 'deny', agent_message: 'Barry tools only' }));\n});\n",
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": [\n      \"Read(*)\",\n      \"Shell(*)\",\n      \"WebFetch(*)\",\n      \"Write(*)\"\n    ]\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {\n    \"preToolUse\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ],\n    \"beforeMCPExecution\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ]\n  }\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden-cursor-resume-by-id\",\n      \"headers\": {\n        \"Authorization\": \"Bearer golden-token\"\n      }\n    },\n    \"local\": {\n      \"command\": \"node\",\n      \"args\": [\n        \"server.js\"\n      ],\n      \"env\": {\n        \"HOME\": \"<USER_HOME>\",\n        \"LOCAL_FLAG\": \"1\",\n        \"BARRY_SESSION_ID\": \"golden-cursor-resume-by-id\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `<REPO>`. Run commands and edit files there, not in this session directory.\n"
+      },
+      "<CURSOR_HOME>": {
+        ".cursor/cli-config.json": "{\n  \"version\": 1,\n  \"channel\": \"static\",\n  \"approvalMode\": \"allowlist\",\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}\n"
+      }
+    }
+  },
+  {
+    "case": "resume-last",
+    "refused": "Barry resume requires an exact recorded conversation ID"
+  },
+  {
+    "case": "resume-picker",
+    "refused": "Barry resume requires an exact recorded conversation ID"
+  },
+  {
+    "case": "denied-tools",
+    "plan": {
+      "kind": "cli",
+      "command": "<CURSOR_BIN>",
+      "args": [
+        "--disable-auto-update",
+        "--force",
+        "--approve-mcps",
+        "--trust",
+        "--workspace",
+        "<TMP_DIR>",
+        "--add-dir",
+        "<REPO>",
+        "--resume",
+        "<RESERVED_ID>"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-cursor-denied-tools",
+        "CURSOR_API_KEY": "crsr-golden",
+        "HOME": "<BARRY_HOME>/cache/cursor-homes/adf059f75da4",
+        "AGENT_CLI_CREDENTIAL_STORE": "memory",
+        "BARRY_PROVIDER": "cursor"
+      },
+      "cwd": "<TMP_DIR>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+      ],
+      "providerSessionId": "<RESERVED_ID>"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        ".cursor/barry-tool-gate.cjs": "const servers = new Set([\"barry\",\"local\"]);\nconst denied = new Set([\"Read\",\"Edit\",\"Write\",\"Glob\",\"Grep\",\"Shell\",\"Task\",\"WebFetch\",\"WebSearch\",\"Delete\",\"List\",\"Fetch\",\"WriteShellStdin\",\"SemanticSearch\",\"ReadLints\",\"GenerateImage\",\"ComputerUse\",\"RecordScreen\",\"ListMcpResources\",\"FetchMcpResource\",\"AskQuestion\",\"CreatePlan\",\"SwitchMode\",\"UpdateTodos\",\"ReadTodos\",\"ApplyAgentDiff\",\"Bash\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    const tool = typeof input.tool_name === 'string' ? input.tool_name : '';\n    const server = typeof input.mcp_server_name === 'string' ? input.mcp_server_name : '';\n    if (input.hook_event_name === 'preToolUse') allowed = tool.startsWith('MCP:') && tool.length > 4 || native.has(tool) && !denied.has(tool) && (tool !== 'Write' || native.has('Edit') && !denied.has('Edit'));\n    if (input.hook_event_name === 'beforeMCPExecution') {\n      allowed = servers.has(server) && tool !== '' && !denied.has('mcp__' + server + '__' + tool) && !denied.has('mcp__' + server.replace(/-/g, '_') + '__' + tool);\n    }\n  } catch {}\n  console.log(JSON.stringify(allowed ? { permission: 'allow' } : { permission: 'deny', agent_message: 'Barry tools only' }));\n});\n",
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": [\n      \"Read(*)\",\n      \"Shell(*)\",\n      \"WebFetch(*)\",\n      \"Write(*)\"\n    ]\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {\n    \"preToolUse\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ],\n    \"beforeMCPExecution\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ]\n  }\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden-cursor-denied-tools\",\n      \"headers\": {\n        \"Authorization\": \"Bearer golden-token\"\n      }\n    },\n    \"local\": {\n      \"command\": \"node\",\n      \"args\": [\n        \"server.js\"\n      ],\n      \"env\": {\n        \"HOME\": \"<USER_HOME>\",\n        \"LOCAL_FLAG\": \"1\",\n        \"BARRY_SESSION_ID\": \"golden-cursor-denied-tools\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `<REPO>`. Run commands and edit files there, not in this session directory.\n"
+      },
+      "<CURSOR_HOME>": {
+        ".cursor/cli-config.json": "{\n  \"version\": 1,\n  \"channel\": \"static\",\n  \"approvalMode\": \"allowlist\",\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}\n"
+      }
+    }
+  },
+  {
+    "case": "plugins-and-roots",
+    "plan": {
+      "kind": "cli",
+      "command": "<CURSOR_BIN>",
+      "args": [
+        "--disable-auto-update",
+        "--force",
+        "--approve-mcps",
+        "--trust",
+        "--workspace",
+        "<TMP_DIR>",
+        "--add-dir",
+        "<REPO>",
+        "--plugin-dir",
+        "/plugins/skills",
+        "--add-dir",
+        "/extra/root",
+        "--resume",
+        "<RESERVED_ID>"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-cursor-plugins-and-roots",
+        "CURSOR_API_KEY": "crsr-golden",
+        "HOME": "<BARRY_HOME>/cache/cursor-homes/8f1f95c8477c",
+        "AGENT_CLI_CREDENTIAL_STORE": "memory",
+        "BARRY_PROVIDER": "cursor"
+      },
+      "cwd": "<TMP_DIR>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+      ],
+      "providerSessionId": "<RESERVED_ID>"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        ".cursor/barry-tool-gate.cjs": "const servers = new Set([\"barry\",\"local\"]);\nconst denied = new Set([\"Read\",\"Edit\",\"Write\",\"Glob\",\"Grep\",\"Shell\",\"Task\",\"WebFetch\",\"WebSearch\",\"Delete\",\"List\",\"Fetch\",\"WriteShellStdin\",\"SemanticSearch\",\"ReadLints\",\"GenerateImage\",\"ComputerUse\",\"RecordScreen\",\"ListMcpResources\",\"FetchMcpResource\",\"AskQuestion\",\"CreatePlan\",\"SwitchMode\",\"UpdateTodos\",\"ReadTodos\",\"ApplyAgentDiff\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    const tool = typeof input.tool_name === 'string' ? input.tool_name : '';\n    const server = typeof input.mcp_server_name === 'string' ? input.mcp_server_name : '';\n    if (input.hook_event_name === 'preToolUse') allowed = tool.startsWith('MCP:') && tool.length > 4 || native.has(tool) && !denied.has(tool) && (tool !== 'Write' || native.has('Edit') && !denied.has('Edit'));\n    if (input.hook_event_name === 'beforeMCPExecution') {\n      allowed = servers.has(server) && tool !== '' && !denied.has('mcp__' + server + '__' + tool) && !denied.has('mcp__' + server.replace(/-/g, '_') + '__' + tool);\n    }\n  } catch {}\n  console.log(JSON.stringify(allowed ? { permission: 'allow' } : { permission: 'deny', agent_message: 'Barry tools only' }));\n});\n",
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": [\n      \"Read(*)\",\n      \"Shell(*)\",\n      \"WebFetch(*)\",\n      \"Write(*)\"\n    ]\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {\n    \"preToolUse\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ],\n    \"beforeMCPExecution\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ]\n  }\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden-cursor-plugins-and-roots\",\n      \"headers\": {\n        \"Authorization\": \"Bearer golden-token\"\n      }\n    },\n    \"local\": {\n      \"command\": \"node\",\n      \"args\": [\n        \"server.js\"\n      ],\n      \"env\": {\n        \"HOME\": \"<USER_HOME>\",\n        \"LOCAL_FLAG\": \"1\",\n        \"BARRY_SESSION_ID\": \"golden-cursor-plugins-and-roots\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `<REPO>`. Run commands and edit files there, not in this session directory.\n"
+      },
+      "<CURSOR_HOME>": {
+        ".cursor/cli-config.json": "{\n  \"version\": 1,\n  \"channel\": \"static\",\n  \"approvalMode\": \"allowlist\",\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}\n"
+      }
+    }
+  },
+  {
+    "case": "relax",
+    "refused": "Barry sessions cannot load unscoped vendor MCP configuration"
+  },
+  {
+    "case": "system-prompt",
+    "plan": {
+      "kind": "cli",
+      "command": "<CURSOR_BIN>",
+      "args": [
+        "--disable-auto-update",
+        "--force",
+        "--approve-mcps",
+        "--trust",
+        "--workspace",
+        "<TMP_DIR>",
+        "--add-dir",
+        "<REPO>",
+        "--resume",
+        "<RESERVED_ID>"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-cursor-system-prompt",
+        "CURSOR_API_KEY": "crsr-golden",
+        "HOME": "<BARRY_HOME>/cache/cursor-homes/3f68a801830e",
+        "AGENT_CLI_CREDENTIAL_STORE": "memory",
+        "BARRY_PROVIDER": "cursor"
+      },
+      "cwd": "<TMP_DIR>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+      ],
+      "providerSessionId": "<RESERVED_ID>"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        ".cursor/barry-tool-gate.cjs": "const servers = new Set([\"barry\",\"local\"]);\nconst denied = new Set([\"Read\",\"Edit\",\"Write\",\"Glob\",\"Grep\",\"Shell\",\"Task\",\"WebFetch\",\"WebSearch\",\"Delete\",\"List\",\"Fetch\",\"WriteShellStdin\",\"SemanticSearch\",\"ReadLints\",\"GenerateImage\",\"ComputerUse\",\"RecordScreen\",\"ListMcpResources\",\"FetchMcpResource\",\"AskQuestion\",\"CreatePlan\",\"SwitchMode\",\"UpdateTodos\",\"ReadTodos\",\"ApplyAgentDiff\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    const tool = typeof input.tool_name === 'string' ? input.tool_name : '';\n    const server = typeof input.mcp_server_name === 'string' ? input.mcp_server_name : '';\n    if (input.hook_event_name === 'preToolUse') allowed = tool.startsWith('MCP:') && tool.length > 4 || native.has(tool) && !denied.has(tool) && (tool !== 'Write' || native.has('Edit') && !denied.has('Edit'));\n    if (input.hook_event_name === 'beforeMCPExecution') {\n      allowed = servers.has(server) && tool !== '' && !denied.has('mcp__' + server + '__' + tool) && !denied.has('mcp__' + server.replace(/-/g, '_') + '__' + tool);\n    }\n  } catch {}\n  console.log(JSON.stringify(allowed ? { permission: 'allow' } : { permission: 'deny', agent_message: 'Barry tools only' }));\n});\n",
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": [\n      \"Read(*)\",\n      \"Shell(*)\",\n      \"WebFetch(*)\",\n      \"Write(*)\"\n    ]\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {\n    \"preToolUse\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ],\n    \"beforeMCPExecution\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ]\n  }\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden-cursor-system-prompt\",\n      \"headers\": {\n        \"Authorization\": \"Bearer golden-token\"\n      }\n    },\n    \"local\": {\n      \"command\": \"node\",\n      \"args\": [\n        \"server.js\"\n      ],\n      \"env\": {\n        \"HOME\": \"<USER_HOME>\",\n        \"LOCAL_FLAG\": \"1\",\n        \"BARRY_SESSION_ID\": \"golden-cursor-system-prompt\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "Be brief.\n\n## Working tree\n\nThe repository for this session is `<REPO>`. Run commands and edit files there, not in this session directory.\n"
+      },
+      "<CURSOR_HOME>": {
+        ".cursor/cli-config.json": "{\n  \"version\": 1,\n  \"channel\": \"static\",\n  \"approvalMode\": \"allowlist\",\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}\n"
+      }
+    }
+  },
+  {
+    "case": "extra-args",
+    "refused": "Raw adapter arguments cannot override Barry's tool policy"
+  },
+  {
+    "case": "no-mcp-servers",
+    "plan": {
+      "kind": "cli",
+      "command": "<CURSOR_BIN>",
+      "args": [
+        "--disable-auto-update",
+        "--force",
+        "--approve-mcps",
+        "--trust",
+        "--workspace",
+        "<TMP_DIR>",
+        "--add-dir",
+        "<REPO>",
+        "--resume",
+        "<RESERVED_ID>"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-cursor-no-mcp-servers",
+        "CURSOR_API_KEY": "crsr-golden",
+        "HOME": "<BARRY_HOME>/cache/cursor-homes/f784d92839cc",
+        "AGENT_CLI_CREDENTIAL_STORE": "memory",
+        "BARRY_PROVIDER": "cursor"
+      },
+      "cwd": "<TMP_DIR>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+      ],
+      "providerSessionId": "<RESERVED_ID>"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        ".cursor/barry-tool-gate.cjs": "const servers = new Set([]);\nconst denied = new Set([\"Read\",\"Edit\",\"Write\",\"Glob\",\"Grep\",\"Shell\",\"Task\",\"WebFetch\",\"WebSearch\",\"Delete\",\"List\",\"Fetch\",\"WriteShellStdin\",\"SemanticSearch\",\"ReadLints\",\"GenerateImage\",\"ComputerUse\",\"RecordScreen\",\"ListMcpResources\",\"FetchMcpResource\",\"AskQuestion\",\"CreatePlan\",\"SwitchMode\",\"UpdateTodos\",\"ReadTodos\",\"ApplyAgentDiff\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    const tool = typeof input.tool_name === 'string' ? input.tool_name : '';\n    const server = typeof input.mcp_server_name === 'string' ? input.mcp_server_name : '';\n    if (input.hook_event_name === 'preToolUse') allowed = tool.startsWith('MCP:') && tool.length > 4 || native.has(tool) && !denied.has(tool) && (tool !== 'Write' || native.has('Edit') && !denied.has('Edit'));\n    if (input.hook_event_name === 'beforeMCPExecution') {\n      allowed = servers.has(server) && tool !== '' && !denied.has('mcp__' + server + '__' + tool) && !denied.has('mcp__' + server.replace(/-/g, '_') + '__' + tool);\n    }\n  } catch {}\n  console.log(JSON.stringify(allowed ? { permission: 'allow' } : { permission: 'deny', agent_message: 'Barry tools only' }));\n});\n",
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": [\n      \"Read(*)\",\n      \"Shell(*)\",\n      \"WebFetch(*)\",\n      \"Write(*)\"\n    ]\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {\n    \"preToolUse\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ],\n    \"beforeMCPExecution\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ]\n  }\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {}\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `<REPO>`. Run commands and edit files there, not in this session directory.\n"
+      },
+      "<CURSOR_HOME>": {
+        ".cursor/cli-config.json": "{\n  \"version\": 1,\n  \"channel\": \"static\",\n  \"approvalMode\": \"allowlist\",\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}\n"
+      }
+    }
+  },
+  {
+    "case": "prompt",
+    "plan": {
+      "kind": "server",
+      "prompt": "do it"
+    },
+    "written": {}
+  },
+  {
+    "case": "own-model",
+    "plan": {
+      "kind": "cli",
+      "command": "<CURSOR_BIN>",
+      "args": [
+        "--disable-auto-update",
+        "--force",
+        "--approve-mcps",
+        "--trust",
+        "--workspace",
+        "<TMP_DIR>",
+        "--add-dir",
+        "<REPO>",
+        "--resume",
+        "<RESERVED_ID>",
+        "--model",
+        "claude-opus-5-high"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-cursor-own-model",
+        "CURSOR_API_KEY": "crsr-golden",
+        "HOME": "<BARRY_HOME>/cache/cursor-homes/881fcc1d0bf5",
+        "AGENT_CLI_CREDENTIAL_STORE": "memory",
+        "BARRY_PROVIDER": "cursor"
+      },
+      "cwd": "<TMP_DIR>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+      ],
+      "providerSessionId": "<RESERVED_ID>"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        ".cursor/barry-tool-gate.cjs": "const servers = new Set([\"barry\",\"local\"]);\nconst denied = new Set([\"Read\",\"Edit\",\"Write\",\"Glob\",\"Grep\",\"Shell\",\"Task\",\"WebFetch\",\"WebSearch\",\"Delete\",\"List\",\"Fetch\",\"WriteShellStdin\",\"SemanticSearch\",\"ReadLints\",\"GenerateImage\",\"ComputerUse\",\"RecordScreen\",\"ListMcpResources\",\"FetchMcpResource\",\"AskQuestion\",\"CreatePlan\",\"SwitchMode\",\"UpdateTodos\",\"ReadTodos\",\"ApplyAgentDiff\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    const tool = typeof input.tool_name === 'string' ? input.tool_name : '';\n    const server = typeof input.mcp_server_name === 'string' ? input.mcp_server_name : '';\n    if (input.hook_event_name === 'preToolUse') allowed = tool.startsWith('MCP:') && tool.length > 4 || native.has(tool) && !denied.has(tool) && (tool !== 'Write' || native.has('Edit') && !denied.has('Edit'));\n    if (input.hook_event_name === 'beforeMCPExecution') {\n      allowed = servers.has(server) && tool !== '' && !denied.has('mcp__' + server + '__' + tool) && !denied.has('mcp__' + server.replace(/-/g, '_') + '__' + tool);\n    }\n  } catch {}\n  console.log(JSON.stringify(allowed ? { permission: 'allow' } : { permission: 'deny', agent_message: 'Barry tools only' }));\n});\n",
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": [\n      \"Read(*)\",\n      \"Shell(*)\",\n      \"WebFetch(*)\",\n      \"Write(*)\"\n    ]\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {\n    \"preToolUse\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ],\n    \"beforeMCPExecution\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ]\n  }\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden-cursor-own-model\",\n      \"headers\": {\n        \"Authorization\": \"Bearer golden-token\"\n      }\n    },\n    \"local\": {\n      \"command\": \"node\",\n      \"args\": [\n        \"server.js\"\n      ],\n      \"env\": {\n        \"HOME\": \"<USER_HOME>\",\n        \"LOCAL_FLAG\": \"1\",\n        \"BARRY_SESSION_ID\": \"golden-cursor-own-model\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `<REPO>`. Run commands and edit files there, not in this session directory.\n"
+      },
+      "<CURSOR_HOME>": {
+        ".cursor/cli-config.json": "{\n  \"version\": 1,\n  \"channel\": \"static\",\n  \"approvalMode\": \"allowlist\",\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}\n"
+      }
+    }
+  },
+  {
+    "case": "no-chat-id",
+    "plan": {
+      "kind": "cli",
+      "command": "<CURSOR_BIN>",
+      "args": [
+        "--disable-auto-update",
+        "--force",
+        "--approve-mcps",
+        "--trust",
+        "--workspace",
+        "<TMP_DIR>",
+        "--add-dir",
+        "<REPO>"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-cursor-no-chat-id",
+        "CURSOR_API_KEY": "crsr-golden",
+        "GOLDEN_CURSOR_CHAT": "none",
+        "HOME": "<BARRY_HOME>/cache/cursor-homes/0f3a3389dc7b",
+        "AGENT_CLI_CREDENTIAL_STORE": "memory",
+        "BARRY_PROVIDER": "cursor"
+      },
+      "cwd": "<TMP_DIR>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff",
+        "Cursor gave no chat id, so `barry resume` cannot reopen this conversation."
+      ]
+    },
+    "written": {
+      "<TMP_DIR>": {
+        ".cursor/barry-tool-gate.cjs": "const servers = new Set([\"barry\",\"local\"]);\nconst denied = new Set([\"Read\",\"Edit\",\"Write\",\"Glob\",\"Grep\",\"Shell\",\"Task\",\"WebFetch\",\"WebSearch\",\"Delete\",\"List\",\"Fetch\",\"WriteShellStdin\",\"SemanticSearch\",\"ReadLints\",\"GenerateImage\",\"ComputerUse\",\"RecordScreen\",\"ListMcpResources\",\"FetchMcpResource\",\"AskQuestion\",\"CreatePlan\",\"SwitchMode\",\"UpdateTodos\",\"ReadTodos\",\"ApplyAgentDiff\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    const tool = typeof input.tool_name === 'string' ? input.tool_name : '';\n    const server = typeof input.mcp_server_name === 'string' ? input.mcp_server_name : '';\n    if (input.hook_event_name === 'preToolUse') allowed = tool.startsWith('MCP:') && tool.length > 4 || native.has(tool) && !denied.has(tool) && (tool !== 'Write' || native.has('Edit') && !denied.has('Edit'));\n    if (input.hook_event_name === 'beforeMCPExecution') {\n      allowed = servers.has(server) && tool !== '' && !denied.has('mcp__' + server + '__' + tool) && !denied.has('mcp__' + server.replace(/-/g, '_') + '__' + tool);\n    }\n  } catch {}\n  console.log(JSON.stringify(allowed ? { permission: 'allow' } : { permission: 'deny', agent_message: 'Barry tools only' }));\n});\n",
+        ".cursor/cli.json": "{\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": [\n      \"Read(*)\",\n      \"Shell(*)\",\n      \"WebFetch(*)\",\n      \"Write(*)\"\n    ]\n  }\n}",
+        ".cursor/hooks.json": "{\n  \"version\": 1,\n  \"hooks\": {\n    \"preToolUse\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ],\n    \"beforeMCPExecution\": [\n      {\n        \"command\": \"'<NODE>' '<TMP_DIR>/.cursor/barry-tool-gate.cjs'\",\n        \"timeout\": 10,\n        \"failClosed\": true\n      }\n    ]\n  }\n}",
+        ".cursor/mcp.json": "{\n  \"mcpServers\": {\n    \"barry\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:4510/mcp?sessionId=golden-cursor-no-chat-id\",\n      \"headers\": {\n        \"Authorization\": \"Bearer golden-token\"\n      }\n    },\n    \"local\": {\n      \"command\": \"node\",\n      \"args\": [\n        \"server.js\"\n      ],\n      \"env\": {\n        \"HOME\": \"<USER_HOME>\",\n        \"LOCAL_FLAG\": \"1\",\n        \"BARRY_SESSION_ID\": \"golden-cursor-no-chat-id\"\n      }\n    }\n  }\n}",
+        "AGENTS.md": "## Working tree\n\nThe repository for this session is `<REPO>`. Run commands and edit files there, not in this session directory.\n"
+      },
+      "<CURSOR_HOME>": {
+        ".cursor/cli-config.json": "{\n  \"version\": 1,\n  \"channel\": \"static\",\n  \"approvalMode\": \"allowlist\",\n  \"permissions\": {\n    \"allow\": [],\n    \"deny\": []\n  }\n}\n"
+      }
+    }
+  }
+]

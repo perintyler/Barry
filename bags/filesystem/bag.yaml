@@ -1,0 +1,12 @@
+name: filesystem
+description: File read, write, glob, and grep operations
+
+bags:
+  - tracker
+
+dependencies:
+  ripgrep:
+    bin: rg
+    reason: powers the Glob and Grep tools
+    install:
+      macos: brew install ripgrep

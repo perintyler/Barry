@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "*.ts",
+    "src/**/*.ts",
+    "scheduler/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "vitest.config.ts",
+    "scheduler/vitest.config.ts"
+  ]
+}

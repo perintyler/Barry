@@ -1,0 +1,1 @@
+'<NODE>' '<SCRATCH>/instance/app-support/current/cli/bin/barry-hook.js'

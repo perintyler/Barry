@@ -1,0 +1,25 @@
+{
+  "name": "@barry-rocks/scheduler-service",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/runners.ts"
+  },
+  "scripts": {
+    "start": "tsx src/service.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*",
+    "@barry-rocks/schedules-bag": "workspace:*",
+    "@barry-rocks/actions-bag": "workspace:*",
+    "@barry-rocks/identities-bag": "workspace:*",
+    "better-sqlite3": "12.10.0"
+  },
+  "devDependencies": {
+    "tsx": "4.23.12",
+    "vitest": "4.1.0"
+  },
+  "license": "SEE LICENSE IN ../../../LICENSE.md"
+}

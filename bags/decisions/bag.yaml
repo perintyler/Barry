@@ -1,0 +1,12 @@
+name: decisions
+description: Typed questions answered by decision models, with a durable log of every answer
+
+stores:
+  decisions:
+    owned_by: identity
+    engine: sqlite
+    migrations: ./migrations/decisions
+  unscoped:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/decisions

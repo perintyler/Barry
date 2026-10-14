@@ -1,0 +1,16 @@
+{
+  "name": "@barry-rocks/identities-service",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The identities service's entry point. A package of its own because it is a composition root: it installs the vendor catalog, which the bag it serves must not name.",
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*",
+    "@barry-rocks/sessions-bag": "workspace:*",
+    "express": "4.22.1"
+  },
+  "exports": {
+    "./app": "./src/app.ts"
+  },
+  "license": "SEE LICENSE IN ../../../LICENSE.md"
+}

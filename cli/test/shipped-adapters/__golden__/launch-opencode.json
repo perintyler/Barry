@@ -1,0 +1,242 @@
+[
+  {
+    "case": "default",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--standalone",
+        "--session",
+        "ses_7c2a03272c83469a337cc6cd89"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-default",
+        "XDG_DATA_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/7c2a03272c83469a/data",
+        "XDG_STATE_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/7c2a03272c83469a/state",
+        "XDG_CONFIG_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/7c2a03272c83469a/config",
+        "XDG_RUNTIME_DIR": "<TMP_DIR>",
+        "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_CONFIG": "<TMP_DIR>/opencode.json"
+      },
+      "cwd": "<REPO>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [],
+      "providerSessionId": "ses_7c2a03272c83469a337cc6cd89"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        "opencode.json": "{\"enabled_providers\":[],\"permissions\":[{\"action\":\"*\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"barry_*\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"local_*\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"shell\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"read\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"grep\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"glob\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"webfetch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"websearch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"subagent\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"skill\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"question\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"execute\",\"resource\":\"*\",\"effect\":\"deny\"}],\"mcp\":{\"servers\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden-opencode-default\",\"codemode\":false,\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"codemode\":false,\"environment\":{\"LOCAL_FLAG\":\"1\",\"BARRY_SESSION_ID\":\"golden-opencode-default\"}}}},\"share\":\"disabled\"}"
+      }
+    }
+  },
+  {
+    "case": "resume-by-id",
+    "refused": "opencode conversation prior-conversation is not in this session's opencode data, so it cannot be resumed"
+  },
+  {
+    "case": "resume-last",
+    "refused": "Barry resume requires an exact recorded conversation ID"
+  },
+  {
+    "case": "resume-picker",
+    "refused": "Barry resume requires an exact recorded conversation ID"
+  },
+  {
+    "case": "denied-tools",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--standalone",
+        "--session",
+        "ses_a2e82756ee4e50c3db4729f362"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-denied-tools",
+        "XDG_DATA_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/a2e82756ee4e50c3/data",
+        "XDG_STATE_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/a2e82756ee4e50c3/state",
+        "XDG_CONFIG_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/a2e82756ee4e50c3/config",
+        "XDG_RUNTIME_DIR": "<TMP_DIR>",
+        "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_CONFIG": "<TMP_DIR>/opencode.json"
+      },
+      "cwd": "<REPO>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [],
+      "providerSessionId": "ses_a2e82756ee4e50c3db4729f362"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        "opencode.json": "{\"enabled_providers\":[],\"permissions\":[{\"action\":\"*\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"barry_*\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"local_*\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"shell\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"read\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"grep\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"glob\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"webfetch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"websearch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"subagent\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"skill\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"question\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"execute\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"Bash\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"Glob\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"WebFetch\",\"resource\":\"*\",\"effect\":\"deny\"}],\"mcp\":{\"servers\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden-opencode-denied-tools\",\"codemode\":false,\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"codemode\":false,\"environment\":{\"LOCAL_FLAG\":\"1\",\"BARRY_SESSION_ID\":\"golden-opencode-denied-tools\"}}}},\"share\":\"disabled\"}"
+      }
+    }
+  },
+  {
+    "case": "plugins-and-roots",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--standalone",
+        "--session",
+        "ses_0f244fada77826402e8344f671"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-plugins-and-roots",
+        "XDG_DATA_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/0f244fada7782640/data",
+        "XDG_STATE_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/0f244fada7782640/state",
+        "XDG_CONFIG_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/0f244fada7782640/config",
+        "XDG_RUNTIME_DIR": "<TMP_DIR>",
+        "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_CONFIG": "<TMP_DIR>/opencode.json"
+      },
+      "cwd": "<REPO>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [],
+      "providerSessionId": "ses_0f244fada77826402e8344f671"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        "opencode.json": "{\"enabled_providers\":[],\"permissions\":[{\"action\":\"*\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"barry_*\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"local_*\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"shell\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"read\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"grep\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"glob\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"webfetch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"websearch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"subagent\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"skill\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"question\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"execute\",\"resource\":\"*\",\"effect\":\"deny\"}],\"mcp\":{\"servers\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden-opencode-plugins-and-roots\",\"codemode\":false,\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"codemode\":false,\"environment\":{\"LOCAL_FLAG\":\"1\",\"BARRY_SESSION_ID\":\"golden-opencode-plugins-and-roots\"}}}},\"share\":\"disabled\"}"
+      }
+    }
+  },
+  {
+    "case": "relax",
+    "refused": "Barry sessions cannot load unscoped vendor MCP configuration"
+  },
+  {
+    "case": "system-prompt",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--standalone",
+        "--session",
+        "ses_4c05a04bae59c84437d6cb4789"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-system-prompt",
+        "XDG_DATA_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/4c05a04bae59c844/data",
+        "XDG_STATE_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/4c05a04bae59c844/state",
+        "XDG_CONFIG_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/4c05a04bae59c844/config",
+        "XDG_RUNTIME_DIR": "<TMP_DIR>",
+        "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_CONFIG": "<TMP_DIR>/opencode.json"
+      },
+      "cwd": "<REPO>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [],
+      "providerSessionId": "ses_4c05a04bae59c84437d6cb4789"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        "opencode.json": "{\"enabled_providers\":[],\"permissions\":[{\"action\":\"*\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"barry_*\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"local_*\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"shell\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"read\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"grep\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"glob\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"webfetch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"websearch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"subagent\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"skill\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"question\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"execute\",\"resource\":\"*\",\"effect\":\"deny\"}],\"mcp\":{\"servers\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden-opencode-system-prompt\",\"codemode\":false,\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"codemode\":false,\"environment\":{\"LOCAL_FLAG\":\"1\",\"BARRY_SESSION_ID\":\"golden-opencode-system-prompt\"}}}},\"share\":\"disabled\"}"
+      }
+    }
+  },
+  {
+    "case": "extra-args",
+    "refused": "Raw adapter arguments cannot override Barry's tool policy"
+  },
+  {
+    "case": "no-mcp-servers",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--standalone",
+        "--session",
+        "ses_f29114112b1d47f26450ea73d4"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-no-mcp-servers",
+        "XDG_DATA_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/f29114112b1d47f2/data",
+        "XDG_STATE_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/f29114112b1d47f2/state",
+        "XDG_CONFIG_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/f29114112b1d47f2/config",
+        "XDG_RUNTIME_DIR": "<TMP_DIR>",
+        "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_CONFIG": "<TMP_DIR>/opencode.json"
+      },
+      "cwd": "<REPO>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [],
+      "providerSessionId": "ses_f29114112b1d47f26450ea73d4"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        "opencode.json": "{\"enabled_providers\":[],\"permissions\":[{\"action\":\"*\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"shell\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"read\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"grep\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"glob\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"webfetch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"websearch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"subagent\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"skill\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"question\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"execute\",\"resource\":\"*\",\"effect\":\"deny\"}],\"mcp\":{\"servers\":{}},\"share\":\"disabled\"}"
+      }
+    }
+  },
+  {
+    "case": "prompt",
+    "plan": {
+      "kind": "server",
+      "prompt": "do it"
+    },
+    "written": {}
+  },
+  {
+    "case": "own-model",
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--standalone",
+        "--session",
+        "ses_6587217ef660752fa0786e5404"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "golden-opencode-own-model",
+        "XDG_DATA_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/6587217ef660752f/data",
+        "XDG_STATE_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/6587217ef660752f/state",
+        "XDG_CONFIG_HOME": "<BARRY_HOME>/app-support/data/opencode/sessions/6587217ef660752f/config",
+        "XDG_RUNTIME_DIR": "<TMP_DIR>",
+        "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_CONFIG": "<TMP_DIR>/opencode.json"
+      },
+      "cwd": "<REPO>",
+      "tmpDirs": [
+        "<TMP_DIR>"
+      ],
+      "warnings": [],
+      "providerSessionId": "ses_6587217ef660752fa0786e5404"
+    },
+    "written": {
+      "<TMP_DIR>": {
+        "opencode.json": "{\"model\":\"anthropic/claude-opus-5\",\"enabled_providers\":[\"anthropic\"],\"permissions\":[{\"action\":\"*\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"barry_*\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"local_*\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"shell\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"edit\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"read\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"grep\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"glob\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"webfetch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"websearch\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"subagent\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"skill\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"question\",\"resource\":\"*\",\"effect\":\"deny\"},{\"action\":\"execute\",\"resource\":\"*\",\"effect\":\"deny\"}],\"mcp\":{\"servers\":{\"barry\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:4510/mcp?sessionId=golden-opencode-own-model\",\"codemode\":false,\"headers\":{\"Authorization\":\"Bearer golden-token\"}},\"local\":{\"type\":\"local\",\"command\":[\"node\",\"server.js\"],\"codemode\":false,\"environment\":{\"LOCAL_FLAG\":\"1\",\"BARRY_SESSION_ID\":\"golden-opencode-own-model\"}}}},\"share\":\"disabled\"}"
+      }
+    }
+  },
+  {
+    "case": "prompt-with-model",
+    "plan": {
+      "kind": "server",
+      "prompt": "do it"
+    },
+    "written": {}
+  }
+]

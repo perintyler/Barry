@@ -1,0 +1,16 @@
+[
+  "sdk/src/stores/backups.ts",
+  "sdk/src/stores/context.ts",
+  "sdk/src/stores/load.ts",
+  "sdk/src/stores/migrate.ts",
+  "sdk/src/stores/migration.ts",
+  "sdk/src/stores/options.ts",
+  "sdk/src/stores/paths.ts",
+  "sdk/src/stores/registry.ts",
+  "sdk/src/stores/snapshots.ts",
+  "sdk/src/bounds/execution-context.ts",
+  "sdk/src/bounds/tool-guards.ts",
+  "sdk/src/nodes/registry.ts",
+  "sdk/src/workflows/workflow-owner.ts",
+  "sdk/src/auth/workflow-actor.ts"
+]

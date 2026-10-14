@@ -1,26 +1,43 @@
 {
-  "name": "@barry-rocks/cursor",
-  "version": "1.0.0",
+  "name": "@barry-rocks/session-cursor",
+  "version": "0.0.0",
   "description": "Cursor agent adapter for Barry",
   "license": "SEE LICENSE IN LICENSE.md",
-  "private": true,
   "type": "module",
-  "main": "src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./permissions": "./src/permissions.ts",
-    "./bin": "./src/bin.ts",
-    "./launch": "./src/launch.ts",
-    "./event-mapping": "./src/event-mapping.ts",
-    "./workspace": "./src/workspace.ts",
-    "./transcript": "./src/transcript.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./permissions": {
+      "types": "./dist/permissions.d.ts",
+      "import": "./dist/permissions.js"
+    },
+    "./bin": {
+      "types": "./dist/bin.d.ts",
+      "import": "./dist/bin.js"
+    },
+    "./workspace": {
+      "types": "./dist/workspace.d.ts",
+      "import": "./dist/workspace.js"
+    },
+    "./transcript": {
+      "types": "./dist/transcript.d.ts",
+      "import": "./dist/transcript.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    }
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "node ../../scripts/build-package.mjs",
+    "prepack": "node ../../../.github/ci/prepare-package-license.mjs && node ../../scripts/build-package.mjs"
   },
   "engines": {
-    "node": ">=22"
+    "node": "26.x"
   },
   "dependencies": {
     "@barry-rocks/sdk": "workspace:*"
@@ -29,5 +46,17 @@
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
-  }
+  },
+  "files": [
+    "dist",
+    "bag.yaml",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "barry": {
+    "sessionAdapter": {
+      "contractVersion": 1
+    }
+  },
+  "private": true
 }

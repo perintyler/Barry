@@ -1,0 +1,36 @@
+/* @barry/syntax — Token colors
+   Dark mode is default; light mode via [data-color-mode="light"]. */
+
+.sy-keyword { color: #c678dd; }
+.sy-string { color: #98c379; }
+.sy-comment { color: #5c6370; font-style: italic; }
+.sy-number { color: #d19a66; }
+.sy-function { color: #61afef; }
+.sy-type { color: #e5c07b; }
+.sy-operator { color: #56b6c2; }
+.sy-variable { color: #e06c75; }
+.sy-tag { color: #e06c75; }
+.sy-attribute { color: #d19a66; }
+.sy-meta { color: #61afef; }
+.sy-regexp { color: #98c379; }
+.sy-literal { color: #d19a66; }
+.sy-punctuation { color: #abb2bf; }
+.sy-decorator { color: #c678dd; }
+.sy-property { color: #e06c75; }
+
+[data-color-mode="light"] .sy-keyword { color: #a626a4; }
+[data-color-mode="light"] .sy-string { color: #50a14f; }
+[data-color-mode="light"] .sy-comment { color: #a0a1a7; font-style: italic; }
+[data-color-mode="light"] .sy-number { color: #986801; }
+[data-color-mode="light"] .sy-function { color: #4078f2; }
+[data-color-mode="light"] .sy-type { color: #c18401; }
+[data-color-mode="light"] .sy-operator { color: #0184bc; }
+[data-color-mode="light"] .sy-variable { color: #e45649; }
+[data-color-mode="light"] .sy-tag { color: #e45649; }
+[data-color-mode="light"] .sy-attribute { color: #986801; }
+[data-color-mode="light"] .sy-meta { color: #4078f2; }
+[data-color-mode="light"] .sy-regexp { color: #50a14f; }
+[data-color-mode="light"] .sy-literal { color: #986801; }
+[data-color-mode="light"] .sy-punctuation { color: #383a42; }
+[data-color-mode="light"] .sy-decorator { color: #a626a4; }
+[data-color-mode="light"] .sy-property { color: #e45649; }

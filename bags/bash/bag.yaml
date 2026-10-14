@@ -1,0 +1,13 @@
+name: bash
+description: Shell execution — run commands, stream long-running jobs, and kill them
+
+bounds:
+  no-bash:
+    description: Disable Barry shell tools
+    bound:
+      deniedTools: [ Bash, BashOutput, KillShell ]
+
+traits:
+  no-bash:
+    description: Disable shell tools in Barry and the running harness
+    bounds: [ no-bash ]
