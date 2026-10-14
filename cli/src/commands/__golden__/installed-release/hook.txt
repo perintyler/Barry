@@ -1,0 +1,1 @@
+'<SCRATCH>/instance/app-support/current/bin/barry-hook'

@@ -1,0 +1,12 @@
+name: vault
+description: Barry Vault — encrypted secret store, isolated behind its own user
+
+services:
+  api:
+    description: Serves the vault's REST API and MCP endpoint over a unix socket, so secrets resolve without the daemon sharing the user's UID
+    entry: dist/server.mjs
+    working-directory: .
+    user: _barryvault
+    socket: run/vault.sock
+    health: /health
+    secrets: [VAULT_REGISTRATION_SECRET, VAULT_BACKUP_SECRET]

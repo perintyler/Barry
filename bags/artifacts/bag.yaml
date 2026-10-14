@@ -1,0 +1,34 @@
+name: artifacts
+description: Immutable generated files with editable titles and tags
+stores:
+  default:
+    owned_by: identity
+    engine: sqlite
+    migrations: ./migrations/artifacts
+snapshots:
+  default:
+    entry: ./dist/local/snapshot-adapter.js
+restores:
+  default:
+    entry: ./dist/local/restore-adapter.js
+services:
+  web:
+    description: Serves artifact share links and the owner's artifacts API
+    entry: src/web.ts
+    working-directory: .
+    serves: http
+    health: /health
+    secrets: [BARRY_SECRET]
+jobs:
+  maintenance:
+    description: Reconcile expired staging intents and verified unreferenced artifact bytes
+    runs:
+      using: node
+      main: dist/maintenance-job.js
+      secrets: [ BARRY_SECRET ]
+    timeout: 5m
+schedules:
+  maintenance:
+    every: 1d
+    traits: [ bash, artifacts ]
+    job: maintenance

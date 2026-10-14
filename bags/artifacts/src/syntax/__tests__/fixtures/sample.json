@@ -1,0 +1,23 @@
+[
+  {
+    "toolName": "ask_question",
+    "namespace": "barry",
+    "access": "write"
+  },
+  {
+    "toolName": "check_prompts",
+    "namespace": "barry",
+    "access": "read"
+  },
+  {
+    "toolName": "get_session_info",
+    "namespace": "barry",
+    "access": "read",
+    "metadata": {
+      "priority": 1,
+      "tags": ["core", "session"],
+      "enabled": true,
+      "retries": 3
+    }
+  }
+]

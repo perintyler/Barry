@@ -1,0 +1,19 @@
+name: schedules
+description: Run actions on a trigger — cron, an interval, or once at a time
+
+requires:
+  actions:
+    reason: a schedule runs an action, and its runs are action runs
+
+services:
+  scheduler:
+    description: Fires schedules from every registered bag and records their runs
+    entry: scheduler/src/service.ts
+    working-directory: .
+    secrets: [BARRY_SECRET]
+
+stores:
+  schedules:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/schedules

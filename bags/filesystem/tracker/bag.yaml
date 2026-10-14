@@ -1,0 +1,32 @@
+name: tracker
+description: The append-only record of every file change Barry's sessions make
+
+tools:
+  - prune: deferred
+  - status: deferred
+  - list_changes: deferred
+  - get_change: deferred
+  - get_change_stats: deferred
+  - get_changes_for_file: deferred
+  - get_changes_for_session: deferred
+  - search_changes: deferred
+
+stores:
+  file-tracker:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/file-tracker
+
+jobs:
+  retention:
+    description: Prune changes older than 90 days from closed, unpinned sessions
+    runs:
+      using: node
+      main: src/retention.ts
+      secrets: [ BARRY_SECRET ]
+    timeout: 5m
+schedules:
+  retention:
+    every: 1d
+    traits: [ bash, sessions, filesystem ]
+    job: retention

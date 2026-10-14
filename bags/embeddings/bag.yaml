@@ -1,0 +1,12 @@
+name: embeddings
+description: Semantic search with configurable embedding backends
+
+stores:
+  embeddings:
+    owned_by: identity
+    engine: sqlite
+    migrations: ./migrations/embeddings
+  unscoped:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/embeddings

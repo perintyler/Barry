@@ -1,0 +1,233 @@
+{
+  "name": "@barry-rocks/sdk",
+  "version": "0.0.0",
+  "description": "Barry SDK: domain handles and subject entries for bags, services, stores, adapters, and apps",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/barry/testing.d.ts",
+      "import": "./dist/barry/testing.js"
+    },
+    "./tools": {
+      "types": "./dist/tools/index.d.ts",
+      "import": "./dist/tools/index.js"
+    },
+    "./bags": {
+      "types": "./dist/bags/index.d.ts",
+      "import": "./dist/bags/index.js"
+    },
+    "./services": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.js"
+    },
+    "./services/http": {
+      "types": "./dist/services/http.d.ts",
+      "import": "./dist/services/http.js"
+    },
+    "./stores": {
+      "types": "./dist/stores/index.d.ts",
+      "import": "./dist/stores/index.js"
+    },
+    "./logging": {
+      "types": "./dist/logging/index.d.ts",
+      "import": "./dist/logging/index.js"
+    },
+    "./logging/edge": {
+      "types": "./dist/logging/emit-edge.d.ts",
+      "import": "./dist/logging/emit-edge.js"
+    },
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "import": "./dist/auth/index.js"
+    },
+    "./apps": {
+      "types": "./dist/apps/index.d.ts",
+      "import": "./dist/apps/index.js"
+    },
+    "./events": {
+      "types": "./dist/events/index.d.ts",
+      "import": "./dist/events/index.js"
+    },
+    "./transcripts": {
+      "types": "./dist/transcripts/index.d.ts",
+      "import": "./dist/transcripts/index.js"
+    },
+    "./ids": {
+      "types": "./dist/ids.d.ts",
+      "import": "./dist/ids.js"
+    },
+    "./http": {
+      "types": "./dist/http/index.d.ts",
+      "import": "./dist/http/index.js"
+    },
+    "./acp": {
+      "types": "./dist/acp/index.d.ts",
+      "import": "./dist/acp/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
+    },
+    "./bounds": {
+      "types": "./dist/bounds/index.d.ts",
+      "import": "./dist/bounds/index.js"
+    },
+    "./sessions": {
+      "types": "./dist/sessions/index.d.ts",
+      "import": "./dist/sessions/index.js"
+    },
+    "./adapters/harnesses": {
+      "types": "./dist/adapters/harnesses/index.d.ts",
+      "import": "./dist/adapters/harnesses/index.js"
+    },
+    "./adapters/models": {
+      "types": "./dist/adapters/models/index.d.ts",
+      "import": "./dist/adapters/models/index.js"
+    },
+    "./openapi.json": "./openapi.json",
+    "./internal/actions": {
+      "types": "./dist/actions/index.d.ts",
+      "import": "./dist/actions/index.js"
+    },
+    "./internal/adapters": {
+      "types": "./dist/adapters/internal.d.ts",
+      "import": "./dist/adapters/internal.js"
+    },
+    "./internal/auth": {
+      "types": "./dist/auth/internal.d.ts",
+      "import": "./dist/auth/internal.js"
+    },
+    "./internal/bags": {
+      "types": "./dist/bags/internal.d.ts",
+      "import": "./dist/bags/internal.js"
+    },
+    "./internal/client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
+    },
+    "./internal/env": {
+      "types": "./dist/env/index.d.ts",
+      "import": "./dist/env/index.js"
+    },
+    "./internal/hooks": {
+      "types": "./dist/hooks/hooks.d.ts",
+      "import": "./dist/hooks/hooks.js"
+    },
+    "./internal/identities": {
+      "types": "./dist/identities/index.d.ts",
+      "import": "./dist/identities/index.js"
+    },
+    "./internal/instructions": {
+      "types": "./dist/instructions/index.d.ts",
+      "import": "./dist/instructions/index.js"
+    },
+    "./internal/jobs": {
+      "types": "./dist/jobs/index.d.ts",
+      "import": "./dist/jobs/index.js"
+    },
+    "./internal/mcp": {
+      "types": "./dist/mcp/internal.d.ts",
+      "import": "./dist/mcp/internal.js"
+    },
+    "./internal/nodes": {
+      "types": "./dist/nodes/index.d.ts",
+      "import": "./dist/nodes/index.js"
+    },
+    "./internal/routes": {
+      "types": "./dist/routes/index.d.ts",
+      "import": "./dist/routes/index.js"
+    },
+    "./internal/schedules": {
+      "types": "./dist/schedules/index.d.ts",
+      "import": "./dist/schedules/index.js"
+    },
+    "./internal/services": {
+      "types": "./dist/services/internal.d.ts",
+      "import": "./dist/services/internal.js"
+    },
+    "./internal/sessions": {
+      "types": "./dist/sessions/internal.d.ts",
+      "import": "./dist/sessions/internal.js"
+    },
+    "./internal/stores": {
+      "types": "./dist/stores/internal.d.ts",
+      "import": "./dist/stores/internal.js"
+    },
+    "./internal/tools": {
+      "types": "./dist/tools/internal.d.ts",
+      "import": "./dist/tools/internal.js"
+    },
+    "./internal/traits": {
+      "types": "./dist/traits/index.d.ts",
+      "import": "./dist/traits/index.js"
+    },
+    "./internal/vault": {
+      "types": "./dist/vault/index.d.ts",
+      "import": "./dist/vault/index.js"
+    },
+    "./internal/workflows": {
+      "types": "./dist/workflows/index.d.ts",
+      "import": "./dist/workflows/index.js"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs",
+    "generate": "tsx scripts/generate-ag-ui-fixtures.ts",
+    "check:generated": "tsx scripts/generate-ag-ui-fixtures.ts --check",
+    "maintenance": "tsx src/workflows/maintenance-cli.ts",
+    "prepack": "node ../.github/ci/prepare-package-license.mjs && node scripts/build.mjs"
+  },
+  "engines": {
+    "node": "26.x"
+  },
+  "dependencies": {
+    "@ag-ui/core": "1.0.1",
+    "@agentclientprotocol/sdk": "1.5.0",
+    "@cfworker/json-schema": "4.1.1",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@types/express": "4.17.21",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "better-sqlite3": "12.10.0",
+    "croner": "10.0.1",
+    "esbuild": "0.28.1",
+    "express": "4.22.1",
+    "express-rate-limit": "8.2.2",
+    "pino": "9.14.0",
+    "tsx": "4.23.12",
+    "yaml": "2.8.3",
+    "zod": "4.4.3",
+    "zod-to-json-schema": "3.25.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0",
+    "zod-v3-oracle": "npm:zod@3.25.76"
+  },
+  "files": [
+    "dist",
+    "openapi.json",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE.md"
+  ],
+  "peerDependencies": {
+    "zod": "^3.25.0 || ^4.0.0"
+  },
+  "sideEffects": [
+    "./dist/workflows/executor-child.js",
+    "./dist/workflows/recovery-child.js",
+    "./dist/workflows/maintenance-cli.js"
+  ],
+  "private": true
+}

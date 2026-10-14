@@ -1,0 +1,1 @@
+ALTER TABLE one_off DROP COLUMN env;

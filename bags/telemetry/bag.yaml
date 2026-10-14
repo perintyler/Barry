@@ -1,0 +1,142 @@
+name: telemetry
+description: Resource telemetry for Barry itself — samples, stores and alerts on
+  the things that have broken this machine
+
+dependencies:
+  lsof:
+    bin: /usr/sbin/lsof
+    reason: identifies which process actually owns a service's port
+  ps:
+    bin: /bin/ps
+    reason: one batched process table per tick, for resource use and subprocess
+      attribution
+  du:
+    bin: /usr/bin/du
+    reason: sizes of the instance's data, logs, cache and trash, which grow until
+      something prunes them
+  sysctl:
+    bin: /usr/sbin/sysctl
+    reason: host swap and load, the only honest memory signal under pressure
+  vm_stat:
+    bin: /usr/bin/vm_stat
+    reason: page-level memory breakdown behind the swap signal
+  top:
+    bin: /usr/bin/top
+    reason: per-process CPU sampled in one batch per tick
+  bash:
+    bin: /bin/bash
+    reason: runs the notification script (notify.ts)
+
+services:
+  web:
+    description: Metrics dashboard — service health, resource trends and firing alerts
+    entry: src/server.ts
+    working-directory: .
+    serves: http
+    health: /health
+    secrets: [BARRY_SECRET]
+
+schedules:
+  sample:
+    cron: "* * * * *"
+    timezone: UTC
+    traits: [ bash, telemetry ]
+    action:
+      description: Collect Barry resource metrics and evaluate alert rules
+      run:
+        command: /usr/bin/env
+        args: [ "node", "--import", "tsx", "scripts/sample" ]
+        working-directory: .
+      secrets:
+        - BARRY_SECRET
+      timeout: 5m
+
+  footprint:
+    cron: "*/5 * * * *"
+    timezone: UTC
+    traits: [ bash, telemetry ]
+    action:
+      description: Sample real per-process memory footprint, which RSS understates
+      run:
+        command: /usr/bin/env
+        args: [ "node", "--import", "tsx", "scripts/sample", "--footprint" ]
+        working-directory: .
+      timeout: 10m
+
+  ingest-requests:
+    cron: "*/10 * * * *"
+    timezone: UTC
+    traits: [ bash, telemetry ]
+    action:
+      description: Copy request logs into the local store before they are truncated
+      run:
+        command: /usr/bin/env
+        args: [ "node", "--import", "tsx", "scripts/ingest-requests" ]
+        working-directory: .
+      timeout: 5m
+
+  ingest-logs:
+    cron: "*/2 * * * *"
+    timezone: UTC
+    traits: [ bash, telemetry ]
+    action:
+      description: Copy every service log line, at every level, into the local logs store
+      run:
+        command: /usr/bin/env
+        args: [ "node", "--import", "tsx", "scripts/ingest-logs" ]
+        working-directory: .
+      timeout: 5m
+
+  ingest-errors:
+    cron: "1-59/5 * * * *"
+    timezone: UTC
+    traits: [ bash, telemetry ]
+    action:
+      description: Copy warn/error events into the local store, and publish their counts
+      run:
+        command: /usr/bin/env
+        args: [ "node", "--import", "tsx", "scripts/ingest-errors" ]
+        working-directory: .
+      timeout: 5m
+
+  ingest-transcripts:
+    cron: "17 * * * *"
+    timezone: UTC
+    traits: [ bash, telemetry ]
+    action:
+      description: Recover token usage and cost from the vendor CLI transcripts
+      run:
+        command: /usr/bin/env
+        args: [ "node", "--import", "tsx", "scripts/ingest-transcripts" ]
+        working-directory: .
+      timeout: 30m
+
+  sweep:
+    cron: "37 * * * *"
+    timezone: UTC
+    traits: [ bash, telemetry ]
+    action:
+      description: Sample with directory sizes, then roll up and prune old metrics
+      run:
+        command: /usr/bin/env
+        args: [ "node", "--import", "tsx", "scripts/sample", "--heavy", "--maintain" ]
+        working-directory: .
+      timeout: 30m
+
+stores:
+  metrics:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/metrics
+  requests:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/requests
+  errors:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/errors
+  usage:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/usage

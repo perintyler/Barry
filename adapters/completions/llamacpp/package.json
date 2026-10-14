@@ -1,0 +1,58 @@
+{
+  "name": "@barry-rocks/completion-llamacpp",
+  "version": "0.0.0",
+  "description": "Barry llamacpp completion adapter",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./api": {
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.js"
+    },
+    "./check": {
+      "types": "./dist/check.d.ts",
+      "import": "./dist/check.js"
+    },
+    "./supervisor": {
+      "types": "./dist/supervisor.d.ts",
+      "import": "./dist/supervisor.js"
+    },
+    "./bridge": {
+      "types": "./dist/bridge.d.ts",
+      "import": "./dist/bridge.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build-package.mjs",
+    "prepack": "node ../../../.github/ci/prepare-package-license.mjs && node ../../scripts/build-package.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": "26.x"
+  },
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "barry": {
+    "modelProvider": {
+      "contractVersion": 1,
+      "factoryExport": "COMPLETION_FACTORIES"
+    }
+  },
+  "private": true
+}

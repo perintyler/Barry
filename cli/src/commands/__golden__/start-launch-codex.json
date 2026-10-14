@@ -1,0 +1,173 @@
+{
+  "default": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "--dangerously-bypass-hook-trust"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261",
+        "OPENAI_API_KEY": "sk-parity"
+      },
+      "tmpDirs": [],
+      "warnings": [],
+      "discoversConversation": true
+    },
+    "written": {
+      "barry-tool-gate-launcher.cjs": "const { spawnSync } = require('node:child_process');\nconst { join } = require('node:path');\nconst deny = () => console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Barry tool gate unavailable' } }));\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  const result = spawnSync(process.execPath, [join(__dirname, 'barry-tool-gate.cjs')], { input: data, encoding: 'utf8', timeout: 8000, maxBuffer: 1024 * 1024 });\n  if (result.error || result.status !== 0) { deny(); return; }\n  if (!result.stdout.trim()) return;\n  try {\n    const output = JSON.parse(result.stdout);\n    if (output.hookSpecificOutput?.hookEventName !== 'PreToolUse' || output.hookSpecificOutput.permissionDecision !== 'deny') { deny(); return; }\n    console.log(JSON.stringify(output));\n  } catch { deny(); }\n});\n",
+      "barry-tool-gate.cjs": "const prefixes = [\"mcp__barry__\"];\nconst denied = new Set([\"apply_patch\",\"update_plan\",\"view_image\",\"web_search\",\"Bash\",\"write_stdin\",\"list_mcp_resources\",\"list_mcp_resource_templates\",\"read_mcp_resource\",\"request_user_input\",\"spawn_agent\",\"send_input\",\"wait_agent\",\"close_agent\",\"resume_agent\",\"imagegen\",\"tool_search\",\"get_goal\",\"create_goal\",\"update_goal\",\"web\",\"exec\",\"wait\",\"send_message\",\"followup_task\",\"interrupt_agent\",\"list_agents\",\"request_permissions\",\"sleep\",\"current_time\",\"get_context_remaining\",\"new_context\",\"wait_for_environment\",\"list_available_plugins_to_install\",\"request_plugin_install\",\"create_channel\",\"get_channels\",\"list_threads\",\"post\",\"read_post\",\"read_thread\",\"search_posts\",\"subscribe\",\"unsubscribe\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    allowed = typeof input.tool_name === 'string' && (native.has(input.tool_name) || prefixes.some(prefix => input.tool_name.startsWith(prefix) && input.tool_name.length > prefix.length)) && !denied.has(input.tool_name);\n  } catch {}\n  // Codex reads an explicit allow as a failed hook, so an allowed call says nothing.\n  if (!allowed) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Barry tools only' } }));\n});\n",
+      "config.toml": "model_provider = \"barry-openai\"\ndaemon_auto_start = false\ncheck_for_update_on_startup = false\napproval_policy = \"never\"\nsandbox_mode = \"danger-full-access\"\ndeveloper_instructions = \"Be brief.\"\n\nweb_search = \"disabled\"\nfeatures.hooks = true\nfeatures.shell_tool = false\nfeatures.code_mode = false\nfeatures.code_mode_only = false\nfeatures.code_mode_host = false\nfeatures.js_repl = false\nfeatures.image_generation = false\nfeatures.imagegenext = false\nfeatures.browser_use = false\nfeatures.computer_use = false\nfeatures.multi_agent = false\nfeatures.multi_agent_v2 = false\nfeatures.plugins = false\nfeatures.apps = false\nfeatures.connectors = false\nfeatures.non_prefixed_mcp_tool_names = false\nfeatures.tool_search = false\nfeatures.tool_search_always_defer_mcp_tools = false\nfeatures.goals = false\nfeatures.default_mode_request_user_input = false\ntools.experimental_request_user_input.enabled = false\nfeatures.search_tool = false\nfeatures.view_image = false\ntools.update_plan.enabled = false\nfeatures.standalone_web_search = false\nfeatures.request_permissions_tool = false\nfeatures.sleep_tool = false\nfeatures.memories = false\nfeatures.agent_message_board = false\nfeatures.send_message_to_user_async = false\nfeatures.tool_suggest = false\nfeatures.skill_search = false\n\n[model_providers.barry-openai]\nname = \"OpenAI\"\nbase_url = \"https://api.openai.com/v1\"\nwire_api = \"responses\"\nenv_key = \"OPENAI_API_KEY\"\n\n[projects.\"<SCRATCH>/repo\"]\ntrust_level = \"trusted\"\n\n[mcp_servers.barry]\nomit_tools_from = [\"deferred\", \"code_mode\"]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=parity-codex\"\n",
+      "hooks.json": "{\"hooks\":{\"PreToolUse\":[{\"matcher\":\"*\",\"hooks\":[{\"type\":\"command\",\"command\":\"'<NODE>' '<CODEX_HOME>/e8808a6af261/barry-tool-gate-launcher.cjs'\",\"timeout\":10}]}]}}"
+    }
+  },
+  "one-shot": {
+    "kind": "server",
+    "prompt": "do it"
+  },
+  "resume by id": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "--dangerously-bypass-hook-trust",
+        "resume",
+        "prior-conversation"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261",
+        "OPENAI_API_KEY": "sk-parity"
+      },
+      "tmpDirs": [],
+      "warnings": [],
+      "providerSessionId": "prior-conversation"
+    },
+    "written": {
+      "barry-tool-gate-launcher.cjs": "const { spawnSync } = require('node:child_process');\nconst { join } = require('node:path');\nconst deny = () => console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Barry tool gate unavailable' } }));\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  const result = spawnSync(process.execPath, [join(__dirname, 'barry-tool-gate.cjs')], { input: data, encoding: 'utf8', timeout: 8000, maxBuffer: 1024 * 1024 });\n  if (result.error || result.status !== 0) { deny(); return; }\n  if (!result.stdout.trim()) return;\n  try {\n    const output = JSON.parse(result.stdout);\n    if (output.hookSpecificOutput?.hookEventName !== 'PreToolUse' || output.hookSpecificOutput.permissionDecision !== 'deny') { deny(); return; }\n    console.log(JSON.stringify(output));\n  } catch { deny(); }\n});\n",
+      "barry-tool-gate.cjs": "const prefixes = [\"mcp__barry__\"];\nconst denied = new Set([\"apply_patch\",\"update_plan\",\"view_image\",\"web_search\",\"Bash\",\"write_stdin\",\"list_mcp_resources\",\"list_mcp_resource_templates\",\"read_mcp_resource\",\"request_user_input\",\"spawn_agent\",\"send_input\",\"wait_agent\",\"close_agent\",\"resume_agent\",\"imagegen\",\"tool_search\",\"get_goal\",\"create_goal\",\"update_goal\",\"web\",\"exec\",\"wait\",\"send_message\",\"followup_task\",\"interrupt_agent\",\"list_agents\",\"request_permissions\",\"sleep\",\"current_time\",\"get_context_remaining\",\"new_context\",\"wait_for_environment\",\"list_available_plugins_to_install\",\"request_plugin_install\",\"create_channel\",\"get_channels\",\"list_threads\",\"post\",\"read_post\",\"read_thread\",\"search_posts\",\"subscribe\",\"unsubscribe\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    allowed = typeof input.tool_name === 'string' && (native.has(input.tool_name) || prefixes.some(prefix => input.tool_name.startsWith(prefix) && input.tool_name.length > prefix.length)) && !denied.has(input.tool_name);\n  } catch {}\n  // Codex reads an explicit allow as a failed hook, so an allowed call says nothing.\n  if (!allowed) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Barry tools only' } }));\n});\n",
+      "config.toml": "model_provider = \"barry-openai\"\ndaemon_auto_start = false\ncheck_for_update_on_startup = false\napproval_policy = \"never\"\nsandbox_mode = \"danger-full-access\"\ndeveloper_instructions = \"Be brief.\"\n\nweb_search = \"disabled\"\nfeatures.hooks = true\nfeatures.shell_tool = false\nfeatures.code_mode = false\nfeatures.code_mode_only = false\nfeatures.code_mode_host = false\nfeatures.js_repl = false\nfeatures.image_generation = false\nfeatures.imagegenext = false\nfeatures.browser_use = false\nfeatures.computer_use = false\nfeatures.multi_agent = false\nfeatures.multi_agent_v2 = false\nfeatures.plugins = false\nfeatures.apps = false\nfeatures.connectors = false\nfeatures.non_prefixed_mcp_tool_names = false\nfeatures.tool_search = false\nfeatures.tool_search_always_defer_mcp_tools = false\nfeatures.goals = false\nfeatures.default_mode_request_user_input = false\ntools.experimental_request_user_input.enabled = false\nfeatures.search_tool = false\nfeatures.view_image = false\ntools.update_plan.enabled = false\nfeatures.standalone_web_search = false\nfeatures.request_permissions_tool = false\nfeatures.sleep_tool = false\nfeatures.memories = false\nfeatures.agent_message_board = false\nfeatures.send_message_to_user_async = false\nfeatures.tool_suggest = false\nfeatures.skill_search = false\n\n[model_providers.barry-openai]\nname = \"OpenAI\"\nbase_url = \"https://api.openai.com/v1\"\nwire_api = \"responses\"\nenv_key = \"OPENAI_API_KEY\"\n\n[projects.\"<SCRATCH>/repo\"]\ntrust_level = \"trusted\"\n\n[mcp_servers.barry]\nomit_tools_from = [\"deferred\", \"code_mode\"]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=parity-codex\"\n",
+      "hooks.json": "{\"hooks\":{\"PreToolUse\":[{\"matcher\":\"*\",\"hooks\":[{\"type\":\"command\",\"command\":\"'<NODE>' '<CODEX_HOME>/e8808a6af261/barry-tool-gate-launcher.cjs'\",\"timeout\":10}]}]}}"
+    }
+  },
+  "resume last": {
+    "refused": "Barry resume requires an exact recorded conversation ID"
+  },
+  "resume picker": {
+    "refused": "Barry resume requires an exact recorded conversation ID"
+  },
+  "relax": {
+    "refused": "Barry sessions cannot load unscoped vendor MCP configuration"
+  },
+  "denied tools": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "--dangerously-bypass-hook-trust"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261",
+        "OPENAI_API_KEY": "sk-parity"
+      },
+      "tmpDirs": [],
+      "warnings": [],
+      "discoversConversation": true
+    },
+    "written": {
+      "barry-tool-gate-launcher.cjs": "const { spawnSync } = require('node:child_process');\nconst { join } = require('node:path');\nconst deny = () => console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Barry tool gate unavailable' } }));\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  const result = spawnSync(process.execPath, [join(__dirname, 'barry-tool-gate.cjs')], { input: data, encoding: 'utf8', timeout: 8000, maxBuffer: 1024 * 1024 });\n  if (result.error || result.status !== 0) { deny(); return; }\n  if (!result.stdout.trim()) return;\n  try {\n    const output = JSON.parse(result.stdout);\n    if (output.hookSpecificOutput?.hookEventName !== 'PreToolUse' || output.hookSpecificOutput.permissionDecision !== 'deny') { deny(); return; }\n    console.log(JSON.stringify(output));\n  } catch { deny(); }\n});\n",
+      "barry-tool-gate.cjs": "const prefixes = [\"mcp__barry__\"];\nconst denied = new Set([\"apply_patch\",\"update_plan\",\"view_image\",\"web_search\",\"Bash\",\"write_stdin\",\"list_mcp_resources\",\"list_mcp_resource_templates\",\"read_mcp_resource\",\"request_user_input\",\"spawn_agent\",\"send_input\",\"wait_agent\",\"close_agent\",\"resume_agent\",\"imagegen\",\"tool_search\",\"get_goal\",\"create_goal\",\"update_goal\",\"web\",\"exec\",\"wait\",\"send_message\",\"followup_task\",\"interrupt_agent\",\"list_agents\",\"request_permissions\",\"sleep\",\"current_time\",\"get_context_remaining\",\"new_context\",\"wait_for_environment\",\"list_available_plugins_to_install\",\"request_plugin_install\",\"create_channel\",\"get_channels\",\"list_threads\",\"post\",\"read_post\",\"read_thread\",\"search_posts\",\"subscribe\",\"unsubscribe\",\"Bash\",\"Glob\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    allowed = typeof input.tool_name === 'string' && (native.has(input.tool_name) || prefixes.some(prefix => input.tool_name.startsWith(prefix) && input.tool_name.length > prefix.length)) && !denied.has(input.tool_name);\n  } catch {}\n  // Codex reads an explicit allow as a failed hook, so an allowed call says nothing.\n  if (!allowed) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Barry tools only' } }));\n});\n",
+      "config.toml": "model_provider = \"barry-openai\"\ndaemon_auto_start = false\ncheck_for_update_on_startup = false\napproval_policy = \"never\"\nsandbox_mode = \"danger-full-access\"\ndeveloper_instructions = \"Be brief.\"\n\nweb_search = \"disabled\"\nfeatures.hooks = true\nfeatures.shell_tool = false\nfeatures.code_mode = false\nfeatures.code_mode_only = false\nfeatures.code_mode_host = false\nfeatures.js_repl = false\nfeatures.image_generation = false\nfeatures.imagegenext = false\nfeatures.browser_use = false\nfeatures.computer_use = false\nfeatures.multi_agent = false\nfeatures.multi_agent_v2 = false\nfeatures.plugins = false\nfeatures.apps = false\nfeatures.connectors = false\nfeatures.non_prefixed_mcp_tool_names = false\nfeatures.tool_search = false\nfeatures.tool_search_always_defer_mcp_tools = false\nfeatures.goals = false\nfeatures.default_mode_request_user_input = false\ntools.experimental_request_user_input.enabled = false\nfeatures.search_tool = false\nfeatures.view_image = false\ntools.update_plan.enabled = false\nfeatures.standalone_web_search = false\nfeatures.request_permissions_tool = false\nfeatures.sleep_tool = false\nfeatures.memories = false\nfeatures.agent_message_board = false\nfeatures.send_message_to_user_async = false\nfeatures.tool_suggest = false\nfeatures.skill_search = false\n\n[model_providers.barry-openai]\nname = \"OpenAI\"\nbase_url = \"https://api.openai.com/v1\"\nwire_api = \"responses\"\nenv_key = \"OPENAI_API_KEY\"\n\n[projects.\"<SCRATCH>/repo\"]\ntrust_level = \"trusted\"\n\n[mcp_servers.barry]\nomit_tools_from = [\"deferred\", \"code_mode\"]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=parity-codex\"\n",
+      "hooks.json": "{\"hooks\":{\"PreToolUse\":[{\"matcher\":\"*\",\"hooks\":[{\"type\":\"command\",\"command\":\"'<NODE>' '<CODEX_HOME>/e8808a6af261/barry-tool-gate-launcher.cjs'\",\"timeout\":10}]}]}}"
+    }
+  },
+  "extra args": {
+    "refused": "Raw adapter arguments cannot override Barry's tool policy"
+  },
+  "skills": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "--dangerously-bypass-hook-trust"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261",
+        "OPENAI_API_KEY": "sk-parity"
+      },
+      "tmpDirs": [],
+      "warnings": [],
+      "discoversConversation": true
+    },
+    "written": {
+      "barry-tool-gate-launcher.cjs": "const { spawnSync } = require('node:child_process');\nconst { join } = require('node:path');\nconst deny = () => console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Barry tool gate unavailable' } }));\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  const result = spawnSync(process.execPath, [join(__dirname, 'barry-tool-gate.cjs')], { input: data, encoding: 'utf8', timeout: 8000, maxBuffer: 1024 * 1024 });\n  if (result.error || result.status !== 0) { deny(); return; }\n  if (!result.stdout.trim()) return;\n  try {\n    const output = JSON.parse(result.stdout);\n    if (output.hookSpecificOutput?.hookEventName !== 'PreToolUse' || output.hookSpecificOutput.permissionDecision !== 'deny') { deny(); return; }\n    console.log(JSON.stringify(output));\n  } catch { deny(); }\n});\n",
+      "barry-tool-gate.cjs": "const prefixes = [\"mcp__barry__\"];\nconst denied = new Set([\"apply_patch\",\"update_plan\",\"view_image\",\"web_search\",\"Bash\",\"write_stdin\",\"list_mcp_resources\",\"list_mcp_resource_templates\",\"read_mcp_resource\",\"request_user_input\",\"spawn_agent\",\"send_input\",\"wait_agent\",\"close_agent\",\"resume_agent\",\"imagegen\",\"tool_search\",\"get_goal\",\"create_goal\",\"update_goal\",\"web\",\"exec\",\"wait\",\"send_message\",\"followup_task\",\"interrupt_agent\",\"list_agents\",\"request_permissions\",\"sleep\",\"current_time\",\"get_context_remaining\",\"new_context\",\"wait_for_environment\",\"list_available_plugins_to_install\",\"request_plugin_install\",\"create_channel\",\"get_channels\",\"list_threads\",\"post\",\"read_post\",\"read_thread\",\"search_posts\",\"subscribe\",\"unsubscribe\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    allowed = typeof input.tool_name === 'string' && (native.has(input.tool_name) || prefixes.some(prefix => input.tool_name.startsWith(prefix) && input.tool_name.length > prefix.length)) && !denied.has(input.tool_name);\n  } catch {}\n  // Codex reads an explicit allow as a failed hook, so an allowed call says nothing.\n  if (!allowed) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Barry tools only' } }));\n});\n",
+      "config.toml": "model_provider = \"barry-openai\"\ndaemon_auto_start = false\ncheck_for_update_on_startup = false\napproval_policy = \"never\"\nsandbox_mode = \"danger-full-access\"\ndeveloper_instructions = \"Be brief.\"\n\nweb_search = \"disabled\"\nfeatures.hooks = true\nfeatures.shell_tool = false\nfeatures.code_mode = false\nfeatures.code_mode_only = false\nfeatures.code_mode_host = false\nfeatures.js_repl = false\nfeatures.image_generation = false\nfeatures.imagegenext = false\nfeatures.browser_use = false\nfeatures.computer_use = false\nfeatures.multi_agent = false\nfeatures.multi_agent_v2 = false\nfeatures.plugins = false\nfeatures.apps = false\nfeatures.connectors = false\nfeatures.non_prefixed_mcp_tool_names = false\nfeatures.tool_search = false\nfeatures.tool_search_always_defer_mcp_tools = false\nfeatures.goals = false\nfeatures.default_mode_request_user_input = false\ntools.experimental_request_user_input.enabled = false\nfeatures.search_tool = false\nfeatures.view_image = false\ntools.update_plan.enabled = false\nfeatures.standalone_web_search = false\nfeatures.request_permissions_tool = false\nfeatures.sleep_tool = false\nfeatures.memories = false\nfeatures.agent_message_board = false\nfeatures.send_message_to_user_async = false\nfeatures.tool_suggest = false\nfeatures.skill_search = false\n\n[model_providers.barry-openai]\nname = \"OpenAI\"\nbase_url = \"https://api.openai.com/v1\"\nwire_api = \"responses\"\nenv_key = \"OPENAI_API_KEY\"\n\n[projects.\"<SCRATCH>/repo\"]\ntrust_level = \"trusted\"\n\n[mcp_servers.barry]\nomit_tools_from = [\"deferred\", \"code_mode\"]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=parity-codex\"\n",
+      "hooks.json": "{\"hooks\":{\"PreToolUse\":[{\"matcher\":\"*\",\"hooks\":[{\"type\":\"command\",\"command\":\"'<NODE>' '<CODEX_HOME>/e8808a6af261/barry-tool-gate-launcher.cjs'\",\"timeout\":10}]}]}}"
+    }
+  },
+  "own model": {
+    "plan": {
+      "kind": "cli",
+      "command": "codex",
+      "args": [
+        "--cd",
+        "<SCRATCH>/repo",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+        "--dangerously-bypass-hook-trust"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-codex",
+        "CODEX_HOME": "<CODEX_HOME>/e8808a6af261",
+        "OPENAI_API_KEY": "sk-parity"
+      },
+      "tmpDirs": [],
+      "warnings": [],
+      "discoversConversation": true
+    },
+    "written": {
+      "barry-tool-gate-launcher.cjs": "const { spawnSync } = require('node:child_process');\nconst { join } = require('node:path');\nconst deny = () => console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Barry tool gate unavailable' } }));\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  const result = spawnSync(process.execPath, [join(__dirname, 'barry-tool-gate.cjs')], { input: data, encoding: 'utf8', timeout: 8000, maxBuffer: 1024 * 1024 });\n  if (result.error || result.status !== 0) { deny(); return; }\n  if (!result.stdout.trim()) return;\n  try {\n    const output = JSON.parse(result.stdout);\n    if (output.hookSpecificOutput?.hookEventName !== 'PreToolUse' || output.hookSpecificOutput.permissionDecision !== 'deny') { deny(); return; }\n    console.log(JSON.stringify(output));\n  } catch { deny(); }\n});\n",
+      "barry-tool-gate.cjs": "const prefixes = [\"mcp__barry__\"];\nconst denied = new Set([\"apply_patch\",\"update_plan\",\"view_image\",\"web_search\",\"Bash\",\"write_stdin\",\"list_mcp_resources\",\"list_mcp_resource_templates\",\"read_mcp_resource\",\"request_user_input\",\"spawn_agent\",\"send_input\",\"wait_agent\",\"close_agent\",\"resume_agent\",\"imagegen\",\"tool_search\",\"get_goal\",\"create_goal\",\"update_goal\",\"web\",\"exec\",\"wait\",\"send_message\",\"followup_task\",\"interrupt_agent\",\"list_agents\",\"request_permissions\",\"sleep\",\"current_time\",\"get_context_remaining\",\"new_context\",\"wait_for_environment\",\"list_available_plugins_to_install\",\"request_plugin_install\",\"create_channel\",\"get_channels\",\"list_threads\",\"post\",\"read_post\",\"read_thread\",\"search_posts\",\"subscribe\",\"unsubscribe\"]);\nconst native = new Set([]);\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  let allowed = false;\n  try {\n    const input = JSON.parse(data);\n    allowed = typeof input.tool_name === 'string' && (native.has(input.tool_name) || prefixes.some(prefix => input.tool_name.startsWith(prefix) && input.tool_name.length > prefix.length)) && !denied.has(input.tool_name);\n  } catch {}\n  // Codex reads an explicit allow as a failed hook, so an allowed call says nothing.\n  if (!allowed) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Barry tools only' } }));\n});\n",
+      "config.toml": "model_provider = \"barry-openai\"\nmodel = \"gpt-5.5\"\ndaemon_auto_start = false\ncheck_for_update_on_startup = false\napproval_policy = \"never\"\nsandbox_mode = \"danger-full-access\"\ndeveloper_instructions = \"Be brief.\"\n\nweb_search = \"disabled\"\nfeatures.hooks = true\nfeatures.shell_tool = false\nfeatures.code_mode = false\nfeatures.code_mode_only = false\nfeatures.code_mode_host = false\nfeatures.js_repl = false\nfeatures.image_generation = false\nfeatures.imagegenext = false\nfeatures.browser_use = false\nfeatures.computer_use = false\nfeatures.multi_agent = false\nfeatures.multi_agent_v2 = false\nfeatures.plugins = false\nfeatures.apps = false\nfeatures.connectors = false\nfeatures.non_prefixed_mcp_tool_names = false\nfeatures.tool_search = false\nfeatures.tool_search_always_defer_mcp_tools = false\nfeatures.goals = false\nfeatures.default_mode_request_user_input = false\ntools.experimental_request_user_input.enabled = false\nfeatures.search_tool = false\nfeatures.view_image = false\ntools.update_plan.enabled = false\nfeatures.standalone_web_search = false\nfeatures.request_permissions_tool = false\nfeatures.sleep_tool = false\nfeatures.memories = false\nfeatures.agent_message_board = false\nfeatures.send_message_to_user_async = false\nfeatures.tool_suggest = false\nfeatures.skill_search = false\n\n[model_providers.barry-openai]\nname = \"OpenAI\"\nbase_url = \"https://api.openai.com/v1\"\nwire_api = \"responses\"\nenv_key = \"OPENAI_API_KEY\"\n\n[projects.\"<SCRATCH>/repo\"]\ntrust_level = \"trusted\"\n\n[mcp_servers.barry]\nomit_tools_from = [\"deferred\", \"code_mode\"]\nurl = \"http://127.0.0.1:4510/mcp?sessionId=parity-codex\"\n",
+      "hooks.json": "{\"hooks\":{\"PreToolUse\":[{\"matcher\":\"*\",\"hooks\":[{\"type\":\"command\",\"command\":\"'<NODE>' '<CODEX_HOME>/e8808a6af261/barry-tool-gate-launcher.cjs'\",\"timeout\":10}]}]}}"
+    }
+  },
+  "one-shot with resume": {
+    "refused": "Barry resume requires an exact recorded conversation ID"
+  }
+}

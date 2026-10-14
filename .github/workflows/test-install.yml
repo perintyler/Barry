@@ -1,0 +1,115 @@
+name: install
+
+# The README's install path and the multi-machine link, run end to end on a
+# disposable home. Unit suites mock the pieces (launchd, the owner store, the
+# worker transport); nothing else runs `barry setup --link` as a whole, or two
+# Barry homes linked over HTTPS, and both broke unnoticed between releases.
+#
+# The ubuntu job is the gate: it proves everything up to launchd, with a
+# recording stand-in for it. The macOS job is the rehearsal with the real
+# launchd and the Node the README names; it is manual and weekly rather than
+# per change, because macOS runners are the scarce kind.
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+    paths: &paths
+      - "cli/**"
+      - "sdk/**"
+      - "bags/**"
+      - "bin/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".node-version"
+      - ".npmrc"
+      # Shared test infrastructure: the config every suite inherits, the runner
+      # that discovers which tests exist, and the workspace inventory it walks.
+      - "vitest.base.config.ts"
+      - ".github/ci/**"
+      - ".github/actions/setup/action.yml"
+      - "package.json"
+      - "workspace-entries.json"
+      - ".github/workflows/test-install.yml"
+  pull_request:
+  schedule:
+    # Weekly, for the macOS rehearsal below.
+    - cron: "17 9 * * 1"
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # `barry setup --link .` on a disposable home, then the installed command,
+  # a second setup, uninstall, purge; and two homes linked as owner and worker
+  # over an HTTPS loopback edge, running a bag job remotely.
+  disposable:
+    if: github.repository != 'perintyler/barry-dev' && github.event.repository.private == false
+    name: install / disposable
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup
+      - name: Install from the checkout into a disposable home
+        run: node --import tsx cli/scripts/verify-install.ts
+      - name: Link two homes as owner and worker and run a job remotely
+        run: node --import tsx cli/scripts/verify-nodes.ts
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: disposable-install-evidence
+          path: |
+            /tmp/barry-install-verification-*/*.json
+            /tmp/barry-install-verification-*/*.log
+            /tmp/barry-nodes-verification-*/*.json
+            /tmp/barry-nodes-verification-*/*.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  # The README's commands, verbatim, with the real launchd. `--no-start`
+  # registers without starting: the runner has no adapter, model or vault to
+  # bring the services up against, and a started service would outlive the
+  # step. Everything registered is removed again before the runner is retired.
+  macos:
+    if: github.repository != 'perintyler/barry-dev' && github.event.repository.private == false && (github.event_name == 'workflow_call' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      BARRY_HOME: ${{ github.workspace }}/.barry-install-rehearsal
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup
+      - name: barry setup --link . --no-start
+        run: node cli/bin/barry.js setup --link . --no-start
+      - name: The installed command
+        run: |
+          "$BARRY_HOME/bin/barry" --version
+          "$BARRY_HOME/bin/barry" service list
+          "$BARRY_HOME/bin/barry" workers status
+          "$BARRY_HOME/bin/barry" doctor || true
+      - name: barry setup --uninstall
+        if: always()
+        run: node cli/bin/barry.js setup --uninstall --purge --yes
+      - name: Verify real launchd lifecycle
+        run: node --import tsx cli/scripts/verify-launchd.ts
+      - name: Verify service acceptance
+        run: node --import tsx cli/scripts/acceptance/verify-services.ts run "$HOME/barry-services-${{ github.run_id }}-${{ github.run_attempt }}"
+      - name: Clean service acceptance
+        if: always()
+        run: |
+          fixture="$HOME/barry-services-${{ github.run_id }}-${{ github.run_attempt }}"
+          if [ -f "$fixture/acceptance.json" ]; then
+            node --import tsx cli/scripts/acceptance/verify-services.ts cleanup "$fixture"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: macos-acceptance
+          path: ~/barry-services-${{ github.run_id }}-${{ github.run_attempt }}/acceptance.json
+          if-no-files-found: error

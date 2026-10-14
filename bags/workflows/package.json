@@ -1,0 +1,28 @@
+{
+  "name": "@barry-rocks/workflows-bag",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "start": "tsx runtime/src/service.ts",
+    "preview": "tsx src/preview.ts"
+  },
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.11.1",
+    "@playwright/test": "1.62.0",
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "license": "SEE LICENSE IN ../../LICENSE.md"
+}

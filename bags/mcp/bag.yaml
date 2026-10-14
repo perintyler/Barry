@@ -1,0 +1,38 @@
+name: mcp
+description: Barry's MCP server — every packed bag's tools in one server, filtered per session
+
+requires:
+  identities:
+    reason: resolves each session's identity, traits and bounds
+  sessions:
+    reason: reads the session a connection belongs to
+  actions:
+    reason: answers action questions for hosted bag tools
+  events:
+    reason: records and lists events for hosted bag tools
+  schedules:
+    reason: answers schedule questions for hosted bag tools
+  locks:
+    reason: arbitrates concurrent file edits
+  tracker:
+    reason: records which files a session read and changed
+
+tools:
+  - services_list: deferred
+  - services_status: deferred
+  - services_restart: deferred
+
+traits:
+  services:
+    description: Observe and restart this instance's services
+    namespaces: [mcp]
+    access: readwrite
+
+services:
+  server:
+    description: "Barry MCP server: every bag's tools in one server"
+    entry: src/server-main.ts
+    working-directory: .
+    serves: http
+    health: /health
+    secrets: [BARRY_SECRET]

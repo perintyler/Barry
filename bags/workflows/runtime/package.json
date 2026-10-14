@@ -1,0 +1,21 @@
+{
+  "name": "@barry-rocks/workflows-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/service.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*",
+    "@barry-rocks/workflows-bag": "workspace:*",
+    "@barry-rocks/identities-bag": "workspace:*",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "tsx": "4.23.12",
+    "vitest": "4.1.0"
+  },
+  "license": "SEE LICENSE IN ../../../LICENSE.md"
+}

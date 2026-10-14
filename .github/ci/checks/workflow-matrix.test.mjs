@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { parse } from "yaml";
+import { matrixProblems } from "./workflow-matrix.mjs";
+const source = readFileSync(new URL("../../workflows/test.yml", import.meta.url), "utf8");
+const keys = ["sdk", "cli", "bags/mcp", "adapters/sessions/codex"];
+test("one matrix covers every area through the shared runner", () => assert.deepEqual(matrixProblems(parse(source), keys), []));
+test("a missing discovery input cannot silently skip tests", () => assert.match(matrixProblems(parse(source.replace('      - ".github/ci/**"\n', "")), keys).join("\n"), /missing shared trigger/));
+test("dead scopes and unselected workspaces are both rejected", () => assert.match(matrixProblems(parse(source.replace('"adapters"', '"removed"')), keys).join("\n"), /selects no workspace[\s\S]*no matrix scope/));
+test("a matrix whose command ignores its scope is rejected", () => assert.match(matrixProblems(parse(source.replace("--scope=${{ matrix.scope }}", "--scope=sdk")), keys).join("\n"), /scope must select/));

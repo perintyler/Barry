@@ -1,0 +1,141 @@
+{
+  "default": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--standalone",
+        "--session",
+        "ses_d7a58c25d42ef5c1be87fe3a0d"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "XDG_DATA_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/data",
+        "XDG_STATE_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/state",
+        "XDG_CONFIG_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/config",
+        "XDG_RUNTIME_DIR": "<TMP_0>",
+        "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_CONFIG": "<TMP_0>/opencode.json"
+      },
+      "cwd": "<SCRATCH>/repo",
+      "tmpDirs": [
+        "<TMP_0>"
+      ],
+      "warnings": [],
+      "providerSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
+    },
+    "written": {}
+  },
+  "one-shot": {
+    "kind": "server",
+    "prompt": "do it"
+  },
+  "resume by id": {
+    "refused": "opencode conversation prior-conversation is not in this session's opencode data, so it cannot be resumed"
+  },
+  "resume last": {
+    "refused": "Barry resume requires an exact recorded conversation ID"
+  },
+  "resume picker": {
+    "refused": "Barry resume requires an exact recorded conversation ID"
+  },
+  "relax": {
+    "refused": "Barry sessions cannot load unscoped vendor MCP configuration"
+  },
+  "denied tools": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--standalone",
+        "--session",
+        "ses_d7a58c25d42ef5c1be87fe3a0d"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "XDG_DATA_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/data",
+        "XDG_STATE_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/state",
+        "XDG_CONFIG_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/config",
+        "XDG_RUNTIME_DIR": "<TMP_0>",
+        "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_CONFIG": "<TMP_0>/opencode.json"
+      },
+      "cwd": "<SCRATCH>/repo",
+      "tmpDirs": [
+        "<TMP_0>"
+      ],
+      "warnings": [],
+      "providerSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
+    },
+    "written": {}
+  },
+  "extra args": {
+    "refused": "Raw adapter arguments cannot override Barry's tool policy"
+  },
+  "skills": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--standalone",
+        "--session",
+        "ses_d7a58c25d42ef5c1be87fe3a0d"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "XDG_DATA_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/data",
+        "XDG_STATE_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/state",
+        "XDG_CONFIG_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/config",
+        "XDG_RUNTIME_DIR": "<TMP_1>",
+        "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_CONFIG": "<TMP_1>/opencode.json"
+      },
+      "cwd": "<SCRATCH>/repo",
+      "tmpDirs": [
+        "<TMP_1>"
+      ],
+      "warnings": [],
+      "providerSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
+    },
+    "written": {}
+  },
+  "own model": {
+    "plan": {
+      "kind": "cli",
+      "command": "opencode",
+      "args": [
+        "--standalone",
+        "--session",
+        "ses_d7a58c25d42ef5c1be87fe3a0d"
+      ],
+      "env": {
+        "PATH": "/usr/bin",
+        "BARRY_SESSION_ID": "parity-opencode",
+        "XDG_DATA_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/data",
+        "XDG_STATE_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/state",
+        "XDG_CONFIG_HOME": "<SCRATCH>/home/app-support/data/opencode/sessions/d7a58c25d42ef5c1/config",
+        "XDG_RUNTIME_DIR": "<TMP_0>",
+        "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_CONFIG": "<TMP_0>/opencode.json"
+      },
+      "cwd": "<SCRATCH>/repo",
+      "tmpDirs": [
+        "<TMP_0>"
+      ],
+      "warnings": [],
+      "providerSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
+    },
+    "written": {}
+  },
+  "one-shot with model": {
+    "kind": "server",
+    "prompt": "do it"
+  }
+}

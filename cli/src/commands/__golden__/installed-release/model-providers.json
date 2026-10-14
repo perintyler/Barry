@@ -1,0 +1,10 @@
+[
+  {
+    "packageName": "alpha",
+    "path": "<SCRATCH>/instance/app-support/current/adapters/completions/alpha",
+    "version": "1.0.0",
+    "contractVersion": 1,
+    "factoryExport": "FACTORIES",
+    "shipped": true
+  }
+]

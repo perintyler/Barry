@@ -1,0 +1,31 @@
+{
+  "name": "@barry-rocks/actions-bag",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./db": "./src/db.ts"
+  },
+  "dependencies": {
+    "@barry-rocks/artifacts-bag": "workspace:*",
+    "@barry-rocks/sdk": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "nanoid": "5.1.6",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "dev": "tsx --watch server/src/index.ts",
+    "start": "tsx server/src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "SEE LICENSE IN ../../LICENSE.md"
+}

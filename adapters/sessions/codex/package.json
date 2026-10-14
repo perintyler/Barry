@@ -1,23 +1,31 @@
 {
-  "name": "@barry-rocks/codex",
-  "version": "1.0.0",
+  "name": "@barry-rocks/session-codex",
+  "version": "0.0.0",
   "description": "OpenAI Codex agent adapter for Barry",
   "license": "SEE LICENSE IN LICENSE.md",
-  "private": true,
   "type": "module",
-  "main": "src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./runtime": "./src/runtime.ts",
-    "./launch": "./src/launch.ts",
-    "./transcript": "./src/transcript.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    },
+    "./transcript": {
+      "types": "./dist/transcript.d.ts",
+      "import": "./dist/transcript.js"
+    }
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "node ../../scripts/build-package.mjs",
+    "prepack": "node ../../../.github/ci/prepare-package-license.mjs && node ../../scripts/build-package.mjs"
   },
   "engines": {
-    "node": ">=22"
+    "node": "26.x"
   },
   "dependencies": {
     "@barry-rocks/sdk": "workspace:*",
@@ -28,5 +36,17 @@
     "@types/ws": "8.18.1",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
-  }
+  },
+  "files": [
+    "dist",
+    "bag.yaml",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "barry": {
+    "sessionAdapter": {
+      "contractVersion": 1
+    }
+  },
+  "private": true
 }

@@ -1,0 +1,30 @@
+name: memory
+description: Repo- and tag-scoped memories — agents save them, sessions start with them
+
+tools:
+  - update: deferred
+  - forget: deferred
+  - list_tags: deferred
+  - import_claude: deferred
+
+prompts:
+  entry: prompt.ts
+
+services:
+  web:
+    description: Memory browser — search, edit, and curate memories in a web UI
+    entry: server/src/index.ts
+    working-directory: .
+    serves: http
+    health: /health
+    secrets: [BARRY_SECRET]
+
+stores:
+  memory:
+    owned_by: identity
+    engine: sqlite
+    migrations: ./migrations/memory
+  unscoped:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/memory

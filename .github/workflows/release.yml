@@ -1,0 +1,159 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    if: github.repository != 'perintyler/barry-dev' && github.event.repository.private == false
+    uses: ./.github/workflows/test-install.yml
+  build:
+    if: github.repository != 'perintyler/barry-dev' && github.event.repository.private == false
+    needs: acceptance
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - name: Verify acceptance and build refer to the same commit
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Check migration catalog and upstream Node digest
+        run: |
+          pnpm stores:check
+          node .github/ci/checks/node-runtime-digest.mjs
+      - name: Build and check immutable release
+        run: |
+          node cli/scripts/release.mjs --ref "$GITHUB_REF" --out "$RUNNER_TEMP/barry-release" > "$RUNNER_TEMP/release-report.txt" 2>&1
+          tarball=$(find "$RUNNER_TEMP/barry-release" -name '*.tar.gz' -maxdepth 1 -print)
+          node cli/scripts/release.mjs --check "$tarball" >> "$RUNNER_TEMP/release-report.txt" 2>&1
+      - name: Exercise the actual previous-release upgrade matrix
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tarball=$(find "$RUNNER_TEMP/barry-release" -maxdepth 1 -name '*.tar.gz' -print)
+          node .github/ci/run-release-matrix.mjs "$tarball" "$RUNNER_TEMP/barry-upgrade-matrix" "$GITHUB_REPOSITORY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: release-upgrade-matrix
+          path: |
+            ${{ runner.temp }}/barry-upgrade-matrix/matrix-summary.json
+            ${{ runner.temp }}/barry-upgrade-matrix/fixture-*.log
+            ${{ runner.temp }}/barry-upgrade-matrix/previous-*/*.tar.gz
+            ${{ runner.temp }}/barry-upgrade-matrix/previous-*/*.sha256
+            ${{ runner.temp }}/barry-upgrade-matrix/fixture-*/acceptance.json
+            ${{ runner.temp }}/barry-upgrade-matrix/fixture-*/snapshots/**
+            ${{ runner.temp }}/barry-upgrade-matrix/fixture-*/initial-backup/**
+          if-no-files-found: error
+          retention-days: 90
+      - name: Render published formula and audit it
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node .github/ci/render-release-formula.mjs "$RUNNER_TEMP/barry-release" "$RELEASE_TAG" "$GITHUB_REPOSITORY"
+          brew tap-new perintyler/barry-rehearsal
+          cp "$RUNNER_TEMP/barry-release/barry.rb" "$(brew --repository)/Library/Taps/perintyler/homebrew-barry-rehearsal/Formula/barry.rb"
+          brew audit --strict perintyler/barry-rehearsal/barry
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: release-report
+          path: ${{ runner.temp }}/release-report.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-bundle
+          path: ${{ runner.temp }}/barry-release/*
+          retention-days: 90
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          subject-path: ${{ runner.temp }}/barry-release/*.tar.gz
+  privileged-health:
+    if: github.repository != 'perintyler/barry-dev' && github.event.repository.private == false && (startsWith(github.ref, 'refs/tags/v') && !startsWith(github.ref, 'refs/tags/v0.0.0-pr57-') && vars.BARRY_RELEASE_SYSTEM_ENABLED == 'true')
+    needs: build
+    runs-on: [self-hosted, macOS, ARM64, barry-release-system]
+    environment: release-system
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-bundle
+          path: ${{ runner.temp }}/barry-health-bundle
+      - name: Certify actual artifact with provisioned system services
+        env:
+          BARRY_RELEASE_SYSTEM_ENABLED: "true"
+        run: |
+          tarball=$(find "$RUNNER_TEMP/barry-health-bundle" -maxdepth 1 -name '*.tar.gz' -print)
+          node --import tsx cli/scripts/verify-release-health.ts "$tarball" "$RUNNER_TEMP/barry-release-health-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          node .github/ci/validate-release-health.mjs "$RUNNER_TEMP/barry-release-health-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/release-health.json" "$tarball"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: release-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/barry-release-health-${{ github.run_id }}-${{ github.run_attempt }}/release-health.json
+          if-no-files-found: error
+          retention-days: 90
+  publish:
+    if: github.repository != 'perintyler/barry-dev' && github.event.repository.private == false && (always() && needs.build.result == 'success' && startsWith(github.ref, 'refs/tags/v'))
+    needs: [build, privileged-health]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Require a successful privileged health job for public releases
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          HEALTH_RESULT: ${{ needs.privileged-health.result }}
+        run: |
+          if [[ "$RELEASE_TAG" != v0.0.0-pr57-* && "$HEALTH_RESULT" != success ]]; then
+            echo "Privileged artifact health is uncertified ($HEALTH_RESULT); public release blocked."
+            exit 1
+          fi
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-bundle
+          path: ${{ runner.temp }}/barry-release
+      - name: Verify same-run privileged receipt
+        if: ${{ !startsWith(github.ref, 'refs/tags/v0.0.0-pr57-') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --name "release-health-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --dir "$RUNNER_TEMP/barry-health"
+          tarball=$(find "$RUNNER_TEMP/barry-release" -maxdepth 1 -name '*.tar.gz' -print)
+          node .github/ci/validate-release-health.mjs "$RUNNER_TEMP/barry-health/release-health.json" "$tarball"
+      - name: Publish release with independent data and health evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --name macos-acceptance --dir "$RUNNER_TEMP/acceptance"
+          gh run download "$GITHUB_RUN_ID" --name release-report --dir "$RUNNER_TEMP/release-report"
+          gh run download "$GITHUB_RUN_ID" --name release-upgrade-matrix --dir "$RUNNER_TEMP/barry-upgrade-matrix"
+          options=()
+          if [[ "$GITHUB_REF_NAME" == v0.0.0-pr57-* ]]; then options+=(--draft); fi
+          if [[ "$GITHUB_REF_NAME" != v0.0.0-pr57-* ]]; then
+            options+=("$RUNNER_TEMP/barry-health/release-health.json")
+          fi
+          node --input-type=module -e 'import { readFileSync } from "node:fs"; const report = JSON.parse(readFileSync(process.argv[1], "utf8")); if (report.passed !== true) throw new Error("Data matrix did not pass.");' "$RUNNER_TEMP/barry-upgrade-matrix/matrix-summary.json"
+          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP"/barry-release/* "$RUNNER_TEMP/release-report/release-report.txt" "$RUNNER_TEMP/acceptance/acceptance.json" "$RUNNER_TEMP/barry-upgrade-matrix/matrix-summary.json" --verify-tag --generate-notes "${options[@]}"

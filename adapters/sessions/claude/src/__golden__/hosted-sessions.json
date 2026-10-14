@@ -8,21 +8,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -30,6 +59,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -51,7 +90,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "first message"
       },
@@ -62,21 +102,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -84,6 +153,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -106,7 +185,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "second message"
       }
@@ -236,21 +316,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -258,6 +367,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -280,7 +399,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "first message"
       },
@@ -291,21 +411,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -313,6 +462,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -336,7 +495,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "second message"
       }
@@ -466,23 +626,51 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
             "ANTHROPIC_API_KEY": "zk",
             "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -491,6 +679,16 @@
             "PATH": "/usr/bin",
             "USER": "golden",
             "Z_AI_API_KEY": "zk"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -510,7 +708,8 @@
           "systemPrompt": {
             "preset": "claude_code",
             "type": "preset"
-          }
+          },
+          "tools": []
         },
         "prompt": "first message"
       },
@@ -521,23 +720,51 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
             "ANTHROPIC_API_KEY": "zk",
             "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -546,6 +773,16 @@
             "PATH": "/usr/bin",
             "USER": "golden",
             "Z_AI_API_KEY": "zk"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -566,7 +803,8 @@
           "systemPrompt": {
             "preset": "claude_code",
             "type": "preset"
-          }
+          },
+          "tools": []
         },
         "prompt": "second message"
       }
@@ -696,23 +934,51 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
             "ANTHROPIC_API_KEY": "ollama-local",
             "ANTHROPIC_BASE_URL": "http://127.0.0.1:11434",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -720,6 +986,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -739,7 +1015,8 @@
           "systemPrompt": {
             "preset": "claude_code",
             "type": "preset"
-          }
+          },
+          "tools": []
         },
         "prompt": "first message"
       },
@@ -750,23 +1027,51 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
             "ANTHROPIC_API_KEY": "ollama-local",
             "ANTHROPIC_BASE_URL": "http://127.0.0.1:11434",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -774,6 +1079,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -794,7 +1109,8 @@
           "systemPrompt": {
             "preset": "claude_code",
             "type": "preset"
-          }
+          },
+          "tools": []
         },
         "prompt": "second message"
       }
@@ -924,23 +1240,51 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
             "ANTHROPIC_API_KEY": "ollama-local",
             "ANTHROPIC_BASE_URL": "http://10.0.0.5:11434",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -948,6 +1292,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -967,7 +1321,8 @@
           "systemPrompt": {
             "preset": "claude_code",
             "type": "preset"
-          }
+          },
+          "tools": []
         },
         "prompt": "first message"
       },
@@ -978,23 +1333,51 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
             "ANTHROPIC_API_KEY": "ollama-local",
             "ANTHROPIC_BASE_URL": "http://10.0.0.5:11434",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -1002,6 +1385,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -1022,7 +1415,8 @@
           "systemPrompt": {
             "preset": "claude_code",
             "type": "preset"
-          }
+          },
+          "tools": []
         },
         "prompt": "second message"
       }
@@ -1152,23 +1546,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
             "TaskGet",
-            "Bash",
-            "WebFetch"
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -1176,6 +1597,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 12,
@@ -1216,7 +1647,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "first message"
       },
@@ -1227,23 +1659,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
             "TaskGet",
-            "Bash",
-            "WebFetch"
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -1251,6 +1710,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 12,
@@ -1292,7 +1761,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "second message"
       }
@@ -1422,21 +1892,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -1444,6 +1943,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -1466,7 +1975,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "first message"
       },
@@ -1477,21 +1987,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -1499,6 +2038,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -1521,7 +2070,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "second message"
       }
@@ -1651,21 +2201,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -1673,6 +2252,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -1694,7 +2283,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "first message"
       },
@@ -1705,21 +2295,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -1727,6 +2346,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -1749,7 +2378,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "second message"
       }
@@ -1801,21 +2431,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -1823,6 +2482,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -1844,7 +2513,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "first message"
       }
@@ -1883,21 +2553,50 @@
           "allowDangerouslySkipPermissions": true,
           "cwd": "/repo",
           "disallowedTools": [
+            "Read",
             "Write",
             "Edit",
-            "AskUserQuestion",
+            "Glob",
+            "Grep",
+            "Bash",
             "NotebookEdit",
-            "NotebookRead",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "AskUserQuestion",
+            "Agent",
             "ToolSearch",
             "EnterWorktree",
             "ExitWorktree",
-            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "SendMessage",
             "TaskCreate",
             "TaskUpdate",
             "TaskList",
-            "TaskGet"
+            "TaskGet",
+            "TaskStop",
+            "Skill",
+            "SendUserMessage",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ListAgents",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Workflow",
+            "PowerShell",
+            "Monitor",
+            "LSP",
+            "ListMcpResourcesTool",
+            "ReadMcpResourceTool",
+            "ReadMcpResourceDirTool",
+            "WaitForMcpServers",
+            "RefreshMcpTools"
           ],
           "env": {
+            "ANTHROPIC_API_KEY": "sk-ant-golden",
+            "BARRY_SESSION_ID": "golden",
             "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
@@ -1905,6 +2604,16 @@
             "HOME": "/home/golden",
             "PATH": "/usr/bin",
             "USER": "golden"
+          },
+          "hooks": {
+            "PreToolUse": [
+              {
+                "hooks": [
+                  "<function>"
+                ],
+                "timeout": 600
+              }
+            ]
           },
           "includePartialMessages": true,
           "maxTurns": 50,
@@ -1933,7 +2642,8 @@
           },
           "thinking": {
             "type": "adaptive"
-          }
+          },
+          "tools": []
         },
         "prompt": "one shot"
       }

@@ -1,32 +1,51 @@
 {
-  "name": "@barry-rocks/claude",
-  "version": "1.0.0",
+  "name": "@barry-rocks/session-claude",
+  "version": "0.0.0",
   "description": "Claude agent adapter for Barry \u2014 the Claude Agent SDK and Anthropic-compatible backends",
   "license": "SEE LICENSE IN LICENSE.md",
-  "private": true,
   "type": "module",
-  "main": "src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./native-tools": "./src/native-tools.ts",
-    "./transcript": "./src/transcript.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./native-tools": {
+      "types": "./dist/native-tools.d.ts",
+      "import": "./dist/native-tools.js"
+    },
+    "./transcript": {
+      "types": "./dist/transcript.d.ts",
+      "import": "./dist/transcript.js"
+    }
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "node ../../scripts/build-package.mjs",
+    "prepack": "node ../../../.github/ci/prepare-package-license.mjs && node ../../scripts/build-package.mjs"
   },
   "engines": {
-    "node": ">=22"
+    "node": "26.x"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.282",
-    "@barry-rocks/sdk": "workspace:*",
-    "@modelcontextprotocol/sdk": "1.29.0"
+    "@barry-rocks/sdk": "workspace:*"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "0.117.1",
     "@types/node": "22.15.0",
     "typescript": "5.9.3",
     "vitest": "4.1.0"
-  }
+  },
+  "files": [
+    "dist",
+    "bag.yaml",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "barry": {
+    "sessionAdapter": {
+      "contractVersion": 1
+    }
+  },
+  "private": true
 }
