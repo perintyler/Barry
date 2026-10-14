@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+**/generated/**
+**/*.generated.*
+pnpm-lock.yaml
+plans/review-resolution/review
+LICENSE.md
+**/LICENSE.md

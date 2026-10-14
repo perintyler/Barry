@@ -1,0 +1,76 @@
+name: codex
+description: Native tools and traits for codex
+jobs:
+  home-retention:
+    description: Prune unpinned Codex conversations closed at least 30 days ago
+    runs:
+      using: node
+      main: dist/retention.js
+      secrets: [ BARRY_SECRET ]
+    timeout: 5m
+schedules:
+  home-retention:
+    every: 1d
+    traits: [ bash, sessions ]
+    job: home-retention
+credentials:
+  OPENAI_API_KEY: { source: vault, item: openai-api-key, field: password }
+bounds:
+  no-shell:
+    description: Disable native shell
+    bound:
+      nativeTools:
+        codex:
+          - exec_command
+          - write_stdin
+  no-file-writes:
+    description: Disable native file-writes
+    bound:
+      nativeTools:
+        codex:
+          - apply_patch
+  no-planning:
+    description: Disable native planning
+    bound:
+      nativeTools:
+        codex:
+          - update_plan
+  no-file-reads:
+    description: Disable native file-reads
+    bound:
+      nativeTools:
+        codex:
+          - view_image
+  no-network:
+    description: Disable native network
+    bound:
+      nativeTools:
+        codex:
+          - web_search
+          - web
+traits:
+  native-shell:
+    description: Grant native shell
+    access: readwrite
+    nativeTools:
+      codex:
+        - exec_command
+        - write_stdin
+  native-file-reads:
+    description: Grant native file-reads
+    access: read
+    nativeTools:
+      codex:
+        - view_image
+  native-file-writes:
+    description: Grant native file-writes
+    access: readwrite
+    nativeTools:
+      codex:
+        - apply_patch
+  native-network:
+    description: Grant native network
+    access: read
+    nativeTools:
+      codex:
+        - web_search

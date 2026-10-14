@@ -1,0 +1,37 @@
+name: actions
+description: Validated procedures — find and run Barry actions
+
+requires:
+  sessions:
+    reason: action runs attach to the session that triggered them
+
+services:
+  web:
+    description: Actions web app — search the catalog and run an action from a
+      browser or phone
+    entry: server/src/index.ts
+    working-directory: .
+    serves: http
+    health: /health
+    secrets: [BARRY_SECRET]
+
+scripts:
+  skill-to-action:
+    description: Convert legacy SKILL.md directories into actions (dry-run unless --write)
+    command: npx
+    args: [ tsx, scripts/skill-to-action.ts ]
+  sync-skills:
+    description: Sync actions from an upstream skills repo, reporting
+      new/changed/removed (dry-run unless --write)
+    command: npx
+    args: [ tsx, scripts/sync-skills.ts ]
+
+stores:
+  actions:
+    owned_by: identity
+    engine: sqlite
+    migrations: ./migrations/actions
+  infrastructure:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/actions

@@ -1,0 +1,23 @@
+name: identities
+description: Identities — who Barry is when it acts, and what each one may reach
+
+scripts:
+  audit:
+    description: Check an identity's declared secret references and bag credentials
+    command: barry
+    args: [identity, check]
+
+services:
+  identities:
+    description: Identity, trait and bound management — REST API
+    entry: server/src/index.ts
+    working-directory: .
+    serves: http
+    health: /health
+    secrets: [BARRY_SECRET]
+
+stores:
+  identities:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/identities

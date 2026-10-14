@@ -1,0 +1,72 @@
+name: workflow runtime and operator console
+on:
+  pull_request:
+    paths: &paths
+      - "sdk/**"
+      - "bags/workflows/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "workspace-entries.json"
+      - ".node-version"
+      - "vitest.base.config.ts"
+      - "vitest.config.ts"
+      - "vitest.instance-home.setup.ts"
+      - ".github/actions/setup/action.yml"
+      - ".github/ci/**"
+      - ".github/workflows/test-workflows.yml"
+  push:
+    branches: [master]
+    paths: *paths
+  workflow_dispatch:
+    inputs:
+      load_seconds:
+        description: "Disposable load duration, up to 3600 seconds; run overnight probes locally"
+        default: "60"
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: workflows-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    if: github.repository != 'perintyler/barry-dev' && github.event.repository.private == false
+    name: workflow runtime and operator console
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup
+      - name: Start isolated systemd user manager for containment acceptance
+        run: |
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
+      - name: Verify real hardened cgroup containment
+        env:
+          BARRY_TEST_HARDENED_SYSTEMD: '1'
+        run: pnpm exec vitest run sdk/src/workflows/containment/hardened-systemd.test.ts
+      - run: pnpm exec vitest run sdk/src/workflows bags/workflows/src bags/workflows/runtime/src sdk/src/auth/workflow-actor.test.ts sdk/src/nodes
+      - run: pnpm --dir sdk typecheck && pnpm --dir bags/workflows typecheck
+      - run: pnpm --dir bags/workflows exec playwright install --with-deps chromium
+      - run: pnpm --dir bags/workflows exec playwright test
+        env:
+          WORKFLOW_BROWSER_CHANNEL: chromium
+      - name: Two-process HTTP load probe
+        run: pnpm exec tsx bags/workflows/src/network-load-probe.ts 60
+      - name: Disposable declared-load probe
+        env:
+          LOAD_SECONDS: ${{ inputs.load_seconds || '60' }}
+        run: |
+          if [ "$LOAD_SECONDS" -gt 3600 ]; then
+            echo "Use the local load-probe CLI for overnight runs."
+            exit 1
+          fi
+          pnpm exec tsx bags/workflows/src/load-probe.ts "$LOAD_SECONDS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: workflow-browser-traces
+          path: bags/workflows/node_modules/.cache/workflow-browser-results

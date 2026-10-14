@@ -1,0 +1,24 @@
+import { servicesRoutes } from "./services.js";
+import { sessionsRoutes } from "./sessions.js";
+import { identitiesRoutes } from "./identities.js";
+import { changesRoutes } from "./changes.js";
+import { eventsRoutes } from "./events.js";
+import { actionsRoutes } from "./actions.js";
+import { jobsRoutes } from "./jobs.js";
+import { aguiRoutes } from "./ag-ui.js";
+import { devicesRoutes } from "./devices.js";
+import { schedulesRoutes } from "./schedules.js";
+
+export * from "./services.js";
+export * from "./route.js";
+export * from "./openapi.js";
+export * from "./sessions.js";
+export * from "./identities.js";
+export * from "./changes.js";
+export * from "./events.js";
+export * from "./actions.js";
+export * from "./jobs.js";
+export * from "./ag-ui.js";
+export * from "./devices.js";
+export * from "./schedules.js";
+export const apiRoutes = [...Object.values(servicesRoutes), ...Object.values(sessionsRoutes), ...Object.values(identitiesRoutes), ...Object.values(changesRoutes), ...Object.values(eventsRoutes), ...Object.values(actionsRoutes), ...Object.values(jobsRoutes), ...Object.values(aguiRoutes), ...Object.values(devicesRoutes), ...Object.values(schedulesRoutes)];

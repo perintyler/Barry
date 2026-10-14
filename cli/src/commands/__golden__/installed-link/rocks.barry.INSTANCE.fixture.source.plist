@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>rocks.barry.<INSTANCE>.fixture.source</string>
+<key>ProgramArguments</key><array><string><SCRATCH>/instance/app-support/current/bin/barry-service</string><string><SCRATCH>/instance/app-support</string><string>fixture.source</string></array>
+<key>WorkingDirectory</key><string><SCRATCH>/instance/app-support/current/bags/fixture</string>
+<key>RunAtLoad</key><true/>
+<key>KeepAlive</key><true/>
+<key>Disabled</key><false/>
+<key>ExitTimeOut</key><integer>40</integer>
+<key>StandardOutPath</key><string><SCRATCH>/instance/logs/fixture/fixture.source.out.log</string>
+<key>StandardErrorPath</key><string><SCRATCH>/instance/logs/fixture/fixture.source.err.log</string>
+
+<key>EnvironmentVariables</key><dict><key>HOME</key><string><SCRATCH>/home</string><key>PATH</key><string><NODE_DIR>:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string><key>BARRY_HOME</key><string><SCRATCH>/instance</string><key>BARRY_DIR</key><string><SCRATCH>/instance/app-support/current</string><key>BARRY_HOOK_DISPATCHER</key><string><SCRATCH>/instance/app-support/current/cli/bin/barry-hook.js</string><key>BARRY_NODE</key><string><NODE></string></dict>
+</dict></plist>

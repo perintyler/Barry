@@ -1,0 +1,18 @@
+import { Barry } from "@barry-rocks/sdk";
+import { z } from "zod";
+
+import { callWorkflows } from "./client.js";
+import { runRequestSchema } from "@barry-rocks/sdk/internal/workflows";
+
+const id = z.string().min(1).max(200);
+const path = (run: string) => `/api/runs/${encodeURIComponent(run)}`;
+export const tools = [
+  Barry.Tool({ namespace: "workflows", name: "start", access: "write", description: "Start a durable workflow run with explicit traits and optional run-as identity. Reuse the ID to retry the same request safely.", schema: { id, type: id, version: id, input: z.json(), timeoutMs: z.number().int().positive().optional(), job: runRequestSchema.optional() }, handler: async args => callWorkflows("/api/runs", args) }),
+  Barry.Tool({ namespace: "workflows", name: "list", access: "read", description: "List run summaries with live keyset pagination. Reuse nextCursor with the same filters.", schema: { status: z.enum(["running", "blocked", "completed", "failed", "cancelled", "timed_out"]).optional(), prefix: z.string().max(200).optional(), type: id.optional(), cursor: z.string().max(4096).optional() }, handler: async args => callWorkflows(`/api/v2/runs?${new URLSearchParams(Object.entries(args).map(([key, value]) => [key, String(value)]))}`) }),
+  Barry.Tool({ namespace: "workflows", name: "get", access: "read", description: "Inspect bounded run summaries, permissions, resources, queue reasons or authorized details.", schema: { id, section: z.enum(["summary", "permissions", "resources", "payloads", "command", "receipt", "eligibility"]).default("summary"), itemId: z.string().optional(), after: z.string().optional() }, handler: async ({ id, section, itemId, after }) => callWorkflows(`${path(id)}${section === "summary" ? "" : `/${section}`}?${new URLSearchParams({ ...(itemId ? { id: itemId } : {}), ...(after ? { after } : {}) })}`) }),
+  Barry.Tool({ namespace: "workflows", name: "history", access: "read", description: "Read a page of durable run events; pass the last sequence as after.", schema: { id, after: z.number().int().nonnegative().optional() }, handler: async ({ id, after }) => callWorkflows(`${path(id)}/history?after=${after ?? 0}`) }),
+  Barry.Tool({ namespace: "workflows", name: "signal", access: "write", description: "Deliver a deduplicated signal to a run. Keep signalId stable when retrying delivery.", schema: { id, signalId: id, name: id, payload: z.json() }, handler: async ({ id, ...body }) => callWorkflows(`${path(id)}/signal`, body) }),
+  Barry.Tool({ namespace: "workflows", name: "cancel", access: "write", description: "Cancel at the inspected revision. Preserve requestId on retries. Already running external effects may still finish.", schema: { id, requestId: id, expectedRevision: z.number().int().nonnegative() }, handler: async ({ id, ...body }) => callWorkflows(`${path(id)}/cancel`, body) }),
+  Barry.Tool({ namespace: "workflows", name: "resume", access: "write", description: "Resume a blocked run after installing its pinned artifact. Preserve requestId on retries; terminal runs cannot resume.", schema: { id, requestId: id, expectedRevision: z.number().int().nonnegative() }, handler: async ({ id, ...body }) => callWorkflows(`${path(id)}/resume`, body) }),
+  Barry.Tool({ namespace: "workflows", name: "reauthorize", access: "write", description: "Explicitly approve a new run scope after outstanding work settles. Resume does not expand permissions.", schema: { id, requestId: id, expectedRevision: z.number().int().nonnegative(), job: runRequestSchema, reason: z.string().min(1).max(1000) }, handler: async ({ id, ...body }) => callWorkflows(`${path(id)}/reauthorize`, body) }),
+];

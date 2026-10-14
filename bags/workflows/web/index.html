@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Workflows · Barry</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to runs</a>
+  <aside class="sidebar">
+    <a class="brand" href="#runs"><span class="brand-mark">b.</span> barry <span class="muted">/ work</span></a>
+    <div class="nav-label">OPERATIONS</div>
+    <nav aria-label="Main"><a href="#runs" id="runs-link">▤ <span>Runs</span></a><a href="#workers" id="workers-link">◉ <span>Workers</span></a></nav>
+    <div class="owner-label"><span class="pulse"></span> LOCAL OWNER <code id="owner">Connecting…</code><p>History stays here.<br>Activities can run anywhere.</p></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><span>WORKFLOWS <span class="separator">/</span> <span id="breadcrumb">Runs</span></span><span id="freshness" role="status">Connecting…</span></header>
+    <main>
+      <div id="notice" role="alert" hidden></div>
+      <section id="pending" aria-label="Unconfirmed operations" hidden></section>
+      <div class="page-heading"><div><div class="eyebrow">DURABLE EXECUTION</div><h1 id="title">Runs</h1><p id="subtitle">Every run, from first step to final result.</p></div><div class="actions"><button id="refresh" class="secondary">↻ Refresh</button><button id="new-run" class="primary">+ Start run</button></div></div>
+      <section id="counts" class="counts" aria-label="Run counts"></section>
+      <form id="filters" class="filters" role="search"><label class="search">Run ID prefix<input id="search" type="search" placeholder="Filter by run ID prefix…" maxlength="200"></label><label>Status<select id="status"><option value="">All statuses</option><option>running</option><option>blocked</option><option>completed</option><option>failed</option><option>cancelled</option><option>timed_out</option></select></label><label>Blocking reason<select id="filter-blocking-reason"><option value="">All reasons</option><option value="PolicyRevoked">Permission revoked</option><option value="OutcomeUnknown">Outcome unknown</option><option value="SessionBusy">Session busy</option><option value="ReconciliationRequired">Reconciliation required</option><option value="RequiredContainmentUnavailable">Containment unavailable</option></select></label><label>Workflow type<input id="workflow-type" maxlength="200" placeholder="Exact type"></label><label>Identity<input id="filter-identity" maxlength="200" placeholder="Stable identity ID"></label><label>Creator<input id="filter-creator" maxlength="200" placeholder="Exact principal"></label><label>Worker<input id="filter-worker" maxlength="200" placeholder="Exact worker ID"></label><label>Execution profile<select id="filter-profile"><option value="">All profiles</option><option value="portable">Portable trusted code</option><option value="resource-contained">Resource contained</option></select></label><label>Started from<input id="started-after" type="datetime-local" step="1"></label><label>Started before<input id="started-before" type="datetime-local" step="1"></label><button type="submit" class="secondary">Apply filters</button></form>
+      <section id="content" tabindex="-1" aria-label="Runs"><div class="empty">Loading runs…</div></section>
+    </main>
+    <footer>Owned locally. Recorded durably.<span id="footer-owner"></span></footer>
+  </div>
+  <dialog id="start-dialog"><form id="start-form"><div class="dialog-heading"><h2>Start a run</h2><button type="button" class="icon close" aria-label="Close">×</button></div><p>Choose an installed workflow and give this run a unique ID.</p><label>Workflow<select id="definition" required></select></label><label>Run ID<input id="run-id" required maxlength="200"></label><label>Assigned traits<input id="run-traits" maxlength="2000" placeholder="Comma-separated trait names"></label><label>Run as identity<input id="run-identity" maxlength="200" placeholder="Stable identity ID; required for sessions"></label><label>Session harness<input id="run-harness" maxlength="200" placeholder="Optional harness ID"></label><p>Assigned traits define the run’s capability ceiling. The portable profile has no hard total-memory cap.</p><label>Input · JSON<textarea id="run-input" rows="7" spellcheck="false" required>{"message":"Hello from Barry"}</textarea></label><div class="form-error" role="alert"></div><button type="submit" class="primary">Start run</button></form></dialog>
+  <dialog id="signal-dialog"><form id="signal-form"><div class="dialog-heading"><h2>Send a signal</h2><button type="button" class="icon close" aria-label="Close">×</button></div><p>The run can receive this signal now or when it reaches a matching wait.</p><label>Signal name<input id="signal-name" value="continue" required maxlength="200"></label><label>Delivery ID<input id="signal-id" required maxlength="200"></label><label>Payload · JSON<textarea id="signal-payload" rows="5" required spellcheck="false">null</textarea></label><div class="form-error" role="alert"></div><button type="submit" class="primary">Send signal</button></form></dialog>
+  <dialog id="cancel-dialog"><form id="cancel-form"><h2>Cancel this run?</h2><p>Its history will remain available. An activity already running may still produce external effects.</p><div class="form-error" role="alert"></div><div class="actions"><button type="button" class="secondary close">Keep running</button><button type="submit" class="danger">Cancel run</button></div></form></dialog>
+  <dialog id="reauthorize-dialog"><form id="reauthorize-form"><h2>Approve a new execution scope</h2><p>Outstanding work must settle first. This changes the approved trait selection; it does not resume the run or change its identity.</p><label>New assigned traits<input id="reauthorize-traits" maxlength="2000"></label><label>Reason<textarea id="reauthorize-reason" required maxlength="1000" rows="3"></textarea></label><div class="form-error" role="alert"></div><div class="actions"><button type="button" class="secondary close">Keep current scope</button><button type="submit" class="primary">Approve scope</button></div></form></dialog>
+</body>
+</html>

@@ -1,0 +1,53 @@
+name: list-action-runs
+description: >-
+  List recorded action runs, newest first: the ones still open by default,
+  closed ones with active: false, or all of them with active: null. Use to
+  check on runs, find a run id, or spot runs that were started and never
+  closed.
+# Barry runs this itself: a listing needs no agent, and an agent asked to
+# produce one had no tool that could.
+context: none
+run: list-action-runs.ts
+input_schema:
+  type: object
+  properties:
+    active:
+      title: Active
+      type: [boolean, "null"]
+      default: true
+      description: >-
+        true for runs still open — started and never completed or cancelled.
+        A run whose session has ended is closed as failed before listing, so
+        an open run is still working or has no session to vouch for it. false
+        for closed runs. null for both.
+    action:
+      title: Action
+      type: string
+      description: >-
+        Only runs of this action, by the name its runs are recorded under:
+        bag:name, or name@session-id for an ad-hoc action.
+    limit:
+      title: Limit
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 25
+output_schema:
+  type: object
+  properties:
+    count: { type: integer }
+    runs:
+      type: array
+      items:
+        type: object
+        properties:
+          run_id: { type: string }
+          action: { type: string }
+          status: { type: string, enum: [started, complete, failed, cancelled] }
+          session_id: { type: [string, "null"] }
+          started_at: { type: string }
+          completed_at: { type: [string, "null"] }
+          summary: { type: [string, "null"] }
+        required: [run_id, action, status, session_id, started_at, completed_at, summary]
+  required: [count, runs]
+timeout: 1m

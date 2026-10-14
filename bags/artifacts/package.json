@@ -1,0 +1,97 @@
+{
+  "name": "@barry-rocks/artifacts-bag",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    },
+    "./contracts": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    },
+    "./tools": {
+      "types": "./dist/tools.d.ts",
+      "import": "./dist/tools.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js"
+    },
+    "./local/catalog": {
+      "types": "./dist/local/catalog.d.ts",
+      "import": "./dist/local/catalog.js"
+    },
+    "./blobs": {
+      "types": "./dist/blobs.d.ts",
+      "import": "./dist/blobs.js"
+    },
+    "./local/blobs": {
+      "types": "./dist/local/blobs.d.ts",
+      "import": "./dist/local/blobs.js"
+    },
+    "./create": {
+      "types": "./dist/create.d.ts",
+      "import": "./dist/create.js"
+    },
+    "./local/maintenance": {
+      "types": "./dist/local/maintenance.d.ts",
+      "import": "./dist/local/maintenance.js"
+    },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./local/store": {
+      "types": "./dist/local/store.d.ts",
+      "import": "./dist/local/store.js"
+    },
+    "./migrations": {
+      "types": "./dist/generated/artifacts-migrations.d.ts",
+      "import": "./dist/generated/artifacts-migrations.js"
+    },
+    "./local/restore": {
+      "types": "./dist/local/restore.d.ts",
+      "import": "./dist/local/restore.js"
+    },
+    "./http": {
+      "types": "./dist/http/index.d.ts",
+      "import": "./dist/http/index.js"
+    },
+    "./rendering": {
+      "types": "./dist/rendering/index.d.ts",
+      "import": "./dist/rendering/index.js"
+    },
+    "./handoff": {
+      "types": "./dist/handoff.d.ts",
+      "import": "./dist/handoff.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bag.yaml",
+    "README.md",
+    "migrations",
+    "LICENSE.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepack": "node ../../.github/ci/prepare-package-license.mjs && pnpm build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "4.4.3",
+    "better-sqlite3": "12.10.0",
+    "@barry-rocks/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0",
+    "@types/better-sqlite3": "7.6.13"
+  },
+  "license": "SEE LICENSE IN LICENSE.md"
+}

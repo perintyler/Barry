@@ -1,0 +1,74 @@
+name: opencode
+description: Native tools and traits for opencode
+credentials:
+  ANTHROPIC_API_KEY: { source: vault, item: anthropic-api-key, field: password }
+  OPENAI_API_KEY: { source: vault, item: openai-api-key, field: password }
+  OPENROUTER_API_KEY: { source: vault, item: openrouter-api-key, field: password }
+  Z_AI_API_KEY: { source: vault, item: z-ai-api-key, field: password }
+bounds:
+  no-shell:
+    description: Disable native shell
+    bound:
+      nativeTools:
+        opencode:
+          - shell
+  no-file-reads:
+    description: Disable native file-reads
+    bound:
+      nativeTools:
+        opencode:
+          - read
+          - grep
+          - glob
+  no-file-writes:
+    description: Disable native file-writes
+    bound:
+      nativeTools:
+        opencode:
+          - edit
+          - write
+          - patch
+  no-tasks:
+    description: Disable native tasks
+    bound:
+      nativeTools:
+        opencode:
+          - subagent
+  no-network:
+    description: Disable native network
+    bound:
+      nativeTools:
+        opencode:
+          - webfetch
+          - websearch
+          - execute
+traits:
+  native-shell:
+    description: Grant native shell
+    access: readwrite
+    nativeTools:
+      opencode:
+        - shell
+  native-file-reads:
+    description: Grant native file-reads
+    access: read
+    nativeTools:
+      opencode:
+        - read
+        - grep
+        - glob
+  native-file-writes:
+    description: Grant native file-writes
+    access: readwrite
+    nativeTools:
+      opencode:
+        - edit
+        - write
+        - patch
+  native-network:
+    description: Grant native network
+    access: read
+    nativeTools:
+      opencode:
+        - webfetch
+        - websearch

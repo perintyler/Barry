@@ -1,0 +1,71 @@
+name: pi
+description: Native tools and traits for pi
+credentials:
+  ANTHROPIC_API_KEY: { source: vault, item: anthropic-api-key, field: password }
+bounds:
+  no-shell:
+    description: Disable native shell
+    bound:
+      nativeTools:
+        pi:
+          - bash
+          - powershell
+  no-file-reads:
+    description: Disable native file-reads
+    bound:
+      nativeTools:
+        pi:
+          - read
+          - grep
+          - find
+          - ls
+  no-file-writes:
+    description: Disable native file-writes
+    bound:
+      nativeTools:
+        pi:
+          - edit
+          - write
+  no-scripts:
+    description: Disable native scripts
+    bound:
+      nativeTools:
+        pi:
+          - codemode
+  no-discovery:
+    description: Disable native discovery
+    bound:
+      nativeTools:
+        pi:
+          - tool_search
+  no-network:
+    description: Disable native network
+    bound:
+      nativeTools:
+        pi:
+          - bash
+          - powershell
+traits:
+  native-shell:
+    description: Grant native shell
+    access: readwrite
+    nativeTools:
+      pi:
+        - bash
+        - powershell
+  native-file-reads:
+    description: Grant native file-reads
+    access: read
+    nativeTools:
+      pi:
+        - read
+        - grep
+        - find
+        - ls
+  native-file-writes:
+    description: Grant native file-writes
+    access: readwrite
+    nativeTools:
+      pi:
+        - edit
+        - write

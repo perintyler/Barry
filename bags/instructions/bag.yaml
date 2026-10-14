@@ -1,0 +1,8 @@
+name: instructions
+description: Reference instructions — search what standing guidance exists and
+  read it in full
+
+tools:
+  - search_instructions: deferred
+  - get_instructions: deferred
+  - publish_instruction: deferred

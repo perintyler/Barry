@@ -1,0 +1,57 @@
+{
+  "name": "@barry-rocks/sessions-bag",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./bookkeeping": "./src/bookkeeping.ts",
+    "./client": "./src/client/index.ts",
+    "./client/terminal-relay": "./src/client/terminal-relay.ts",
+    "./capture": "./src/capture/index.ts",
+    "./delivery": "./src/delivery/index.ts",
+    "./execution-authorization": "./src/execution-authorization.ts",
+    "./engines": "./src/engines/index.ts",
+    "./lifecycle": "./src/lifecycle/index.ts",
+    "./process-liveness": "./src/process-liveness.ts",
+    "./settings": "./src/settings.ts",
+    "./store/messages": "./src/store/messages.ts",
+    "./store/models-registry": "./src/store/models-registry.ts",
+    "./store/turn-continuations": "./src/store/turn-continuations.ts",
+    "./store/processes": "./src/store/processes.ts",
+    "./store/process-cleanup-recovery": "./src/store/process-cleanup-recovery.ts",
+    "./store/session-helpers": "./src/store/session-helpers.ts",
+    "./store/session-records": "./src/store/session-records.ts",
+    "./store/sessions-contract": "./src/store/sessions-contract.ts",
+    "./store/sessions-db": "./src/store/sessions-db.ts",
+    "./store/sessions-json-plugin": "./src/store/sessions-json-plugin.ts",
+    "./store/sessions-sqlite-reads": "./src/store/sessions-sqlite-reads.ts",
+    "./store/sessions-sqlite-writes": "./src/store/sessions-sqlite-writes.ts",
+    "./store/sessions-store-api": "./src/store/sessions-store-api.ts",
+    "./store/sessions-types": "./src/store/sessions-types.ts",
+    "./store/workflow-turns": "./src/store/workflow-turns.ts",
+    "./attachments": "./src/attachments/attachments-store.ts",
+    "./renderer/acp-server": "./src/renderer/acp-server.ts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "1.5.0",
+    "@barry-rocks/sdk": "workspace:*",
+    "better-sqlite3": "12.10.0",
+    "dotenv": "16.4.5",
+    "kysely": "0.28.17",
+    "yaml": "2.8.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "license": "SEE LICENSE IN ../../LICENSE.md"
+}

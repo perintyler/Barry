@@ -1,0 +1,207 @@
+name: sessions
+description: Barry session lifecycle — inspect, create and update coding sessions
+
+bags:
+  - tracker
+  - events
+  - actions
+
+hooks:
+  agent:
+    - event: session-start
+      run: hooks/session-tracker/index.ts
+      args: [ start ]
+    - event: session-end
+      run: hooks/session-tracker/index.ts
+      args: [ end ]
+    - event: stop
+      run: hooks/session-tracker/index.ts
+      args: [ assistant-message ]
+    - event: user-prompt
+      run: hooks/session-tracker/index.ts
+      args: [ user-message ]
+    - event: post-tool
+      run: hooks/change-tracker/index.ts
+      cursor-events: [ postToolUse, afterFileEdit ]
+
+dependencies:
+  ollama:
+    reason: bookkeeping job runs local inference (qwen3:4b) to summarize sessions
+    optional: true
+    install:
+      macos: brew install --cask ollama
+
+scripts:
+  backfill-books:
+    description: "One-off: write bookkeeping entries for the whole session archive"
+    command: npx
+    args: [ tsx, api/src/jobs/bookkeeping.ts ]
+    env:
+      - BARRY_BOOKKEEPING_BACKFILL=1
+
+jobs:
+  watch-session:
+    description: "Check in on watched sessions and record an event when one changes"
+    runs:
+      using: node
+      main: scripts/watch-tick.ts
+      secrets: [ BARRY_SECRET ]
+      env:
+        - BARRY_WATCH_SCAN_LIMIT=5000
+    timeout: 2m
+
+  bookkeeping:
+    description: "Keep per-session books — append activity entries, name unnamed sessions"
+    runs:
+      using: node
+      main: api/src/jobs/bookkeeping.ts
+      secrets: [ BARRY_SECRET ]
+      env:
+        - BARRY_BOOKKEEPING_MODEL=
+        - BARRY_BOOKKEEPING_OLLAMA_URL=
+        - BARRY_BOOKKEEPING_MAX_SESSIONS=8
+    timeout: 30m
+
+  disk-retention:
+    description: "Prune dead session worktrees"
+    runs:
+      using: node
+      main: src/disk-retention.ts
+      secrets: [ BARRY_SECRET ]
+    timeout: 30m
+
+  reaper:
+    description: "Close sessions whose OS process is gone"
+    runs:
+      using: node
+      main: src/reaper.ts
+      secrets: [ BARRY_SECRET ]
+      env:
+        - BARRY_REAPER_DEAD_FRACTION=0.5
+        - BARRY_REAPER_MIN_REAP=5
+        - BARRY_REAPER_MAX_SESSIONS=100
+        - BARRY_REAPER_DRY_RUN=0
+        - BARRY_REAPER_NO_ADOPT=0
+        - BARRY_REAPER_ADOPT_ORPHANS=0
+    timeout: 10m
+
+  summarize-sessions:
+    description: "Write a wrap-up summary for each session that fell quiet after new messages"
+    runs:
+      using: node
+      main: api/src/jobs/summarize-sessions.ts
+      secrets: [ BARRY_SECRET ]
+      env:
+        - ENABLE_LOCAL_LOGS=false
+        - BARRY_SUMMARY_QUIET_MIN=15
+        - BARRY_SUMMARY_MAX_SESSIONS=4
+        - BARRY_SUMMARY_ON=auto
+    output_schema:
+      type: object
+      properties:
+        summarized: { type: integer }
+        considered: { type: integer }
+      required: [ summarized ]
+    timeout: 15m
+
+  summarize-session:
+    description: "Ask a local model for one session's wrap-up, on any worker that has one"
+    version: 1
+    bounds: [ no-files ]
+    runs:
+      using: node
+      main: jobs/summarize-session.mjs
+    requires:
+      labels: { model: local }
+    input_schema:
+      type: object
+      properties:
+        prompt: { type: string, maxLength: 200000 }
+        model: { type: string }
+      required: [ prompt ]
+    output_schema:
+      type: object
+      properties:
+        text: { type: string }
+      required: [ text ]
+    timeout: 5m
+
+  app-watchdog:
+    description: "Restart the BarrySessions app when its main thread is wedged"
+    runs:
+      using: node
+      main: src/app-watchdog.ts
+      env:
+        - BARRY_APP_WATCHDOG_CPU=70
+        - BARRY_APP_WATCHDOG_STRIKES=3
+        - BARRY_APP_WATCHDOG_INTERVAL=5
+        - BARRY_APP_WATCHDOG_MAX_RESTARTS=2
+        - BARRY_APP_WATCHDOG_DRY_RUN=0
+    timeout: 2m
+
+schedules:
+  watch-session:
+    every: 1m
+    traits: [ bash, sessions ]
+    job: watch-session
+
+  bookkeeping:
+    every: 15m
+    traits: [ bash, sessions ]
+    job: bookkeeping
+
+  summarize-sessions:
+    every: 15m
+    traits: [ bash, sessions ]
+    job: summarize-sessions
+
+  disk-retention:
+    cron: "30 4 * * *"
+    traits: [ bash, sessions ]
+    job: disk-retention
+
+  reaper:
+    every: 5m
+    traits: [ bash, sessions ]
+    enabled: true
+    job: reaper
+
+  app-watchdog:
+    every: 1m
+    traits: [ bash, sessions ]
+    enabled: true
+    job: app-watchdog
+
+services:
+  api:
+    description: Session API — lifecycle, transcripts, git and actions over HTTP
+    entry: api/src/index.ts
+    working-directory: api
+    serves: http
+    health: /health
+    secrets: [BARRY_SECRET]
+    env:
+      - BARRY_NAMESPACE_SPLIT=false
+      - ENABLE_LOCAL_LOGS=true
+      - NODE_ENV=production
+      - MAILGUN_MAX_AGE_SECONDS=300
+      - BARRY_TRUST_PROXY=false
+      - BARRY_MAX_RESIDENT_SESSIONS=10
+      - BARRY_MAX_CONCURRENT_TURNS=10
+      - BARRY_MAX_QUEUED_TURNS=100
+
+stores:
+  sessions:
+    owned_by: identity
+    engine: sqlite
+    migrations: ./migrations/sessions
+  catalog:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/sessions
+
+bounds:
+  no-files:
+    description: Touch no files at all; what a job needs to run on another machine
+    bound:
+      files: { allowOnly: [] }

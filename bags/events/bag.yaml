@@ -1,0 +1,16 @@
+name: events
+description: Progress events recorded during long-running tasks
+
+requires:
+  sessions:
+    reason: an event can name the session it came from, and the feed links back to it
+
+stores:
+  events:
+    owned_by: identity
+    engine: sqlite
+    migrations: ./migrations/events
+  unscoped:
+    owned_by: node
+    engine: sqlite
+    migrations: ./migrations/events

@@ -1,0 +1,44 @@
+{
+  "name": "@barry-rocks/completion-anthropic",
+  "version": "0.0.0",
+  "description": "Barry anthropic completion adapter",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./messages": {
+      "types": "./dist/messages.d.ts",
+      "import": "./dist/messages.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build-package.mjs",
+    "prepack": "node ../../../.github/ci/prepare-package-license.mjs && node ../../scripts/build-package.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": "26.x"
+  },
+  "dependencies": {
+    "@barry-rocks/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3"
+  },
+  "barry": {
+    "modelProvider": {
+      "contractVersion": 1,
+      "factoryExport": "COMPLETION_FACTORIES"
+    }
+  },
+  "private": true
+}

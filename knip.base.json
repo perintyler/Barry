@@ -1,0 +1,261 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "eslint.config.js",
+    ".github/ci/**/*.{js,mjs,ts}"
+  ],
+  "include": [
+    "files",
+    "dependencies",
+    "devDependencies",
+    "unlisted",
+    "unresolved"
+  ],
+  "ignoreUnresolved": [
+    "^/spark\\.js$",
+    "^/usr/bin/plutil$",
+    "^/bin/launchctl$"
+  ],
+  "ignoreFiles": [
+    "**/public/vendor/**",
+    "**/*.generated.*",
+    "**/generated/**",
+    "sdk/src/hooks/hook-dispatch.ts",
+    "bags/actions/scripts/sync-skills.ts",
+    "bags/sessions/api/src/jobs/bookkeeping.ts",
+    "**/*.test-d.ts",
+    "sdk/src/services/home.d.mts",
+    "run-*.ts",
+    "**/fixtures/**",
+    "plans/**"
+  ],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "eslint.config.js",
+        ".github/ci/**/*.{js,mjs,ts}",
+        "adapters/sessions/qa/run.ts",
+        "adapters/sessions/qa/model.ts",
+        "adapters/sessions/qa/probe.cjs"
+      ]
+    },
+    "adapters/sessions/antigravity": {
+      "entry": [
+        "src/index.ts",
+        "src/bin.ts",
+        "src/launch.ts",
+        "src/modes.ts",
+        "src/event-mapping.ts",
+        "src/workspace.ts"
+      ]
+    },
+    "adapters/sessions/claude": {
+      "entry": [
+        "src/index.ts",
+        "src/provider.ts",
+        "src/cli-provider.ts",
+        "src/endpoint.ts",
+        "src/anthropic-compatible/*.ts",
+        "src/sandbox/*.ts"
+      ]
+    },
+    "adapters/sessions/codex": {
+      "entry": [
+        "src/index.ts",
+        "src/agent.ts",
+        "src/provider.ts",
+        "src/sdk-provider.ts",
+        "src/runtime.ts"
+      ]
+    },
+    "adapters/sessions/cursor": {
+      "entry": [
+        "src/index.ts",
+        "src/provider.ts",
+        "src/permissions.ts",
+        "src/bin.ts",
+        "src/event-mapping.ts",
+        "src/workspace.ts",
+        "src/hooks.ts"
+      ]
+    },
+    "adapters/sessions/opencode": {
+      "entry": [
+        "src/index.ts",
+        "src/provider.ts",
+        "src/mcp-config.ts"
+      ]
+    },
+    "adapters/sessions/pi": {
+      "entry": [
+        "src/index.ts",
+        "src/native-tools.ts",
+        "src/transcript.ts"
+      ]
+    },
+    "bags/*": {
+      "entry": [
+        "tools.ts",
+        "skills/**/scripts/**/*.{js,mjs,ts}",
+        "actions/**/*.{js,mjs,ts}",
+        "src/*.{js,mjs,ts}",
+        "web/**/*.{js,mjs}",
+        "hooks/*/index.ts",
+        "server/src/index.ts",
+        "deploy/*/index.ts",
+        "deploy/*/entry.ts"
+      ],
+      "ignoreDependencies": [
+        "tsx"
+      ]
+    },
+    "bags/workflows": {
+      "entry": [
+        "web/waiting-reasons.d.ts",
+        "tools.ts"
+      ]
+    },
+    "bags/sessions": {
+      "entry": [
+        "tools.ts",
+        "actions/**/*.{js,mjs,ts}",
+        "jobs/*.{js,mjs}",
+        "scripts/*.ts",
+        "src/*.{js,mjs,ts}",
+        "hooks/*/index.ts"
+      ],
+      "ignoreDependencies": [
+        "dotenv",
+        "express",
+        "@types/express",
+        "tsx"
+      ]
+    },
+    "adapters/embeddings/ollama": {},
+    "bags/sessions/extensions/search": {
+      "entry": [
+        "tools.ts",
+        "src/*.{js,mjs,ts}"
+      ],
+      "ignoreDependencies": [
+        "tsx"
+      ]
+    },
+    "bags/filesystem/*": {
+      "entry": [
+        "tools.ts",
+        "skills/**/scripts/**/*.{js,mjs,ts}",
+        "src/*.{js,mjs,ts}",
+        "hooks/*/index.ts",
+        "server/src/index.ts"
+      ],
+      "ignoreDependencies": [
+        "tsx"
+      ]
+    },
+    "bags/sessions/api": {
+      "entry": [
+        "src/index.ts",
+        "src/jobs/*.ts",
+        "qa/**/*.{js,cjs,mjs,ts}",
+        "scripts/**/*.{ts,mts}"
+      ]
+    },
+    "sdk": {
+      "entry": [
+        "src/index.ts",
+        "scripts/**/*.{js,mjs,mts,ts}",
+        "src/workflows/executor-child.ts",
+        "src/workflows/recovery-child.ts"
+      ],
+      "ignoreDependencies": [
+        "better-sqlite3"
+      ]
+    },
+    "cli": {
+      "entry": [
+        "bin/*.js",
+        "src/index.ts",
+        "src/identity.ts",
+        "src/automation.ts",
+        "src/services/entry.ts",
+        "src/hooks/hook-dispatch.ts",
+        "scripts/**/*.{js,mjs,mts,ts}"
+      ]
+    },
+    "adapters/completions/anthropic": {
+      "entry": [
+        "src/index.ts"
+      ]
+    },
+    "adapters/completions/ollama": {
+      "entry": [
+        "src/index.ts"
+      ]
+    },
+    "adapters/completions/llamacpp": {
+      "entry": [
+        "src/index.ts",
+        "src/supervisor.ts",
+        "src/bridge.ts"
+      ]
+    },
+    "adapters/decisions/systemone": {
+      "entry": [
+        "src/index.ts"
+      ]
+    },
+    "adapters/decisions/typesafe": {
+      "entry": [
+        "src/index.ts"
+      ]
+    },
+    "adapters/decisions/von": {
+      "entry": [
+        "src/index.ts"
+      ]
+    },
+    "adapters/decisions/anthropic": {
+      "entry": [
+        "src/index.ts"
+      ]
+    },
+    "adapters/decisions/ollama": {
+      "entry": [
+        "src/index.ts"
+      ]
+    },
+    "bags/artifacts": {
+      "entry": [
+        "src/types.ts",
+        "src/core.ts",
+        "src/local/catalog.ts",
+        "src/blobs.ts",
+        "src/local/blobs.ts",
+        "src/create.ts",
+        "src/local/maintenance.ts",
+        "src/index.ts",
+        "src/local/store.ts",
+        "src/local/restore.ts",
+        "src/local/restore-adapter.ts",
+        "src/tools.ts",
+        "src/web.ts",
+        "src/http/index.ts",
+        "src/rendering/index.js"
+      ],
+      "ignoreDependencies": [
+        "jsdom"
+      ]
+    },
+    "bags/schedules/scheduler": {
+      "entry": [
+        "src/service.ts"
+      ]
+    },
+    "bags/workflows/runtime": {
+      "entry": [
+        "src/service.ts"
+      ]
+    }
+  }
+}

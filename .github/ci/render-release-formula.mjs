@@ -1,0 +1,17 @@
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join, basename } from "node:path";
+import { createHash } from "node:crypto";
+const [directory, tag, repository, ...extra] = process.argv.slice(2);
+if (!directory || !tag || !repository || extra.length) throw new Error("usage: render-release-formula.mjs <release-directory> <tag> <publishing-owner/repository>");
+const parts = repository.split("/");
+if (parts.length !== 2 || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(parts[0]) || parts[0].includes("--") || !/^[A-Za-z0-9_.-]{1,100}$/.test(parts[1]) || [".", ".."].includes(parts[1])) throw new Error("invalid publishing repository: expected GitHub owner/repository");
+const files = readdirSync(directory).filter(file => file.endsWith(".tar.gz"));
+if (files.length !== 1) throw new Error("expected one release tarball");
+const filename = files[0];
+const digest = createHash("sha256").update(readFileSync(join(directory, filename))).digest("hex");
+const version = /^barry-(.+)-darwin-arm64\.tar\.gz$/.exec(basename(filename))?.[1];
+if (!version || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error("unexpected tarball name or version");
+if (tag !== `v${version}`) throw new Error(`release tag ${tag} does not match tarball version ${version}`);
+const template = readFileSync(new URL("../../cli/scripts/homebrew/barry.rb", import.meta.url), "utf8");
+const url = `https://github.com/${repository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(filename)}`;
+writeFileSync(join(directory, "barry.rb"), template.replaceAll("@@URL@@", url).replaceAll("@@SHA256@@", digest).replaceAll("@@VERSION@@", version));

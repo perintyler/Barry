@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "generated": "<TIME>",
+  "resources": {
+    "fixture.source": {
+      "bag": "fixture",
+      "name": "source",
+      "kind": "service"
+    },
+    "fixture.built": {
+      "bag": "fixture",
+      "name": "built",
+      "kind": "service"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+#!/bin/sh
+path=$0
+case "$path" in
+  */*) ;;
+  *) path=$(command -v "$path") ;;
+esac
+while :; do
+  directory=$(dirname "$path")
+  root=$(cd "$directory/.." 2>/dev/null && pwd)
+  if [ -n "$root" ] && [ -f "$root/identity.yaml" ]; then
+    break
+  fi
+  if [ ! -L "$path" ]; then
+    echo "barry: cannot find a root with identity.yaml" >&2
+    exit 1
+  fi
+  target=$(readlink "$path") || exit 1
+  case "$target" in
+    /*) path=$target ;;
+    *) path=$directory/$target ;;
+  esac
+done
+export BARRY_DIR="$root"
+export BARRY_BUILTIN_DIR="$root/bags"
+if [ -x "$root/runtime/bin/node" ]; then
+  node=$root/runtime/bin/node
+elif [ -n "${BARRY_NODE:-}" ]; then
+  node=$BARRY_NODE
+else
+  echo "barry: no shipped runtime or BARRY_NODE; link a checkout with barry setup --link" >&2
+  exit 1
+fi
+exec "$node" "$root/cli/bin/barry-hook.js" "$@"
