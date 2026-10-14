@@ -29,13 +29,13 @@
   },
   "dependencies": {
     "@barry-rocks/sdk": "workspace:*",
-    "ws": "8.21.0"
+    "ws": "8.22.0"
   },
   "devDependencies": {
-    "@types/node": "22.15.0",
-    "@types/ws": "8.18.1",
-    "typescript": "5.9.3",
-    "vitest": "4.1.0"
+    "@types/node": "26.6.5",
+    "@types/ws": "8.18.2",
+    "typescript": "7.0.2",
+    "vitest": "5.0.4"
   },
   "files": [
     "dist",

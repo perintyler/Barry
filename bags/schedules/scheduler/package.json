@@ -15,11 +15,11 @@
     "@barry-rocks/schedules-bag": "workspace:*",
     "@barry-rocks/actions-bag": "workspace:*",
     "@barry-rocks/identities-bag": "workspace:*",
-    "better-sqlite3": "12.10.0"
+    "better-sqlite3": "13.0.3"
   },
   "devDependencies": {
-    "tsx": "4.23.12",
-    "vitest": "4.1.0"
+    "tsx": "4.23.15",
+    "vitest": "5.0.4"
   },
   "license": "SEE LICENSE IN ../../../LICENSE.md"
 }

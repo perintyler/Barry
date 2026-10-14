@@ -7,7 +7,7 @@
   "dependencies": {
     "@barry-rocks/sdk": "workspace:*",
     "@barry-rocks/sessions-bag": "workspace:*",
-    "express": "4.22.1"
+    "express": "5.3.0"
   },
   "exports": {
     "./app": "./src/app.ts"

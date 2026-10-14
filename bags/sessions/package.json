@@ -34,20 +34,20 @@
     "./renderer/acp-server": "./src/renderer/acp-server.ts"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "1.5.0",
+    "@agentclientprotocol/sdk": "1.8.0",
     "@barry-rocks/sdk": "workspace:*",
-    "better-sqlite3": "12.10.0",
-    "dotenv": "16.4.5",
-    "kysely": "0.28.17",
-    "yaml": "2.8.3",
-    "zod": "4.4.3"
+    "better-sqlite3": "13.0.3",
+    "dotenv": "18.0.7",
+    "kysely": "0.29.6",
+    "yaml": "2.9.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "7.6.13",
-    "@types/node": "22.15.0",
-    "tsx": "4.23.12",
-    "typescript": "5.9.3",
-    "vitest": "4.1.0"
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "26.6.5",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.4"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -14,13 +14,13 @@
   },
   "dependencies": {
     "@barry-rocks/sdk": "workspace:*",
-    "better-sqlite3": "12.10.0",
-    "zod": "4.4.3"
+    "better-sqlite3": "13.0.3",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "7.6.13",
-    "@types/node": "22.15.0",
-    "typescript": "5.9.3",
-    "vitest": "4.1.0"
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2",
+    "vitest": "5.0.4"
   }
 }
