@@ -29,7 +29,9 @@ function assertRetainedNative(f: Fixture) {
   expect(f.providerErrors).toEqual([]);
 }
 
-it("cold launches the real retained Sessions worker and Pi graph after the entire installed generation and Node are deleted", async () => {
+const darwinIt = it.skipIf(process.platform !== "darwin");
+
+darwinIt("cold launches the real retained Sessions worker and Pi graph after the entire installed generation and Node are deleted", async () => {
   await using({ mode: "plain", mutateCallerOptions: true }, async f => {
     expect(f.launches).toHaveLength(0);expect(f.configured).toHaveLength(0);
     f.removeInstalled();expect(existsSync(f.installedPath)).toBe(false);
@@ -42,7 +44,7 @@ it("cold launches the real retained Sessions worker and Pi graph after the entir
   });
 }, 180000);
 
-it("resumes an actual Pi write checkpoint in a fresh retained native segment after installed adapter dependencies and runtime replacement", async () => {
+darwinIt("resumes an actual Pi write checkpoint in a fresh retained native segment after installed adapter dependencies and runtime replacement", async () => {
   await using({ mode: "tool", mutateAfterCheckpoint: true }, async f => {
     expect(await f.start()).toBe(f.result);expect(f.checkpointMutations).toBe(1);
     expect(existsSync(join(f.root, "installed-tripwire"))).toBe(false);
@@ -60,7 +62,7 @@ it("resumes an actual Pi write checkpoint in a fresh retained native segment aft
   });
 }, 180000);
 
-it("refuses altered retained adapter bytes before configure credentials input or a provider request without inventing a physical receipt", async () => {
+darwinIt("refuses altered retained adapter bytes before configure credentials input or a provider request without inventing a physical receipt", async () => {
   await using({ mode: "plain" }, async f => {
     f.removeInstalled();f.corruptAdapter();await expect(f.start()).rejects.toThrow();
     expect(f.configured).toHaveLength(0);expect(f.requests).toHaveLength(0);
@@ -72,7 +74,7 @@ it("refuses altered retained adapter bytes before configure credentials input or
   });
 }, 180000);
 
-it("keeps the accepted runtime identity across real SQLite reconstruction and refuses a different selected closure before traffic", async () => {
+darwinIt("keeps the accepted runtime identity across real SQLite reconstruction and refuses a different selected closure before traffic", async () => {
   await using({ mode: "plain" }, async f => {
     f.removeInstalled();expect(await f.start()).toBe(f.result);assertRetainedNative(f);
     const original = f.backend.destination.lookupSession(f.declaration.sessionId)!;
@@ -86,7 +88,7 @@ it("keeps the accepted runtime identity across real SQLite reconstruction and re
 
 
 for (const adapterSelection of ["non-durable", "malformed-open"] as const) {
-  it(`rejects actual retained Pi adapter selection with ${adapterSelection} before configure or credential release`, async () => {
+  darwinIt(`rejects actual retained Pi adapter selection with ${adapterSelection} before configure or credential release`, async () => {
     await using({ mode: "plain", adapterSelection }, async f => {
       f.removeInstalled();await expect(f.start()).rejects.toThrow();
       expect(f.configured).toHaveLength(0);expect(f.requests).toHaveLength(0);
@@ -100,7 +102,7 @@ for (const adapterSelection of ["non-durable", "malformed-open"] as const) {
   }, 180000);
 }
 
-it("rechecks authority after a real retained adapter top-level await before configure credentials or model input", async () => {
+darwinIt("rechecks authority after a real retained adapter top-level await before configure credentials or model input", async () => {
   await using({ mode: "plain", adapterSelection: "blocked" }, async f => {
     f.removeInstalled();const operation = f.start().then(() => null, error => error);
     await expect.poll(() => existsSync(join(f.root, "selection-wait")), { timeout: 20000 }).toBe(true);

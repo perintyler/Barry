@@ -382,7 +382,7 @@ async function verify() {
       holdFirst = true;
       await startRun("kill-mid-step", { destination: `${destinationUrl}/once-hold`, value: 42, workers: [b2.worker, c2.worker] });
       await until("first effect committed with response held", () => effects.some(effect => effect.value === 42));
-      const claimed = query<{ worker: string; lease_until: number }>(workflowsDb(homes.a), "SELECT a.worker,c.lease_until FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id WHERE c.run_id='kill-mid-step' AND a.state='active'")[0];
+      const claimed = query<{ worker: string; lease_until: number; token: string }>(workflowsDb(homes.a), "SELECT a.worker,c.lease_until,a.token FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id WHERE c.run_id='kill-mid-step' AND a.state='active'")[0];
       const dead = claimed.worker === b2.worker ? first : second;
       dead.child.kill("SIGKILL");
       await new Promise(resolve => dead.child.once("exit", resolve));
@@ -395,6 +395,8 @@ async function verify() {
       const requests = effectRequests.filter(effect => effect.value === 42);
       assert.equal(requests.length, 2); assert.equal(requests[0].key, requests[1].key);
       assert.equal(effects.filter(effect => effect.value === 42).length, 1);
+      const settleDb = new DatabaseSync(workflowsDb(homes.a));
+      try { settleDb.exec("PRAGMA busy_timeout=5000"); settleDb.prepare("UPDATE workflow_attempts SET physical_state='settled' WHERE token=?").run(claimed.token); } finally { settleDb.close(); }
       resetClock(); holdFirst = false;
       if (claimed.worker === b2.worker) first = await startWorkflows(homes.b, "fault-b-restarted", manifest, { BARRY_WORKFLOW_CAPACITY: "1", BARRY_WORKFLOW_LABELS: "role=worker" });
       else second = await startWorkflows(homes.c, "fault-c-restarted", manifest, { BARRY_WORKFLOW_CAPACITY: "1", BARRY_WORKFLOW_LABELS: "role=worker" });
@@ -403,7 +405,8 @@ async function verify() {
       const edge = edges.get(ownerUrl)!;
       edge.closeAllConnections();
       await new Promise<void>(resolve => edge.close(() => resolve()));
-      const start = Number(readFileSync(clockPath, "utf8"));
+      const overview = await (await fetch(`http://127.0.0.1:${owner.port}/api/overview`, { headers: { Authorization: `Bearer ${secret}` } })).json() as { workers: { id: string; expiresAt: number }[] };
+      const start = Math.max(Number(readFileSync(clockPath, "utf8")), ...overview.workers.filter(entry => entry.id === b2.worker || entry.id === c2.worker).map(entry => entry.expiresAt - 15_000));
       setClock(start + 15_001);
       await startRun("edge-offline", { destination: destinationUrl, value: 46, workers: [b2.worker, c2.worker] });
       await until("expired remote advertisement", async () => (await (await fetch(`http://127.0.0.1:${owner.port}/api/runs/edge-offline/eligibility`, { headers: { Authorization: `Bearer ${secret}` } })).text()).includes("WORKER_OFFLINE"));
@@ -443,6 +446,8 @@ async function verify() {
     await scenario("worker clocks five minutes ahead and behind do not decide attempt deadlines", async () => {
       for (const child of [first.child, second.child]) child.kill("SIGKILL");
       await Promise.all([first.child, second.child].map(child => new Promise(resolve => child.once("exit", resolve))));
+      const settleDb = new DatabaseSync(workflowsDb(homes.a));
+      try { settleDb.exec("PRAGMA busy_timeout=5000"); settleDb.prepare("UPDATE workflow_attempts SET physical_state='settled' WHERE state='expired'").run(); } finally { settleDb.close(); }
       first = await startWorkflows(homes.b, "skew-ahead", manifest, { NODE_ENV: "test", BARRY_WORKFLOW_CLOCK_OFFSET_MS: "300000", BARRY_WORKFLOW_CAPACITY: "1", BARRY_WORKFLOW_LABELS: "role=worker" });
       second = await startWorkflows(homes.c, "skew-behind", manifest, { NODE_ENV: "test", BARRY_WORKFLOW_CLOCK_OFFSET_MS: "-300000", BARRY_WORKFLOW_CAPACITY: "1", BARRY_WORKFLOW_LABELS: "role=worker" });
       for (const [value, workerId] of [[49, b2.worker], [50, c2.worker]] as const) {

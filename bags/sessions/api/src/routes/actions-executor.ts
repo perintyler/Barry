@@ -290,7 +290,7 @@ export async function executeDetached(
     const identityFreeSchedule = Boolean((body.executionContext || body.bags || body.bounds) && !body.identity && !body.identity_id && (body.trigger === "schedule" || body.trigger === "job" || body.schedule_id));
     if (identityFreeSchedule && Boolean(body.executionContext && !body.identity && !body.identity_id) && (!action.agent?.agent || !action.agent.model)) return reply(400, { error: "explicit_agent_required", message: "Identity-free agent schedules require an explicit agent and model in the action." });
     let selection: { barry: IdentityRecord | null };
-    if (Boolean(body.executionContext && !body.identity && !body.identity_id)) {
+    if (body.executionContext && !body.identity && !body.identity_id) {
       selection = { barry: null };
     } else {
       try {
@@ -323,7 +323,7 @@ export async function executeDetached(
       fallbackAgent: providerFieldId(FALLBACK_HARNESS),
     });
     let identityEnv: IdentityEnv | null = null;
-    if (!Boolean(body.executionContext && !body.identity && !body.identity_id)) {
+    if (!(body.executionContext && !body.identity && !body.identity_id)) {
       try {
         identityEnv = await resolveEnvForBarry(identityId);
       } catch (error) {

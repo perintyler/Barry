@@ -443,18 +443,18 @@ describe("VaultClient refuses to send credentials to an untrusted URL", () => {
 it("lists once across concurrent secret reads and invalidates after a write", async () => {
   let lists = 0;
   const auth = { accountId: "fixture", token: "fixture-token", encKey: Buffer.alloc(32, 1), macKey: Buffer.alloc(32, 2) };
-  let client: VaultClient;
+  const cryptoClient = new VaultClient("http://127.0.0.1:1");
   const server = startServer((req, res) => {
     res.setHeader("content-type", "application/json");
     if (req.url === "/api/items" && req.method === "GET") {
       lists++;
-      return res.end(JSON.stringify({ items: [{ id: "one", name: client.encryptField("KEY", auth), type: 1 }] }));
+      return res.end(JSON.stringify({ items: [{ id: "one", name: cryptoClient.encryptField("KEY", auth), type: 1 }] }));
     }
-    if (req.method === "GET") return res.end(JSON.stringify({ id: "one", name: client.encryptField("KEY", auth), password: client.encryptField("value", auth), username: null, uri: null, notes: null }));
+    if (req.method === "GET") return res.end(JSON.stringify({ id: "one", name: cryptoClient.encryptField("KEY", auth), password: cryptoClient.encryptField("value", auth), username: null, uri: null, notes: null }));
     res.end("{}");
   });
   const port = await listenOnPort(server);
-  client = new VaultClient(`http://127.0.0.1:${port}`);
+  const client = new VaultClient(`http://127.0.0.1:${port}`);
   try {
     expect((await client.getItemById(auth, "one")).password).toBe("value");
     expect(lists).toBe(0);

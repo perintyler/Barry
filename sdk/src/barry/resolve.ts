@@ -4,7 +4,7 @@ import { applyBoundGuards, filterToolObjects, narrowJsonSchemaWithInputs } from 
 import { bagBinding } from "../bags/store.js";
 import type { StoreBinding } from "../stores/bindings.js";
 import type { StoreContext } from "../stores/context.js";
-import type { Action, Bag, Identity, Instruction, Skill, Tool } from "./types.js";
+import type { Action, Bag, Instruction, Skill, Tool } from "./types.js";
 
 export type BoundEntryLike =
   | Bound
@@ -669,7 +669,7 @@ export function resolveBarryTools<T extends BagToolInput = Tool>(
       );
       current = bindIdentityStoreContext(guarded, identity, resolvedBound);
     }
-    return current as unknown as (Tool & T);
+    return current as Tool & T;
   });
 }
 

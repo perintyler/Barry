@@ -340,7 +340,7 @@ export async function configImportCommand(options: { dir?: string } = {}): Promi
           rawExported.name === defaultIdentityName ? legacyCustomBounds : [];
         let exported = rawExported;
         if (needsLegacyIdentityMigration(rawExported, customForThisIdentity.length)) {
-          const doc: Record<string, unknown> = { ...(rawExported as unknown as Record<string, unknown>) };
+          const doc: Record<string, unknown> = Object.fromEntries(Object.entries(rawExported));
           if (typeof doc.bound === "string" || typeof doc.scope === "string") {
             const boundName = (doc.bound ?? doc.scope) as string;
             doc.bounds = Array.isArray(doc.bounds) ? [...doc.bounds, boundName] : [boundName];
@@ -352,7 +352,7 @@ export async function configImportCommand(options: { dir?: string } = {}): Promi
             traitsTableMap: legacyTraitsMap,
             customBoundsToAdd: customForThisIdentity,
           });
-          exported = migrated.updated as unknown as ExportedBarry;
+          exported = { ...rawExported, ...migrated.updated };
         }
 
         const { update, fullBounds, skipped, warned } = await importedUpdate(exported);

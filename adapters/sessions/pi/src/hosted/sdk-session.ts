@@ -13,7 +13,6 @@ import type {
 import { declaredKeyFor, requireDeclaredKey } from "../credentials.js";
 import { piEventOf, sumUsage } from "../event-mapping.js";
 import {
-  type InferenceFaultV1,
   classifyInferenceFault,
   redactSensitiveText,
 } from "../inference-fault.js";
@@ -29,10 +28,8 @@ import {
 } from "../inference-bounds.js";
 import {
   UsageAccountingCoordinator,
-  type UsageReconcilePortV1,
 } from "../inference-reconciliation.js";
 import {
-  type UsageSinkV1,
   buildUsageEvidence,
 } from "../inference-usage.js";
 import { toPiMcpConfigs } from "../mcp-config.js";

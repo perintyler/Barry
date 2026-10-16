@@ -18,7 +18,6 @@ import { subscribeTopic, unsubscribeTopic, clearTopics } from "./bus-registry.js
 import { attachAgUiSubscription } from "./ag-ui-websocket.js";
 import { SocketPublications } from "./socket-publications.js";
 import { sessionMcpServers } from "./mcp-config.js";
-import { getDescribeAdapter } from "./agent-runtime.js";
 import { Barry, requestCaller, type Bound, type Caller, type Tool } from "@barry-rocks/sdk";
 
 const log = createLogger("barry-ws");
@@ -160,7 +159,13 @@ export function createWebSocketServer(server: Server, options: { authorizationIn
     let authorizationTimer: NodeJS.Timeout | undefined;
     let pending: Promise<void> | undefined;
     let invalidated = false;
-    let publications: SocketPublications | undefined;
+    const native = ws as WebSocket & { _socket?: { cork():void; uncork():void } };
+    const publications = new SocketPublications({
+      get readyState(){return ws.readyState;}, get bufferedAmount(){return ws.bufferedAmount;},
+      send:(data,callback)=>ws.send(data,callback), close:(code,reason)=>ws.close(code,reason),
+      on:(event,listener)=>ws.on(event,listener),
+      cork:()=>native._socket?.cork(), uncork:()=>native._socket?.uncork(),
+    }, authorization);
     let unsubscribeAuthorization: (() => void) | undefined;
     const dispose = () => {
       if (authorizationTimer) clearTimeout(authorizationTimer);
@@ -180,7 +185,7 @@ export function createWebSocketServer(server: Server, options: { authorizationIn
       await revalidate();
       if (ws.readyState === 1) { authorizationTimer = setTimeout(() => { void poll(); }, authorizationIntervalMs); authorizationTimer.unref(); }
     };
-    unsubscribeAuthorization = access.subscribe(() => { invalidated = true; publications?.invalidateAuthorization(); void revalidate(); });
+    unsubscribeAuthorization = access.subscribe(() => { invalidated = true; publications.invalidateAuthorization(); void revalidate(); });
     authorizationTimer = setTimeout(() => { void poll(); }, authorizationIntervalMs); authorizationTimer.unref();
     ws.once("close", dispose);
     if (new URL(request?.url ?? "/", "http://localhost").pathname === "/api/v2/ws") {
@@ -191,13 +196,6 @@ export function createWebSocketServer(server: Server, options: { authorizationIn
       return;
     }
     log.info("websocket.connect", { clients: wss.clients.size });
-    const native = ws as WebSocket & { _socket?: { cork():void; uncork():void } };
-    publications = new SocketPublications({
-      get readyState(){return ws.readyState;}, get bufferedAmount(){return ws.bufferedAmount;},
-      send:(data,callback)=>ws.send(data,callback), close:(code,reason)=>ws.close(code,reason),
-      on:(event,listener)=>ws.on(event,listener),
-      cork:()=>native._socket?.cork(), uncork:()=>native._socket?.uncork(),
-    }, authorization);
     const publisher = publications;
 
     sessionRuntime.broadcastSessionList(publisher);

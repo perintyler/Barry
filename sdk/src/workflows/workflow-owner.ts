@@ -1802,9 +1802,10 @@ export class WorkflowOwner {
     identifier.parse(worker);
     encode(advertisement);
     const at = this.clock();
-    for (const [id, entry] of this.workers) if (entry.expiresAt <= at) this.workers.delete(id);
-    if (!this.workers.has(worker) && this.workers.size >= 100)
-      throw new Error("worker limit reached");
+    if (!this.workers.has(worker) && this.workers.size >= 100) {
+      for (const [id, entry] of this.workers) if (entry.expiresAt <= at) this.workers.delete(id);
+      if (this.workers.size >= 100) throw new Error("worker limit reached");
+    }
     this.workers.set(worker, {
       ...advertisementSchema.parse(advertisement),
       expiresAt: at + 15_000,

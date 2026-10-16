@@ -19,7 +19,7 @@
  * The rule the shape encodes: every JSON column crossing this boundary must be
  * parsed by hand. Saying so in the type is what makes the compiler enforce it.
  */
-import type { ColumnType, Generated } from "kysely";
+import type { ColumnType } from "kysely";
 
 /** Written as ISO text; supplied by the caller or defaulted by the column. */
 type TimestampText = ColumnType<string, string | undefined, string>;

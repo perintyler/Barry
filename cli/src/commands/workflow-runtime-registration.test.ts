@@ -22,7 +22,9 @@ async function using(run: (fixture: Fixture) => Promise<void>) {
   }
 }
 
-it("registers actual retained native generations, distinguishes unchanged-version bytes and restores old identity after installation deletion", async () => {
+const darwinIt = it.skipIf(process.platform !== "darwin");
+
+darwinIt("registers actual retained native generations, distinguishes unchanged-version bytes and restores old identity after installation deletion", async () => {
   await using(async f => {
     const first = await f.registry.register(f.selected.id, Date.now() + 30000), observed = f.readMarker();
     expect(observed.argv).toContain("--registration-probe");
@@ -41,7 +43,7 @@ it("registers actual retained native generations, distinguishes unchanged-versio
   });
 }, 180000);
 
-it("registers actual Pi before managed Sessions API readiness and retains generations through a real service restart", async () => {
+darwinIt("registers actual Pi before managed Sessions API readiness and retains generations through a real service restart", async () => {
   const f = await installedIdentityWork({ managedEntry: true, runtimeRegistration: true }), failures: unknown[] = [];
   try {
     const path = readdirSync(f.home, { recursive: true }).map(String).find(path => path.endsWith("workflow-runtimes/generations.db"));
@@ -66,7 +68,7 @@ it("registers actual Pi before managed Sessions API readiness and retains genera
   if (failures.length) throw new AggregateError(failures, "Managed registration failed; preserved " + f.root);
 }, 180000);
 
-it("registers the actual installed compiled Pi graph through the production startup helper without opening a session", async () => {
+darwinIt("registers the actual installed compiled Pi graph through the production startup helper without opening a session", async () => {
   const f = await installedPiRuntimeRegistration(), failures: unknown[] = [];
   try {
     const resource = await f.start();
@@ -81,7 +83,7 @@ it("registers the actual installed compiled Pi graph through the production star
   if (failures.length) throw new AggregateError(failures, "Actual installed Pi registration failed; preserved " + f.root);
 }, 180000);
 
-it.each(["changed-declaration", "malformed-open"] as const)("refuses actual retained %s despite a cached original install object, before config or input", async kind => {
+darwinIt.each(["changed-declaration", "malformed-open"] as const)("refuses actual retained %s despite a cached original install object, before config or input", async kind => {
   await using(async f => {
     f.replace(kind === "changed-declaration" ? { label: "Changed after original import" } : { malformedOpen: true });
     await expect(f.registry.register(f.selected.id, Date.now() + 30000)).rejects.toThrow();

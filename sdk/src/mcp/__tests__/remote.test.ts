@@ -13,7 +13,7 @@ function createMockClient(
   resources: Array<{ uri: string; name: string }>,
   contents: Record<string, string>,
   tools?: Array<{ name: string; annotations?: { readOnlyHint?: boolean } }>,
-) {
+): Client {
   return {
     listResources: async () => ({ resources }),
     readResource: async ({ uri }: { uri: string }) => {
@@ -22,7 +22,7 @@ function createMockClient(
       return { contents: [{ uri, text, mimeType: "application/json" }] };
     },
     ...(tools ? { listTools: async () => ({ tools }) } : {}),
-  } as unknown as Client;
+  } as never;
 }
 
 afterEach(() => {

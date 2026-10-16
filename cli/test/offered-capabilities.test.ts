@@ -122,7 +122,7 @@ describe("buildSessionPickerCandidates", () => {
       apps: [],
       schedules: [],
       jobs: [],
-    }) as unknown as Bag;
+    }) as never;
 
   it("excludes required identity bags, marks optional identity bags, and filters bag bounds by Step 1 active bags", () => {
     const candidates = buildSessionPickerCandidates({

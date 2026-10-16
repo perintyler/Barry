@@ -5,7 +5,7 @@ export * from "./adapters.js";
 export * from "./retired.js";
 import { parseVaultName, mergeSecretBindings, type SecretBindings } from "./secrets.js";
 export { parseVaultName, bindSecretReferences, mergeSecretBindings, SecretReferenceSchema, type SecretReference, type SecretBinding, type SecretBindings } from "./secrets.js";
-import { mergeBagConfiguration, requiredIdentityBags, optionalIdentityBags, type IdentityBagConfiguration } from "./bags.js";
+import { mergeBagConfiguration, type IdentityBagConfiguration } from "./bags.js";
 export { parseIdentityBags, serializeIdentityBags, mergeBagConfiguration, requiredIdentityBags, optionalIdentityBags, type IdentityBags, type IdentityBagConfiguration, type ToolVisibility } from "./bags.js";
 import { mergeBounds, type Bound } from "../bounds/index.js";
 /** An identity is reusable configuration, never a process or inheritance chain. */

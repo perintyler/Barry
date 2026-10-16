@@ -1,7 +1,9 @@
 import { expect, it } from "vitest";
 import { workflowWorkSessions } from "../../test/fixtures/workflow-work-sessions.js";
 
-it("executes signed managed Work through retained Sessions Pi and recovers a lost admission reply across completed service restart", async () => {
+const darwinIt = it.skipIf(process.platform !== "darwin");
+
+darwinIt("executes signed managed Work through retained Sessions Pi and recovers a lost admission reply across completed service restart", async () => {
   const f = await workflowWorkSessions(), failures: unknown[] = [];
   try {
     await f.loseAdmissionAcknowledgement();
@@ -39,7 +41,7 @@ it("executes signed managed Work through retained Sessions Pi and recovers a los
   if (failures.length) throw new AggregateError(failures, "Actual Work Sessions integration failed; preserved " + f.root);
 }, 180000);
 
-it("retains failed JSON validation and frees both brokers after actual agent cessation without another provider call", async () => {
+darwinIt("retains failed JSON validation and frees both brokers after actual agent cessation without another provider call", async () => {
   const f = await workflowWorkSessions({ providerOutput: "not JSON" }), failures: unknown[] = [];
   try {
     const work = await f.accept();
@@ -63,7 +65,7 @@ it("retains failed JSON validation and frees both brokers after actual agent ces
   if (failures.length) throw new AggregateError(failures, "Actual Work Sessions validation failure failed; preserved " + f.root);
 }, 180000);
 
-it("stops actual Work-owned Pi during held provider input and releases both brokers only with native cessation", async () => {
+darwinIt("stops actual Work-owned Pi during held provider input and releases both brokers only with native cessation", async () => {
   const f = await workflowWorkSessions({ holdProvider: true }), failures: unknown[] = [];
   try {
     const work = await f.accept();

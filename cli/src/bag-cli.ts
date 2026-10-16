@@ -23,7 +23,6 @@ import { withStoreContext } from "@barry-rocks/sdk/internal/stores";
 import { join } from "path";
 import { homedir, constants } from "os";
 import { spawn } from "child_process";
-import { readFileSync, existsSync } from "fs";
 import type { Command } from "commander";
 import { checkBagRequirements, loadBagSync } from "@barry-rocks/sdk/internal/bags";
 

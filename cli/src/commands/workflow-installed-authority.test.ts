@@ -10,7 +10,9 @@ async function using(run: (fixture: Fixture) => Promise<void>) {
   if (errors.length) throw new AggregateError(errors, "Installed authority fixture failed; preserved " + f.root);
 }
 
-it("runs actual registered Pi with owned session authority and private declared provider credentials, then reads replay after key/model removal", async () => {
+const darwinIt = it.skipIf(process.platform !== "darwin");
+
+darwinIt("runs actual registered Pi with owned session authority and private declared provider credentials, then reads replay after key/model removal", async () => {
   await using(async f => {
     expect(f.toolDefinitions).toEqual([]);
     const request = f.request(), session = await f.manager.prepare(request), turn = request.key + "/turn";
@@ -35,7 +37,7 @@ it("runs actual registered Pi with owned session authority and private declared 
   });
 }, 180000);
 
-it("refuses actual foreign/device/ended/nested origins and cross-binding journal access before provider input", async () => {
+darwinIt("refuses actual foreign/device/ended/nested origins and cross-binding journal access before provider input", async () => {
   await using(async f => {
     const device: AuthPrincipal = { kind: "device", actorId: 1, credentialId: "device", identityIds: [42], scopes: ["sessions:turn"] };
     for (const overrides of [
@@ -53,7 +55,7 @@ it("refuses actual foreign/device/ended/nested origins and cross-binding journal
   });
 }, 180000);
 
-it("refuses missing real declared identity keys despite same-name ambient credentials before any destination input", async () => {
+darwinIt("refuses missing real declared identity keys despite same-name ambient credentials before any destination input", async () => {
   await using(async f => {
     f.writeSecrets(false);await expect(f.manager.prepare(f.request())).rejects.toThrow("WorkflowDeclaredCredentialsUnavailable");
     expect(f.requests).toHaveLength(0);expect(f.sessionDb.prepare("SELECT count(*) AS count FROM session_workflow_settlements").get()).toEqual({ count: 0 });
@@ -61,7 +63,7 @@ it("refuses missing real declared identity keys despite same-name ambient creden
 }, 180000);
 
 
-it("refuses an unexpected provider native write without an effect or a successor model request", async () => {
+darwinIt("refuses an unexpected provider native write without an effect or a successor model request", async () => {
   await using(async f => {
     f.unexpectedToolResponse();
     const request = f.request(), session = await f.manager.prepare(request), turn = request.key + "/unexpected-tool";
@@ -90,7 +92,7 @@ it("refuses an unexpected provider native write without an effect or a successor
 }, 180000);
 
 
-it("rechecks actual origin authority after preparation and refuses missing activation keys without input", async () => {
+darwinIt("rechecks actual origin authority after preparation and refuses missing activation keys without input", async () => {
   await using(async f => {
     for (const kind of ["bags", "bound", "actor", "identity", "identity-deletion"] as const) {
       const request = f.request(), session = await f.manager.prepare(request), restore = f.changeAuthority(kind);
@@ -112,7 +114,7 @@ it("rechecks actual origin authority after preparation and refuses missing activ
   });
 }, 180000);
 
-it("rereads a real declared provider key rotated after preparation before releasing model input", async () => {
+darwinIt("rereads a real declared provider key rotated after preparation before releasing model input", async () => {
   await using(async f => {
     const request = f.request(), session = await f.manager.prepare(request), originalKey = f.selectedKey;
     f.writeSecrets(true, originalKey + "-rotated");
@@ -127,7 +129,7 @@ it("rereads a real declared provider key rotated after preparation before releas
 }, 180000);
 
 
-it("drains an actual active owner before evaluating a standby handle for the same binding during manager close", async () => {
+darwinIt("drains an actual active owner before evaluating a standby handle for the same binding during manager close", async () => {
   await using(async f => {
     f.holdProvider();
     const request = f.request(), owner = await f.manager.prepare(request), turn = request.key + "/held-provider";

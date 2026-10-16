@@ -3,7 +3,9 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 import { workflowWorkSessions } from "../../test/fixtures/workflow-work-sessions.js";
 
-it("refuses missing selected provider credentials without ambient fallback, new input or retained physical occupancy", async () => {
+const darwinIt = it.skipIf(process.platform !== "darwin");
+
+darwinIt("refuses missing selected provider credentials without ambient fallback, new input or retained physical occupancy", async () => {
   const f = await workflowWorkSessions(), failures: unknown[] = [];
   try {
     // Managed services still have wrong-installation/ambient credential canaries.
