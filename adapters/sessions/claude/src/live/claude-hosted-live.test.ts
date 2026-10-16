@@ -10,7 +10,13 @@ import { CLAUDE_LIVE } from "../modes.js";
 const recording = vi.hoisted(() => ({ phase: "", lines: [] as Array<{ phase: string; dir: "in" | "out"; m: unknown }> }));
 vi.mock("../anthropic-compatible/event-mapping.js", async original => {
   const mapping = await original<typeof import("../anthropic-compatible/event-mapping.js")>();
-  return { ...mapping, processSDKMessage(message: Parameters<typeof mapping.processSDKMessage>[0]) {
+  return { ...mapping, createSDKMessageMapper() {
+    const map = mapping.createSDKMessageMapper();
+    return (message: Parameters<typeof map>[0]) => {
+      recording.lines.push({ phase: recording.phase, dir: "out", m: message });
+      return map(message);
+    };
+  }, processSDKMessage(message: Parameters<typeof mapping.processSDKMessage>[0]) {
     recording.lines.push({ phase: recording.phase, dir: "out", m: message });
     return mapping.processSDKMessage(message);
   } };
@@ -99,7 +105,7 @@ it.skipIf(process.env.BARRY_CLAUDE_LIVE !== "1")("proves hosted on the bundled b
     expect(probe.mcpCalls.some(c => c.method === "tools/call" && c.tool === "probe_refused")).toBe(false);
     expect(probe.modelRequests.every(r => r.credential === "expected")).toBe(true);
     expect(warnings).not.toContain("CLAUDE_SDK_CAN_USE_TOOL_SHADOWED");
-    for (const phase of new Set(recording.lines.map(l => l.phase))) expect(recording.lines.filter(l => l.phase === phase && (l.m as { type?: string }).type === "result")).toHaveLength(1);
+    for (const phase of new Set(recording.lines.map(l => l.phase).filter(Boolean))) expect(recording.lines.filter(l => l.phase === phase && (l.m as { type?: string }).type === "result"), `phase ${phase}`).toHaveLength(1);
     if (process.env.BARRY_CLAUDE_RECORD === "1") {
       const raw = recording.lines.map(line => JSON.stringify(line)).join("\n") + "\n";
       expect(raw).not.toContain(key);

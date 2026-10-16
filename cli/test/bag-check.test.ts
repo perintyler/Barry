@@ -126,14 +126,21 @@ describe("static checks", () => {
     expect(outputIncludes(lines, /\/bin\/bash/)).toBe(false);
   });
 
-  it("fails a trait granting a skill no skills dir has", async () => {
+  it("passes valid { allow, deny } bounds and fails unrecognized bound keys", async () => {
     write({
       "bag.yaml":
-        "name: x\ndescription: d\ntraits:\n  helper:\n    description: d\n    access: read\n    skills: [nope]\n",
+        "name: x\ndescription: d\nbounds:\n  readonly:\n    description: read-only\n    tools:\n      deny: [\"x:write\"]\n",
+    });
+    await run();
+    expect(process.exitCode).toBe(0);
+
+    write({
+      "bag.yaml":
+        "name: x\ndescription: d\nbounds:\n  broken:\n    unknownDimension: true\n",
     });
     const lines = await run();
     expect(process.exitCode).toBe(1);
-    expect(outputIncludes(lines, /grants skill "nope"/)).toBe(true);
+    expect(outputIncludes(lines, /Unrecognized key/)).toBe(true);
   });
 
   it("fails an unloadable skill directory", async () => {

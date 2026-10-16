@@ -143,6 +143,10 @@
     "name": "@barry-rocks/scheduler-service",
     "class": "internal-package"
   },
+  "bags/session-vector-search": {
+    "name": "@barry-rocks/session-vector-search-bag",
+    "class": "bag"
+  },
   "bags/sessions": {
     "name": "@barry-rocks/sessions-bag",
     "class": "bag"
@@ -150,10 +154,6 @@
   "bags/sessions/api": {
     "name": "@barry-rocks/sessions-api",
     "class": "internal-package"
-  },
-  "bags/sessions/extensions/search": {
-    "name": "@barry-rocks/search-bag",
-    "class": "bag"
   },
   "bags/telemetry": {
     "name": "@barry-rocks/telemetry-bag",

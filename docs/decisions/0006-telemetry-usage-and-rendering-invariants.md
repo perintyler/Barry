@@ -1651,7 +1651,7 @@ Original rationale:
 
 ## Note 238
 
-Source: [bags/telemetry/web/catalog.js](../../bags/telemetry/web/catalog.js)
+Source: [bags/telemetry/web/metrics.js](../../bags/telemetry/web/metrics.js)
 
 Expose metric discovery and label dimensions without requiring a preselected series.
 
@@ -1673,7 +1673,7 @@ Original rationale:
 
 ## Note 239
 
-Source: [bags/telemetry/web/catalog.js](../../bags/telemetry/web/catalog.js)
+Source: [bags/telemetry/web/metrics.js](../../bags/telemetry/web/metrics.js)
 
 Persist catalog state in the URL so reloads and shared links keep their filters.
 
@@ -1691,7 +1691,7 @@ Original rationale:
 
 ## Note 240
 
-Source: [bags/telemetry/web/catalog.js](../../bags/telemetry/web/catalog.js)
+Source: [bags/telemetry/web/metrics.js](../../bags/telemetry/web/metrics.js)
 
 Show every distinct label set so metric dimensions are discoverable.
 

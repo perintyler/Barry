@@ -6,7 +6,7 @@ import { basename, dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { barryAppSupportDir, barryArchivesDir, barryStoresDir } from "@barry-rocks/sdk/services";
-import { CLI_SCOPE } from "../scope.js";
+import { CLI_TARGET } from "../target.js";
 import { storeMigrateCommand } from "./store-migrate.js";
 import { originalVerdicts, storeRemoveOriginalsCommand } from "./store-remove-originals.js";
 
@@ -68,7 +68,7 @@ beforeEach(() => {
   file(join(barryStoresDir(), "active.json"), JSON.stringify({ id: "gen" }));
 });
 afterEach(() => {
-  delete (globalThis as Record<symbol, unknown>)[CLI_SCOPE];
+  delete (globalThis as Record<symbol, unknown>)[CLI_TARGET];
   for (const [stream, descriptor] of [[process.stdin, inputTTY], [process.stdout, outputTTY]] as const) {
     if (descriptor) Object.defineProperty(stream, "isTTY", descriptor); else Reflect.deleteProperty(stream, "isTTY");
   }
@@ -156,9 +156,9 @@ it("requires an explicit report when multiple reports exist", async () => {
   await expect(storeRemoveOriginalsCommand({ yes: true })).rejects.toThrow(second); unchanged(saved);
   await storeRemoveOriginalsCommand({ report: reportPath, yes: true }); expect(existsSync(path)).toBe(false);
 });
-it("refuses identity scope before reading reports", async () => {
+it("refuses identity target before reading reports", async () => {
   const path = original("logs"), saved = snapshot([path]);
-  (globalThis as Record<symbol, unknown>)[CLI_SCOPE] = { kind: "identity", name: "bux", binding: { id: 1, home: null } };
+  (globalThis as Record<symbol, unknown>)[CLI_TARGET] = { kind: "identity", name: "bux", binding: { id: 1, home: null } };
   await expect(storeRemoveOriginalsCommand({ report: "/missing", yes: true })).rejects.toThrow("from the instance"); unchanged(saved);
   expect(() => originalVerdicts(reportPath)).toThrow("from the instance");
 });

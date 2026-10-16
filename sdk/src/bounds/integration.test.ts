@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { filterTools } from "./filter-tools.js";
 import { isFileDenied, isBashDenied } from "./bound-guards.js";
-import type { AgentTrait, Bound, ToolMeta } from "./types.js";
+import type { Bound, ToolDescriptor } from "./types.js";
 
 /**
  * Integration test: filterTools selects which tools exist,
@@ -10,20 +10,7 @@ import type { AgentTrait, Bound, ToolMeta } from "./types.js";
  * This mirrors what the MCP server does at session init.
  */
 
-const traits: Record<string, AgentTrait> = {
-  core: {
-    name: "core",
-    namespaces: ["system", "filesystem", "git"],
-    access: "readwrite",
-  },
-  debug: {
-    name: "debug",
-    namespaces: ["sentry"],
-    access: "read",
-  },
-};
-
-const tools: ToolMeta[] = [
+const tools: ToolDescriptor[] = [
   { namespace: "filesystem", toolName: "read", access: "read" },
   { namespace: "filesystem", toolName: "write", access: "write" },
   { namespace: "filesystem", toolName: "edit", access: "write" },
@@ -38,17 +25,18 @@ const tools: ToolMeta[] = [
 describe("full pipeline: filterTools + bound guards", () => {
   it("filters tools then guards enforce file deny", () => {
     const bound: Bound = {
+      tools: { deny: ["sentry:write"] },
       files: { deny: ["*.env", "secrets/**"] },
     };
 
     // Step 1: filterTools determines which tools exist
-    const allowed = filterTools(tools, ["core", "debug"], traits, bound);
+    const allowed = filterTools(tools, bound);
 
     // Structured core tools remain; file restrictions implicitly withhold Bash.
     expect(allowed).toContain("read");
     expect(allowed).toContain("write");
     expect(allowed).not.toContain("Bash");
-    // Debug read-only — write excluded
+    // Sentry read-only — write excluded
     expect(allowed).toContain("search_issues");
     expect(allowed).not.toContain("create_issue");
 
@@ -63,7 +51,7 @@ describe("full pipeline: filterTools + bound guards", () => {
       bash: { deny: ["rm -rf", "curl"] },
     };
 
-    const allowed = filterTools(tools, ["core"], traits, bound);
+    const allowed = filterTools(tools, bound);
     expect(allowed).toContain("Bash");
 
     expect(isBashDenied("rm -rf /tmp/data", bound.bash!.deny!)).toBe("rm -rf");
@@ -73,11 +61,11 @@ describe("full pipeline: filterTools + bound guards", () => {
 
   it("combines tool filtering with bound guards", () => {
     const bound: Bound = {
-      deniedTools: ["push"],
+      tools: { deny: ["*:push"] },
       files: { deny: ["*.env"] },
     };
 
-    const allowed = filterTools(tools, ["core"], traits, bound);
+    const allowed = filterTools(tools, bound);
 
     expect(allowed).not.toContain("push");
     expect(allowed).toContain("status");
@@ -89,9 +77,9 @@ describe("full pipeline: filterTools + bound guards", () => {
   });
 
   it("no bound means no guards needed", () => {
-    const allowed = filterTools(tools, ["core", "debug"], traits);
+    const allowed = filterTools(tools, { tools: { deny: ["sentry:write"] } });
     // core: read, write, edit, glob, Bash, status, push (7)
-    // debug: search_issues (1, read-only)
+    // sentry: search_issues (1, read-only)
     expect(allowed.length).toBe(8);
   });
 
@@ -101,7 +89,9 @@ describe("full pipeline: filterTools + bound guards", () => {
       bash: { deny: [] },
     };
 
-    expect(isFileDenied("/anything", bound.files!.deny!)).toBeNull();
-    expect(isBashDenied("anything", bound.bash!.deny!)).toBeNull();
+    const allowed = filterTools(tools, bound);
+    expect(allowed.length).toBe(9);
+    expect(isFileDenied("/app/.env", bound.files!.deny!)).toBeNull();
+    expect(isBashDenied("rm -rf /", bound.bash!.deny!)).toBeNull();
   });
 });

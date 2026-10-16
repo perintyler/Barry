@@ -10,7 +10,7 @@ import {
   renderActionInstruction,
   selectSlashCommandActions,
 } from "../action-commands.js";
-import type { ActionMeta } from "../action-catalog.js";
+import type { ActionMeta } from "../action-registry.js";
 
 function action(name: string, overrides: Partial<ActionMeta> = {}): ActionMeta {
   return {

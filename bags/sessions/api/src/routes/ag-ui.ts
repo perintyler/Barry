@@ -15,7 +15,7 @@ import { getDescribeAdapter } from "../agent-runtime.js";
 import { getSessionRecord } from "../db.js";
 import { sessionRuntime } from "../session-runtime.js";
 import { prepareTurnSession, turnExecutionService } from "../turn-execution.js";
-import { sessionReviewPolicy } from "../review-policy.js";
+import { sessionReviewRules } from "../review-rules.js";
 const streams = new Set<Response>();
 export function closeAgUiStreams(): void { for (const response of streams) response.end(); streams.clear(); }
 
@@ -133,7 +133,7 @@ export function createAgUiRouter(options: { authorizationIntervalMs?: number } =
     }
     try {
       const session = await getSessionRecord(req.params.id);
-      if (!session) { res.status(404).json({ title: "Session not found", status: 404 }); return; }
+      if (!session) { res.status(404).json({ title: "Session not found" , status: 404 }); return; }
       res.locals.barrySession = session; next();
     } catch (error) { next(error); }
   });
@@ -183,7 +183,7 @@ export function createAgUiRouter(options: { authorizationIntervalMs?: number } =
         const hosted = getDescribeAdapter()?.(active.provider)?.modes.hosted;
         const continuation = hosted?.approvalContinuation;
         if ((continuation !== "durable" && continuation !== "live") || hosted?.guarantees.gating !== "per-call") throw new ExecutionConflict("This adapter cannot provide per-call approval runs");
-        const policy = sessionReviewPolicy(res.locals.barrySession.metadata?.review_policy);
+        const policy = sessionReviewRules(res.locals.barrySession.metadata?.review_policy);
         const prefix = attachmentIds.length ? await sessionRuntime.prepareTurnAttachments(active, attachmentIds) : "";
         turn = execution.admit({ sessionId: req.params.sessionId, requestId: input.runId, runId: input.runId, actor: `user:${user.id}`, content: { text: prefix ? `${prefix}\n\n${message.content}` : message.content, message, request: input, attachmentIds }, policy, ...(ifActive ? { ifActive } : {}) });
       }

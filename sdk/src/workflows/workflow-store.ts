@@ -87,7 +87,7 @@ export class WorkflowStore {
   backfillTurn(): void {
     if (this.accounted) return;
     this.transaction(() => {
-      const run = this.one<{ id: string; revision: number; bytes: number; status: string }>("SELECT id,revision,length(CAST(input AS BLOB))+length(CAST(request AS BLOB))+coalesce(length(CAST(outcome AS BLOB)),0)+1049088 bytes,status FROM workflow_runs WHERE budget_bytes=0 ORDER BY id LIMIT 1");
+      const run = this.one<{ id: string; revision: number; bytes: number; status: string }>("SELECT id,revision,length(CAST(input AS BLOB))+length(CAST(request AS BLOB))+coalesce(length(CAST(outcome AS BLOB)),0)+512+CASE WHEN status IN ('running','blocked') THEN 1048576 ELSE 0 END bytes,status FROM workflow_runs WHERE budget_bytes=0 ORDER BY id LIMIT 1");
       if (!run) { this.run("UPDATE workflow_meta SET value='1' WHERE key='bytes-accounted'"); this.run("DELETE FROM workflow_byte_backfill"); return; }
       let progress = this.one<{ run_id: string; revision: number; phase: number; cursor: number; bytes: number }>("SELECT * FROM workflow_byte_backfill WHERE id=1");
       if (!progress || progress.run_id !== run.id || progress.revision !== run.revision) {
@@ -101,6 +101,19 @@ export class WorkflowStore {
         ["workflow_signals", "length(CAST(payload AS BLOB))+256"],
         ["workflow_payloads", "bytes+256"],
         ["workflow_receipts", "length(CAST(request AS BLOB))+length(CAST(response AS BLOB))+256"],
+        ["workflow_grants", "length(CAST(evidence AS BLOB))+512"],
+        ["workflow_session_bindings", "512"],
+        ["workflow_work_admissions", "length(CAST(record AS BLOB))+512"],
+        ["workflow_work_grants", "length(CAST(evidence AS BLOB))+512"],
+        ["workflow_work_sources", "256"],
+        ["workflow_work_reservations", "512"],
+        ["workflow_work_outbox", "length(CAST(body AS BLOB))+512"],
+        ["workflow_work_nonces", "length(CAST(binding AS BLOB))+512"],
+      ["workflow_work_delegations", "length(CAST(evidence AS BLOB))+512"],
+      ["workflow_work_executions", "length(CAST(request AS BLOB))+length(CAST(observation AS BLOB))+coalesce(length(CAST(receipt AS BLOB)),0)+512"],
+      ["workflow_work_index", "length(installation)+length(namespace_hash)+coalesce(length(identity_id),0)+length(state)+length(definition_ref)+512"],
+      ["workflow_work_resource_intents", "length(CAST(request AS BLOB))+coalesce(length(CAST(settlement AS BLOB)),0)+512"],
+      ["workflow_work_reconciliations", "length(CAST(request AS BLOB))+length(CAST(audit AS BLOB))+length(CAST(response AS BLOB))+512"],
         ["workflow_attempts", "coalesce(length(CAST(outcome AS BLOB)),0)+512"],
       ];
       const [table, expression] = phases[progress.phase];

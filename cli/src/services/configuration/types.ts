@@ -42,7 +42,7 @@ export type ConfigTableName = keyof ConfigDatabase;
  * TypeScript types are erased, so nothing at runtime can compare the interfaces
  * to the live schema. This list is what makes the drift test possible, and it
  * only works if it is maintained in lockstep — which is why the test asserts
- * BOTH directions. A `traits.skills` column once went unmirrored for months.
+ * BOTH directions. A `bags.builtin` column once went unmirrored for months.
  *
  * Keep entries in the same order as the interface fields.
  */

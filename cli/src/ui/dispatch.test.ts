@@ -523,7 +523,7 @@ describe("launchSessionUi", () => {
       expect(exitMock).toHaveBeenCalledWith(0);
     });
 
-    it("starts server turn when prompt is provided before spawning btui", async () => {
+    it("hands the prompt to btui before the POST", async () => {
       const mockChild = makeMockChildProcess();
       const spawnMock: UiSpawnFn = vi.fn((_cmd, _args, _opts): UiSpawnChild => {
         setTimeout(() => {
@@ -540,36 +540,22 @@ describe("launchSessionUi", () => {
         renderer: "btui",
         spawn: spawnMock,
         startTurn: startTurnMock,
+        recordHarness:vi.fn(async()=>new Response()),
         exit: exitMock,
       });
 
-      expect(startTurnMock).toHaveBeenCalledWith(
-        "sess-test-456",
-        expect.objectContaining({ prompt: "btui task" }),
-        expect.anything(),
-      );
+      expect(startTurnMock).not.toHaveBeenCalled();
+      expect(spawnMock).toHaveBeenCalledWith("btui",["sess-test-456"],expect.objectContaining({env:expect.objectContaining({BTUI_SEND:"btui task",BTUI_REPO_PATH:expect.any(String)})}));
       expect(spawnMock).toHaveBeenCalled();
       expect(exitMock).toHaveBeenCalledWith(0);
     });
 
-    it("exits with 1 when turn is refused before spawning btui", async () => {
-      const spawnMock: UiSpawnFn = vi.fn((_cmd, _args, _opts): UiSpawnChild => makeMockChildProcess());
-      const startTurnMock = vi.fn().mockResolvedValue("Capacity reached");
-      const exitMock = vi.fn();
-      const cleanupMock = vi.fn();
-
-      const result = await launchSessionUi({ ...baseContext, prompt: "btui task" }, {
-        renderer: "btui",
-        spawn: spawnMock,
-        startTurn: startTurnMock,
-        cleanupTmpDirs: cleanupMock,
-        exit: exitMock,
-      });
-
-      expect(result.exitCode).toBe(1);
-      expect(spawnMock).not.toHaveBeenCalled();
-      expect(cleanupMock).toHaveBeenCalled();
-      expect(exitMock).toHaveBeenCalledWith(1);
+    it("leaves turn rejection to btui after displaying the prompt", async () => {
+      const child=makeMockChildProcess();
+      const spawnMock:UiSpawnFn=vi.fn(()=>{setTimeout(()=>{child.emit("spawn");setTimeout(()=>child.emit("close",0),10);},10);return child;});
+      const startTurnMock=vi.fn().mockResolvedValue("Capacity reached");
+      const result=await launchSessionUi({...baseContext,prompt:"btui task"},{renderer:"btui",spawn:spawnMock,startTurn:startTurnMock,recordHarness:vi.fn(async()=>new Response()),exit:vi.fn()});
+      expect(startTurnMock).not.toHaveBeenCalled();expect(spawnMock).toHaveBeenCalled();expect(result.exitCode).toBe(0);
     });
   });
 
@@ -666,4 +652,10 @@ describe("launchSessionUi", () => {
       expect(runRawMock).toHaveBeenCalled();
     });
   });
+});
+
+it("refuses a turn before spawning an older btui that cannot consume BTUI_SEND",async()=>{
+ const spawn=vi.fn();const startTurn=vi.fn(async()=>"not admitted");const exit=vi.fn();
+ const result=await launchSessionUi({sessionId:"old-client",prompt:"hello"},{renderer:"btui",supportsPendingSend:async()=>false,spawn,startTurn,exit,cleanupTmpDirs:()=>{},stderr:{write:()=>{}}});
+ expect(spawn).not.toHaveBeenCalled();expect(startTurn).toHaveBeenCalledOnce();expect(result.exitCode).toBe(1);
 });

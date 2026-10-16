@@ -62,9 +62,9 @@ const EXPECTED_CREATED: SessionRecord = {
   status: "pending",
   system_prompt: null,
   summary: null,
-  traits: [],
+  bags: [],
   bound: null,
-  bounds: [], bound_id: null,
+  bounds: [],
   metadata: { name: "Write Test", working_directory: "/tmp" },
   created_at: "",
   started_at: null,
@@ -104,11 +104,12 @@ describe("createSession", () => {
   });
 
   it("stores JSON columns as text that reads back as objects", () => {
-    seed(`${PREFIX}json`, { traits: ["a", "b"], bound: { kind: "repo" } });
+    seed(`${PREFIX}json`, { bags: ["a", "b"], bounds: ["readonly"], bound: { kind: "repo" } });
     const s = getSessionSqlite(`${PREFIX}json`);
     // An object bound directly would throw in better-sqlite3; this asserts the
     // serialisation happened AND round-trips.
-    expect(s?.traits).toEqual(["a", "b"]);
+    expect(s?.bags).toEqual(["a", "b"]);
+    expect(s?.bounds).toEqual(["readonly"]);
     expect(s?.bound).toEqual({ kind: "repo" });
   });
 });
@@ -464,11 +465,11 @@ describe("message persistence", () => {
 
 
 describe("workflow run credentials", () => {
-  const expected = { actorId: 11, identityId: 22, scopeFingerprint: "a".repeat(64) };
+  const expected = { actorId: 11, identityId: 22, boundFingerprint: "a".repeat(64) };
   function workflowSession(): void {
     seed(ID, { user_id: 11, identity_id: 22, metadata: {
       name: "Workflow", workflow_identity_id: 22,
-      workflow_scope: { fingerprint: expected.scopeFingerprint },
+      workflow_bound: { fingerprint: expected.boundFingerprint },
     } });
   }
 
@@ -479,7 +480,7 @@ describe("workflow run credentials", () => {
     expect(first).toMatch(/^[a-f0-9-]{36}$/);
     expect(second).not.toBe(first);
     expect(getSessionSqlite(ID)?.workflow_credential_id).toBe(second);
-    for (const stale of [{ ...expected, actorId: 12 }, { ...expected, identityId: 23 }, { ...expected, scopeFingerprint: "b".repeat(64) }]) {
+    for (const stale of [{ ...expected, actorId: 12 }, { ...expected, identityId: 23 }, { ...expected, boundFingerprint: "b".repeat(64) }]) {
       expect(issueWorkflowCredentialSqlite(ID, stale)).toBeNull();
       expect(getSessionSqlite(ID)?.workflow_credential_id).toBe(second);
     }
@@ -513,11 +514,11 @@ describe("workflow run credentials", () => {
     if (change === "ended") updateSessionSqlite(ID, { ended_at: new Date() });
     if (change === "actor") sqlite.prepare("UPDATE sessions SET user_id = 12 WHERE id = ?").run(ID);
     if (change === "identity") updateSessionSqlite(ID, { identity_id: 23 });
-    if (change === "scope") updateSessionMetadataSqlite(ID, { workflow_scope: { fingerprint: "b".repeat(64) } });
+    if (change === "scope") updateSessionMetadataSqlite(ID, { workflow_bound: { fingerprint: "b".repeat(64) } });
     if (change === "scopeIdentity") updateSessionMetadataSqlite(ID, { workflow_identity_id: 23 });
     expect(getSessionSqlite(ID)?.workflow_credential_id).toBeNull();
     sqlite.prepare("UPDATE sessions SET status = 'pending', state = 'open', ended_at = NULL, user_id = 11, identity_id = 22 WHERE id = ?").run(ID);
-    updateSessionMetadataSqlite(ID, { workflow_identity_id: 22, workflow_scope: { fingerprint: expected.scopeFingerprint } });
+    updateSessionMetadataSqlite(ID, { workflow_identity_id: 22, workflow_bound: { fingerprint: expected.boundFingerprint } });
     expect(getSessionSqlite(ID)?.workflow_credential_id).toBeNull();
   });
 

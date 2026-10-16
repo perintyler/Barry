@@ -15,5 +15,13 @@ export default [
   {
     "name": "004_action_artifacts.sql",
     "sql": "      ALTER TABLE adhoc_actions ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;\n\n      CREATE TABLE IF NOT EXISTS adhoc_action_outbox (\n        id TEXT PRIMARY KEY,\n        owner_session_id TEXT NOT NULL,\n        name TEXT NOT NULL,\n        revision INTEGER NOT NULL,\n        definition TEXT NOT NULL,\n        status TEXT NOT NULL DEFAULT 'pending',\n        artifact_id TEXT,\n        error TEXT,\n        created_at TEXT NOT NULL,\n        updated_at TEXT NOT NULL\n      );\n\n      CREATE INDEX IF NOT EXISTS idx_adhoc_action_outbox_pending\n        ON adhoc_action_outbox (status, created_at);\n"
+  },
+  {
+    "name": "005_work_projections.sql",
+    "sql": "-- This store is a compatibility projection. Workflow ownership never migrates\n-- to the Actions runner or session orphan sweeper.\nCREATE TABLE action_work_projection_owner (\n  id INTEGER PRIMARY KEY CHECK (id = 1),\n  namespace TEXT NOT NULL\n);\nCREATE TABLE action_work_projections (\n  action_id TEXT PRIMARY KEY,\n  work_id TEXT NOT NULL UNIQUE,\n  workflow_id TEXT NOT NULL UNIQUE,\n  binding TEXT NOT NULL,\n  revision INTEGER NOT NULL,\n  digest TEXT NOT NULL,\n  record TEXT NOT NULL,\n  result TEXT\n);\n"
+  },
+  {
+    "name": "006_projection_generations.sql",
+    "sql": "ALTER TABLE action_work_projection_owner ADD COLUMN generation TEXT NOT NULL DEFAULT 'initial';\nALTER TABLE action_work_projections ADD COLUMN generation TEXT NOT NULL DEFAULT 'initial';\nCREATE TABLE action_work_projection_generations (\n  generation TEXT PRIMARY KEY,\n  previous_generation TEXT,\n  prepared_at TEXT NOT NULL\n);\n-- Newer pre-restore observations remain evidence after canonical rebuilding.\nCREATE TABLE action_work_projection_history (\n  action_id TEXT NOT NULL,\n  generation TEXT NOT NULL,\n  revision INTEGER NOT NULL,\n  digest TEXT NOT NULL,\n  record TEXT NOT NULL,\n  result TEXT,\n  PRIMARY KEY(action_id, generation, revision)\n);\n"
   }
 ];

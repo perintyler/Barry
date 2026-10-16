@@ -17,10 +17,10 @@ export async function fixtureSession(config: SessionConfig): Promise<Session> {
   };
 }
 export const fixtureAdapter: Adapter = {
-  id: "acceptance", label: "Disposable acceptance harness", bag: ".", nativeTools: ["ForbiddenNative"], defaultMode: "hosted",
+  id: "acceptance", label: "Disposable acceptance harness", bag: ".", tools: ["ForbiddenNative"], defaultMode: "hosted",
   capabilities: { mcpTransports: ["http"], toolDenial: "native", systemPromptFormat: "raw", skillsMount: "none", withoutKey: "unauthenticated", endpoint: "fixed" },
   requirements: { binary: { command: process.execPath, versionArgs: ["--version"], versionPattern: "(\\d+\\.\\d+\\.\\d+)", install: { fallback: "Use the test runner Node executable" }, pin: { version: process.versions.node, enforcedBy: "test runner executable" } } },
   modes: { guest: null, instrumented: null, hosted: { verifiedOn: "acceptance 1", guarantees,
-    evidence: { check: "cli/test/acceptance/identity-policy.test.ts", proves: "deterministic fixture events and captured policy" },
+    evidence: { check: "cli/test/acceptance/identity-bounds.test.ts", proves: "deterministic fixture events and captured bounds" },
     egressSandbox: false, structuredOutput: "prompted", start: fixtureSession } },
 };

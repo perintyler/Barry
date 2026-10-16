@@ -755,7 +755,7 @@ describe("check_action_run", () => {
 
 describe("run_action", () => {
   it("accepts wait_s as a bound on the call, separate from timeout_s", () => {
-    expect(Object.keys(runAction.schema).sort()).toEqual(["action", "cwd", "inputs", "timeout_s", "traits", "wait_s"]);
+    expect(Object.keys(runAction.schema).sort()).toEqual(["action", "bags", "bounds", "cwd", "inputs", "timeout_s", "wait_s"]);
     expect(runAction.schema.wait_s.safeParse(30).success).toBe(true);
     expect(runAction.schema.wait_s.safeParse(0).success).toBe(false);
     expect(runAction.schema.wait_s.safeParse(601).success).toBe(false);

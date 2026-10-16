@@ -3,7 +3,7 @@
 import { mkdirSync, writeFileSync, readdirSync, symlinkSync, existsSync, mkdtempSync, statSync } from "fs";
 import { join, basename } from "path";
 import { tmpdir } from "os";
-import type { BagCatalogEntry } from "./catalog-entry.js";
+import type { ActionEntry } from "./action-entry.js";
 
 /**
  * Resolve skill names to absolute skill directories by scanning every
@@ -11,7 +11,7 @@ import type { BagCatalogEntry } from "./catalog-entry.js";
  * Unresolved names are skipped (the bag may be unregistered on this machine).
  */
 export async function resolveSkillDirs(
-  bags: readonly BagCatalogEntry[],
+  bags: readonly ActionEntry[],
   skillNames: string[],
 ): Promise<string[]> {
   if (skillNames.length === 0) return [];

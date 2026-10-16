@@ -7,11 +7,12 @@
  * that `syncIdentityToDb` keeps up to date.
  *
  * Lives in the identities bag so it can feed directly into the resolver and the sync
- * path can use Identities/Traits without a dependency cycle.
+ * path can use Identities without a dependency cycle.
  */
 
 import { createHash } from "node:crypto";
 import {
+  statSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -31,11 +32,13 @@ import {
   getLegacyIdentitiesRegistryPath,
   getBuiltinIdentityDir,
 } from "../paths.js";
-import { parseTraits, parseBounds, inheritEntries, serializeEntries, ownEntries, type IdentityEntries, resolveIdentityConfig, IdentityAdaptersSchema, mergeAdapters, ownAdapters, RETIRED_IDENTITY_KEYS, type IdentityAdapters, parseVaultName, bindSecretReferences, mergeSecretBindings, mergeInheritedIdentity, parseIdentityBags, serializeIdentityBags, type IdentityBags } from "@barry-rocks/sdk/internal/identities";
+import { parseBounds, inheritEntries, serializeEntries, ownEntries, type IdentityEntries, resolveIdentityConfig, IdentityAdaptersSchema, mergeAdapters, ownAdapters, RETIRED_IDENTITY_KEYS, type IdentityAdapters, parseVaultName, bindSecretReferences, mergeSecretBindings, mergeInheritedIdentity, parseIdentityBags, serializeIdentityBags, type IdentityBags } from "@barry-rocks/sdk/internal/identities";
 
 import { findInstalled } from "@barry-rocks/sdk/adapters/harnesses";
 import { loadAdapters } from "@barry-rocks/sdk/internal/adapters";
-import { barryAdaptersPath } from "@barry-rocks/sdk/services";
+import { invalidateIdentityEnvironment } from "@barry-rocks/sdk/internal/env";
+import { bagLoadInputs } from "@barry-rocks/sdk/internal/bags";
+import { barryCacheDir, barryAdaptersPath } from "@barry-rocks/sdk/services";
 
 import type { IdentityRecord, IdentityMetadata } from "./identities.js";
 import { createLogger as createDiagnosticLogger } from "@barry-rocks/sdk/logging";
@@ -89,12 +92,9 @@ export interface IdentityYaml {
    */
   aliases?: string[];
   bags?: IdentityBags;
-  traits?: IdentityEntries;
   bounds?: IdentityEntries;
   adapters?: IdentityAdapters;
   tool_discovery?: "provider" | "barry";
-  /** Whether packing a bag grants its tools to every session. Absent = "session". */
-  bag_grant?: "session" | "identity";
   status_notify?: { tool: string; target?: string };
   ui?: string;
   /**
@@ -149,8 +149,9 @@ function syntheticTokenFromName(name: string): string {
 /** The config file an identity directory is defined by. */
 export const IDENTITY_YAML = "identity.yaml";
 
-/** Read legacy barry.yaml configs for compatibility while always writing identity.yaml; see docs/decisions/0012-credentials-action-runs-and-traits.md. */
+/** Read legacy barry.yaml configs for compatibility while always writing identity.yaml; see docs/decisions/0012-credentials-action-runs-and-identity-bags.md. */
 export const LEGACY_IDENTITY_YAML = "barry.yaml";
+const LEGACY_GRANT_KEY = ["bag", "grant"].join("_");
 
 /**
  * Path to a directory's identity config, preferring the current filename and
@@ -192,7 +193,7 @@ export function isIdentityDirectory(dir: string): boolean {
  */
 export function loadIdentityFromDirectory(
   identityDir: string,
-  options: { actorId: number },
+  options: { actorId: number; sources?: Set<string> },
   seenInherits: Set<string> = new Set(),
 ): IdentityRecord {
   return readFileIdentity(identityDir, options, seenInherits).record;
@@ -200,7 +201,7 @@ export function loadIdentityFromDirectory(
 
 function readFileIdentity(
   identityDir: string,
-  options: { actorId: number },
+  options: { actorId: number; sources?: Set<string> },
   seenInherits: Set<string> = new Set(),
 ): { record: IdentityRecord; declaredId: number | undefined } {
   const yamlPath = findIdentityYamlPath(identityDir);
@@ -208,6 +209,7 @@ function readFileIdentity(
     throw new Error(`No ${IDENTITY_YAML} found in ${identityDir}`);
   }
 
+  options.sources?.add(yamlPath);
   let raw: unknown;
   try {
     raw = yamlParse(readFileSync(yamlPath, "utf-8"));
@@ -239,6 +241,14 @@ function readFileIdentity(
 
   const retired = RETIRED_IDENTITY_KEYS.filter(key => Object.hasOwn(raw, key));
   if (retired.length) warnIdentityFile(join(identityDir, "identity.yaml"), `uses ${retired.join(", ")}, which are no longer read. Run \`barry doctor --fix\` to rewrite them as \`adapters:\`.`);
+  if (resolve(identityDir) !== getBuiltinIdentityDir()) {
+    if (Object.hasOwn(raw, "traits")) {
+      warnIdentityFile(yamlPath, "uses `traits:`, which is retired. Run `barry doctor --fix` to migrate to `bags:` and `bounds:`.");
+    }
+    if (Object.hasOwn(raw, LEGACY_GRANT_KEY)) {
+      warnIdentityFile(yamlPath, `uses \`${LEGACY_GRANT_KEY}:\`, which is retired. Run \`barry doctor --fix\` to migrate.`);
+    }
+  }
   const adapters = yaml.adapters === undefined ? undefined : IdentityAdaptersSchema.safeParse(yaml.adapters);
   if (adapters && !adapters.success) throw new Error(`Invalid adapters in ${identityDir}: ${adapters.error.message}`);
 
@@ -247,23 +257,42 @@ function readFileIdentity(
   if (yaml.displayName) metadata.display_name = yaml.displayName;
   if (yaml.aliases && yaml.aliases.length > 0) metadata.aliases = yaml.aliases;
   if (yaml.secrets) metadata.secrets = bindSecretReferences(yaml.secrets, resolve(identityDir));
-  const selectedBags = parseIdentityBags(yaml.bags);
+  let rawBagsForParse: unknown = yaml.bags;
+  if (Array.isArray(yaml.bags)) {
+    let hadNestedExtensions = false;
+    rawBagsForParse = yaml.bags.map((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry) || "name" in entry) return entry;
+      const entries = Object.entries(entry as Record<string, unknown>);
+      if (entries.length !== 1) return entry;
+      const [bagName, val] = entries[0];
+      if (val && typeof val === "object" && !Array.isArray(val) && "extensions" in val) {
+        hadNestedExtensions = true;
+        const { extensions: _ignored, ...rest } = val as Record<string, unknown>;
+        return Object.keys(rest).length > 0 ? { [bagName]: rest } : bagName;
+      }
+      return entry;
+    });
+    if (hadNestedExtensions && resolve(identityDir) !== getBuiltinIdentityDir()) {
+      warnIdentityFile(
+        yamlPath,
+        "uses `extensions:` inside `bags:`, which is retired. Run `barry doctor --fix` to migrate to standalone bags.",
+      );
+    }
+  }
+  const selectedBags = parseIdentityBags(rawBagsForParse);
   if (selectedBags.bags.length) metadata.bags = selectedBags.bags;
   if (Object.keys(selectedBags.bag_configs).length) metadata.bag_configs = selectedBags.bag_configs;
   const baseDir = getBuiltinIdentityDir();
   const base = baseDir && findIdentityYamlPath(baseDir) && resolve(identityDir) !== resolve(baseDir) ? loadIdentityFromDirectory(baseDir, options).metadata : undefined;
-  const ownTraits = inheritEntries([], parseTraits(yaml.traits, yamlPath), parseTraits(base?.traits).map(entry => entry.name), yamlPath);
   const ownBounds = inheritEntries([], parseBounds(yaml.bounds, yamlPath), parseBounds(base?.bounds).map(entry => entry.name), yamlPath);
-  if (ownTraits.length) metadata.traits = serializeEntries(ownTraits);
   if (ownBounds.length) metadata.bounds = serializeEntries(ownBounds);
   if (adapters?.success) metadata.adapters = canonicalAdapters(adapters.data);
   if (yaml.tool_discovery) metadata.tool_discovery = yaml.tool_discovery;
-  if (yaml.bag_grant) metadata.bag_grant = yaml.bag_grant;
   if (yaml.status_notify?.tool) metadata.status_notify = yaml.status_notify;
   if (yaml.ui) metadata.ui = yaml.ui;
-  const inlineBound = yaml.bound ?? yaml.scope;
-  if (inlineBound && Object.keys(inlineBound).length > 0) {
-    metadata.bound = inlineBound;
+  const unqualifiedBound = yaml.bound ?? yaml.scope;
+  if (unqualifiedBound && Object.keys(unqualifiedBound).length > 0) {
+    metadata.bound = unqualifiedBound;
     warnIdentityFile(yamlPath, "writes restrictions inline under `bound:`. Run `barry doctor --fix` to move them into `bounds:`");
   }
   if (yaml.vault !== undefined) metadata.vault = parseVaultName(yaml.vault);
@@ -626,7 +655,7 @@ export async function resolveForeignKeyId(
   }
 
   try {
-    const { identityId } = await syncIdentityToDb(dir, { actorId });
+    const { identityId } = await syncIdentityToDbIfChanged(dir, { actorId });
     return identityId;
   } catch {
     // Without a cache row there's no id the FK accepts; the caller stores null
@@ -638,15 +667,10 @@ export async function resolveForeignKeyId(
 /**
  * The metadata payload a disk→DB sync must send.
  *
- * Grant-shaped keys (bags, traits) are pinned to explicit empty arrays when
+ * Collection-shaped keys (bags, bounds) are pinned to explicit empty arrays when
  * absent: the row update is a JSON MERGE, so only a present key can clear a
  * stale value. Without this, "remove the last bag" is the one edit that can
  * never propagate — an asymmetry invisible until someone disables something.
- *
- * `bag_grant` is pinned for the same reason and is the same shape of hazard:
- * deleting `bag_grant: identity` from the yaml must return the barry to
- * "session", and a merge cannot clear a key it is not sent. Without the pin the
- * revert is the direction that silently fails — the one that RE-GRANTS tools.
  */
 export function syncMetadataPayload(metadata: IdentityMetadata): IdentityMetadata {
   return {
@@ -654,36 +678,55 @@ export function syncMetadataPayload(metadata: IdentityMetadata): IdentityMetadat
     bags: metadata.bags ?? [],
     bag_configs: metadata.bag_configs ?? {},
     secrets: metadata.secrets ?? {},
-    traits: metadata.traits ?? [],
     bounds: metadata.bounds ?? [],
-    bag_grant: metadata.bag_grant ?? "session",
   };
 }
 
-/** Sync changed bag traits best-effort after persisting the identity, reporting failure without making an already-written identity unusable; see docs/decisions/0012-credentials-action-runs-and-traits.md. */
-async function syncIdentityBagTraits(
-  identityId: number,
-  bags: string[] | undefined,
-  options: { force?: boolean } = {},
-): Promise<void> {
-  if (!bags || bags.length === 0) return;
-  let identityBags: typeof import("./identity-bags.js");
-  try {
-    identityBags = await import("./identity-bags.js");
-  } catch {
-    // The bags package may not be available (scripts/seed.ts at bootstrap).
-    return;
+interface IdentitySyncStamp {
+  version: number; identityId: number; actorId: number; name: string; row: string; base: string | null;
+  inputs: Array<{ path: string; stamp: string }>;
+}
+function inputStamp(path: string): string {
+  try { const st = statSync(path); return `${st.mtimeMs}:${st.size}`; } catch { return "-"; }
+}
+function identityRowStamp(row: IdentityRecord): string {
+  return createHash("sha256").update(JSON.stringify([row.name, row.actor_id, FILE_OWNED_FIELDS.map(field => row.metadata[field])])).digest("hex");
+}
+/** Skip YAML parsing and durable writes while every authored input and cache row agree. */
+export async function syncIdentityToDbIfChanged(identityDir: string, options: { actorId: number; expectedId?: number }): Promise<{ identityId: number; synced: boolean }> {
+  const directory = resolve(identityDir);
+  if (options.expectedId !== undefined && !listIdentityDirectoryPaths().some(path => resolve(path) === directory)) throw new Error("identity file no longer matches this CLI binding; regenerate this CLI");
+  const cacheDir = join(barryCacheDir(), "identity-sync");
+  const file = join(cacheDir, `${createHash("sha256").update(directory).digest("hex")}.json`);
+  const { getIdentity } = await import("./identities.js");
+  let cached: IdentitySyncStamp | undefined;
+  try { cached = JSON.parse(readFileSync(file, "utf8")) as IdentitySyncStamp; } catch { /* First sync or purged cache. */ }
+  if (cached?.version === 2 && cached.actorId === options.actorId && cached.base === getBuiltinIdentityDir() && (options.expectedId === undefined || cached.identityId === options.expectedId) && Array.isArray(cached.inputs) && cached.inputs.length > 0 && cached.inputs.every(input => inputStamp(input.path) === input.stamp)) {
+    const row = await getIdentity(cached.identityId);
+    if (row?.actor_id === options.actorId && identityRowStamp(row) === cached.row) return { identityId: cached.identityId, synced: false };
   }
-  try {
-    await identityBags.resolveAndSyncBagsIfChanged(`identity-${identityId}`, bags, options);
-  } catch (err) {
-    diagnostics.warn("identities.trait_sync_failed", { detail: `warning: could not sync this identity's bag traits: ${err instanceof Error ? err.message : String(err)}` });
+  // Validate a generated binding before a sync can retarget it to another row.
+  if (options.expectedId !== undefined) {
+    const { record } = readFileIdentity(directory, options);
+    if (record.id !== options.expectedId) throw new Error("identity file no longer matches this CLI binding; regenerate this CLI");
   }
+  const sources = new Set<string>();
+  const result = await syncIdentityToDb(directory, { actorId: options.actorId, sources });
+  const row = await getIdentity(result.identityId);
+  if (!row || row.actor_id !== options.actorId) throw new Error("identity sync no longer resolves to its owner");
+  const inputs = [...sources, getIdentitiesRegistryPath(), getLegacyIdentitiesRegistryPath(), getIdentitiesDir(), getLegacyIdentitiesDir()].flatMap(path => [path, dirname(path)]).map(path => ({ path, stamp: inputStamp(path) }));
+  inputs.push(...bagLoadInputs(row.metadata.bags ?? []));
+  const stamp: IdentitySyncStamp = { version: 2, identityId: row.id, actorId: options.actorId, name: row.name, row: identityRowStamp(row), base: getBuiltinIdentityDir(), inputs };
+  mkdirSync(cacheDir, { recursive: true });
+  const temporary = `${file}.${process.pid}.tmp`;
+  writeFileSync(temporary, JSON.stringify(stamp), { mode: 0o600 });
+  renameSync(temporary, file);
+  return result;
 }
 
 export async function syncIdentityToDb(
   identityDir: string,
-  options: { actorId: number },
+  options: { actorId: number; sources?: Set<string> },
 ): Promise<{ identityId: number; synced: boolean }> {
   const { record, declaredId: fileId } = readFileIdentity(identityDir, options);
   // The shipped identity's file is checked in and shared by every machine,
@@ -707,9 +750,7 @@ export async function syncIdentityToDb(
     // Mirror disk to the cache row — via syncMetadataPayload, because the
     // loader drops empty arrays from metadata (`bags: []` becomes an absent
     // key) and updateIdentityMetadata MERGES JSON, so an absent key preserves
-    // the stale row value. Disabling the LAST bag or trait never reached the
-    // DB: enabling worked, disabling silently did not, and sessions kept
-    // resolving grants the yaml no longer had.
+    // the stale row value.
     const payload = syncMetadataPayload(record.metadata);
     await updateIdentityMetadataInRow(existing.id, payload);
     // The merge cannot REMOVE a key, so a file-owned field deleted from the
@@ -722,9 +763,8 @@ export async function syncIdentityToDb(
       }
     }
 
-    await syncIdentityBagTraits(existing.id, record.metadata.bags);
-
     if (!shipped && record.id !== existing.id) writeIdentityYaml(identityDir, { id: existing.id });
+    invalidateIdentityEnvironment(existing.id);
     return { identityId: existing.id, synced: true };
   }
 
@@ -734,9 +774,8 @@ export async function syncIdentityToDb(
     metadata: record.metadata,
   });
 
-  await syncIdentityBagTraits(created.id, record.metadata.bags, { force: true });
-
   if (!shipped) writeIdentityYaml(identityDir, { id: created.id });
+  invalidateIdentityEnvironment(created.id);
   return { identityId: created.id, synced: true };
 }
 
@@ -783,7 +822,7 @@ export async function updateIdentity(
 
   const ownYaml = yamlParse(readFileSync(findIdentityYamlPath(dir)!, "utf-8")) as IdentityYaml;
   /**
-   * `bags` and `traits` are UNIONED with the parent's (mergeInheritedIdentity),
+   * `bags` and `bounds` are UNIONED with the parent's (mergeInheritedIdentity),
    * and callers hand this the resolved list — `pack` reads the merged record,
    * appends, and writes it back. Written verbatim, every inherited entry was
    * frozen into the child's file: packing one bag onto an identity that
@@ -815,9 +854,8 @@ export async function updateIdentity(
       for (const retired of RETIRED_IDENTITY_KEYS) yamlUpdates[retired] = undefined;
       continue;
     }
-    if (key === "traits" || key === "bounds") {
-      const parse = key === "traits" ? parseTraits : parseBounds;
-      yamlUpdates[key] = serializeEntries(ownEntries(parse(ownYaml[key]), parse(parent?.[key]), value == null ? null : value as string[]));
+    if (key === "bounds") {
+      yamlUpdates.bounds = serializeEntries(ownEntries(parseBounds(ownYaml.bounds), parseBounds(parent?.bounds), value == null ? null : value as string[]));
       continue;
     }
     if (key === "secrets") {

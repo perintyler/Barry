@@ -26,7 +26,7 @@ export default defineAdapter({
   vendor: "openai",
   requirements: CODEX_REQUIREMENTS,
   capabilities: CODEX_CAPABILITIES,
-  nativeTools: NATIVE_TOOLS,
+  tools: NATIVE_TOOLS,
   defaultMode: "hosted",
   modes: {
     hosted: {

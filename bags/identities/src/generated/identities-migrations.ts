@@ -18,6 +18,10 @@ export default [
   },
   {
     "name": "005_retired_native_policy.sql",
-    "sql": "DELETE FROM traits WHERE bag IS NULL AND name = 'no-native-tools';\nDELETE FROM traits\nWHERE bag IN ('claude', 'codex', 'cursor', 'opencode', 'pi', 'antigravity')\n  AND name LIKE bag || ':no-%';\n\nDELETE FROM bounds\nWHERE json_extract(metadata, '$.bag') IN ('claude', 'codex', 'cursor', 'opencode', 'pi', 'antigravity')\n  AND (name LIKE '%:legacy-%' OR name LIKE '%:guard-network'\n    OR name = 'claude:baseline' OR name IN ('codex:no-native-tools', 'opencode:no-native-tools'));\n\nUPDATE traits SET metadata = json_remove(metadata, '$.harnessTraits')\nWHERE json_type(metadata, '$.harnessTraits') = 'object'\n  AND NOT EXISTS (\n    SELECT 1 FROM json_each(traits.metadata, '$.harnessTraits') AS target\n    JOIN traits AS remaining ON remaining.name = target.value\n  );\n"
+    "sql": "DELETE FROM traits WHERE bag IS NULL AND name = 'no-native-tools';\nDELETE FROM traits\nWHERE bag IN ('claude', 'codex', 'cursor', 'opencode', 'pi', 'antigravity')\n  AND name LIKE bag || ':no-%';\n\nDELETE FROM bounds\nWHERE json_extract(metadata, '$.bag') IN ('claude', 'codex', 'cursor', 'opencode', 'pi', 'antigravity')\n  AND (name LIKE '%:legacy-%' OR name LIKE '%:guard-network'\n    OR name = 'claude:baseline' OR name IN ('codex:no-native-tools', 'opencode:no-native-tools'));\n\nUPDATE traits SET metadata = json_remove(metadata, '$.harness\u0054raits')\nWHERE json_type(metadata, '$.harness\u0054raits') = 'object'\n  AND NOT EXISTS (\n    SELECT 1 FROM json_each(traits.metadata, '$.harness\u0054raits') AS target\n    JOIN traits AS remaining ON remaining.name = target.value\n  );\n"
+  },
+  {
+    "name": "006_drop_traits_bounds.sql",
+    "sql": "DROP TABLE IF EXISTS traits;\nDROP TABLE IF EXISTS bounds;\n"
   }
 ];

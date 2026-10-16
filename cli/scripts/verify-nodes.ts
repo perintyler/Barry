@@ -81,10 +81,6 @@ async function seed(home: string, label: string) {
   }
   const result = { node: peers.id, identities, home, label, originalChecksums: originals, archivedRows: report.archived.length };
   peers.close();
-  // The bound a remotable job needs, as `barry bag sync-traits` would record the fixture bag's.
-  const { bounds, traits } = await import("@barry-rocks/identities-bag");
-  await bounds.create({ name: "verify:no-files", bound: { files: { allowOnly: [] } } });
-  await traits.upsert({ name: "verify:deny-workers", namespaces: [], access: "read", bound: { nodes: { deny: ["local", "b2", "c2"] } } });
   writeFileSync(join(home, "seed.json"), JSON.stringify(result, null, 2));
 }
 
@@ -106,8 +102,10 @@ jobs:
 bounds:
   no-files:
     description: No files at all
-    bound:
-      files: { allowOnly: [] }
+    files: { allow: [] }
+  deny-workers:
+    description: Deny local and test workers
+    nodes: { deny: [ local, b2, c2 ] }
 `;
 const FIXTURE_JOB = `let raw = ""; process.stdin.on("data", d => { raw += d; }); process.stdin.on("end", () => { const input = JSON.parse(raw); process.stdout.write(JSON.stringify({ echo: input.text, key: process.env.BARRY_JOB_KEY })); });`;
 
@@ -464,7 +462,7 @@ async function verify() {
       assert.equal(query(workflowsDb(homes.a), "SELECT a.token FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id WHERE c.run_id='placement-denied'").length, 0);
     });
     await scenario("run grant node bounds exclude the only worker eligible for a step", async () => {
-      const response = await fetch(`http://127.0.0.1:${owner.port}/api/runs`, { method: "POST", headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" }, body: JSON.stringify({ id: "grant-placement-denied", type: "remote", version: "1", input: { destination: destinationUrl, value: 52, worker: b2.worker }, job: { traits: ["verify:deny-workers"] } }) });
+      const response = await fetch(`http://127.0.0.1:${owner.port}/api/runs`, { method: "POST", headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" }, body: JSON.stringify({ id: "grant-placement-denied", type: "remote", version: "1", input: { destination: destinationUrl, value: 52, worker: b2.worker }, job: { bounds: ["verify:deny-workers"] } }) });
       assert(response.ok, await response.text());
       await until("granted node-bound diagnostics", async () => (await (await fetch(`http://127.0.0.1:${owner.port}/api/runs/grant-placement-denied/eligibility`, { headers: { Authorization: `Bearer ${secret}` } })).text()).includes("NODE_BOUND_EXCLUDED"));
       assert.equal(query(workflowsDb(homes.a), "SELECT a.token FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id WHERE c.run_id='grant-placement-denied'").length, 0);

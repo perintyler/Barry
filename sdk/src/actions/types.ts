@@ -24,7 +24,64 @@ const ActionRunStatus = z
 // that required it would fail to decode the whole page on the first such row,
 // the failure the status note above describes.
 const RunBag = z.string().nullable().describe("The bag that ships the action; null for an ad-hoc action.");
+/** Small compatibility pointer; lists never carry retained outputs or logs. */
+export const ActionWorkflowSchema = z.object({
+  work_id: z.string(), workflow_id: z.string(), owner: z.string(), revision: z.number().int().positive(),
+  state: z.enum(["queued", "running", "waiting", "waiting-for-approval", "stopping", "needs-attention", "completed", "failed", "cancelled"]),
+  current: z.boolean(), stop_protocol: z.literal("work-stop-v1").optional(), url: z.string().url().refine(value => ["http:", "https:"].includes(new URL(value).protocol)).optional(),
+}).strict();
+export type ActionWorkflow = z.infer<typeof ActionWorkflowSchema>;
+export const ActionWorkflowStartSchema = z.strictObject({ request_id: z.uuid(), idempotency_key: z.string().min(1).max(200), inputs: z.record(z.string(), z.json()), recovery_epoch: z.uuid().optional() });
+export const ActionWorkflowAdmissionAckSchema = z.strictObject({ run_id: z.string().min(1), work_id: z.string().min(1), workflow_id: z.string().min(1), idempotency_key: z.string().min(1).max(200), created: z.boolean() });
+export const ActionWorkflowStopSchema = z.strictObject({ reason: z.string().trim().min(1).max(2000), request_id: z.uuid(), expected_revision: z.number().int().positive() });
+export const ActionWorkflowStopAckSchema = z.strictObject({ run_id: z.string(), work_id: z.string(), request_id: z.uuid(), applied_revision: z.number().int().positive(), stop_requested: z.literal(true), status: z.literal("stop_requested") });
+// Public, browser-safe canonical read shapes. Keep owner internals (including
+// projection bookkeeping and retained execution plans) outside this surface.
+const WorkRef = z.string().min(1).max(200);
+export const ActionWorkIdSchema = z.string().regex(/^work_[a-f0-9]{32}$/);
+export const ActionWorkSessionsSchema = z.strictObject({ sessions: z.array(z.strictObject({ id: WorkRef, name: z.string().nullable(), identity_id: z.number().int().positive(), ended: z.boolean() })) });
+const WorkTime = z.number().int().nonnegative();
+const WorkArtifact = z.strictObject({ digest: z.string().regex(/^[a-f0-9]{64}$/), bytes: WorkTime.max(1_073_741_824), media_type: WorkRef,
+  owner_identity: WorkRef.nullable(), purpose: z.enum(["source", "input", "output", "log", "checkpoint"]) });
+const WorkCheck = z.strictObject({ passed: z.boolean(), unknown: z.boolean(), detail: z.string().max(2000), failures: z.array(z.string().max(2000)).max(100) });
+export const ActionWorkItemSchema = z.strictObject({
+  version: z.literal(2), work_id: WorkRef, workflow_id: WorkRef, action_id: WorkRef.nullable(), job_run_id: WorkRef.nullable(), title: z.string(),
+  source: z.discriminatedUnion("kind", [z.strictObject({ kind: z.literal("action"), reference: WorkRef, catalog_namespace: WorkRef }),
+    z.strictObject({ kind: z.literal("job"), reference: WorkRef }), z.strictObject({ kind: z.literal("workflow"), reference: WorkRef, version: WorkRef })]),
+  origin: z.strictObject({ entry_point: WorkRef, trigger: z.enum(["invocation", "schedule", "event", "internal", "manual"]), caller_session_id: WorkRef.optional(),
+    occurrence_id: WorkRef.optional(), producer_ref: WorkRef.optional(), parent_work_id: WorkRef.optional() }),
+  namespace: z.strictObject({ installation: WorkRef, principal_kind: z.enum(["operator", "identity", "service"]), principal_id: WorkRef,
+    identity_id: WorkRef.nullable(), caller_session_id: WorkRef.nullable() }),
+  accepted_at: WorkTime, first_started_at: WorkTime.nullable(), dispatch_deadline: WorkTime, execution_deadline: WorkTime.nullable(),
+  revision: z.number().int().positive(), state: ActionWorkflowSchema.shape.state,
+  facts: z.strictObject({ coordinator: z.enum(["running", "blocked", "completed", "failed", "cancelled", "timed_out"]),
+    phase: z.enum(["queued", "preflight", "executing", "validating", "publishing", "terminal"]), wait: z.enum(["none", "timer", "dependency", "signal", "human-decision"]),
+    physical: z.enum(["not-started", "running", "stopping", "ceased", "unknown"]), effect: z.enum(["not-started", "known", "uncertain"]),
+    stop_requested: z.boolean(), has_result: z.boolean(), can_continue: z.boolean(), can_retry_step: z.boolean(), can_respond: z.boolean() }),
+  reason: z.strictObject({ code: WorkRef, stage: z.enum(["admission", "placement", "preflight", "execution", "validation", "postcondition", "publication", "recovery"]),
+    since: WorkTime, retryable: z.boolean(), detail: z.string().max(2000), attempt_id: WorkRef.optional() }).nullable(),
+  receipt_ref: WorkRef.nullable(), allowed_actions: z.array(z.enum(["inspect", "stop", "continue", "retry-step", "run-again", "reconcile", "respond", "result"])),
+  can_review_reconciliation: z.boolean(),
+});
+export const ActionWorkResultSchema = z.strictObject({
+  version: z.literal(2), work_id: WorkRef, revision: z.number().int().positive(), status: z.enum(["pending", "available"]), receipt_ref: WorkRef.nullable(),
+  closed_at: WorkTime.nullable().optional(), action_checks: z.strictObject({ preflight: WorkCheck.optional(), postcondition: WorkCheck.optional() }).optional(),
+  outcome: z.discriminatedUnion("ok", [z.strictObject({ ok: z.literal(true), value: z.json() }),
+    z.strictObject({ ok: z.literal(false), error: z.strictObject({ message: z.string().max(4096), code: WorkRef, retryable: z.boolean() }) })]).nullable(),
+  logs: z.array(z.strictObject({ stage: z.string(), reference: WorkArtifact, invalid_reason: z.string().nullable(), value: z.strictObject({
+    version: z.literal(1), stdout: z.string().max(16384), stderr: z.string().max(4096), stdout_bytes: WorkTime, stderr_bytes: WorkTime,
+    stdout_truncated: z.boolean(), stderr_truncated: z.boolean(),
+  }).nullable() })).optional(),
+  retained_output: z.strictObject({ reference: WorkArtifact, value: z.json().nullable(), invalid_reason: z.string().nullable(),
+    validation: z.enum(["skipped", "passed", "failed", "unknown"]), validation_failures: z.array(z.string()).nullable() }).nullable(),
+});
+export const ActionWorkStopAckSchema = z.strictObject({ version: z.literal(2), work_id: WorkRef, request_id: z.uuid(),
+  applied_revision: z.number().int().positive(), applied_at: WorkTime, stop_requested: z.literal(true) });
+export type ActionWorkItem = z.infer<typeof ActionWorkItemSchema>;
+export type ActionWorkResult = z.infer<typeof ActionWorkResultSchema>;
+export type ActionWorkStopAck = z.infer<typeof ActionWorkStopAckSchema>;
 export const ActionRunSummarySchema = z.object({
+  workflow: ActionWorkflowSchema.optional(),
   run_id: z.string(),
   action: z.string(),
   bag: RunBag,
@@ -54,6 +111,7 @@ export const ActionRunSummarySchema = z.object({
 // costs nothing: an absent metadata reads as "not recorded", which is exactly
 // what a pre-capture server means.
 export const ActionRunRecordSchema = z.object({
+  workflow: ActionWorkflowSchema.optional(),
   run_id: z.string(),
   action: z.string(),
   bag: RunBag,
@@ -205,7 +263,11 @@ export const RunActionBodySchema = z.strictObject({
    * session's access; for an installed action it is recorded as lineage.
    */
   caller_session_id: z.string().min(1).optional(),
-  /** Ad-hoc only: run with a subset of the caller's traits. Never more. */
+  /** Subset of the caller's packed bags. Narrows access; cannot widen it. */
+  bags: z.array(z.string().min(1)).optional(),
+  /** Additional named or inline bounds to intersect onto this run. */
+  bounds: z.array(z.union([z.string().min(1), z.record(z.string(), z.unknown())])).optional(),
+  /** @deprecated Legacy alias for bags. */
   traits: z.array(z.string().min(1)).optional(),
   /** Ad-hoc only: where the run starts. Absent: where the action was created. */
   cwd: z.string().min(1).optional(),

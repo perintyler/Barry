@@ -1,3 +1,5 @@
+import { resolveHarnessCommand } from "@barry-rocks/sdk/adapters/harnesses";
+import { CODEX_REQUIREMENTS } from "./modes.js";
 /**
  * Codex's guest launch: the human drives the `codex` TUI in a private
  * `CODEX_HOME` Barry prepares, on the identity's key.
@@ -58,7 +60,7 @@ export async function planCodexLaunch(config: SessionConfig, guarantees: Guarant
   if (resumed) args.push("resume", resumed);
 
   return {
-    command: "codex",
+    command: resolveHarnessCommand(CODEX_REQUIREMENTS, config.env),
     args,
     env: runtime.env,
     tmpDirs: config.ephemeral ? [runtime.codexHome] : [],

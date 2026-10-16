@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { describe, expect, it, vi } from "vitest";
 import { ownerCommand, registerOwner, type OwnerCommandDeps } from "./owner.js";
-import { applyCommandScope } from "../scope.js";
+import { applyCommandTarget } from "../target.js";
 
 function fixture() {
   const store = { current: vi.fn(() => null as { actorId: number; name: string; boundAt: number } | null), bind: vi.fn((selection: { actorId: number; actorToken: string }) => ({ actorId: selection.actorId, name: "Tyler", boundAt: 1000 })) };
@@ -48,12 +48,12 @@ describe("installation owner CLI", () => {
     await expect(ownerCommand(deps, "7", { yes: true })).rejects.toThrow("changed");
     expect(deps.write).not.toHaveBeenCalled();
   });
-  it("makes owner selection available only at system scope", () => {
+  it("makes owner selection available only at system target", () => {
     const identity = new Command(); registerOwner(identity, fixture().deps);
-    applyCommandScope(identity, { kind: "identity", name: "fixture", binding: { id: 1, home: null } });
+    applyCommandTarget(identity, { kind: "identity", name: "fixture", binding: { id: 1, home: null } });
     expect(identity.commands.map(command => command.name())).not.toContain("owner");
     const system = new Command(); registerOwner(system, fixture().deps);
-    applyCommandScope(system, { kind: "system" });
+    applyCommandTarget(system, { kind: "system" });
     expect(system.commands.map(command => command.name())).toContain("owner");
   });
 });

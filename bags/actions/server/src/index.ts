@@ -25,6 +25,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
+import { identityWorkRoute } from "./identity-work.js";
 import { getServiceUrl, listenOnAssignedPort, assignedPort } from "@barry-rocks/sdk/services";
 
 import { handleSignIn, isAuthorized, SIGN_IN_PATH } from "@barry-rocks/sdk/auth";
@@ -50,6 +51,9 @@ const STATIC_ASSETS: Record<string, { file: string; type: string }> = {
   "/app.css": { file: "app.css", type: "text/css; charset=utf-8" },
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
   "/search.js": { file: "search.js", type: "text/javascript; charset=utf-8" },
+  "/work": { file: "identity-work.html", type: "text/html; charset=utf-8" },
+  "/identity-work.js": { file: "identity-work.js", type: "text/javascript; charset=utf-8" },
+  "/identity-work.css": { file: "identity-work.css", type: "text/css; charset=utf-8" },
 };
 
 function json(res: ServerResponse, body: unknown, status = 200): void {
@@ -106,6 +110,7 @@ async function callApi(
     method: init?.method ?? "GET",
     headers: {
       authorization: `Bearer ${SECRET}`,
+      ...(path.startsWith("/actions/runs") && (init?.method ?? "GET") === "GET" ? { accept: "application/json;profile=barry-action-work-v1" } : {}),
       ...(init?.body !== undefined ? { "content-type": "application/json" } : {}),
     },
     ...(init?.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
@@ -159,6 +164,8 @@ export const server = createServer(async (req, res) => {
       if (!isAuthorized(req, SECRET)) {
         return json(res, { error: "unauthorized", signIn: SIGN_IN_PATH }, 401);
       }
+
+      if (await identityWorkRoute(req, res, url, SECRET, callApi)) return;
 
       if (url.pathname === "/api/catalog" && method === "GET") {
         const { status, body } = await callApi("/actions/catalog");

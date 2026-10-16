@@ -24,6 +24,15 @@ describe("registry", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  it("memoizes unchanged snapshots and sees an atomic replacement", () => {
+    writeFileSync(snapshotPath, JSON.stringify({ bags: { one: { type: "remote", url: "https://one.example/mcp" } } }));
+    const first = loadRegistry();
+    expect(loadRegistry()).toBe(first);
+    writeFileSync(snapshotPath, JSON.stringify({ bags: { two: { type: "remote", url: "https://two.example/mcp" } } }));
+    const second = loadRegistry();
+    expect(second).not.toBe(first);
+    expect(Object.keys(second)).toEqual(["two"]);
+  });
   it("throws, naming the fix, when the snapshot is missing", () => {
     expect(() => loadRegistry()).toThrow(RegistrySnapshotError);
     expect(() => loadRegistry()).toThrow(/barry bag doctor --fix|barry up/);

@@ -3,8 +3,9 @@ import { filterBagsNeedingAuthForSession } from "../../vault/oauth.js";
 
 /**
  * The bug this guards: the CLI prompted to authorize every OAuth bag installed
- * on the identity, including ones the session's traits never grant. Tool access
- * is gated by traits, not by installation, so the prompt must follow the grant.
+ * on the identity, including ones the session's active bags never select. Tool
+ * access is gated by the session's bags, not by installation, so the prompt
+ * must follow the session's selection.
  */
 describe("filterBagsNeedingAuthForSession", () => {
   const unauthorized = [

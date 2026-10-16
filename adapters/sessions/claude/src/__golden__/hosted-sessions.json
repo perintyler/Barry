@@ -89,6 +89,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []
@@ -184,6 +185,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []
@@ -398,6 +400,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []
@@ -494,6 +497,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []
@@ -1646,6 +1650,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []
@@ -1760,6 +1765,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []
@@ -1974,6 +1980,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []
@@ -2069,6 +2076,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []
@@ -2282,6 +2290,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []
@@ -2377,6 +2386,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []
@@ -2512,6 +2522,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []
@@ -2641,6 +2652,7 @@
             "type": "preset"
           },
           "thinking": {
+            "display": "summarized",
             "type": "adaptive"
           },
           "tools": []

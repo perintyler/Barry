@@ -46,3 +46,19 @@ it("does not cache credentials supplied through a caller-owned vault session", a
   expect((await identityEnvironmentForId(1, { ...options, vault: session("first-session") })).vars).toEqual({ FIRST_KEY: "first-session" });
   expect((await identityEnvironmentForId(1, { ...options, vault: session("second-session") })).vars).toEqual({ FIRST_KEY: "second-session" });
 });
+
+it("serves a late cache hit immediately while refreshing and fences invalidation", async () => {
+  const { vi }=await import("vitest");
+  const now=vi.spyOn(Date,"now").mockReturnValue(1000);
+  try {
+    const directory=installSecrets("FIRST_KEY=old\n");
+    const options={names:["FIRST_KEY"],cacheTtlMs:1000,touch:false};
+    expect((await identityEnvironmentForId(1,options)).vars.FIRST_KEY).toBe("old");
+    writeFileSync(join(directory,".env"),"FIRST_KEY=new\n");
+    now.mockReturnValue(1801);
+    expect((await identityEnvironmentForId(1,options)).vars.FIRST_KEY).toBe("old");
+    await vi.waitFor(async()=>expect((await identityEnvironmentForId(1,options)).vars.FIRST_KEY).toBe("new"));
+    invalidateIdentityEnvironment(1);writeFileSync(join(directory,".env"),"FIRST_KEY=rotated\n");
+    expect((await identityEnvironmentForId(1,options)).vars.FIRST_KEY).toBe("rotated");
+  } finally {now.mockRestore();}
+});

@@ -18,13 +18,20 @@
  */
 import type { TokenUsage } from "@barry-rocks/sdk/adapters/models";
 import type { SessionEvent } from "@barry-rocks/sdk/sessions";
+import {
+  type NormalizedUsageSnapshotV1,
+  type NormalizeRawUsageOptions,
+  normalizeRawProviderUsage,
+} from "./inference-usage.js";
 
 /** What one pi event contributed to the turn being read. */
 export interface PiEventSignals {
   /** Barry events to emit, in order. */
   events: SessionEvent[];
-  /** Usage the event reported, to add to the turn's total. */
+  /** Usage the event reported, to add to the turn's total (only when both input and output are known). */
   usage?: TokenUsage;
+  /** Structured usage classification (`known` | `partial` | `unknown`) for inference accounting. */
+  usageSnapshot?: NormalizedUsageSnapshotV1;
   /** The turn failed, in the model's or pi's own words. */
   error?: string;
 }
@@ -71,6 +78,21 @@ function userEvents(message: Record<string, unknown>): SessionEvent[] {
   return text ? [{ type: "text", text, role: "user" }] : [];
 }
 
+function isUninitializedErrorUsage(message: Record<string, unknown>): boolean {
+  if (message.stopReason !== "error" && message.stopReason !== "aborted") {
+    return false;
+  }
+  const usage = asRecord(message.usage);
+  if (!usage) return true;
+  return (
+    (usage.input === 0 || usage.input === undefined) &&
+    (usage.output === 0 || usage.output === undefined) &&
+    (usage.totalTokens === 0 || usage.totalTokens === undefined) &&
+    (usage.cacheRead === 0 || usage.cacheRead === undefined) &&
+    (usage.cacheWrite === 0 || usage.cacheWrite === undefined)
+  );
+}
+
 function assistantSignals(message: Record<string, unknown>): PiEventSignals {
   const events: SessionEvent[] = [];
   const blocks = Array.isArray(message.content) ? message.content : [];
@@ -85,8 +107,19 @@ function assistantSignals(message: Record<string, unknown>): PiEventSignals {
     // Thinking blocks are the model's, not Barry's, to surface.
   }
   const signals: PiEventSignals = { events };
-  const usage = usageOf(message.usage);
-  if (usage) signals.usage = usage;
+  if ( isUninitializedErrorUsage(message) ) {
+    signals.usageSnapshot = normalizeRawProviderUsage(null, {
+      defaultUnknownReason:
+        message.stopReason === "aborted"
+          ? "aborted_before_usage"
+          : "call_failed_before_usage",
+    });
+  } else {
+    const snapshot = usageSnapshotOf(message.usage);
+    signals.usageSnapshot = snapshot;
+    const usage = usageOf(message.usage);
+    if (usage) signals.usage = usage;
+  }
   if (message.stopReason === "error") signals.error = errorTextOf(message) ?? "pi reported an error response";
   return signals;
 }
@@ -137,22 +170,44 @@ function resultOf(raw: unknown): unknown {
   return raw;
 }
 
+/** Normalize raw usage into `known` | `partial` | `unknown` without zero-filling missing halves. */
+export function usageSnapshotOf(
+  raw: unknown,
+  options?: NormalizeRawUsageOptions,
+): NormalizedUsageSnapshotV1 {
+  return normalizeRawProviderUsage(raw, options);
+}
 
-/** pi's `Usage` as Barry's `TokenUsage`. */
+/**
+ * pi's `Usage` as Barry's `TokenUsage`.
+ *
+ * Emits `TokenUsage` only when both `input` and `output` are actually known
+ * nonnegative finite integers. Never fabricates `0` for missing halves.
+ */
 export function usageOf(raw: unknown): TokenUsage | undefined {
   const usage = asRecord(raw);
   if (!usage) return undefined;
-  const input = numberOr(usage.input);
-  const output = numberOr(usage.output);
-  if (input === undefined && output === undefined) return undefined;
-  const cacheRead = numberOr(usage.cacheRead);
-  const cacheWrite = numberOr(usage.cacheWrite);
+  const input = nonNegativeIntOr(usage.input ?? usage.input_tokens ?? usage.prompt_tokens);
+  const output = nonNegativeIntOr(usage.output ?? usage.output_tokens ?? usage.completion_tokens);
+  if (input === undefined || output === undefined) return undefined;
+  if (
+    ("cacheRead" in usage && usage.cacheRead !== undefined && usage.cacheRead !== null && nonNegativeIntOr(usage.cacheRead) === undefined) ||
+    ("cacheWrite" in usage && usage.cacheWrite !== undefined && usage.cacheWrite !== null && nonNegativeIntOr(usage.cacheWrite) === undefined) ||
+    ("totalTokens" in usage && usage.totalTokens !== undefined && usage.totalTokens !== null && nonNegativeIntOr(usage.totalTokens) === undefined)
+  ) {
+    return undefined;
+  }
+  const cacheRead = nonNegativeIntOr(usage.cacheRead ?? usage.cache_read_input_tokens);
+  const cacheWrite = nonNegativeIntOr(usage.cacheWrite ?? usage.cache_creation_input_tokens);
+  const explicitTotal = nonNegativeIntOr(usage.totalTokens ?? usage.total_tokens);
   const cost = asRecord(usage.cost);
-  const costUsd = cost ? numberOr(cost.total) : undefined;
+  const costUsd = cost ? nonNegativeNumberOr(cost.total) : nonNegativeNumberOr(usage.reported_cost ?? usage.costUsd);
   return {
-    inputTokens: input ?? 0,
-    outputTokens: output ?? 0,
-    totalTokens: numberOr(usage.totalTokens) ?? (input ?? 0) + (output ?? 0),
+    inputTokens: input,
+    outputTokens: output,
+    totalTokens:
+      explicitTotal ??
+      input + output + (cacheRead ?? 0) + (cacheWrite ?? 0),
     ...(cacheRead !== undefined ? { cacheReadTokens: cacheRead } : {}),
     ...(cacheWrite !== undefined ? { cacheWriteTokens: cacheWrite } : {}),
     ...(costUsd !== undefined && costUsd > 0 ? { costUsd } : {}),
@@ -179,6 +234,9 @@ export function sumUsage(total: TokenUsage | undefined, add: TokenUsage | undefi
 }
 
 function errorTextOf(message: Record<string, unknown>): string | undefined {
+  if (typeof message.errorMessage === "string" && message.errorMessage) {
+    return message.errorMessage;
+  }
   const diagnostics = Array.isArray(message.diagnostics) ? message.diagnostics : [];
   for (const raw of diagnostics) {
     const diagnostic = asRecord(raw);
@@ -205,8 +263,16 @@ function asRecord(raw: unknown): Record<string, unknown> | undefined {
   return raw as Record<string, unknown>;
 }
 
-function numberOr(raw: unknown): number | undefined {
-  return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
+function nonNegativeIntOr(raw: unknown): number | undefined {
+  return typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 0
+    ? raw
+    : undefined;
+}
+
+function nonNegativeNumberOr(raw: unknown): number | undefined {
+  return typeof raw === "number" && Number.isFinite(raw) && raw >= 0
+    ? raw
+    : undefined;
 }
 
 function none(): PiEventSignals {

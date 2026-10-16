@@ -24,8 +24,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "ses_7c2a03272c83469a337cc6cd89"
+      "warnings": [
+        "opencode: unknown version; recommended 2.0.26; could not establish the runtime version"
+      ],
+      "harnessSessionId": "ses_7c2a03272c83469a337cc6cd89"
     },
     "written": {
       "<TMP_DIR>": {
@@ -70,8 +72,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "ses_a2e82756ee4e50c3db4729f362"
+      "warnings": [
+        "opencode: unknown version; recommended 2.0.26; could not establish the runtime version"
+      ],
+      "harnessSessionId": "ses_a2e82756ee4e50c3db4729f362"
     },
     "written": {
       "<TMP_DIR>": {
@@ -104,8 +108,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "ses_0f244fada77826402e8344f671"
+      "warnings": [
+        "opencode: unknown version; recommended 2.0.26; could not establish the runtime version"
+      ],
+      "harnessSessionId": "ses_0f244fada77826402e8344f671"
     },
     "written": {
       "<TMP_DIR>": {
@@ -142,8 +148,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "ses_4c05a04bae59c84437d6cb4789"
+      "warnings": [
+        "opencode: unknown version; recommended 2.0.26; could not establish the runtime version"
+      ],
+      "harnessSessionId": "ses_4c05a04bae59c84437d6cb4789"
     },
     "written": {
       "<TMP_DIR>": {
@@ -180,8 +188,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "ses_f29114112b1d47f26450ea73d4"
+      "warnings": [
+        "opencode: unknown version; recommended 2.0.26; could not establish the runtime version"
+      ],
+      "harnessSessionId": "ses_f29114112b1d47f26450ea73d4"
     },
     "written": {
       "<TMP_DIR>": {
@@ -222,8 +232,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "ses_6587217ef660752fa0786e5404"
+      "warnings": [
+        "opencode: unknown version; recommended 2.0.26; could not establish the runtime version"
+      ],
+      "harnessSessionId": "ses_6587217ef660752fa0786e5404"
     },
     "written": {
       "<TMP_DIR>": {

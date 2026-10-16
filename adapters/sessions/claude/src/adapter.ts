@@ -10,6 +10,7 @@
  * and the API's provider field still carry it, and it resolves here.
  */
 import { defineAdapter, type StartEngine } from "@barry-rocks/sdk/adapters/harnesses";
+import { envMs } from "@barry-rocks/sdk/sessions";
 import type { Session, SessionConfig } from "@barry-rocks/sdk/sessions";
 import { CLAUDE_CAPABILITIES } from "./capabilities.js";
 import { resolveClaudeCredential } from "./credential.js";
@@ -19,7 +20,7 @@ import { assertRoutable } from "./routing.js";
 import { claudeTranscript } from "./transcript.js";
 
 /** How long an idle live session keeps its process; the next delivery resumes the conversation. */
-const RELEASE_IDLE_PROCESS_MS = 10 * 60_000;
+const RELEASE_IDLE_PROCESS_MS = envMs("BARRY_CLAUDE_IDLE_RELEASE_MS",30*60_000);
 
 /**
  * Live where the session may, per turn where it may not. A one-turn session
@@ -53,7 +54,7 @@ export default defineAdapter({
   vendor: "anthropic",
   requirements: CLAUDE_REQUIREMENTS,
   capabilities: CLAUDE_CAPABILITIES,
-  nativeTools: NATIVE_TOOLS,
+  tools: NATIVE_TOOLS,
   defaultMode: "hosted",
   modes: {
     // Declared as the floor, what every session gets; a live one reports the

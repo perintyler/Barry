@@ -75,13 +75,13 @@ How jobs are started:
 - **From the SDK:** `jobs.run("bag:name", inputs, { key })`. The run's state comes from `get()`, its result from `output()`, and `cancel()` stops it.
 - **Over HTTP:** `POST /api/v1/jobs/{ref}/runs`.
 
-Every run is a one-off in the scheduler. That makes it durable before the caller is answered, deduplicated by `key`, and recorded as an action run with trigger `job`. Job runs share a concurrency budget of 8, separate from other one-offs.
+Every run is scheduled at an instant in the scheduler (`scheduleAt`). That makes it durable before the caller is answered, deduplicated by `key`, and recorded as an action run with trigger `job`. Job runs share a concurrency budget of 8, separate from other scheduled runs.
 
 **Authority.** A run started for a session (`callerSessionId`, or `run_action` over MCP) acts for that session:
 
 - it gets none of the job's declared secrets;
 - a job that declares secrets is refused for it;
-- a code job also needs the session's own policy to allow a raw process: Bash, and no bound.
+- a code job also needs the session's own bound to allow a raw process: Bash allowed, and no process-restricting bound.
 
 A run with no caller acts with its bag's authority. Over HTTP the caller is self-asserted behind `BARRY_SECRET`, so naming one only narrows a run. MCP is the enforced path.
 
@@ -90,7 +90,7 @@ A run with no caller acts with its bag's authority. Over HTTP the caller is self
 | Kind | Under a bound |
 | --- | --- |
 | `process` | Refused: Barry cannot confine an arbitrary program. |
-| `node` | Runs under Node's permission model: `files.allowOnly` paths become `--allow-fs-read`/`--allow-fs-write`, and child processes, workers and addons are never granted. `main` must be one self-contained `.mjs` or `.js` file. A network restriction or `files.deny` is refused, because Node cannot express it. |
+| `node` | Runs under Node's permission model: `files.allow` paths become `--allow-fs-read`/`--allow-fs-write`, and child processes, workers and addons are never permitted. `main` must be one self-contained `.mjs` or `.js` file. A network restriction or `files.deny` is refused, because Node cannot express it. |
 | `action` | The agent's session carries the bound, like any action. |
 
 A bounded job cannot declare `preflight` or `validate`: they run as shell commands outside the bound.
@@ -102,7 +102,7 @@ A job can run on a worker when all of these hold:
 - it is versioned (`version: 1`), so it is addressed as `bag:name@1`;
 - it runs with `using: node`;
 - it declares no secrets;
-- it is bounded to `files: { allowOnly: [] }`, so it touches no files at all.
+- it is bounded to `files: { allow: [] }`, so it touches no files at all.
 
 Its `main` file is then the whole bundle. Owner and worker pin it by digest, and both must have the same bag version installed.
 
@@ -123,7 +123,7 @@ The built-in `job@1` workflow runs one job as one step:
 - **Output** that breaks the contract fails the step without a retry, recorded as `JobOutputRejected`.
 - **Remote job processes** get only the network, the step key in `BARRY_JOB_KEY`, and their input.
 
-**Placement.** A step can carry `placement.nodes: { allow, deny }`. The owner also applies the `nodes` bound of a run's grant. `local` names the owner, and other entries name invited workers by name or id. A worker the bound excludes is never offered the step (`NODE_BOUND_EXCLUDED`).
+**Placement.** A step can carry `placement.nodes: { allow, deny }`. The owner also applies the `nodes` bound of a run's approved bounds. `local` names the owner, and other entries name invited workers by name or id. A worker the bound excludes is never offered the step (`NODE_BOUND_EXCLUDED`).
 
 **First use.** `sessions:summarize-session@1` is the summarizer's model call. With `BARRY_SUMMARY_ON=auto` (the default), each `summarize-sessions` sweep runs the model on a worker whenever one offers the job, and on this machine otherwise. The prompt is built and the summary saved locally. The run id is the session plus its message watermark, so a sweep that stops waiting or restarts reconnects to the same run.
 
@@ -143,10 +143,10 @@ The built-in `job@1` workflow runs one job as one step:
 
 ## Unsupported work
 
-See the [support policy and reasons](../../docs/support.md#unsupported-and-why) for the supported platform boundary.
+See the [supported platform boundary](../../docs/support.md#unsupported-and-why) for platform requirements.
 
-- **Workers you do not operate.** Job scopes now restrict claims, but untrusted workers still need result verification and per-person grants; scopes do not make worker results trustworthy.
-- **Remote action jobs.** These would need the caller's grant carried to the worker and prompts pinned by digest.
+- **Workers you do not operate.** Job restrictions limit claims, but untrusted workers still need result verification and per-person approvals; bounds do not make worker results trustworthy.
+- **Remote action jobs.** These would need the caller's approved bounds carried to the worker and prompts pinned by digest.
 - **Remote jobs with files or a restricted network.** Node's permission model cannot express those bounds, so such jobs run only where they are started.
 
-See also: [workflows](workflows.md) for the owner and worker runtime, the [workflows bag README](../../bags/workflows/README.md) for operating it, and the [schedules bag README](../../bags/schedules/README.md) for one-offs and job runs.
+See also: [workflows](workflows.md) for the owner and worker runtime, the [workflows bag README](../../bags/workflows/README.md) for operating it, and the [schedules bag README](../../bags/schedules/README.md) for scheduled runs and job runs.

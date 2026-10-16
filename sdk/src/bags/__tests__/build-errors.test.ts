@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from "fs";
 import { tmpdir } from "os";
 import { dirname, join } from "path";
-import { buildBag } from "../build.js";
+import { buildBag, ensureToolsBuilt, bagBuildInputStamp } from "../build.js";
 
 // Preserve every unresolved-import diagnostic and its location in the structured build result.
 // Rationale: docs/decisions/0010-adapter-and-session-regression-invariants.md#note-040
@@ -69,3 +69,25 @@ describe("a successful bag build", () => {
     }
   });
 });
+
+
+it("caches a failed missing build without retrying it on the next launch", async () => {
+  const bag = bagWithUnresolvableImport();
+  await expect(ensureToolsBuilt(bag)).rejects.toThrow("@definitely/not-installed");
+  const firstStamp = bagBuildInputStamp(bag);
+  await expect(ensureToolsBuilt(bag)).rejects.toMatchObject({ cachedBuildFailure: true });
+  writeFileSync(join(bag.bagDir, "src", "a.ts"), "export const a = 1;\n");
+  expect(bagBuildInputStamp(bag)).not.toBe(firstStamp);
+  // A fixed bag must recover on this launch without waiting for maintenance.
+  await expect(ensureToolsBuilt(bag)).resolves.toMatch(/tools\.js$/);
+});
+
+ it("invalidates a missing dependency failure when dependencies are installed", async () => {
+  const bag = bagWithUnresolvableImport();
+  await expect(ensureToolsBuilt(bag)).rejects.toThrow("@definitely/not-installed");
+  const dependency = join(bag.bagDir, "node_modules", "@definitely", "not-installed");
+  mkdirSync(dependency, { recursive: true });
+  writeFileSync(join(dependency, "package.json"), JSON.stringify({ name: "@definitely/not-installed", main: "index.js" }));
+  writeFileSync(join(dependency, "index.js"), "export const x = 1;");
+  await expect(ensureToolsBuilt(bag)).resolves.toMatch(/tools\.js$/);
+ });

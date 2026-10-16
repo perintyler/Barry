@@ -1,8 +1,9 @@
-import type { Grants } from "@barry-rocks/sdk";
+import type { Tool } from "@barry-rocks/sdk";
 import type { McpServerConfig } from "@barry-rocks/sdk/sessions";
-import { traits } from "@barry-rocks/identities-bag";
 import { resolveSessionNamespaces } from "@barry-rocks/sdk/internal/sessions";
 import { getServicePort } from "@barry-rocks/sdk/services";
+
+const ALWAYS_ON_SERVERS = ["barry"] as const;
 
 function generateRuntimeMcpConfig(): Record<string, McpServerConfig> {
   // The barry MCP server listens on the mcpBarry port (engine uses
@@ -40,7 +41,7 @@ export function buildMcpConfig(namespaces?: string[]): Record<string, McpServerC
   const filtered: Record<string, McpServerConfig> = {};
 
   const runtime = runtimeMcpServers();
-  for (const name of traits.alwaysOn) {
+  for (const name of ALWAYS_ON_SERVERS) {
     if (runtime[name]) filtered[name] = runtime[name];
   }
   // Register per-namespace MCP server entries. Each namespace gets its own
@@ -82,12 +83,22 @@ export function buildMcpConfig(namespaces?: string[]): Record<string, McpServerC
 
 /**
  * The MCP servers a session starts with: the always-on servers, and an entry
- * per namespace it is granted. The MCP server's answer for the session is the
- * authority; the session's grants stand in when it cannot be reached (or the
- * session is not created yet), since without namespaces every tool collapses
- * onto mcp__barry__*.
+ * per namespace of its enabled tools. The MCP server's answer for the session
+ * is the authority; the resolved tools stand in when it cannot be reached (or
+ * the session is not created yet), since without namespaces every tool
+ * collapses onto mcp__barry__*.
  */
-export async function sessionMcpServers(sessionId: string | undefined, grants: Grants): Promise<Record<string, McpServerConfig>> {
-  const namespaces = await resolveSessionNamespaces(sessionId, { fallback: grants.namespaces });
+export async function sessionMcpServers(
+  sessionId: string | undefined,
+  toolsOrNamespaces: readonly Tool[] | readonly string[] | { readonly namespaces: readonly string[] },
+  namespaceSplit = false,
+): Promise<Record<string, McpServerConfig>> {
+  const fallback: string[] = Array.isArray(toolsOrNamespaces)
+    ? [...new Set((toolsOrNamespaces as ReadonlyArray<Tool | string>).map((entry) => (typeof entry === "string" ? entry : entry.namespace)))]
+    : [...(toolsOrNamespaces as { readonly namespaces: readonly string[] }).namespaces];
+  const namespaces = await resolveSessionNamespaces(sessionId, {
+    fallback,
+    enabled: namespaceSplit,
+  });
   return buildMcpConfig(namespaces);
 }

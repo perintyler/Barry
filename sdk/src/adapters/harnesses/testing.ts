@@ -45,6 +45,7 @@ export function testSessionMode(start: SessionMode["start"]): SessionMode {
 }
 
 export function testAdapter(overrides: Partial<Adapter> = {}): Adapter {
+  const inventory = overrides.tools ?? [];
   return {
     id: "test-harness",
     label: "Test harness",
@@ -65,7 +66,7 @@ export function testAdapter(overrides: Partial<Adapter> = {}): Adapter {
       withoutKey: "unauthenticated",
       endpoint: "fixed",
     },
-    nativeTools: [],
+    tools: inventory,
     defaultMode: "guest",
     modes: { hosted: null, instrumented: null, guest: GUEST },
     ...overrides,

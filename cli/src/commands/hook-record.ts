@@ -138,8 +138,8 @@ export async function recordForeignEvent(event: ForeignEvent): Promise<void> {
     body: JSON.stringify({
       // The vendor's own id IS the Barry session id for a foreign guest: Barry
       // never launched it, so there is no BARRY_SESSION_ID to have stamped.
-      sessionId: launchedSessionId() ?? event.providerSessionId,
-      providerSessionId: event.providerSessionId,
+      sessionId: launchedSessionId() ?? event.harnessSessionId,
+      harnessSessionId: event.harnessSessionId,
       provider: event.vendor,
       // No mode: Barry did not launch this session and chose no mode for it.
       // Recorded as absent rather than guessed, so the session's real

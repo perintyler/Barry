@@ -1,3 +1,8 @@
+import {sessionRuntime} from "../session-runtime.js";
+import {enqueuePromptInThread} from "@barry-rocks/sessions-bag/store/threaded-persist";
+import {getSessionsSqlite} from "@barry-rocks/sessions-bag/store/sessions-db";
+import {PersistQueue,PersistenceBacklogError} from "../runtime/persist-queue.js";
+import {authorizeSessionExecution} from "@barry-rocks/sessions-bag/execution-authorization";
 /**
  * The delivery routes every process other than this one calls
  * (`@barry-rocks/sessions-bag/client`'s `waitForPrompts`, `registerListener`,
@@ -28,6 +33,29 @@ const WaitRequest = z.strictObject({
 export function promptsRouter(delivery: DeliveryHost): Router {
   const router = Router();
   const routes = serve(router, "/prompts", { casing: "verbatim" });
+  router.post("/enqueue",async(req,res,next)=>{
+    const parsed=z.strictObject({sessionId:SessionId,content:z.string().min(1),options:z.strictObject({clientMessageId:z.string().optional(),source:z.enum(["web_prompt","session"]).optional(),fromSession:z.string().optional()}).optional()}).safeParse(req.body);
+    if(!parsed.success)return res.status(400).json({ok:false,error:"Invalid prompt"});
+    try {
+      const {sessionId,content,options}=parsed.data;
+      await authorizeSessionExecution(req.authPrincipal!,{sessionId});
+      sessionRuntime.assertPersistenceAdmission(sessionId);
+      const active=sessionRuntime.getActiveSession(sessionId);
+      const sequence=active?sessionRuntime.allocateSequence(sessionId):undefined;
+      const input={...options,...(sequence!==undefined?{sequence}:{})};
+      const path=getSessionsSqlite().name;
+      const write=()=>enqueuePromptInThread(path,sessionId,content,input);
+      const result=active?await new Promise<Awaited<ReturnType<typeof write>>>((resolve)=>{
+        active.persistence??=new PersistQueue(lagging=>sessionRuntime.publishPersistenceHealth(sessionId,"messages",lagging));
+        const frame={type:"text",sessionId,role:"user" as const,content,sequence,metadata:{delivery:"queued",...(options?.clientMessageId?{clientMessageId:options.clientMessageId}:{})}};
+        active.persistence.enqueue(frame,Buffer.byteLength(content)+256,async()=>{
+          const result=await write();frame.sequence=result.sequence;active.lastSequence=Math.max(active.lastSequence,result.sequence);resolve(result);
+        });
+      }):await write();
+      if(!result.duplicate)delivery.promptQueued(sessionId);
+      res.json(result);
+    } catch(error){if(error instanceof PersistenceBacklogError)return res.status(503).json({ok:false,error:error.message,code:error.code,retryable:true});next(error);}
+  });
 
   /**
    * Long-poll for a pending prompt.

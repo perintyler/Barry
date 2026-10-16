@@ -3,7 +3,7 @@
 // Relative, not root-absolute: the browser resolves either way, but a
 // root-absolute specifier means the FILESYSTEM root to static analysis, so
 // `/search.js` read as an unresolved import and failed the knip lane.
-import { rankActions, coerceInputs } from "./search.js";
+import { rankActions, coerceInputs, formatLegacyRunState } from "./search.js";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -214,13 +214,17 @@ function runRow(r) {
   const row = el("button", "row");
   row.type = "button";
   const head = el("div");
-  const dot = el("span", `dot ${r.status}`);
+  const dot = el("span", `dot ${r.status === "failed" ? "failed" : r.workflow?.state ?? r.status}`);
   head.append(dot, el("span", "row-name", r.action.split(":").pop()));
   row.append(head);
   if (r.summary) row.append(el("div", "row-desc", r.summary));
-  row.append(el("div", "row-meta", `${r.status} · ${when(r.started_at)}`));
+  row.append(el("div", "row-meta", `${runState(r)} · ${when(r.started_at)}`));
   row.addEventListener("click", () => openRun(r));
   return row;
+}
+
+function runState(run) {
+  return formatLegacyRunState(run);
 }
 
 function when(iso) {
@@ -255,9 +259,36 @@ async function openRun(r) {
     const status = el("div", "field");
     status.append(el("span", "lab", "Status"));
     const line = el("div", "summary");
-    line.append(el("span", `dot ${detail.status}`), document.createTextNode(detail.status));
+    line.append(el("span", `dot ${detail.status === "failed" ? "failed" : detail.workflow?.state ?? detail.status}`), document.createTextNode(runState(detail)));
     status.append(line);
     body.append(status);
+
+    if (detail.workflow) {
+      const work = el("div", "field"); work.append(el("span", "lab", "Background work"));
+      work.append(el("p", "summary", detail.workflow.current ? "Stop, results and recovery are managed by Background work." : "This history awaits recovery from its current owner."));
+      if (detail.workflow.work_id) {
+        const localLink = el("a", "work-link", "Open in Actions Background work");
+        const params = new URLSearchParams({ work_id: detail.workflow.work_id, ...(detail.session_id ? { session_id: detail.session_id } : {}) });
+        localLink.href = `/work#${params.toString()}`;
+        work.append(localLink);
+      }
+      if (detail.workflow.url) {
+        try {
+          const url = new URL(detail.workflow.url);
+          if (["http:", "https:"].includes(url.protocol) && !url.username && !url.password) {
+            if (detail.workflow.work_id) work.append(document.createTextNode(" · "));
+            const link = el("a", "work-link", "Open Background work"); link.href = url.href; link.target = "_blank"; link.rel = "noopener"; work.append(link);
+          }
+        } catch { /* A missing or invalid owner address leaves the recorded history readable. */ }
+      }
+      body.append(work);
+    }
+
+    if (Array.isArray(detail.validation_failures) && detail.validation_failures.length > 0) {
+      const vf = el("div", "field");
+      vf.append(el("span", "lab", "Validation failures"), el("div", "report", detail.validation_failures.join("\n")));
+      body.append(vf);
+    }
 
     if (detail.summary) {
       const s = el("div", "field");

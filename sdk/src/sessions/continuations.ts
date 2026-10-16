@@ -2,11 +2,11 @@ import type { PermissionDecision, PermissionRequest, SessionEvent } from "./inde
 import { z } from "zod";
 
 export type ApprovalContinuation = "durable" | "live" | "unsupported";
-export const ReviewPolicySchema = z.discriminatedUnion("mode", [
+export const ReviewRulesSchema = z.discriminatedUnion("mode", [
   z.strictObject({ mode: z.literal("automatic") }),
   z.strictObject({ mode: z.literal("review_required"), expiresAt: z.iso.datetime().optional() }),
 ]);
-export type ReviewPolicy = z.infer<typeof ReviewPolicySchema>;
+export type ReviewRules = z.infer<typeof ReviewRulesSchema>;
 export type TurnState = "queued" | "running" | "waiting_for_input" | "recovery_required" | "completed" | "failed" | "cancelled";
 export type CallState = "not_started" | "executing" | "completed" | "failed" | "denied" | "uncertain";
 
@@ -77,7 +77,7 @@ export interface TurnSnapshot {
   runId: string;
   state: TurnState;
   revision: number;
-  reviewPolicy: ReviewPolicy;
+  reviewPolicy: ReviewRules;
   interrupts: PublicInterrupt[];
   result?: unknown;
   error?: string;

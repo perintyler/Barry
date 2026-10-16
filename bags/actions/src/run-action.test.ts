@@ -140,12 +140,13 @@ describe("run_action — detached dispatch", () => {
     mockFetch.mockResolvedValue(okResponse({ run_id: "r5", status: "complete" }));
 
     await runAction.handler(
-      { action: "survey-auth", traits: ["readonly"], cwd: "/work/repo" },
+      { action: "survey-auth", bags: ["filesystem"], bounds: ["filesystem:read"], cwd: "/work/repo" },
       { sessionId: "sess-1" } as never,
     );
 
     expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toMatchObject({
-      traits: ["readonly"],
+      bags: ["filesystem"],
+      bounds: ["filesystem:read"],
       cwd: "/work/repo",
       caller_session_id: "sess-1",
     });

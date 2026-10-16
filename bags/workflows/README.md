@@ -63,7 +63,7 @@ Workers call `POST /api/worker` over HTTPS with `Authorization: Bearer barry_wk_
 
 `/live` reports process responsiveness; `/ready` and `/health` include scheduler/storage readiness. Draining refuses new admissions/claims but retains cancellation, reads and result/heartbeat service. Shutdown has a 30-second worker drain and a 35-second hard exit. A storage fault is not an authored workflow failure; a shared backoff probe prevents per-run retry storms.
 
-The service is currently the trusted-code portable profile. Hardened OS memory containment is unavailable and fails closed. Owner-local durability is not replication/failover. Set `BARRY_WORKFLOW_ARCHIVE_DIR` explicitly to enable verified daily archives and covered-terminal pruning after 30 days; snapshot deletion stays operator-managed. Recovery requires external owner fencing. See the [runbook](../../sdk/docs/workflows-runbook.md).
+The service is currently the trusted-code portable profile. Hardened OS containment requires Linux and an executable systemd user-scope probe of the configured limits; unsupported hosts fail closed. Installed Node jobs remain portable. Owner-local durability is not replication/failover. Set `BARRY_WORKFLOW_ARCHIVE_DIR` explicitly to enable verified daily archives and covered-terminal pruning after 30 days; snapshot deletion stays operator-managed. Recovery requires external owner fencing. See the [runbook](../../sdk/docs/workflows-runbook.md).
 
 ```sh
 pnpm exec vitest run sdk/src/workflows bags/workflows/src sdk/src/auth/workflow-actor.test.ts sdk/src/nodes
@@ -86,6 +86,87 @@ secrets:
 ```
 
 A Keychain or vault reference may replace the file reference. Both processes use the installation binding; the key is not a workflow service `env` value or a forwarded identity credential.
+
+## Opt-in identity script admission
+
+The managed service launcher reads declared nonsecret overrides from
+`barryConfigDir()/barry.yaml`; it does not inherit workflow configuration from
+your shell. For an explicitly selected identity session, configure both services
+with the same private delegation-key file, and configure the runtime's installed
+script resources, current policy and identity-owned Actions projection routes:
+
+```yaml
+services:
+  workflows.runtime:
+    env:
+      - BARRY_WORKFLOW_DELEGATION_KEYS=/absolute/private/work-delegation-keys.json
+      - BARRY_WORKFLOW_SCRIPT_RESOURCES=/absolute/private/script-resources.json
+      - BARRY_WORKFLOW_ACTION_PROJECTIONS=/absolute/private/action-projections.json
+      - BARRY_WORKFLOW_POLICY=/absolute/private/work-policy.json
+  sessions.api:
+    env:
+      - BARRY_WORKFLOW_DELEGATION_KEYS=/absolute/private/work-delegation-keys.json
+```
+
+The delegation file must include a dedicated `workflows.sessions.identity` key
+ring trusted by the runtime. Keep key contents in that private file, separate
+from `BARRY_SECRET` and `BARRY_WORKFLOW_ACTOR_KEY`; those service and actor
+credentials retain their installation secret bindings. Script credentials come
+from the selected identity's declared references. Missing delegation keys,
+installed script resources or required credentials refuses admission; there is
+no legacy execution fallback. An absent projection route leaves publication
+pending while canonical work remains available.
+
+Prepare service definitions again after installing these manifest declarations,
+then restart the affected services after changing configuration. This only
+enables explicit `barry --identity <name> action work-start <bag:action> --session <id>`
+and `barry --identity <name> action work-lookup <key> --session <id>`; existing
+action and schedule producers retain their execution
+paths. The managed runtime also declares optional `BARRY_WORKFLOW_COMMON_HOSTS`
+(host manifest path), `BARRY_WORKFLOW_SCRIPT_TRAITS` (JSON array of operator
+caller trait names; identity callers use their selected session's policy),
+and `BARRY_WORKFLOW_ARTIFACT_BYTES` (default 33554432). Empty manifest-path
+defaults keep the corresponding feature disabled.
+
+Include the configuration files, selected projection stores, dedicated key/trust
+bindings and `app-support/data/sessions/work-admission-issuer.db` in installation
+backup and recovery inventory. Prepared issuer records retain ownership after
+an uncertain submission. The workflow-only archive does not capture this full
+inventory; coordinated restore, fencing, retention and quotas require their own
+qualification before rollout.
+
+## Identity-selected browser work
+
+The Actions web service has an explicit `/work` page for installed identity
+scripts. Sign in using its existing installation-secret form, choose an owned
+identity session, then choose a task. Each admission, canonical inspection,
+result and Stop rechecks that session's current authority. This selects identity
+authority through the installation login; it is not an individual identity or
+session-credential login. Existing Actions trigger and schedule routes retain
+their current execution paths.
+
+An unconfirmed submission keeps its original session, input and key. Check that
+key or explicitly retry the same intent; a missing lookup does not prove that
+an in-flight request cannot commit. Ended owned sessions support read recovery.
+Stop acknowledges intent before physical settlement and retains its original
+request ID/revision/reason after a lost reply. Browser storage is a convenience;
+server key lookup remains available independently.
+
+Cookie-authenticated writes require JSON and the exact expected origin. Direct
+HTTP access uses the service's own scheme and Host. When publishing through a
+TLS proxy, declare its exact public origin in the installation configuration:
+
+```yaml
+services:
+  actions.web:
+    env:
+      - BARRY_ACTIONS_ORIGIN=https://actions.example.test
+```
+
+Reprepare service definitions after the manifest update and restart the Actions
+web service after configuration changes. Forwarded headers do not authorize a
+different origin. This does not enable operator authority on the identity page
+or provision any identity permissions or credentials.
 
 ## Local soak probes
 

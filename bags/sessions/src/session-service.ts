@@ -81,15 +81,15 @@ export class SessionService {
    * Resolve a session from a provider's own id — a Claude transcript UUID, for
    * instance — rather than the barry session id.
    */
-  async getSessionByProviderSessionId(providerSessionId: string): Promise<SessionRecord | undefined> {
-    const record = await dbGetSessionByProviderSessionId(providerSessionId);
+  async getSessionByProviderSessionId(harnessSessionId: string): Promise<SessionRecord | undefined> {
+    const record = await dbGetSessionByProviderSessionId(harnessSessionId);
     return record ? record : undefined;
   }
 
   async getSessionByProviderSessionIdWithTranscript(
-    providerSessionId: string
+    harnessSessionId: string
   ): Promise<SessionWithTranscript | undefined> {
-    const session = await this.getSessionByProviderSessionId(providerSessionId);
+    const session = await this.getSessionByProviderSessionId(harnessSessionId);
     return session ? this.attachTranscript(session) : undefined;
   }
 

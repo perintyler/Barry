@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { scaffoldActionDir, scaffoldInstruction, scaffoldTrait } from "../scaffold-kinds.js";
+import { scaffoldActionDir, scaffoldInstruction, scaffoldBound } from "../scaffold-kinds.js";
 import { parseActionFile } from "@barry-rocks/sdk/internal/actions";
 import { parseManifestObject } from "@barry-rocks/sdk/bags";
 import { parse } from "yaml";
@@ -69,71 +69,46 @@ describe("scaffoldInstruction", () => {
   });
 });
 
-describe("scaffoldTrait", () => {
-  it("adds a trait the manifest parser accepts", () => {
-    scaffoldTrait({ bagDir, name: "demo-trait", description: "A trait", namespaces: ["demo"], access: "read" });
+describe("scaffoldBound", () => {
+  it("adds a bound the manifest parser accepts", () => {
+    scaffoldBound({ bagDir, name: "readonly", description: "Read-only demo bound" });
     const manifest = parseManifestObject(parse(readFileSync(join(bagDir, "bag.yaml"), "utf-8")), "demo");
-    expect(manifest.traits["demo:demo-trait"]).toMatchObject({ description: "A trait", bags: ["demo"], access: "read" });
-  });
-
-  // Scaffolding is the documented way to author a trait, so it has to be able
-  // to express read-only — and to emit the canonical `bounds:` key, since the
-  // legacy spelling is now rejected and would produce an unloadable manifest.
-  it("emits named bounds the manifest parser accepts", () => {
-    scaffoldTrait({ bagDir, name: "demo-read", namespaces: ["demo"], bounds: ["readonly"] });
-    const manifest = parseManifestObject(parse(readFileSync(join(bagDir, "bag.yaml"), "utf-8")), "demo");
-    expect(manifest.traits["demo:demo-read"].boundNames).toEqual(["readonly"]);
-  });
-
-  // Read-only is a full grant narrowed by a bound. Defaulting to `access: read`
-  // here as well would restrict through the weaker mechanism too, so the
-  // generated trait would not behave like the builtins it is modeled on.
-  it("defaults to readwrite access when bounds are given", () => {
-    scaffoldTrait({ bagDir, name: "demo-read", namespaces: ["demo"], bounds: ["readonly"] });
-    const manifest = parseManifestObject(parse(readFileSync(join(bagDir, "bag.yaml"), "utf-8")), "demo");
-    expect(manifest.traits["demo:demo-read"].access).toBe("readwrite");
-  });
-
-  it("keeps the read default when no bounds are given", () => {
-    scaffoldTrait({ bagDir, name: "demo-plain", namespaces: ["demo"] });
-    const manifest = parseManifestObject(parse(readFileSync(join(bagDir, "bag.yaml"), "utf-8")), "demo");
-    expect(manifest.traits["demo:demo-plain"].access).toBe("read");
-    expect(manifest.traits["demo:demo-plain"].boundNames).toEqual([]);
-  });
-
-  // An explicit --access must still win, or the flag silently does nothing.
-  it("lets an explicit access override the bounds default", () => {
-    scaffoldTrait({ bagDir, name: "demo-read", namespaces: ["demo"], bounds: ["readonly"], access: "read" });
-    const manifest = parseManifestObject(parse(readFileSync(join(bagDir, "bag.yaml"), "utf-8")), "demo");
-    expect(manifest.traits["demo:demo-read"].access).toBe("read");
+    expect(manifest.bounds?.["demo:readonly"]).toEqual({
+      description: "Read-only demo bound",
+      tools: {
+        deny: ["demo:write"],
+      },
+      bound: {
+        tools: {
+          deny: ["demo:write"],
+        },
+      },
+    });
   });
 
   it("preserves comments in bag.yaml", () => {
-    // The bag scaffolder itself emits a commented-out dependencies example, so
-    // a trait edit that round-trips through a plain object destroys docs on
-    // exactly the files this is most likely to run against.
-    scaffoldTrait({ bagDir, name: "demo-trait" });
+    scaffoldBound({ bagDir, name: "readonly" });
     const after = readFileSync(join(bagDir, "bag.yaml"), "utf-8");
     expect(after).toContain("# Host binaries this bag needs at runtime.");
     expect(after).toContain("#     install: brew install some-cli");
   });
 
-  it("refuses to redefine an existing trait", () => {
-    scaffoldTrait({ bagDir, name: "demo-trait" });
-    expect(() => scaffoldTrait({ bagDir, name: "demo-trait" })).toThrow(/already exists/);
+  it("refuses to redefine an existing bound", () => {
+    scaffoldBound({ bagDir, name: "readonly" });
+    expect(() => scaffoldBound({ bagDir, name: "readonly" })).toThrow(/already exists/);
   });
 
   it("fails when there is no bag.yaml", () => {
     const empty = mkdtempSync(join(tmpdir(), "no-bag-"));
     try {
-      expect(() => scaffoldTrait({ bagDir: empty, name: "t" })).toThrow(/No bag.yaml/);
+      expect(() => scaffoldBound({ bagDir: empty, name: "readonly" })).toThrow(/No bag.yaml/);
     } finally {
       rmSync(empty, { recursive: true, force: true });
     }
   });
 
-  it("names the bag in its sync hint", () => {
-    expect(scaffoldTrait({ bagDir, name: "t" }).hint).toContain("sync-traits demo");
+  it("names the qualified bound reference in its hint", () => {
+    expect(scaffoldBound({ bagDir, name: "readonly" }).hint).toContain("demo:readonly");
   });
 });
 

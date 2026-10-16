@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { mintWorkflowSessionCredential, verifyWorkflowSessionCredential, verifyWorkflowSessionCredentialForSession } from "./workflow-session-credential.js";
-import { approveExecutionScope } from "../bounds/execution-scope.js";
+import { approveWorkflowBounds } from "../bounds/workflow-bounds.js";
 
 const secret = "barry_session_test_secret_with_sufficient_entropy";
-const claims = { credentialId: "11111111-1111-4111-8111-111111111111", actorId: 1, identityId: 7, sessionId: "job-review", identity: "identity-stable", scopeFingerprint: "a".repeat(64), expiresAt: 50_000 };
+const claims = { credentialId: "11111111-1111-4111-8111-111111111111", actorId: 1, identityId: 7, sessionId: "job-review", identity: "identity-stable", boundFingerprint: "a".repeat(64), expiresAt: 50_000 };
 
 describe("workflow session MCP credentials", () => {
   it("binds one session, identity and frozen scope under a domain-separated signature", () => {
@@ -28,21 +28,21 @@ describe("workflow session MCP credentials", () => {
   });
 
   it("checks the credential against the persisted identity and scope ceiling", async () => {
-    const scope = await approveExecutionScope({ identity: "identity-stable", traitNames: [], traits: {}, tools: [], boundByName: async () => undefined });
-    const scopedClaims = { ...claims, scopeFingerprint: scope.fingerprint };
+    const scope = await approveWorkflowBounds({ identity: "identity-stable", bags: [], tools: [], boundByName: async () => undefined });
+    const scopedClaims = { ...claims, boundFingerprint: scope.fingerprint };
     const token = mintWorkflowSessionCredential(secret, scopedClaims, 1_000);
-    const record = { id: claims.sessionId, state: "open", ended_at: null, workflow_credential_id: claims.credentialId, user_id: 1, identity_id: 7, metadata: { workflow_scope: scope, workflow_identity_id: 7 } };
+    const record = { id: claims.sessionId, state: "open", ended_at: null, workflow_credential_id: claims.credentialId, user_id: 1, identity_id: 7, metadata: { workflow_bound: scope, workflow_identity_id: 7 } };
     expect(verifyWorkflowSessionCredentialForSession(token, secret, claims.sessionId, record, 1_001)).toMatchObject(scopedClaims);
     expect(() => verifyWorkflowSessionCredentialForSession(token, secret, "another-session", record, 1_001)).toThrow("record binding");
     expect(() => verifyWorkflowSessionCredentialForSession(token, secret, claims.sessionId, { ...record, identity_id: 8 }, 1_001)).toThrow("record binding");
     expect(() => verifyWorkflowSessionCredentialForSession(token, secret, claims.sessionId, { ...record, user_id: 2 }, 1_001)).toThrow("record binding");
     expect(() => verifyWorkflowSessionCredentialForSession(token, secret, claims.sessionId, { ...record, user_id: null }, 1_001)).toThrow("record binding");
-    expect(() => verifyWorkflowSessionCredentialForSession(token, secret, claims.sessionId, { ...record, metadata: { ...record.metadata, workflow_scope: { ...scope, tools: { "filesystem:write": "write" } } } }, 1_001)).toThrow("identity or scope");
+    expect(() => verifyWorkflowSessionCredentialForSession(token, secret, claims.sessionId, { ...record, metadata: { ...record.metadata, workflow_bound: { ...scope, tools: { "filesystem:write": "write" } } } }, 1_001)).toThrow("identity or scope");
   });
   it("requires the live run binding and never accepts an earlier token after resume", async () => {
-    const scope = await approveExecutionScope({ identity: "identity-stable", traitNames: [], traits: {}, tools: [], boundByName: async () => undefined });
-    const token = mintWorkflowSessionCredential(secret, { ...claims, scopeFingerprint: scope.fingerprint }, 1_000);
-    const record = { id: claims.sessionId, user_id: 1, identity_id: 7, state: "open", ended_at: null, workflow_credential_id: claims.credentialId, metadata: { workflow_scope: scope, workflow_identity_id: 7 } };
+    const scope = await approveWorkflowBounds({ identity: "identity-stable", bags: [], tools: [], boundByName: async () => undefined });
+    const token = mintWorkflowSessionCredential(secret, { ...claims, boundFingerprint: scope.fingerprint }, 1_000);
+    const record = { id: claims.sessionId, user_id: 1, identity_id: 7, state: "open", ended_at: null, workflow_credential_id: claims.credentialId, metadata: { workflow_bound: scope, workflow_identity_id: 7 } };
     for (const changed of [{ state: "closed" }, { state: "archived" }, { ended_at: "2026-10-03T00:00:00Z" }, { workflow_credential_id: null }, { workflow_credential_id: "22222222-2222-4222-8222-222222222222" }]) {
       expect(() => verifyWorkflowSessionCredentialForSession(token, secret, claims.sessionId, { ...record, ...changed }, 1_001)).toThrow("record binding");
     }

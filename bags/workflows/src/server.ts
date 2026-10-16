@@ -2,17 +2,17 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { carriesSecret, handleSignIn, isAuthorized } from "@barry-rocks/sdk/auth";
+import { hasBrowserSession, carriesSecret, handleSignIn, isAuthorized } from "@barry-rocks/sdk/auth";
 import { verifyWorkflowActor } from "@barry-rocks/sdk/internal/auth";
-import { dispatchWorkerRequest, WORKER_CREDENTIAL_PREFIX, publicError, WorkflowError, limits, encodeEnvelope, authorizeRun, runRequestSchema, type RunGrant, type RunAuthorization, type WorkflowOwner, type WorkflowRun, type StorageHealth } from "@barry-rocks/sdk/internal/workflows";
-import type { ExecutionContext } from "@barry-rocks/sdk/bounds";
-import { intersectExecutionScope, type ExecutionScope } from "@barry-rocks/sdk/bounds";
+import { dispatchWorkerRequest, WORKER_CREDENTIAL_PREFIX, publicError, WorkflowError, limits, encodeEnvelope, authorizeRun, runRequestSchema, type RunApproval, type RunAuthorization, type WorkflowOwner, type WorkflowRun, type StorageHealth, workSubmissionSchema, workDelegationRecordSchema, type WorkAdmissionService, type WorkDelegationCredentials, type WorkReadService, type WorkControlService, type WorkAdmission, type WorkSubmission, recoveryActivationSchema, workStopSchema, workReconciliationSchema, workListQuerySchema, createRemoteArtifactHttpHandler, extractExecutionBinding, sameExecutionBinding, type WorkArtifactStore } from "@barry-rocks/sdk/internal/workflows";
+import type { ToolCallBounds } from "@barry-rocks/sdk/bounds";
+import { intersectWorkflowBounds, type ApprovedBounds } from "@barry-rocks/sdk/bounds";
 
-const assets = new Map([ ["/", ["index.html", "text/html"]], ["/app.js", ["app.js", "text/javascript"]], ["/style.css", ["style.css", "text/css"]] ]);
+const assets = new Map([ ["/work", ["work.html", "text/html"]], ["/work.js", ["work.js", "text/javascript"]], ["/work.css", ["work.css", "text/css"]], ["/", ["index.html", "text/html"]], ["/app.js", ["app.js", "text/javascript"]], ["/style.css", ["style.css", "text/css"]] ]);
 for (const file of ["api.js", "state.js", "routing.js", "operations.js", "waiting-reasons.js"]) assets.set(`/${file}`, [file, "text/javascript"]);
 const status = z.enum(["running", "blocked", "completed", "failed", "cancelled", "timed_out"]);
 const listSchema = z.object({ status: status.optional(), search: z.string().max(200).optional(), limit: z.coerce.number().int().min(1).max(500).default(50), offset: z.coerce.number().int().nonnegative().default(0) });
-const startSchema = z.strictObject({ id: z.string().min(1).max(200), type: z.string().min(1).max(200), version: z.string().min(1).max(200), input: z.json(), timeoutMs: z.number().int().positive().optional(), job: runRequestSchema.optional() });
+const startSchema = z.strictObject({ id: z.string().min(1).max(200), type: z.string().min(1).max(200), version: z.string().min(1).max(200), input: z.json(), timeoutMs: z.number().int().positive().optional(), job: runRequestSchema.optional(), recoveryEpoch: z.uuid().optional() });
 const summary = (run: WorkflowRun | null) => run ? { ...run, input: null, outcome: run.outcome?.ok === false ? run.outcome : null } : null;
 
 async function readBody(request: IncomingMessage): Promise<unknown> {
@@ -45,11 +45,23 @@ export type IdentityGrant = { types: string[]; operations: string[]; payloadRead
 /**
  * `authenticateWorker` maps a worker credential (`barry_wk_…`) to the worker
  * id the owner invited; null refuses it. A worker credential is good for
- * `/api/worker` and nothing else, and the worker id always comes from it,
- * never from the request body.
+ * `/api/worker` and `/api/worker/artifacts/*` and nothing else, and the worker
+ * id always comes from it, never from the request body.
  */
-export function createWorkflowServer(options: { owner: WorkflowOwner; secret: string; authenticateWorker: (credential: string) => string | null; healthy?: () => boolean; draining?: () => boolean; actorKey?: string; readActorKey?: () => Promise<string | undefined>; grants?: () => Record<string, IdentityGrant>; storageHealth?: StorageHealth; clockDiagnostics?: () => unknown; maintenance?: () => unknown; runAuthorization?: RunAuthorization; currentRunScope?: (job: Parameters<RunAuthorization>[0], authorizer: string, delegation?: RunGrant["delegation"]) => Promise<ExecutionScope> }) {
+export function createWorkflowServer(options: { workStart?: (input: Pick<WorkSubmission, "version" | "request_id" | "idempotency_key" | "definition" | "inputs" | "recovery_epoch">) => Promise<{ work: WorkAdmission; created: boolean }>; workCatalog?: () => unknown; workControls?: WorkControlService<string | null>; workReads?: WorkReadService<string | null>; workerDispatch?: (worker: string, request: unknown) => Promise<unknown>; workAdmission?: WorkAdmissionService<WorkDelegationCredentials>; workArtifacts?: WorkArtifactStore; remoteArtifactHandler?: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>; owner: WorkflowOwner; secret: string; authenticateWorker: (credential: string) => string | null; healthy?: () => boolean; draining?: () => boolean; actorKey?: string; readActorKey?: () => Promise<string | undefined>; grants?: () => Record<string, IdentityGrant>; storageHealth?: StorageHealth; clockDiagnostics?: () => unknown; maintenance?: () => unknown; runAuthorization?: RunAuthorization; currentRunScope?: (job: Parameters<RunAuthorization>[0], authorizer: string, delegation?: RunApproval["delegation"]) => Promise<ApprovedBounds> }) {
   if (!options.secret) throw new Error("BARRY_SECRET is required");
+  const remoteArtifactHandler = options.remoteArtifactHandler ?? (options.workArtifacts ? createRemoteArtifactHttpHandler({
+    artifacts: options.workArtifacts,
+    authenticateWorker: options.authenticateWorker,
+    authorizeExecution: (workerId, binding, planDigest) => {
+      const delegation = options.owner.executionDelegation(workerId, binding.attempt_id);
+      const expected = extractExecutionBinding(delegation);
+      if (!sameExecutionBinding(binding, expected) || planDigest !== expected.plan_digest) {
+        throw new WorkflowError("ExecutorBindingConflict", "Execution binding mismatch.", 409);
+      }
+      return { delegation };
+    },
+  }) : undefined);
   const server = createServer({ requestTimeout: 10_000 }, async (request, response) => {
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
@@ -57,11 +69,15 @@ export function createWorkflowServer(options: { owner: WorkflowOwner; secret: st
       const url = new URL(request.url ?? "/", "http://service.invalid");
       if (url.pathname === "/live" && request.method === "GET") return json(response, { ok: true });
       if (["/health", "/ready"].includes(url.pathname) && request.method === "GET") {
-        const ok = (options.healthy?.() ?? true) && (options.storageHealth?.ready ?? true) && options.owner.storageAccounted && !options.draining?.();
-        const state = options.storageHealth && !options.storageHealth.ready ? options.storageHealth.state : options.draining?.() ? "draining" : !options.owner.storageAccounted ? "migrating" : ok ? "ready" : "degraded";
-        return json(response, { ok, state }, ok ? 200 : 503);
+        const ok = (options.healthy?.() ?? true) && (options.storageHealth?.ready ?? true) && options.owner.storageAccounted && !options.draining?.() && (url.pathname !== "/ready" || options.owner.recoveryAdmission?.active !== false);
+        const state = options.storageHealth && !options.storageHealth.ready ? options.storageHealth.state : options.draining?.() ? "draining" : !options.owner.storageAccounted ? "migrating" : options.owner.recoveryAdmission?.active === false ? "recovery-paused" : ok ? "ready" : "degraded";
+        return json(response, { ok, state, admissionPaused: options.owner.recoveryAdmission?.active === false }, ok ? 200 : 503);
       }
       if (url.pathname === "/favicon.ico" && request.method === "GET") { response.writeHead(204); response.end(); return; }
+      if (remoteArtifactHandler && (url.pathname === "/api/worker/artifacts/download" || url.pathname === "/api/worker/artifacts/stage")) {
+        if (options.storageHealth && !options.storageHealth.ready) throw new WorkflowError("StoreUnavailable", "Owner storage is degraded; preserve the request ID and retry later.", 503, true);
+        if (await remoteArtifactHandler(request, response)) return;
+      }
       const [scheme, bearer] = (request.headers.authorization ?? "").split(" ");
       if (scheme === "Bearer" && bearer?.startsWith(WORKER_CREDENTIAL_PREFIX)) {
         const worker = options.authenticateWorker(bearer);
@@ -69,7 +85,7 @@ export function createWorkflowServer(options: { owner: WorkflowOwner; secret: st
         const message = z.strictObject({ request: z.unknown() }).parse(await readBody(request));
         if (options.draining?.() && message.request && typeof message.request === "object" && "operation" in message.request && message.request.operation === "claim") return json(response, { error: "Owner is draining", code: "Draining", retryable: true }, 503);
         if (options.storageHealth && !options.storageHealth.ready) throw new WorkflowError("StoreUnavailable", "Owner storage is degraded; preserve the request ID and retry later.", 503, true);
-        return json(response, dispatchWorkerRequest(options.owner, worker, message.request));
+        return json(response, options.workerDispatch ? await options.workerDispatch(worker, message.request) : dispatchWorkerRequest(options.owner, worker, message.request));
       }
       if (url.pathname === "/sign-in") {
         // Barry's shared sign-in page carries its own inline stylesheet.
@@ -92,15 +108,25 @@ export function createWorkflowServer(options: { owner: WorkflowOwner; secret: st
       const owner = options.owner;
       if (url.pathname === "/api/metadata" && request.method === "GET") {
         if (request.headers["x-workflow-actor"] !== undefined) return json(response, { error: "not found" }, 404);
-        return json(response, { version: 2, limits, profile: "portable", browserPrincipal: "local-operator", clock: options.clockDiagnostics?.(), maintenance: options.maintenance?.() });
+        const recovery = owner.recoveryAdmission, catalog = options.workCatalog?.() ?? { enabled: false, definitions: [] };
+        const work = recovery?.active === false && catalog !== null && typeof catalog === "object" ? { ...catalog, enabled: false } : catalog;
+        return json(response, { version: 2, installation: options.owner.id, limits, profile: "portable", browserPrincipal: "local-operator", recovery, work, clock: options.clockDiagnostics?.(), maintenance: options.maintenance?.() });
       }
       if (request.method === "POST" && options.storageHealth && !options.storageHealth.ready) throw new WorkflowError("StoreUnavailable", "Owner storage is degraded; preserve the request ID and retry later.", 503, true);
       let requestBody: Promise<unknown> | undefined;
       const body = () => requestBody ??= readBody(request);
+      if (url.pathname === "/api/v2/work/submissions" && request.method === "POST") {
+        if (!options.workAdmission) return json(response, { error: "Work admission is not configured." }, 404);
+        if (!carriesSecret(request, options.secret) || request.headers["x-workflow-actor"] !== undefined) throw new WorkflowError("DelegatedServiceRequired", "Work submissions require a service hop and dedicated request-bound delegation.", 403);
+        if (options.draining?.()) throw new WorkflowError("Draining", "Owner is draining; preserve the key.", 503, true);
+        const submitted = z.strictObject({ request: workSubmissionSchema, delegation: z.strictObject({ assertion: z.string().min(1).max(8192), record: workDelegationRecordSchema }) }).parse(await body());
+        const accepted = await options.workAdmission.submitWithReceipt(submitted.request, submitted.delegation);
+        return json(response, { work: accepted.work }, accepted.created ? 201 : 200);
+      }
       const actorHeader = request.headers["x-workflow-actor"];
       let principal: string | undefined;
       let policyRef: string | undefined;
-      let execution: ExecutionContext | undefined;
+      let execution: ToolCallBounds | undefined;
       let grantedTypes: string[] = [];
       let grant: IdentityGrant | undefined;
       let auditOperation = request.method ?? "unknown";
@@ -123,8 +149,58 @@ export function createWorkflowServer(options: { owner: WorkflowOwner; secret: st
         if (!grantedTypes.length) return denied("workflow identity revoked or not granted");
         if (!grant?.operations.includes(operation)) return denied("workflow operation is not granted");
       }
-      if (options.draining?.() && request.method === "POST" && !url.pathname.endsWith("/cancel") && url.pathname !== "/api/worker") return json(response, { error: "Owner is draining", code: "Draining", retryable: true }, 503);
+      if (options.draining?.() && request.method === "POST" && !url.pathname.endsWith("/cancel") && !url.pathname.endsWith("/stop") && url.pathname !== "/api/worker") return json(response, { error: "Owner is draining", code: "Draining", retryable: true }, 503);
       if (url.pathname === "/api/worker") return denied("a worker credential from `barry workers invite` is required");
+      if (url.pathname === "/api/v2/recovery" && request.method === "GET" && !url.search) {
+        if (principal !== undefined) return denied("recovery administration requires the local operator");
+        return json(response, { recovery: owner.recoveryAdmission, activation: owner.recoveryActivation });
+      }
+      if (url.pathname === "/api/v2/recovery/activate" && request.method === "POST" && !url.search) {
+        if (principal !== undefined) return denied("recovery administration requires the local operator");
+        return json(response, owner.activateAdmission(recoveryActivationSchema.parse(await body()), "local-operator"));
+      }
+      if (url.pathname === "/api/v2/work" || url.pathname.startsWith("/api/v2/work/")) {
+        if (url.pathname === "/api/v2/work/start" && request.method === "POST" && !url.search) {
+          if (principal !== undefined || !hasBrowserSession(request, options.secret)) return denied("operator admission requires a signed-in browser; service hops need dedicated delegation");
+          if (!options.workStart) return denied("operator work admission is not configured", 404);
+          const input = workSubmissionSchema.pick({ version: true, request_id: true, idempotency_key: true, definition: true, inputs: true, recovery_epoch: true }).parse(await body());
+          const accepted = await options.workStart(input);
+          return json(response, { work: accepted.work }, accepted.created ? 201 : 200);
+        }
+        const reconciliation = /^\/api\/v2\/work\/([^/]+)\/reconciliation$/.exec(url.pathname);
+        if (reconciliation && !url.search && ["GET", "POST"].includes(request.method ?? "")) {
+          if (!options.workControls) return denied("not found", 404);
+          if (principal !== undefined) return denied("reconciliation requires the local operator");
+          const id = decodeURIComponent(reconciliation[1]);
+          return json(response, request.method === "GET" ? await options.workControls.evidence(id, null) :
+            await options.workControls.reconcile(id, workReconciliationSchema.parse(await body()), null));
+        }
+        const stop = /^\/api\/v2\/work\/([^/]+)\/stop$/.exec(url.pathname);
+        if (stop && request.method === "POST" && !url.search) {
+          if (!options.workControls) return denied("not found", 404);
+          if (principal && !grant?.operations.includes("cancel")) return denied("work stop is not granted");
+          return json(response, await options.workControls.stop(decodeURIComponent(stop[1]), workStopSchema.parse(await body()), principal ?? null));
+        }
+        if (!options.workReads || request.method !== "GET") return denied("not found", 404);
+        if (principal && !grant?.operations.includes(url.pathname === "/api/v2/work" ? "list" : "get")) return denied("work read is not granted");
+        // Scope comes exclusively from the authenticated adapter, never URL fields.
+        if (url.pathname === "/api/v2/work") {
+          const query = z.strictObject({ limit: z.coerce.number().int().min(1).max(100).optional(), states: z.string().optional(), definition_kind: z.enum(["action", "job", "workflow"]).optional(), definition_ref: z.string().max(200).optional(), trigger: z.enum(["invocation", "schedule", "event", "internal", "manual"]).optional(), after: z.coerce.number().int().nonnegative().optional(), before: z.coerce.number().int().nonnegative().optional(), cursor: z.string().max(2048).optional() }).parse(Object.fromEntries(url.searchParams));
+          return json(response, await options.workReads.list({ ...query, states: workListQuerySchema.shape.states.parse(query.states?.split(",")) }, principal ?? null));
+        }
+        if (url.pathname === "/api/v2/work/operations") {
+          const query = z.strictObject({ key: z.string().min(1).max(200), session: z.string().min(1).max(200).optional() }).parse(Object.fromEntries(url.searchParams));
+          return json(response, await options.workReads.lookupOperation(query.key, principal ?? null, query.session));
+        }
+        const result = /^\/api\/v2\/work\/([^/]+)\/result$/.exec(url.pathname);
+        if (result && !url.search) {
+          if (principal && !grant?.payloadRead) return denied("work output read is not granted");
+          return json(response, await options.workReads.result(decodeURIComponent(result[1]), principal ?? null));
+        }
+        const detail = /^\/api\/v2\/work\/([^/]+)$/.exec(url.pathname);
+        if (detail && !url.search) return json(response, await options.workReads.inspect(decodeURIComponent(detail[1]), principal ?? null));
+        return denied("not found", 404);
+      }
       if (url.pathname === "/api/overview" && request.method === "GET") return json(response, owner.overview(principal));
       if (url.pathname === "/api/audit" && request.method === "GET") { if (principal) return denied("not found", 404); return json(response, owner.policyDenials(url.searchParams.get("after") ?? "")); }
       if (url.pathname.startsWith("/api/workers/") && request.method === "GET") {
@@ -164,10 +240,10 @@ export function createWorkflowServer(options: { owner: WorkflowOwner; secret: st
           if (!approved || !options.currentRunScope) return json(response, { grant: approved ?? null, currentPolicyAvailable: false, observedAt: Date.now() });
           try {
             const current = await options.currentRunScope(approved.job, approved.authorizer, approved.delegation);
-            const context: ExecutionContext = { identity: current.identity, traits: current.traits, bound: current.bound, harness: current.harness, allowedToolIds: Object.keys(current.tools) };
-            const catalog = Object.entries(current.tools).map(([id, access]) => { const split = id.indexOf(":"); return { namespace: id.slice(0, split), toolName: id.slice(split + 1), access, contractHash: current.contracts?.[id] }; });
-            const effective = intersectExecutionScope(approved.scope, context, catalog);
-            return json(response, { grant: approved, currentPolicyAvailable: true, effective, observedAt: Date.now(), policyView: "identity-and-selected-traits; destination and live-attempt checks still required" });
+            const context: ToolCallBounds = { identity: current.identity, ...(current.bags !== undefined ? { bags: current.bags } : {}), ...(current.bounds !== undefined ? { bounds: current.bounds } : {}), bound: current.bound, harness: current.harness, allowedToolIds: Object.keys(current.tools) };
+            const currentTools = Object.entries(current.tools).map(([id, access]) => { const split = id.indexOf(":"); return { namespace: id.slice(0, split), toolName: id.slice(split + 1), access, contractHash: current.contracts?.[id] }; });
+            const effective = intersectWorkflowBounds(approved.scope, context, currentTools);
+            return json(response, { grant: approved, currentPolicyAvailable: true, effective, observedAt: Date.now(), policyView: "identity-and-selected-bags; destination and live-attempt checks still required" });
           } catch {
             return json(response, { grant: approved, currentPolicyAvailable: false, reason: "Current policy could not be resolved; privileged execution must fail closed.", observedAt: Date.now() });
           }

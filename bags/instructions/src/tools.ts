@@ -16,7 +16,7 @@ import { Barry } from "@barry-rocks/sdk";
 
 import { z } from "zod";
 import { listAllInstructions, findInstruction } from "@barry-rocks/sdk/internal/instructions";
-// The tool host supplies installed bags to the instruction catalog.
+// The tool host supplies installed bags to the instruction index.
 import { loadBagRegistrySnapshot } from "@barry-rocks/sdk/internal/bags";
 
 export const searchInstructions = Barry.Tool({
@@ -97,11 +97,11 @@ Returns the instruction's text. Use it when search_instructions — or a pointer
     const { bags } = await loadBagRegistrySnapshot();
     let found = await findInstruction(bags, ref, scope);
 
-    // Then fall back to the global catalog. Deliberately not an error: a trait
-    // can point at an instruction whose bag the identity does not list, and a
-    // pointer the session was given in its own prompt must stay fetchable. The
-    // scoped lookup decides WHICH instruction a name means; it does not decide
-    // what may be read.
+    // Then fall back to the full instruction index. Deliberately not an error:
+    // a prompt pointer can reference an instruction whose bag the session did
+    // not select, and a pointer the session was given in its own prompt must
+    // stay fetchable. The scoped lookup decides WHICH instruction a name means;
+    // it does not decide what may be read.
     if (!found && context?.bagNames) found = await findInstruction(bags, ref);
 
     if (!found) {

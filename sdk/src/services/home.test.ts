@@ -8,7 +8,7 @@ import {
   bagSegment,
   bagLogsDir,
   barryAdaptersPath,
-  barryModelProvidersPath,
+  barryModelVendorsPath,
   barryAppSupportDir,
   barryConfigDir,
   barryEnvPath,
@@ -37,7 +37,7 @@ describe("an instance is a home", () => {
     expect(barryConfigDir()).toBe(join(home, "config"));
     expect(barryEnvPath()).toBe(join(home, "app-support", "env"));
     expect(barryAdaptersPath()).toBe(join(home, "app-support", "adapters.json"));
-    expect(barryModelProvidersPath()).toBe(join(home, "app-support", "model-providers.json"));
+    expect(barryModelVendorsPath()).toBe(join(home, "app-support", "model-providers.json"));
     expect(bagLogsDir("sessions")).toBe(join(home, "logs", "sessions"));
   });
 

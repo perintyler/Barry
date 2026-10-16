@@ -51,6 +51,7 @@ const app = agent({ name: "fake-acp" })
   .onNotification(methods.agent.session.cancel, () => cancelTurn?.())
   .onRequest(methods.agent.session.prompt, async ({ params, client }) => {
     const text = params.prompt.map((block) => (block.type === "text" ? block.text : "")).join("");
+    if(text==="crash")process.exit(23);
     prompts.push(text);
     const sessionId = params.sessionId;
 

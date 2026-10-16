@@ -15,8 +15,13 @@ import type { ToolContext, McpAnnotations } from "@barry-rocks/sdk/tools";
 import {
   CORE_NAMESPACES,
   classifyFileWrite,
+  guardToolCall,
+  narrowInputSchemaForBound,
+  qualifyToolId,
+  type Bound,
+  type ToolDescriptor,
 } from "@barry-rocks/sdk/bounds";
-import type { ToolMeta } from "@barry-rocks/sdk/bounds";
+import { installationRegistry } from "@barry-rocks/sdk/internal/nodes";
 import { record as recordChange } from "@barry-rocks/tracker-bag";
 import { createLogger } from "@barry-rocks/sdk/logging";
 import {
@@ -29,8 +34,6 @@ import { searchDeferredTools } from "./tool-search.js";
 import { getRegisteredTools, getRequestHandler, markToolHandlersInitialized, type RegisteredTool } from "./sdk-internals.js";
 import { createLogger as createDiagnosticLogger } from "@barry-rocks/sdk/logging";
 const diagnostics = createDiagnosticLogger("mcp.tools", { transport: "stderr" });
-
-
 
 const log = createLogger("tool-runtime", { transport: "stderr" });
 
@@ -76,6 +79,8 @@ export interface RuntimeTool {
   namespace: string;
   access: "read" | "write";
   name: string;
+  /** Un-disambiguated tool name preserved across `disambiguateToolNames`. */
+  originalName?: string;
   description: string;
   schema: z.ZodRawShape;
   secrets?: string[];
@@ -161,11 +166,11 @@ export function disambiguateToolNames(tools: RuntimeTool[]): RuntimeTool[] {
     let n = 2;
     while (used.has(name)) name = `${base}_${n++}`;
     used.add(name);
-    return { ...tool, name };
+    return { ...tool, originalName: tool.originalName ?? tool.name, name };
   });
 }
 
-export function toToolMeta(tools: RuntimeTool[]): ToolMeta[] {
+export function toToolMeta(tools: RuntimeTool[]): ToolDescriptor[] {
   return tools.map((tool) => ({
     namespace: tool.namespace,
     toolName: tool.name,
@@ -186,19 +191,6 @@ export type ToolDiscovery = "provider" | "barry";
 /**
  * What a session gets when nothing chose — an identity with no
  * `tool_discovery`, or no identity at all.
- *
- * `barry`, so a bag that marks its tools `deferred:` actually gets the effect it
- * asked for. Under `provider` the flag is inert: `tools/list` returns everything
- * and deferral is the client's problem, so a bag author who deferred a whole
- * surface still paid for it in every context window.
- *
- * EXPORTED AND USED EVERYWHERE, rather than repeating `?? "provider"`. Three
- * places decide deferral behaviour — this module's `tools/list` filter and two
- * `keepDeferred` computations in `index.ts` — and the two in `index.ts` test
- * `=== "barry"` against a value that is `undefined` when no identity set it. A
- * default applied in only one of the three would hide tools from `tools/list`
- * while the aggregate stripped the deferred catalog, leaving them unreachable:
- * findable by neither route. They must agree, so they read one constant.
  */
 export const DEFAULT_TOOL_DISCOVERY: ToolDiscovery = "barry";
 
@@ -213,6 +205,10 @@ export interface CreateToolServerOptions {
   proxiedTools?: FilterableProxiedTool[];
   pool?: BagConnectionPool;
   toolDiscovery?: ToolDiscovery;
+  /** Session Bound used to narrow advertised tool schemas and guard proxied calls. */
+  bound?: Bound | null;
+  /** Override node ID for `bound.nodes` checks (defaults to installation ID). */
+  nodeId?: string;
   /** Set when this server serves exactly one namespace (`/mcp/ns/<ns>`). */
   namespaceScoped?: boolean;
   /**
@@ -247,7 +243,7 @@ export interface ToolServerHandle {
    * test uses it to tell a real swap from a silent no-op, which is the failure
    * mode this mechanism is most prone to.
    */
-  refreshTools(next: { tools: RuntimeTool[]; proxiedTools?: FilterableProxiedTool[] }): boolean;
+  refreshTools(next: { tools: RuntimeTool[]; proxiedTools?: FilterableProxiedTool[]; bound?: Bound | null }): boolean;
   /** Names currently visible in `tools/list`, sorted, for logging and assertions. */
   visibleToolNames(): string[];
 }
@@ -301,13 +297,14 @@ export function createToolServerHandle(
   }
   const tools = opts.tools;
   // ONE array identity for proxied tools, shared by the proxy patch, the
-  // deferred catalog, and tools/list. refreshTools mutates it IN PLACE, so
+  // deferred tools list, and tools/list. refreshTools mutates it IN PLACE, so
   // every closure that captured it at construction stays current — replacing
   // the array would silently strand them on the old contents.
   const proxiedRef: FilterableProxiedTool[] = [...(opts.proxiedTools ?? [])];
   const connectionPool = opts.pool;
   const discovery = resolveToolDiscovery(opts.toolDiscovery);
   const namespaceScoped = opts.namespaceScoped ?? false;
+  let currentBound: Bound | null = opts.bound ?? null;
 
   const server = new McpServer({ name: "barry", version: "1.0.0" }, {
     debouncedNotificationMethods: ["notifications/tools/list_changed", "notifications/resources/list_changed", "notifications/prompts/list_changed"],
@@ -316,18 +313,6 @@ export function createToolServerHandle(
   // namespace-qualified to stay unique, so every downstream lookup keyed by
   // name must use this list rather than the caller's.
   const registeredToolList = namespaceScoped ? tools : disambiguateToolNames(tools);
-  // Cap results at the model-facing boundary: everything this server returns
-  // toward an agent is bounded, no matter which bag produced it.
-  // One options object for every registration this server ever does — initial,
-  // refresh-added, and refreshed-handler swaps — so their behavior cannot drift.
-  //
-  // Per-call timing and outcome. Nothing recorded this before, so a tool that
-  // was slow or failing was indistinguishable from one that was never called
-  // — and "which tool is wedging sessions" had no answer at all.
-  //
-  // A failed call logs at warn so it surfaces without a filter; a slow one is
-  // left at info because slow is a judgement the dashboard makes from
-  // percentiles, not something to decide per call with a hardcoded threshold.
   const registerOptions = {
     resultCharLimit: resultCharLimitFromEnv(),
     onToolCall: ({ name, durationMs, ok, error }: { name: string; durationMs: number; ok: boolean; error?: string }) => {
@@ -348,38 +333,51 @@ export function createToolServerHandle(
     }
   }
 
+  function buildDeferredTools(runtimeList: RuntimeTool[]) {
+    if (discovery !== "barry") return [];
+    return [
+      // Registered names, so a tool_search hit is directly callable via call_tool.
+      ...runtimeList.filter((t) => t.deferred).map((t) => ({
+        name: t.name,
+        description: prefixDescription(t.description, t.namespace, namespaceScoped),
+        inputSchema: narrowInputSchemaForBound(
+          zodSchemaToJson(t.schema, t.name),
+          qualifyToolId(t.namespace, t.originalName ?? t.name),
+          currentBound,
+        ),
+        namespace: t.namespace,
+      })),
+      ...proxiedRef.filter((t) => t.deferred && !t.replaced).map((t) => ({
+        name: t.name,
+        description: prefixDescription(t.description, t.namespace, namespaceScoped),
+        inputSchema: narrowInputSchemaForBound(
+          t.inputSchema,
+          qualifyToolId(t.namespace, t.name),
+          currentBound ?? t.bound,
+        ),
+        namespace: t.namespace,
+      })),
+    ];
+  }
+
   // In barry mode, register tool_search + call_tool BEFORE patchServerWithProxiedTools
   // (which overrides the tools/call handler — our tools must be registered first so
   // they appear in the SDK's _registeredTools map and get dispatched by the patch).
-  const deferredCatalog = discovery === "barry"
-    ? [
-        // Registered names, so a tool_search hit is directly callable via call_tool.
-        ...registeredToolList.filter((t) => t.deferred).map((t) => ({
-          name: t.name,
-          description: prefixDescription(t.description, t.namespace, namespaceScoped),
-          inputSchema: zodSchemaToJson(t.schema, t.name),
-          namespace: t.namespace,
-        })),
-        ...proxiedRef.filter((t) => t.deferred).map((t) => ({
-          name: t.name,
-          description: prefixDescription(t.description, t.namespace, namespaceScoped),
-          inputSchema: t.inputSchema,
-          namespace: t.namespace,
-        })),
-      ]
-    : [];
-  const deferredNames = new Set(deferredCatalog.map((t) => t.name));
+  const deferredTools = buildDeferredTools(registeredToolList);
+  const deferredNames = new Set(deferredTools.map((t) => t.name));
 
   // call_tool's proxied dispatch map — same in-place contract as proxiedRef:
   // refreshTools clears and repopulates it so the call_tool closure stays live.
-  const proxiedByName = new Map(proxiedRef.filter((t) => t.deferred).map((t) => [t.name, t]));
+  const proxiedByName = new Map(
+    proxiedRef.filter((t) => t.deferred && !t.replaced).map((t) => [t.name, t]),
+  );
 
-  // Registered for the WHOLE LIFE of a barry-mode server, empty catalog or not.
+  // Registered for the WHOLE LIFE of a barry-mode server, empty deferred list or not.
   //
   // The SDK installs its tools/list + tools/call handlers on the first
   // registration and refuses `registerCapabilities` once a transport is
   // connected, so this is the only moment meta-tools can appear. Gating on
-  // `deferredCatalog.length > 0` therefore made the decision permanently on a
+  // `deferredTools.length > 0` therefore made the decision permanently on a
   // snapshot of the session's FIRST resolution — and a session gains deferred
   // tools later all the time: enabling a bag mid-session (POST /refresh-tools),
   // or a fail-closed resolve healing itself (scheduleResolveRetry). Either way
@@ -388,12 +386,12 @@ export function createToolServerHandle(
   //
   // The cost of being wrong in the other direction is two entries in
   // `tools/list` (~150 tokens) and a `tool_search` that returns []. The cost of
-  // being wrong this way was a tool that is granted, registered, hidden, and
-  // unreachable — which is indistinguishable from one that was never granted.
+  // being wrong this way was a tool that is packed, registered, hidden, and
+  // unreachable — which is indistinguishable from one that was never packed.
   //
   // Safe because `BUILTIN_TOOL_NAMES` exempts both names from the `allowed`
   // gate in `listedTools()`, so they survive every refresh, and `call_tool`
-  // dispatches through the SDK registry rather than the catalog — it is a
+  // dispatches through the SDK registry rather than the deferred list — it is a
   // working general-purpose dispatcher even when nothing is deferred.
   const metaToolsRegistered = discovery === "barry";
 
@@ -408,13 +406,13 @@ export function createToolServerHandle(
       async ({ query, max_results }) => ({
         content: [{
           type: "text" as const,
-          text: JSON.stringify(searchDeferredTools(deferredCatalog, query, max_results ?? 5), null, 2),
+          text: JSON.stringify(searchDeferredTools(deferredTools, query, max_results ?? 5), null, 2),
         }],
       }),
     );
 
     // Capture the registeredTools ref early — it's populated by registerTools above.
-    const nativeTools = getRegisteredTools(server);
+    const localTools = getRegisteredTools(server);
 
     server.tool(
       "call_tool",
@@ -429,8 +427,35 @@ export function createToolServerHandle(
 
         // Try proxied tools first (they have their own client dispatch)
         const proxied = proxiedByName.get(toolName);
-        if (proxied) {
+        if (proxied && !proxied.replaced) {
           try {
+            if (proxied.guard) {
+              await proxied.guard(args);
+            }
+            const activeBound = currentBound ?? proxied.bound ?? null;
+            if (activeBound) {
+              let fallbackNodeId: string | undefined;
+              if (!opts.nodeId) {
+                try {
+                  fallbackNodeId = installationRegistry().id;
+                } catch {
+                  fallbackNodeId = undefined;
+                }
+              }
+              await guardToolCall(
+                {
+                  id: qualifyToolId(proxied.namespace, proxied.name),
+                  name: proxied.name,
+                  namespace: proxied.namespace,
+                },
+                args,
+                activeBound,
+                {
+                  enforceConfigProtection: true,
+                  nodeId: opts.nodeId ?? fallbackNodeId,
+                },
+              );
+            }
             const live = connectionPool?.shared.find(
               (t) => t.bag === proxied.bag && t.name === toolName,
             )?.proxy ?? proxied.proxy;
@@ -442,18 +467,12 @@ export function createToolServerHandle(
           }
         }
 
-        // Try native registered tools — dispatch mirrors the SDK's own
+        // Try local registered tools — dispatch mirrors the SDK's own
         // tools/call handler (validate + call handler(parsedArgs, extra)).
-        const tool = nativeTools[toolName];
+        const tool = localTools[toolName];
         if (!tool) {
           return errorResult(`Unknown tool: ${toolName}`);
         }
-        // "Mirrors the SDK's handler" has to include its ENABLED check, or this
-        // path becomes a way around revocation. refreshTools disables a revoked
-        // tool's record, which stops tools/call — but this dispatch reads the
-        // same registry and only tested for existence, so call_tool still
-        // executed the handler and its captured credentials. Reachable by any
-        // barry with tool_discovery: "barry", where call_tool is registered.
         if (!tool.enabled) {
           return errorResult(`Unknown tool: ${toolName}`);
         }
@@ -477,27 +496,19 @@ export function createToolServerHandle(
   }
 
   // Ensure the tools capability is always declared so tools/list returns an
-  // empty list instead of crashing with "Server does not support tools". The
-  // SDK only registers the capability when server.tool() is called at least
-  // once, so force it when no native tools were registered.
-  if (tools.length === 0 && deferredCatalog.length === 0) {
+  // empty list instead of crashing with "Server does not support tools".
+  if (tools.length === 0 && deferredTools.length === 0) {
     server.server.registerCapabilities({ tools: { listChanged: true } });
   }
 
-  // A server that registered NOTHING at construction must complete its own
-  // handlers: the SDK installs tools/list + tools/call on the FIRST
-  // registerTool, which collides with the custom list handler below and — once
-  // a transport is connected — throws "Cannot register capabilities after
-  // connecting". Without this, a toolless server (degraded init) could never
-  // accept the tools a self-heal refresh brings: the retry failed forever,
-  // which is exactly how the bug surfaced live. The proxy patch is a complete
-  // tools/call (proxied + native dispatch), so owning both handlers is safe.
   const startedToolless = registeredToolList.length === 0 && !metaToolsRegistered;
   let proxyPatchInstalled = proxiedRef.length > 0 || startedToolless;
   if (proxyPatchInstalled) {
     patchServerWithProxiedTools(server, proxiedRef, connectionPool, {
       force: startedToolless,
       barrySessionId: opts.barrySessionId,
+      bound: () => currentBound,
+      nodeId: opts.nodeId,
       // Proxied bags never reach registerTools, so this is the only place a
       // remote bag's calls can be observed. Same shape and same log line as the
       // native path, so both read identically downstream.
@@ -522,6 +533,12 @@ export function createToolServerHandle(
   function buildListState(runtimeTools: RuntimeTool[], deferred: Set<string>) {
     return {
       namespaceByName: new Map(runtimeTools.map((t) => [t.name, t.namespace])),
+      qualifiedIdByName: new Map(
+        runtimeTools.map((t) => [
+          t.name,
+          qualifyToolId(t.namespace, t.originalName ?? t.name),
+        ]),
+      ),
       // `_meta` is not stored in the SDK's _registeredTools, so carry it from the
       // RuntimeTool list. Without this, MCP-Apps hosts never see `ui.resourceUri`.
       metaByName: new Map(runtimeTools.filter((t) => t._meta).map((t) => [t.name, t._meta!])),
@@ -552,23 +569,35 @@ export function createToolServerHandle(
           // provider mode lists everything and the client handles deferral.
           return discovery === "barry" ? !state.deferredNames.has(name) : true;
         })
-        .map(([name, tool]) => ({
-          name,
-          description: prefixDescription(tool.description ?? "", state.namespaceByName.get(name) ?? "", namespaceScoped),
-          inputSchema: zodSchemaToJson(tool.inputSchema, name),
-          ...(state.outputSchemaByName.has(name) ? { outputSchema: state.outputSchemaByName.get(name) } : {}),
-          annotations: tool.annotations,
-          ...(state.metaByName.has(name) ? { _meta: state.metaByName.get(name) } : {}),
-        })),
+        .map(([name, tool]) => {
+          const ns = state.namespaceByName.get(name) ?? "";
+          const qualifiedId = state.qualifiedIdByName.get(name) ?? qualifyToolId(ns, name);
+          return {
+            name,
+            description: prefixDescription(tool.description ?? "", ns, namespaceScoped),
+            inputSchema: narrowInputSchemaForBound(
+              zodSchemaToJson(tool.inputSchema, name),
+              qualifiedId,
+              currentBound,
+            ),
+            ...(state.outputSchemaByName.has(name) ? { outputSchema: state.outputSchemaByName.get(name) } : {}),
+            annotations: tool.annotations,
+            ...(state.metaByName.has(name) ? { _meta: state.metaByName.get(name) } : {}),
+          };
+        }),
       ...proxiedRef
-        .filter((tool) => (discovery === "barry" ? !tool.deferred : true))
+        .filter((tool) => !tool.replaced && (discovery === "barry" ? !tool.deferred : true))
         .map((tool) => ({
           name: tool.name,
           description: prefixDescription(tool.description, tool.namespace, namespaceScoped),
-          inputSchema: tool.inputSchema,
+          inputSchema: narrowInputSchemaForBound(
+            tool.inputSchema,
+            qualifyToolId(tool.namespace, tool.name),
+            currentBound ?? tool.bound,
+          ),
           annotations: tool.annotations,
         })),
-    ];
+    ].sort((a,b)=>a.name<b.name ? -1 : a.name>b.name ? 1 : 0);
   }
 
   server.server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: listedTools() }));
@@ -599,6 +628,9 @@ export function createToolServerHandle(
     visibleToolNames: () => listedTools().map((t) => t.name).sort(),
     refreshTools(next) {
       const before = listedTools().map((t) => t.name).sort().join(" ");
+      if (next.bound !== undefined) {
+        currentBound = next.bound;
+      }
 
       const nextList = namespaceScoped ? next.tools : disambiguateToolNames(next.tools);
 
@@ -631,31 +663,21 @@ export function createToolServerHandle(
         // patch, the SDK's default tools/call handler would reject their names.
         patchServerWithProxiedTools(server, proxiedRef, connectionPool, {
           barrySessionId: opts.barrySessionId,
+          bound: () => currentBound,
+          nodeId: opts.nodeId,
           onToolCall: registerOptions.onToolCall,
         });
+        server.server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: listedTools() }));
         proxyPatchInstalled = true;
       }
 
       let nextDeferred: Set<string>;
       if (metaToolsRegistered) {
-        deferredCatalog.length = 0;
-        deferredCatalog.push(
-          ...nextList.filter((t) => t.deferred).map((t) => ({
-            name: t.name,
-            description: prefixDescription(t.description, t.namespace, namespaceScoped),
-            inputSchema: zodSchemaToJson(t.schema, t.name),
-            namespace: t.namespace,
-          })),
-          ...proxiedRef.filter((t) => t.deferred).map((t) => ({
-            name: t.name,
-            description: prefixDescription(t.description, t.namespace, namespaceScoped),
-            inputSchema: t.inputSchema,
-            namespace: t.namespace,
-          })),
-        );
+        deferredTools.length = 0;
+        deferredTools.push(...buildDeferredTools(nextList));
         proxiedByName.clear();
-        for (const t of proxiedRef.filter((p) => p.deferred)) proxiedByName.set(t.name, t);
-        nextDeferred = new Set(deferredCatalog.map((t) => t.name));
+        for (const t of proxiedRef.filter((p) => p.deferred && !p.replaced)) proxiedByName.set(t.name, t);
+        nextDeferred = new Set(deferredTools.map((t) => t.name));
       } else {
         // Apply deferred-discovery gating only where deferred discovery was actually enabled.
         // Rationale: docs/decisions/0010-adapter-and-session-regression-invariants.md#note-017
@@ -693,8 +715,6 @@ export function createToolServerHandle(
     },
   };
 }
-
-export { applyBoundGuards } from "@barry-rocks/sdk/bounds";
 
 const editTools = new Set(["Write", "Edit", "MultiEdit"]);
 

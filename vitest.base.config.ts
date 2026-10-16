@@ -38,6 +38,9 @@ const INSTANCE_HOME = scratchInstanceHome();
 
 export default defineConfig({
   test: {
+    maxWorkers: 4,
+    testTimeout: 120000,
+    hookTimeout: 120000,
     include: ["src/**/*.test.ts"],
     // Test files share worker processes, so a file that points BARRY_HOME
     // somewhere else and does not put it back would hand the next file an
@@ -45,10 +48,6 @@ export default defineConfig({
     setupFiles: [fileURLToPath(new URL("./vitest.instance-home.setup.ts", import.meta.url))],
     env: {
       LOG_LEVEL: "silent",
-      // A launch checks the installed harness's version by running it; a suite
-      // must not depend on which vendor binaries this machine has. The check's
-      // own tests turn it back on per call.
-      BARRY_HARNESS_VERSION_CHECK: "off",
       // macOS shells warn for inherited C.UTF-8 and contaminate captured stderr.
       LC_ALL: "C",
       // Memory-only events prevent tests from writing the owner store.

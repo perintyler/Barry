@@ -13,29 +13,44 @@
 
 import type { ActionMeta } from "@barry-rocks/sdk/internal/actions";
 import type { ScheduleTrigger } from "@barry-rocks/sdk/internal/schedules";
-import type { ScheduleEntry, ScheduleListing } from "./catalog.js";
-import { decide, firstFire, nextAfterFiring } from "./next-fire.js";
+import type { ScheduleEntry, ScheduleListing } from "./registry.js";
+import { countDueSlots, decide, firstFire, nextAfterFiring } from "./next-fire.js";
 import { claimLoginEvent, countSkippedFire, listStates, updateState, writeHeartbeat, type ScheduleState } from "./store.js";
-import { claimDue, finishAttempt, type FinishOutcome, type OneOff, type OneOffKind } from "./one-offs.js";
+import { claimDue, finishAttempt, type FinishOutcome, type AtSchedule, type AtScheduleKind } from "./at-schedules.js";
+import {
+  MAX_COUNTED_SLOTS,
+  claimLoginOccurrence,
+  dueOccurrences,
+  getOccurrence,
+  newScheduleOccurrence,
+  owedQueuedOccurrence,
+  pendingNotifications,
+  recordNotificationIntent,
+  recordOccurrence,
+  settleNotification,
+  workEligibility,
+  type ExecutorGeneration,
+} from "./work-producer-occurrences.js";
+import type { DispatchResult, ScheduleOccurrenceDispatcher } from "./work-producer-dispatcher.js";
 import { createLogger as createDiagnosticLogger } from "@barry-rocks/sdk/logging";
 const diagnostics = createDiagnosticLogger("schedules.scheduler", { transport: "stderr" });
 
 
-/** How a one-off attempt ended, as its runner reports it. */
-export interface OneOffResult {
+/** How an at-schedule attempt ended, as its runner reports it. */
+export interface AtScheduleResult {
   outcome: FinishOutcome;
   exitCode: number | null;
   runId: string | null;
   reason?: string;
 }
 
-/** Action one-off attempts running at once; the rest wait their turn, still pending. */
-export const MAX_ONE_OFFS_RUNNING = 4;
+/** Action schedule attempts running at once; the rest wait their turn, still pending. */
+export const MAX_AT_SCHEDULES_RUNNING = 4;
 
 /**
  * Job runs at once — a budget of their own. Jobs arrive from the SDK and from
  * subagents in bursts, and a shared cap would let a burst hold every slot a
- * schedule's one-off needs (or the other way round).
+ * schedule needs (or the other way round).
  */
 export const MAX_JOB_RUNS_RUNNING = 8;
 
@@ -59,15 +74,36 @@ export interface SchedulerDeps {
   runJob(entry: ScheduleEntry): Promise<FireOutcome>;
   /** Tell a human a schedule started failing or recovered. False if it could not be delivered. */
   announce(entry: ScheduleEntry, transition: Transition, outcome: FireOutcome): Promise<boolean>;
-  /** Run one attempt of a one-off (`attempt` counts from 1). Should report failure as a result, not throw. */
-  runOneOff(oneOff: OneOff, attemptId: string, attempt: number): Promise<OneOffResult>;
-  /** Settle one-offs a dead runner left running (see recoverOrphans). */
-  recoverOneOffs(): void;
+  /** Run one attempt of an at-schedule (`attempt` counts from 1). Should report failure as a result, not throw. */
+  runAtSchedule(schedule: AtSchedule, attemptId: string, attempt: number): Promise<AtScheduleResult>;
+  /** Settle schedules a dead runner left running (see recoverOrphans). */
+  recoverAtSchedules(): void;
   /** This process, as recorded on the attempts it claims. */
   runner: { pid: number; startedAt: number | null };
   /** The verified current OS login event; null means unavailable. */
   loginEventId(): string | null;
   now(): Date;
+  /**
+   * Durable occurrences (P4.3 preparation). Default OFF: without it the
+   * scheduler behaves exactly as before. With it, every due occurrence is
+   * recorded with its dispatch intent in the transaction that advances
+   * next_fire_at, and dispatched — and recovered — through the ledger.
+   */
+  occurrences?: ScheduleOccurrenceLedger;
+}
+
+/** What the scheduler needs to run on durable occurrences. */
+export interface ScheduleOccurrenceLedger {
+  dispatcher: ScheduleOccurrenceDispatcher;
+  /**
+   * The executor generation a NEW occurrence of this schedule is recorded
+   * with. Recorded occurrences keep theirs. A work.v2 choice for a schedule
+   * Work cannot admit (inline action, unversioned job) is recorded as legacy,
+   * with the reason, rather than refused at its slot.
+   */
+  generation(entry: ScheduleEntry): ExecutorGeneration;
+  /** At most this many due occurrences are (re)dispatched per tick. */
+  drainLimit?: number;
 }
 
 /** How often the schedule list is reloaded from bags. Cheap, and edits land without a restart. */
@@ -83,13 +119,13 @@ export class Scheduler {
   private loadedAt = 0;
   private readonly inFlight = new Map<string, Promise<void>>();
   private readonly queued = new Set<string>();
-  private readonly oneOffsInFlight = new Map<string, { kind: OneOffKind; run: Promise<void> }>();
+  private readonly atSchedulesInFlight = new Map<string, { kind: AtScheduleKind; run: Promise<void> }>();
 
   constructor(private readonly deps: SchedulerDeps) {}
 
   /** Runs still going, for a clean shutdown. */
   get running(): Promise<void>[] {
-    return [...this.inFlight.values(), ...[...this.oneOffsInFlight.values()].map((o) => o.run)];
+    return [...this.inFlight.values(), ...[...this.atSchedulesInFlight.values()].map((o) => o.run)];
   }
 
   /** Force the next tick to reload schedules. */
@@ -109,16 +145,21 @@ export class Scheduler {
       if (!entry.schedule.enabled) continue;
       this.consider(entry, states.get(entry.id) ?? null, now);
     }
-    await this.retryAnnouncements(states);
-    this.tickOneOffs(now);
+    if (this.deps.occurrences) {
+      this.drainOccurrences(now, this.deps.occurrences);
+      await this.deliverNotifications();
+    } else {
+      await this.retryAnnouncements(states);
+    }
+    this.tickAtSchedules(now);
     writeHeartbeat(this.listing.schedules.length, this.listing.errors);
   }
 
-  /** Recover what a dead runner left, then start due one-offs while each budget has room. */
-  private tickOneOffs(now: Date): void {
-    this.deps.recoverOneOffs();
-    for (const [kind, cap] of [["action", MAX_ONE_OFFS_RUNNING], ["job", MAX_JOB_RUNS_RUNNING]] as const) {
-      const running = [...this.oneOffsInFlight.values()].filter((o) => o.kind === kind).length;
+  /** Recover what a dead runner left, then start due schedules while each budget has room. */
+  private tickAtSchedules(now: Date): void {
+    this.deps.recoverAtSchedules();
+    for (const [kind, cap] of [["action", MAX_AT_SCHEDULES_RUNNING], ["job", MAX_JOB_RUNS_RUNNING]] as const) {
+      const running = [...this.atSchedulesInFlight.values()].filter((o) => o.kind === kind).length;
       const claims = claimDue({
         now,
         kind,
@@ -126,14 +167,14 @@ export class Scheduler {
         runnerPid: this.deps.runner.pid,
         runnerStartedAt: this.deps.runner.startedAt,
       });
-      for (const claim of claims) this.startOneOff(kind, claim.oneOff, claim.attemptId, claim.attempt);
+      for (const claim of claims) this.startAtSchedule(kind, claim.schedule, claim.attemptId, claim.attempt);
     }
   }
 
-  private startOneOff(kind: OneOffKind, oneOff: OneOff, attemptId: string, attempt: number): void {
+  private startAtSchedule(kind: AtScheduleKind, schedule: AtSchedule, attemptId: string, attempt: number): void {
     const run = this.deps
-      .runOneOff(oneOff, attemptId, attempt)
-      .catch((error: unknown): OneOffResult => ({
+      .runAtSchedule(schedule, attemptId, attempt)
+      .catch((error: unknown): AtScheduleResult => ({
         // A runner that threw is a bug in it, not the action failing — but
         // the attempt still has to close, or it would sit `running` until
         // the next scheduler restart re-ran it.
@@ -144,7 +185,7 @@ export class Scheduler {
       }))
       .then((result) => {
         finishAttempt({
-          oneOffId: oneOff.id,
+          scheduleId: schedule.id,
           attemptId,
           outcome: result.outcome,
           exitCode: result.exitCode,
@@ -153,11 +194,15 @@ export class Scheduler {
           now: this.deps.now(),
         });
       })
-      .finally(() => this.oneOffsInFlight.delete(attemptId));
-    this.oneOffsInFlight.set(attemptId, { kind, run });
+      .finally(() => this.atSchedulesInFlight.delete(attemptId));
+    this.atSchedulesInFlight.set(attemptId, { kind, run });
   }
 
   private consider(entry: ScheduleEntry, state: ScheduleState | null, now: Date): void {
+    if (this.deps.occurrences) {
+      this.considerDurable(entry, state, now, this.deps.occurrences);
+      return;
+    }
     const { trigger, catchUp, overlap } = entry.schedule;
     const key = triggerKey(trigger);
 
@@ -199,6 +244,207 @@ export class Scheduler {
 
     updateState(entry.id, { last_fired_at: now, next_fire_at: next });
     this.start(entry);
+  }
+
+  /** The generation a new occurrence of `entry` is recorded with, and why when it differs from the choice. */
+  private generationFor(entry: ScheduleEntry, ledger: ScheduleOccurrenceLedger): { generation: ExecutorGeneration; note?: string } {
+    const chosen = ledger.generation(entry);
+    if (chosen === "legacy") return { generation: "legacy" };
+    const eligibility = workEligibility(entry);
+    return eligibility.eligible ? { generation: chosen } : { generation: "legacy", note: eligibility.reason };
+  }
+
+  /**
+   * consider(), on durable occurrences. The occurrence for a due slot is
+   * recorded — with its nominal slot, never the dispatch time — in the same
+   * transaction that advances next_fire_at, so a crash in between can no
+   * longer lose it. Skips, misses and coalesced slots are recorded too.
+   */
+  private considerDurable(entry: ScheduleEntry, state: ScheduleState | null, now: Date, ledger: ScheduleOccurrenceLedger): void {
+    const { trigger, catchUp, overlap } = entry.schedule;
+    const key = triggerKey(trigger);
+    if (!state || state.trigger_key !== key) {
+      updateState(entry.id, { trigger_key: key, next_fire_at: firstFire(trigger, now) });
+      return;
+    }
+    if (state.paused) return;
+    const { generation, note } = this.generationFor(entry, ledger);
+    const notes = note ? { generation_note: note } : {};
+
+    if (trigger.kind === "login") {
+      if (this.inFlight.has(entry.id)) return;
+      const eventId = this.deps.loginEventId();
+      if (!eventId) return;
+      const occurrence = newScheduleOccurrence({ entry, kind: "login", discriminator: eventId, policy: { late: false, coalesced_slots: 1, login_event_id: eventId, ...notes }, generation });
+      const recorded = claimLoginOccurrence(occurrence, eventId, now);
+      if (recorded) this.startOccurrence(entry, recorded.occurrence.occurrenceId, ledger);
+      return;
+    }
+
+    const decision = decide(state.next_fire_at, catchUp, now);
+    if (decision.kind === "wait" || !state.next_fire_at) return;
+    const slot = state.next_fire_at;
+    const next = nextAfterFiring(trigger, now);
+    const kind = trigger.kind === "at" ? "at" : "slot";
+    const late = decision.kind === "miss" || decision.late;
+    const policy = { late, coalesced_slots: late ? countDueSlots(trigger, slot, now, MAX_COUNTED_SLOTS) : 1, ...notes };
+
+    if (decision.kind === "miss") {
+      recordOccurrence({
+        onConflict: "keep-original",
+        occurrence: newScheduleOccurrence({ entry, kind, discriminator: slot, policy, generation }),
+        state: "missed",
+        statePatch: { next_fire_at: next },
+        alsoInTransaction: () => countSkippedFire(entry.id, "missed"),
+        now,
+      });
+      return;
+    }
+
+    if (this.inFlight.has(entry.id)) {
+      // `queue` owes one re-run however many slots land meanwhile: the first
+      // is recorded as the queued occurrence, later ones as coalesced into it.
+      // Durable, so a restart no longer forgets the owed run.
+      if (overlap === "queue") {
+        const owed = owedQueuedOccurrence(entry.id);
+        recordOccurrence({
+          onConflict: "keep-original",
+          occurrence: newScheduleOccurrence({ entry, kind: owed ? kind : "queued", discriminator: slot, policy, generation }),
+          state: owed ? "coalesced" : "pending",
+          statePatch: { next_fire_at: next },
+          now,
+        });
+      } else {
+        recordOccurrence({
+          onConflict: "keep-original",
+          occurrence: newScheduleOccurrence({ entry, kind, discriminator: slot, policy, generation }),
+          state: "skipped",
+          statePatch: { next_fire_at: next },
+          alsoInTransaction: () => countSkippedFire(entry.id, "skipped"),
+          now,
+        });
+      }
+      return;
+    }
+
+    const recorded = recordOccurrence({
+      onConflict: "keep-original",
+      occurrence: newScheduleOccurrence({ entry, kind, discriminator: slot, policy, generation }),
+      state: "pending",
+      statePatch: { last_fired_at: now, next_fire_at: next },
+      now,
+    });
+    this.startOccurrence(entry, recorded.occurrence.occurrenceId, ledger);
+  }
+
+  /**
+   * Re-dispatch what is owed: occurrences recorded but never handed over
+   * (a crash after recording), queued re-runs after a restart, and Work
+   * occurrences whose admission is unconfirmed — observed by their original
+   * key. A dead dispatcher's in-flight rows are settled first.
+   */
+  private drainOccurrences(now: Date, ledger: ScheduleOccurrenceLedger): void {
+    ledger.dispatcher.recoverAbandoned();
+    for (const occurrence of dueOccurrences(now, ledger.drainLimit ?? 32)) {
+      const scheduleId = occurrence.scheduleId;
+      if (!scheduleId || this.inFlight.has(scheduleId)) continue;
+      const entry = this.listing.schedules.find((e) => e.id === scheduleId) ?? null;
+      // A legacy runner needs the loaded schedule; without it the occurrence waits, visible.
+      if (!entry && occurrence.executorGeneration === "legacy") continue;
+      this.startOccurrence(entry, occurrence.occurrenceId, ledger);
+    }
+    for (const owed of ledger.dispatcher.acceptedWithoutOutcome()) {
+      const recorded = getOccurrence(owed.occurrenceId);
+      const scheduleId = recorded?.occurrence.scheduleId;
+      if (!scheduleId || this.inFlight.has(scheduleId)) continue;
+      const entry = this.listing.schedules.find((e) => e.id === scheduleId);
+      if (entry) this.observeAccepted(entry, owed.occurrenceId, owed.oneOffId, ledger);
+    }
+  }
+
+  private startOccurrence(entry: ScheduleEntry | null, occurrenceId: string, ledger: ScheduleOccurrenceLedger): void {
+    const scheduleId = entry?.id ?? getOccurrence(occurrenceId)?.occurrence.scheduleId;
+    if (!scheduleId) return;
+    const run = ledger.dispatcher.dispatch(occurrenceId, entry)
+      .then((result) => (entry ? this.recordDispatch(entry, occurrenceId, result) : undefined))
+      .catch((error: unknown) => {
+        diagnostics.error("schedules.occurrence_failed", { detail: `schedules: occurrence ${occurrenceId} crashed: ${error instanceof Error ? error.stack : String(error)}` });
+      })
+      .finally(() => {
+        this.inFlight.delete(scheduleId);
+        const owed = entry ? owedQueuedOccurrence(scheduleId) : null;
+        if (entry && owed) {
+          updateState(scheduleId, { last_fired_at: this.deps.now() });
+          this.startOccurrence(entry, owed.occurrenceId, ledger);
+        }
+      });
+    this.inFlight.set(scheduleId, run);
+  }
+
+  /** Wait on a legacy job one-off a dead dispatcher had already accepted. Observation only. */
+  private observeAccepted(entry: ScheduleEntry, occurrenceId: string, oneOffId: string, ledger: ScheduleOccurrenceLedger): void {
+    const run = ledger.dispatcher.observeAccepted(occurrenceId, oneOffId)
+      .then((outcome) => this.recordDurable(entry, occurrenceId, outcome))
+      .catch((error: unknown) => {
+        diagnostics.error("schedules.occurrence_observe_failed", { detail: `schedules: observing ${occurrenceId} failed: ${error instanceof Error ? error.message : String(error)}` });
+      })
+      .finally(() => this.inFlight.delete(entry.id));
+    this.inFlight.set(entry.id, run);
+  }
+
+  private async recordDispatch(entry: ScheduleEntry, occurrenceId: string, result: DispatchResult): Promise<void> {
+    switch (result.kind) {
+      case "ran":
+        await this.recordDurable(entry, occurrenceId, result.outcome);
+        return;
+      case "accepted":
+        // The owner owns it now, including its outcome and any retry.
+        updateState(entry.id, { last_run_id: result.workId, last_status: "accepted", last_summary: `accepted by the Work owner as ${result.workId}${result.recovered ? " (recovered by key)" : ""}` });
+        return;
+      case "unknown":
+        updateState(entry.id, { last_status: "unknown", last_summary: `admission not confirmed (${result.code}); the original key will be observed, nothing is started again` });
+        return;
+      case "refused":
+        await this.recordDurable(entry, occurrenceId, { status: "failed", runId: null, summary: `refused (${result.code}): ${result.message}` });
+        return;
+      case "skipped":
+        return;
+    }
+  }
+
+  /**
+   * record(), on durable occurrences: the schedule state as before, and the
+   * failure/recovery notice committed as a ledger intent — grouped per
+   * failure streak — delivered separately, so a notice that cannot be sent is
+   * retried as a notice and never reruns the work.
+   */
+  private async recordDurable(entry: ScheduleEntry, occurrenceId: string, outcome: FireOutcome): Promise<void> {
+    const before = listStates().get(entry.id);
+    const failing = outcome.status === "failed";
+    updateState(entry.id, {
+      last_run_id: outcome.runId,
+      last_status: outcome.status,
+      last_summary: outcome.summary.slice(0, 2000),
+      consecutive_failures: failing ? (before?.consecutive_failures ?? 0) + 1 : 0,
+      ...(failing ? {} : { failure_announced: false }),
+    });
+    recordNotificationIntent({ scheduleId: entry.id, occurrenceId, outcome: outcome.status, summary: outcome.summary, now: this.deps.now() });
+    await this.deliverNotifications();
+  }
+
+  /** Send owed notices; each is delivered at most once and retried until it is. */
+  private async deliverNotifications(): Promise<void> {
+    for (const notice of pendingNotifications()) {
+      const entry = this.listing.schedules.find((e) => e.id === notice.scheduleId);
+      if (!entry) continue;
+      const delivered = await this.deps.announce(entry, notice.transition, {
+        status: notice.transition === "failure" ? "failed" : "complete",
+        runId: null,
+        summary: notice.transition === "failure" && notice.failures > 1 ? `failing (${notice.failures} in a row): ${notice.lastSummary ?? ""}` : (notice.lastSummary ?? ""),
+      });
+      settleNotification(notice.notificationKey, delivered, this.deps.now());
+      if (delivered && notice.transition === "failure") updateState(entry.id, { failure_announced: true });
+    }
   }
 
   private start(entry: ScheduleEntry): void {

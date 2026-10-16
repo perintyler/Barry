@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { EventSchema, MessageSchema, RunAgentInputSchema } from "@ag-ui/core/schemas";
 import { AgUiSubscriptionRequestSchema } from "./subscription.js";
-import { ReviewPolicySchema } from "../sessions/continuations.js";
+import { ReviewRulesSchema } from "../sessions/continuations.js";
 
 export const PublicTurnSchema = z.strictObject({
   id: z.string(), sessionId: z.string(), runId: z.string(),
   state: z.enum(["queued", "running", "waiting_for_input", "recovery_required", "completed", "failed", "cancelled"]),
   revision: z.int().positive(),
-  reviewPolicy: ReviewPolicySchema,
+  reviewPolicy: ReviewRulesSchema,
   interrupts: z.array(z.strictObject({
     id: z.string(), runId: z.string(),
     call: z.strictObject({ id: z.string(), tool: z.string(), input: z.unknown(), description: z.string().optional() }),

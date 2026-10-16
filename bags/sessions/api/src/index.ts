@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { startBagBuildMaintenance } from "@barry-rocks/sdk/internal/bags";
 import { createLogger, setupGracefulShutdown } from "@barry-rocks/sdk/logging";
-import { validateEnv, LOOPBACK, assignedPort, listenOnAssignedPort, barryAdaptersPath, barryRunDir } from "@barry-rocks/sdk/services";
+import { validateEnv, LOOPBACK, assignedPort, listenOnAssignedPort, barryAdaptersPath, barryRunDir, bagDataDir } from "@barry-rocks/sdk/services";
+import { join } from "node:path";
 
 import { sessionIdentity } from "@barry-rocks/sdk/stores";
 import { withStoreContext } from "@barry-rocks/sdk/internal/stores";
@@ -45,6 +47,10 @@ import { createDelivery } from "./delivery.js";
 import { closeAgUiStreams } from "./routes/ag-ui.js";
 import { selectedVendorFactories, shippedVendorRows } from "./shipped-vendors.js";
 import { closeTurnExecutions, maintainTurnExecutions, turnExecutionService } from "./turn-execution.js";
+import { InstalledWorkflowSessions, installWorkflowSessions } from "./workflow-installed-sessions.js";
+import { publishWorkflowAgentProfiles } from "./workflow-agent-profiles.js";
+import { createWorkflowWorkWorker } from "./workflow-work-worker.js";
+import { registerInstalledWorkflowRuntimes } from "./workflow-runtime-installation.js";
 
 // The subjects a session's grants are composed from, answered in-process.
 Barry.use(identities, bags, sessions, actions, events, schedules, tracker);
@@ -132,6 +138,35 @@ if (!process.env.BARRY_SECRET) {
   process.exit(1);
 }
 
+// Trusted opt-in installation preparation. It publishes verified generations
+// only; existing interactive/action producers keep their current owners.
+if ((process.env.BARRY_WORKFLOW_AGENT_PROFILES || process.env.BARRY_WORKFLOW_SESSIONS_WORKER) && !process.env.BARRY_WORKFLOW_RUNTIME_REGISTRATION) throw new Error("WorkSessionsRuntimeRegistrationRequired");
+const workflowRuntimeInstallation = process.env.BARRY_WORKFLOW_RUNTIME_REGISTRATION
+  ? await registerInstalledWorkflowRuntimes({ configuration: process.env.BARRY_WORKFLOW_RUNTIME_REGISTRATION,
+    directory: join(bagDataDir("sessions"), "workflow-runtimes"), adapters }) : undefined;
+let workflowSessions: InstalledWorkflowSessions | undefined;
+let workflowWorkWorker: Awaited<ReturnType<typeof createWorkflowWorkWorker>> | undefined;
+let workflowWorkTick: ReturnType<typeof setInterval> | undefined;
+try {
+  if (workflowRuntimeInstallation) {
+    workflowSessions = new InstalledWorkflowSessions({ installation: workflowRuntimeInstallation,
+      directory: join(bagDataDir("sessions"), "workflow-authorities") });
+    installWorkflowSessions(workflowSessions);
+    if (process.env.BARRY_WORKFLOW_AGENT_PROFILES) await publishWorkflowAgentProfiles(process.env.BARRY_WORKFLOW_AGENT_PROFILES, workflowRuntimeInstallation);
+    if (process.env.BARRY_WORKFLOW_SESSIONS_WORKER) {
+      workflowWorkWorker = await createWorkflowWorkWorker(process.env.BARRY_WORKFLOW_SESSIONS_WORKER, workflowRuntimeInstallation,
+        error => log.error("sessions.work_worker_failed", { error: error instanceof Error && /^Work[A-Za-z]+$/.test(error.message) ? error.message : error instanceof Error ? error.name : "WorkWorkerFailure" }));
+      workflowWorkTick = setInterval(() => { void workflowWorkWorker!.worker.tick().catch(error => log.error("sessions.work_worker_tick_failed", { error: error instanceof Error && /^Work[A-Za-z]+$/.test(error.message) ? error.message : error instanceof Error ? error.name : "WorkWorkerFailure" })); }, 100);
+      workflowWorkTick.unref();
+    }
+  }
+} catch (error) {
+  try { workflowRuntimeInstallation?.close(); }
+  catch (cleanup) { throw new AggregateError([error, cleanup], "WorkflowSessionsInstallationFailed"); }
+  throw error;
+}
+for (const row of workflowRuntimeInstallation?.registrations ?? []) log.info("sessions.workflow_runtime_registered", { harness: row.harness, generation: row.generation, digest: row.runtime.digest });
+
 /**
  * Hand the events bag its way onto the bus.
  *
@@ -200,6 +235,7 @@ sessionRuntime.reconcileStaleSessions().catch((err) => {
 // whose process dies while the server keeps running, which would otherwise
 // claim to be live until the next restart.
 sessionRuntime.startCrashedSessionSweep();
+sessionRuntime.startWarmSweep();
 turnExecutionService().maintain();
 const turnMaintenance = setInterval(() => {
   try { maintainTurnExecutions(); }
@@ -259,7 +295,7 @@ startTranscriptSweeper({
     return sweepTranscripts({
       listSessions: async () =>
         Promise.all(
-          (await getActiveSessions()).map((session) =>
+          (await getActiveSessions()).filter(session => !sessionRuntime.getActiveSession(session.id)).map((session) =>
             toSweepSession(session, getProviderSessionsBySession),
           ),
         ),
@@ -276,6 +312,7 @@ let cleanupRecovery: { stop(): void } | undefined;
 listenOnAssignedPort(httpServer).then(
   () => {
     cleanupRecovery = startCleanupRecovery((detail) => log.warn("sessions.process_cleanup_recovery", { detail }));
+    httpServer.once("close", startBagBuildMaintenance());
     log.info("server.start", {
       port,
       host: LOOPBACK,
@@ -296,11 +333,26 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     stopTtlCleanup();
     cleanupRecovery?.stop();
     sessionRuntime.stopCrashedSessionSweep();
+    sessionRuntime.stopWarmSweep();
     closeAgUiStreams();
-    draining ??= closeTurnExecutions().finally(() => engines.stopAll());
+    draining ??= closeTurnExecutions().then(async () => {
+      if (!await sessionRuntime.drainPersistence()) log.error("session.persistence_shutdown_timeout", {});
+    }).finally(() => engines.stopAll());
   });
 }
 setupGracefulShutdown(httpServer, log, { forceExitTimeout: 35000, onShutdown: async () => {
-  await draining;
-  await sessionRuntime.stopInboxRelay();
+  const failures: unknown[] = [];
+  clearInterval(workflowWorkTick); workflowWorkWorker?.worker.stopClaims();
+  try { await workflowWorkWorker?.close(); } catch (error) { failures.push(error); }
+  try { await draining; } catch (error) { failures.push(error); }
+  try { await sessionRuntime.stopInboxRelay(); } catch (error) { failures.push(error); }
+  try {
+    await Promise.all(sessionRuntime.getActiveSessionIds().map(async id => {
+      const active = sessionRuntime.getActiveSession(id);
+      if (active && (active.warm || active.warming) && active.lastSequence < 0 && !active.pendingTurns) await sessionRuntime.dropResident(id, { force: true });
+    }));
+  } catch (error) { failures.push(error); }
+  try { await workflowSessions?.close(); } catch (error) { failures.push(error); }
+  try { workflowRuntimeInstallation?.close(); } catch (error) { failures.push(error); }
+  if (failures.length) throw new AggregateError(failures, "SessionsShutdownFailed");
 } });

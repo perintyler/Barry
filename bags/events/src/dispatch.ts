@@ -94,7 +94,7 @@ export function resolveBarryHooks(event: BarryHookEvent): ResolvedBarryHook[] {
  * whatever someone typed — and argv is one quoting mistake away from being
  * interpreted. `notify.ts` learned this the same way.
  */
-function runHook(entry: ResolvedBarryHook, payload: BarryHookPayload): Promise<BarryHookOutcome> {
+function runHook(entry: ResolvedBarryHook, payload: BarryHookPayload, env?: NodeJS.ProcessEnv): Promise<BarryHookOutcome> {
   const started = Date.now();
   const timeoutMs = (entry.hook.timeout ?? DEFAULT_TIMEOUT_SEC) * 1000;
   const args = [...(entry.hook.args ?? [])];
@@ -118,6 +118,9 @@ function runHook(entry: ResolvedBarryHook, payload: BarryHookPayload): Promise<B
         // stdout/stderr inherited so a hook's own diagnostics reach the service
         // log rather than vanishing into a pipe nobody drains.
         stdio: ["pipe", "inherit", "inherit"],
+        // Absent: the hook inherits this process's environment (the legacy
+        // contract). The durable path passes a scoped one instead.
+        ...(env ? { env } : {}),
       });
     } catch (err) {
       done(false, err instanceof Error ? err.message : String(err));
@@ -216,4 +219,17 @@ export async function dispatchBarryHooks(
     counters.failuresByBag.set(outcome.bag, (counters.failuresByBag.get(outcome.bag) ?? 0) + 1);
   }
   return outcomes;
+}
+
+/**
+ * Run ONE bag's hooks for an event with an explicit environment — the legacy
+ * runner for a durable event occurrence (work-producer-events.ts). Unlike
+ * dispatchBarryHooks it never inherits this process's environment, so a hook
+ * run from the outbox does not receive the API's credentials (BARRY_SECRET
+ * and the like). Fails when the bag no longer declares a hook for the event.
+ */
+export async function runBarryHook(bag: string, payload: BarryHookPayload, env: NodeJS.ProcessEnv): Promise<BarryHookOutcome[]> {
+  const hooks = resolveBarryHooks(payload.event).filter((entry) => entry.bag === bag);
+  if (hooks.length === 0) return [{ bag, event: payload.event, ok: false, durationMs: 0, reason: `bag "${bag}" declares no ${payload.event} hook` }];
+  return Promise.all(hooks.map((entry) => runHook(entry, payload, env)));
 }

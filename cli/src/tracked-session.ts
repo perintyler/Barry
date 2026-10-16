@@ -3,7 +3,7 @@ import { appendMessage, createProviderSession } from "@barry-rocks/sessions-bag/
 
 type Message = Parameters<typeof appendMessage>[1];
 export interface SessionRecorder {
-  link(providerSessionId: string): Promise<void>;
+  link(harnessSessionId: string): Promise<void>;
   message(message: Message): Promise<void>;
 }
 
@@ -33,6 +33,7 @@ export function withSessionRecorder(session: Session, recorder: SessionRecorder)
     guarantees: session.guarantees,
     harnessVersion: session.harnessVersion,
     warnings: session.warnings,
+    runtimeVersion: session.runtimeVersion,
     get harnessSessionId() { return session.harnessSessionId; },
     status: () => session.status(),
     deliver: async (content, options) => {

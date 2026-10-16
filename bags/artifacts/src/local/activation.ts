@@ -4,7 +4,7 @@ import { constants, closeSync, fsyncSync, lstatSync, mkdirSync, openSync, readFi
 import { dirname, isAbsolute, join } from "node:path";
 import type { StoreBinding } from "@barry-rocks/sdk/stores";
 import { ArtifactError, ArtifactContentSchema, IdentityIdSchema, TimestampSchema } from "../types.js";
-import { sealArtifactGeneration } from "./catalog.js";
+import { sealArtifactGeneration } from "./index-store.js";
 import { readArtifactActivation, type ArtifactActivationJournal } from "./activation-journal.js";
 import { openLocalArtifactStore } from "./store.js";
 import type { prepareLocalArtifactRestore } from "./restore.js";

@@ -1,20 +1,24 @@
+import {hostname} from "node:os";
+import {readProcessStartTime} from "@barry-rocks/sessions-bag/process-liveness";
+import {sessionMcpServers} from "../mcp-config.js";
 // Method bodies extracted from session-runtime.ts for file size.
 // Moved verbatim as free functions taking the runtime instance (`rt`);
 // the SessionRuntime class delegates to these. Pure move + rewire.
 import {SessionRuntime, buildBagAuthGuidance, getBagsNeedingAuth, log, recordBagAuthEvent, tuiModeOf} from "../session-runtime.js";
+import { assertInteractiveDestination } from "../workflow-session-ownership.js";
 import type { ActiveSession, SessionConfig } from "../session-runtime.js";
 import {getDescribeAdapter, providerFieldId, routeSessionModel} from "../agent-runtime.js";
 import {buildSessionHistoryContext, createNamedSession, getSessionRecord, lastMessageSequence, updateSessionMetadata, updateSessionRecord} from "../db.js";
 import {AdmissionError, type Reservation} from "../execution-admission.js";
 import {getGitBranch, resolveRepoPath} from "../repo-paths.js";
-import {nativeToolPolicy, resolveEgressSandbox} from "../session-agent-guards.js";
+import {resolveSessionNativeTools, resolveEgressSandbox} from "../session-agent-guards.js";
 import {createWorktree} from "../worktree.js";
 import {identityRecords, owner} from "@barry-rocks/identities-bag";
-import {requestCaller} from "@barry-rocks/sdk";
+import {Barry, requestCaller} from "@barry-rocks/sdk";
 import {HarnessIdSchema} from "@barry-rocks/sdk/ids";
 import {type AuthPrincipal} from "@barry-rocks/sdk/internal/auth";
 import {expandCompositionFromSnapshot, loadBagRegistrySnapshot, loadBags, mergeBags} from "@barry-rocks/sdk/internal/bags";
-import {FALLBACK_HARNESS, adapterSettings, defaultHarness} from "@barry-rocks/sdk/internal/identities";
+import {FALLBACK_HARNESS, AdapterSettingsSchema, adapterSettings, defaultHarness} from "@barry-rocks/sdk/internal/identities";
 import {type Session, declareSession} from "@barry-rocks/sdk/sessions";
 import {getProviderSessionsBySession} from "@barry-rocks/sessions-bag/client";
 import {endSession as endSessionLifecycle} from "@barry-rocks/sessions-bag/lifecycle";
@@ -32,17 +36,23 @@ import {join} from "path";
    */
 export async function rt_recordSessionDeclaration(rt: SessionRuntime, sessionId: string, harness: string, session: Session, adoptedFrom: string | null = null): Promise<void> {
     const mode = getDescribeAdapter()?.(harness)?.modes[session.mode];
-    const unverified = mode && session.harnessVersion ? declareSession(mode, session.harnessVersion).guaranteesUnverified : false;
+    const observedVersion = session.harnessVersion ?? session.runtimeVersion?.observedVersion;
+    const declaration = mode ? declareSession(mode, observedVersion) : undefined;
     await updateSessionMetadata(sessionId, {
       mode: session.mode,
       ...(adoptedFrom ? { adopted_from: adoptedFrom } : {}),
       guarantees: { ...session.guarantees },
-      ...(session.harnessVersion ? { vendor_version: session.harnessVersion } : {}),
-      ...(unverified ? { guarantees_unverified: true } : {}),
+      ...(observedVersion ? { vendor_version: observedVersion } : {}),
+      ...(session.runtimeVersion?.binary ? { harness_binary: session.runtimeVersion.binary } : {}),
+      ...(declaration ? { guarantees_unverified: declaration.guaranteesUnverified, harness_version_assessment: declaration.versionAssessment } : {}),
     });
   }
 
 export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: SessionConfig, principal?: AuthPrincipal): Promise<ActiveSession> {
+    if (config.sessionId) assertInteractiveDestination(config.sessionId);
+    if(config.sessionId && rt.drainingSessions.has(config.sessionId))throw new Error("Recording delayed; retry when the previous transcript drains");
+    const prepareStart = performance.now();
+    const timings: Record<string, number> = { warm_hit: 0 };
     // Reserved SYNCHRONOUSLY, before the first await below. The old check
     // (`getRunningSessionCount() >= maxSessions`) read the map, then ~370
     // lines of awaited work happened before `activeSessions.set(...)` ever
@@ -65,25 +75,28 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
         }
       }
 
+      const identityStart = performance.now();
       const persistedBarryId = dbSession?.identity_id ?? null;
       const requestedBarryId = config.identityId !== undefined ? config.identityId : persistedBarryId;
       const user = principal ? await owner.users.get(principal.actorId) : dbSession?.user_id != null
         ? await owner.users.get(dbSession.user_id)
         : await owner.current();
       if (!user) throw new Error("No Barry user is configured");
+      const caller = principal ? requestCaller(principal) : { kind: "owner" as const, actorId: user.id };
       const selection = await identityRecords.resolve(
         { id: requestedBarryId, repoPath: config.repoPath },
-        principal ? requestCaller(principal) : { kind: "owner", actorId: user.id },
+        caller,
       );
       // NOT `selection.barry.id`. A file-based Barry's id is a NAME HASH with
       // no `identities` row, and nothing in the schema refuses it: written
-      // raw, the session quietly loses its traits, bags and credentials,
+      // raw, the session quietly loses its bags, bounds and credentials,
       // because every reader of `sessions.identity_id` finds no row.
       // `identityRecords.rowId` syncs the cache row and returns an id that has
       // one, which is what every other writer of this column already does
       // (POST /sessions/draft, POST /actions/trigger).
       const effectiveBarryId =
         (await identityRecords.rowId(selection.barry, { actorId: user.id })) ?? undefined;
+      timings.identity_resolve_ms = performance.now() - identityStart;
       const persistedBarrySource = dbSession?.metadata?.barry_source as string | undefined;
       const identitySource = persistedBarryId
         && persistedBarrySource
@@ -91,13 +104,37 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
         ? persistedBarrySource
         : selection.source;
 
+      const barryConfig = identityRecords.config(selection.barry);
+      const activeBags =
+        config.bags ??
+        (dbSession?.bags?.length || dbSession?.metadata?.explicit_bags || dbSession?.metadata?.execution_context
+          ? (dbSession?.bags ?? [])
+          : barryConfig.bags);
+      const activeBounds = config.bounds ?? dbSession?.bounds ?? [];
+      const resolveBarryBound = async (): Promise<NonNullable<typeof config.bound> | null> => {
+        try {
+          return await Barry.as(caller).bound(effectiveBarryId ?? null, activeBounds);
+        } catch (error) {
+          if (error instanceof Error && error.message.includes('has no subject for "identities"')) {
+            return null;
+          }
+          throw error;
+        }
+      };
+      const pinnedBound =
+        config.bound !== undefined
+          ? config.bound
+          : !sessionId || config.bounds !== undefined
+            ? await resolveBarryBound()
+            : (dbSession?.bound ?? await resolveBarryBound());
+
       if (!sessionId) {
         dbSession = await createNamedSession({
           user_id: user.id,
           system_prompt: config.prompt,
-          traits: config.traits,
-          bound: config.scope,
-          bounds: config.bounds,
+          bags: activeBags,
+          bound: pinnedBound,
+          bounds: activeBounds,
           identity_id: effectiveBarryId,
           metadata: {
             source: "barry-works",
@@ -108,9 +145,12 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
           },
         });
         sessionId = dbSession.id;
-      } else if (dbSession && (dbSession.identity_id !== effectiveBarryId || dbSession.metadata?.barry_source !== identitySource)) {
+      } else if (dbSession && (dbSession.identity_id !== effectiveBarryId || dbSession.metadata?.barry_source !== identitySource || config.bags !== undefined || config.bounds !== undefined || config.bound !== undefined)) {
         await updateSessionRecord(sessionId, {
           identity_id: effectiveBarryId,
+          ...(config.bags !== undefined ? { bags: activeBags } : {}),
+          ...(config.bounds !== undefined ? { bounds: activeBounds } : {}),
+          ...(config.bound !== undefined || config.bounds !== undefined || dbSession.bound == null ? { bound: pinnedBound } : {}),
           metadata: { ...dbSession.metadata, barry_source: identitySource },
         });
         dbSession = (await getSessionRecord(sessionId))!;
@@ -149,8 +189,8 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
         effectiveRepoPath = dbSession.metadata.worktree_path as string;
       }
 
-      const updates: Record<string, unknown> = { status: "running", active: true, state: "open", ended_at: null };
-      if (!dbSession.started_at) {
+      const updates: Record<string, unknown> = { status: config.prepareOnly ? "pending" : "running", active: true, state: "open", ended_at: null };
+      if (!config.prepareOnly && !dbSession.started_at) {
         updates.started_at = new Date();
       }
       // Ensure working_directory and git_branch are set in metadata
@@ -173,11 +213,12 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
       // `?? null` because the DB writers above take `undefined` for "unset"
       // while ActiveSession types this field as nullable.
       const identityId = effectiveBarryId ?? null;
-      const barryConfig = identityRecords.config(selection.barry);
       const adapters = barryConfig.adapters ?? {};
       const identityName: string | null = selection.barry.name;
-      const barryBags: string[] = barryConfig.bags;
-      const workflowScoped = config.metadata?.workflow_scope !== undefined || dbSession?.metadata?.workflow_scope !== undefined;
+      const barryBags: string[] = activeBags;
+      const workflowScoped =
+        config.metadata?.workflow_bound !== undefined ||
+        dbSession?.metadata?.workflow_bound !== undefined;
 
       // An explicit provider wins; otherwise the identity selects the harness.
       const providerParse = HarnessIdSchema.safeParse(
@@ -208,6 +249,10 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
         identity: { model: adapterSettings(adapters, describeAdapter?.(effectiveProvider) ?? { id: effectiveProvider })?.model },
       });
 
+      const promptCacheTtl = adapterSettings(adapters, describeAdapter?.(effectiveProvider) ?? { id: effectiveProvider })?.promptCacheTtl;
+      const namespaceSplit=adapterSettings(adapters, describeAdapter?.(effectiveProvider) ?? {id:effectiveProvider})?.namespaceSplit??false;
+      const identityEffort = adapterSettings(adapters, describeAdapter?.(effectiveProvider) ?? { id: effectiveProvider })?.effort;
+      const effort = AdapterSettingsSchema.shape.effort.parse(config.metadata?.effort ?? dbSession.metadata?.effort ?? identityEffort);
       let resumeProviderSessionId: string | null = null;
       if (config.sessionId) {
         const providerSessions = await getProviderSessionsBySession(config.sessionId);
@@ -220,6 +265,10 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
       {
         const metaForRun = (updates.metadata as Record<string, unknown>) ?? { ...dbSession.metadata };
         metaForRun.provider = effectiveProvider;
+        metaForRun.hosted_runtime_pid=process.pid;
+        metaForRun.hosted_runtime_started_at=readProcessStartTime(process.pid);
+        metaForRun.hosted_runtime_hostname=hostname();
+        if (effort) metaForRun.effort = effort;
         if (effectiveModel) metaForRun.model = effectiveModel;
         // Recorded so a restart or resume returns to the same endpoint: a custom
         // Ollama id cannot be re-inferred from the catalog.
@@ -234,7 +283,9 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
         { provider: effectiveProvider, model: effectiveModel, modelProvider: effectiveModelProvider },
       );
 
-      const mcpServers = config.mcpServers || {};
+      const mcpServers = namespaceSplit
+        ? await sessionMcpServers(sessionId, await Barry.as(caller).tools(identityId, activeBags, pinnedBound ?? undefined), true)
+        : config.mcpServers || {};
       let bagInstructions: string | undefined;
       let pendingActionsIndex: string | undefined;
       let pendingInstructionsIndex: string | undefined;
@@ -246,7 +297,7 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
       //
       // No ALWAYS_ON_BAGS injection here, unlike the CLI (cli/src/commands/
       // start.ts). That is deliberate, and narrower than it looks:
-      //   - TOOLS are unaffected. Both paths gate on `resolveSessionBound`,
+      //   - TOOLS are unaffected. Both paths gate on `sessionBound`,
       //     whose DEFAULT_TRAITS already grant sessions/changes/system/events/
       //     actions/instructions. A server session gets those tools whether or
       //     not its identity lists the bags.
@@ -258,6 +309,7 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
       // skills (`wrap-up`, the system trio), instructions, and actions dirs.
       // Inject here only if that content is wanted server-side; it is not a
       // tool-access gap.
+      const bagsStart = performance.now();
       if (barryBags.length > 0) {
         try {
           // Composition is resolved HERE rather than read from the stored list:
@@ -265,6 +317,8 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
           // only the parent is packed, and a manifest edit should take effect
           // on the next session rather than waiting for a re-pack.
           const loadNames = await expandCompositionFromSnapshot(barryBags);
+          const authStart = performance.now();
+          const authPending = getBagsNeedingAuth(sessionId).then(result => { timings.bag_status_ms = performance.now() - authStart; return result; });
           const bags = await loadBags(loadNames);
           const skipped = loadNames.filter(n => !bags.some(p => p.name === n));
           if (skipped.length > 0) {
@@ -358,7 +412,7 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
             // Scoped by the session's granted bags via /bag-status?sessionId=.
             // If scoped, only report bags the session can reach.
             // Sessions without traits do not fallback to all packed bags.
-            const authStatus = await getBagsNeedingAuth(sessionId);
+            const authStatus = await authPending;
             let relevant: string[] = [];
             if (authStatus.scoped) {
               relevant = authStatus.bags;
@@ -382,7 +436,11 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
         }
       }
 
+      timings.bags_ms = performance.now() - bagsStart;
       const activeSession: ActiveSession = {
+        timings,
+        startedAtRecorded: !!dbSession.started_at || !config.prepareOnly,
+        warming: null, warm: null,
         id: sessionId,
         sessionId: resumeProviderSessionId,
         prompt: config.prompt,
@@ -404,12 +462,15 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
         unlisted: !!config.metadata?.unlisted,
         identityId,
         identityName,
-        // Fall back to the DB row's traits so restarted sessions (message-start
-        // path passes no traits) keep their trait-granted tools and skills.
-        traits: config.traits ?? dbSession?.traits ?? [],
+        bags: activeBags,
+        bounds: activeBounds,
+        bound: pinnedBound,
         consecutiveFailures: 0,
         provider: effectiveProvider,
         model: effectiveModel,
+        ...(promptCacheTtl ? { promptCacheTtl } : {}),
+        ...(effort ? { effort } : {}),
+        ...(identityEffort ? { identityEffort } : {}),
         ...(effectiveModelProvider ? { modelProvider: effectiveModelProvider } : {}),
         bagInstructions,
         actionsIndex: pendingActionsIndex,
@@ -428,27 +489,29 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
       };
 
       // Validate restrictions before admitting a resident session or acknowledging
-      // startup. The per-turn check remains necessary when policy changes later.
-      const native = await nativeToolPolicy(activeSession);
+      // startup. The per-turn check remains necessary when bounds change later.
+      const policyStart = performance.now();
+      const native = await resolveSessionNativeTools(activeSession);
+      timings.native_policy_ms = performance.now() - policyStart;
       if (Object.keys(native.conflicts).length) throw new Error(`session bounds cannot take back ${Object.keys(native.conflicts).join(", ")} on ${activeSession.provider} (hosted): ${[...new Set(Object.values(native.conflicts))].join("; ")}`);
       for (const [tool, reason] of Object.entries(native.refused)) log.warn("sdk.session_warning", { sessionId, warning: `${tool} refused: ${reason}` });
       if (Object.keys(native.uncontrolled).length) log.warn("sdk.session_warning", { sessionId, warning: `${activeSession.provider} (hosted) cannot turn off ${Object.keys(native.uncontrolled).join(", ")}`, reasons: native.uncontrolled });
       if ("operatorOverride" in native && native.operatorOverride) log.warn("sdk.session_warning", { sessionId, warning: native.operatorOverride });
+      // Publish residency only after seeding the send-first allocator. A POST
+      // must never see an owner whose sequence is still the -1 placeholder.
+      activeSession.lastSequence = await lastMessageSequence(sessionId);
       rt.activeSessions.set(sessionId, activeSession);
       activeInserted = true;
       rt.residentBudget.commit(reservation, sessionId);
 
-      // Max, not assignment: a message broadcast while this read was in
-      // flight has already raised it past what the read saw.
-      activeSession.lastSequence = Math.max(activeSession.lastSequence, await lastMessageSequence(sessionId));
-
+      timings.prepare_total_ms = performance.now() - prepareStart;
       if (config.prepareOnly) return activeSession;
 
       let initialPrompt = config.prompt;
 
       // For existing sessions being restarted (cold start), prepend their history
-      if (config.sessionId && dbSession) {
-        const historyContext = await buildSessionHistoryContext(config.sessionId);
+      if (config.sessionId && dbSession && !resumeProviderSessionId) {
+        const historyContext = config.initialHistoryContext ?? await buildSessionHistoryContext(config.sessionId);
         if (historyContext) {
           initialPrompt = `${historyContext}\n<new-message>\n${config.prompt}\n</new-message>`;
         }
@@ -481,6 +544,7 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
           ...(config.clientMessageId ? { clientMessageId: config.clientMessageId } : {}),
         },
         reuseClientMessageRow: config.reuseClientMessageRow,
+        ...(config.userMessageSequence!==undefined ? {sequence:config.userMessageSequence} : {}),
       });
 
       log.info("session.start", {
@@ -495,7 +559,7 @@ export async function rt_startSessionUncoordinated(rt: SessionRuntime, config: S
         hasContinuation: !!config.continueFromSessionId,
       });
 
-      void rt.runSession(activeSession, initialPrompt, mcpServers);
+      void rt.runSession(activeSession, initialPrompt, mcpServers, config.ingressAt);
 
       return activeSession;
     } catch (err) {
@@ -539,7 +603,7 @@ export async function rt_reserveResidentSession(rt: SessionRuntime): Promise<Res
       // Resting sessions can be resumed from persisted history. Close the
       // oldest one to make room while keeping active turns untouched.
       const idle = [...rt.activeSessions.values()]
-        .filter((session) => session.status === "waiting" && !session.abortController && session.pendingTurns === 0 && session.renderers.size === 0)
+        .filter((session) => session.status === "waiting" && !session.abortController && session.pendingTurns === 0 && session.renderers.size === 0 && session.subscribers.size === 0)
         .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
       if (!idle) return rt.residentBudget.reserve();
       await rt.stopSession(idle.id, undefined, "evicted");

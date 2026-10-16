@@ -1,5 +1,5 @@
 {
   "repository": "https://github.com/perintyler/barry-devops-bag.git",
   "revision": "723bae56839993caa4a2a4237c51270a21fda507",
-  "note": "Subset of used upstream checks. tasks.json drops locally overridden tasks; vocabulary scanners exclude their own source by resolved filename; check:monorepo runs the local monorepo.mjs, which then runs this monorepo-policy.mjs."
+  "note": "Subset of used upstream checks. tasks.json drops locally overridden tasks; vocabulary scanners exclude their own source by resolved filename; check:monorepo runs the local monorepo.mjs, which then runs this monorepo-rules.mjs."
 }

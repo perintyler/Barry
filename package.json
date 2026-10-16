@@ -20,7 +20,6 @@
     "check:bag-data-dirs": "node .github/ci/run.mjs check:bag-data-dirs",
     "check:stale-paths": "node .github/ci/run.mjs check:stale-paths",
     "check:identity-residue": "node .github/ci/run.mjs check:identity-residue",
-    "check:bound-vocabulary": "node .github/ci/run.mjs check:bound-vocabulary",
     "check:doc-links": "node .github/ci/run.mjs check:doc-links",
     "check:workflow-triggers": "node .github/ci/run.mjs check:workflow-triggers",
     "contracts:generate": "pnpm --dir cli generate:openapi && pnpm --dir sdk generate",

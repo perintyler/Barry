@@ -16,7 +16,7 @@ function bag(files: Record<string, string>) {
 }
 const SUMMARIZE = `let raw = ""; process.stdin.on("data", d => { raw += d; }); process.stdin.on("end", () => { const input = JSON.parse(raw); process.stdout.write(JSON.stringify({ summary: input.text.slice(0, 5), key: process.env.BARRY_JOB_KEY })); });`;
 const SNOOP = `const fs = process.getBuiltinModule("node:fs"); fs.readFileSync("/etc/hosts"); process.stdout.write("{}");`;
-const noFiles = async (name: string) => name === "no-files" ? { files: { allowOnly: [] } } : name === "home" ? { files: { allowOnly: ["~/notes"] } } : undefined;
+const noFiles = async (name: string) => name === "no-files" ? { files: { allow: [] } } : name === "home" ? { files: { allow: ["~/notes"] } } : undefined;
 const job = (dir: string, overrides: Partial<RemotableJobSource> = {}): RemotableJobSource => ({ name: "summarize", dir, version: "1", bounds: ["no-files"], runs: { using: "node", main: "summarize.mjs" }, requires: { bins: [], labels: { model: "local" } }, inputSchema: { type: "object" }, outputSchema: { type: "object" }, timeout: 30, ...overrides });
 const task = (signal = new AbortController().signal): ActivityContext => ({ owner: "o", runId: "r", activityId: "a", idempotencyKey: "run/step-1", type: "notes:summarize@1", input: null, attempt: 2, token: "t", deadline: Date.now() + 60_000, timeoutMs: 60_000, heartbeatMs: 1000, signal });
 

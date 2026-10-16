@@ -1,3 +1,4 @@
+import nodePin from "./node-runtime.json" with { type: "json" };
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -22,7 +23,7 @@ export const NodePinSchema = z.object({
   sha256: z.object({ arm64: z.string().regex(/^[0-9a-f]{64}$/), x64: z.string().regex(/^[0-9a-f]{64}$/) }).strict(),
 }).strict();
 type NodePin = z.infer<typeof NodePinSchema>;
-const NODE_PIN = NodePinSchema.parse(JSON.parse(readFileSync(new URL("./node-runtime.json", import.meta.url), "utf8")));
+const NODE_PIN = NodePinSchema.parse(nodePin);
 
 export interface NodeRuntime {
   version: string;

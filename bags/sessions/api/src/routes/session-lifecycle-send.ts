@@ -1,15 +1,16 @@
+import { PersistenceBacklogError } from "../runtime/persist-queue.js";
 // Send-message route for the sessions lifecycle router.
 // Extracted verbatim from session-lifecycle.ts for file size; no behavior change.
-import { requestCaller } from "@barry-rocks/sdk";
+import { messageTimingHeader } from "../runtime/timing.js";
+import { Barry, requestCaller, type Bound } from "@barry-rocks/sdk";
 import { createLogger } from "@barry-rocks/sdk/logging";
 import { sessionsRoutes } from "@barry-rocks/sdk/internal/routes";
 import type { serve } from "@barry-rocks/sdk/services/http";
-import { sessionGrants } from "@barry-rocks/sessions-bag";
 import { classify as classifyProcessLiveness } from "@barry-rocks/sessions-bag/process-liveness";
 import { parseMetadata as parseSessionMetadata } from "@barry-rocks/sessions-bag/store/session-helpers";
 import { Processes, claimFailedPromptRetry, getListeners, getMessageByClientMessageId, queuePrompt, recordPromptDelivery, updatePromptDeliveryByClientMessageId, type PromptDeliveryState } from "@barry-rocks/sessions-bag/client";
 import { reportDelivery } from "@barry-rocks/sessions-bag/delivery";
-import { getSessionRecord } from "../db.js";
+import { buildSessionHistoryContext, getSessionRecord } from "../db.js";
 import { AdmissionError } from "../execution-admission.js";
 import { parseRequestBody } from "../http.js";
 import { sessionMcpServers } from "../mcp-config.js";
@@ -29,6 +30,7 @@ function classifyDeliveryFailure(error: unknown): PromptDeliveryState {
 
 export function registerSendMessageRoute(routes: ReturnType<typeof serve>): void {
 routes.route(sessionsRoutes.sendMessage, async (req, res) => {
+    const ingressAt = performance.now();
   if (process.env.BARRY_DISABLE_APP_PROTOCOL_V1 === "true") {
     return res.status(410).json({
       ok: false,
@@ -38,6 +40,7 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
   let requestContent: string | null = null;
   let requestClientMessageId: string | undefined;
   let retryingFailedPrompt = false;
+  let userMessageSequence: number | undefined;
   try {
     const input = parseRequestBody(req, res, sessionsRoutes.sendMessage.body);
     if (!input) return;
@@ -46,6 +49,12 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
     requestClientMessageId = clientMessageId;
     const sessionId = req.params.sessionId;
 
+    const previousAccepted=sessionRuntime.getActiveSession(sessionId)?.acceptedMessages;
+    if (clientMessageId && previousAccepted?.has(clientMessageId)) {
+      if (previousAccepted.get(clientMessageId)!==content) return res.status(409).json({ok:false,error:"clientMessageId belongs to different content"});
+      return res.status(202).json({ok:true,sessionId,status:"idempotent-retry",deliveryState:"accepted",clientMessageId});
+    }
+    sessionRuntime.assertPersistenceAdmission(sessionId);
     const ps = await getSessionRecord(sessionId);
     if (!ps) {
       return res.status(404).json({ ok: false, error: "Session not found" });
@@ -60,6 +69,7 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
         if (existing.state === "failed") {
           retryingFailedPrompt = !!(await claimFailedPromptRetry(sessionId, clientMessageId, content));
           if (retryingFailedPrompt) {
+            userMessageSequence=existing.sequence;
             sessionRuntime.publishDeliveryUpdate(sessionId, {
               messageId: existing.id, clientMessageId, deliveryState: "uncertain",
             });
@@ -80,6 +90,7 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
     }
 
     let activePs = sessionRuntime.getActiveSession(sessionId);
+    const wasWarm = activePs?.session?.isWarm?.() === true;
 
     if (!activePs) {
       // Not active IN THIS PROCESS, but that only covers sessions this API
@@ -149,10 +160,25 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
       }
       const repoPath = validated.path;
 
-      const mcpServers = await sessionMcpServers(sessionId, await sessionGrants(sessionId, requestCaller(req.authPrincipal)));
+      const bagNames = ps.bags ?? [];
+      let tools: Awaited<ReturnType<typeof Barry.tools>> = [];
+      try {
+        tools = await Barry.as(requestCaller(req.authPrincipal)).tools(
+          ps.identity_id ?? null,
+          bagNames,
+          (ps.bound as Bound | null) ?? ps.bounds ?? [],
+        );
+      } catch {
+        tools = [];
+      }
+      const mcpServers = await sessionMcpServers(sessionId, tools);
 
+      // Snapshot history before the idempotency row exists. It must not become
+      // part of the transcript prepended to this same prompt.
+      const initialHistoryContext = await buildSessionHistoryContext(sessionId);
       if (clientMessageId && !retryingFailedPrompt) {
         const recorded = await recordPromptDelivery(sessionId, content, { clientMessageId, delivery: "uncertain" });
+        userMessageSequence=recorded.sequence;
         if (recorded.duplicate) {
           return res.json({ ok: true, sessionId, status: "idempotent-retry", deliveryState: recorded.state, messageId: recorded.id, clientMessageId });
         }
@@ -162,7 +188,11 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
       activePs = await sessionRuntime.startSession({
         sessionId,
         prompt: content,
+        ingressAt,
         repoPath,
+        bags: bagNames,
+        bounds: ps.bounds ?? [],
+        bound: (ps.bound as Bound | null) ?? null,
         mcpServers,
         useWorktree: !!(ps.metadata?.use_worktree),
         provider: (ps.metadata?.provider as string) || undefined,
@@ -170,6 +200,8 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
         modelProvider: (ps.metadata?.model_provider as string) || undefined,
         clientMessageId,
         reuseClientMessageRow: !!clientMessageId,
+        ...(userMessageSequence!==undefined ? {userMessageSequence} : {}),
+        ...(initialHistoryContext!==undefined ? {initialHistoryContext} : {}),
       }, req.authPrincipal);
 
       if (clientMessageId) {
@@ -178,8 +210,11 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
         sessionRuntime.publishDeliveryUpdate(sessionId, { messageId: accepted.id, clientMessageId, deliveryState: "accepted" });
       }
 
-      res.json({
+      res.setHeader("X-Barry-Timing", messageTimingHeader({ ingress_ms: performance.now() - ingressAt, admit_ms: performance.now() - ingressAt }, wasWarm));
+      res.status(202).json({
         ok: true,
+        turn: "queued",
+        warm: wasWarm ? 1 : 0,
         message: "Session started with message",
         sessionId: activePs.id,
         status: activePs.status,
@@ -187,21 +222,24 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
         clientMessageId: clientMessageId ?? null,
       });
     } else {
-      if (clientMessageId && !retryingFailedPrompt) {
-        const recorded = await recordPromptDelivery(sessionId, content, { clientMessageId, delivery: "uncertain" });
-        if (recorded.duplicate) {
-          return res.json({ ok: true, sessionId, status: "idempotent-retry", deliveryState: recorded.state, messageId: recorded.id, clientMessageId });
-        }
+      // Deduplicate before scheduling a row: a retry may arrive while SQLite is
+      // still recording the accepted turn. Reserve the key before any await.
+      const accepted = activePs.acceptedMessages ??= new Map();
+      if (clientMessageId && accepted.has(clientMessageId)) {
+        if (accepted.get(clientMessageId) !== content) return res.status(409).json({ ok: false, error: "clientMessageId belongs to different content" });
+        return res.status(202).json({ ok: true, sessionId, status: "idempotent-retry", deliveryState: "accepted", clientMessageId });
       }
-      await sessionRuntime.sendMessage(sessionId, content, { clientMessageId, reuseClientMessageRow: !!clientMessageId }, req.authPrincipal);
-      if (clientMessageId) {
-        const accepted = await updatePromptDeliveryByClientMessageId(sessionId, clientMessageId, "accepted");
-        if (!accepted) throw new Error("Message retry row disappeared");
-        sessionRuntime.publishDeliveryUpdate(sessionId, { messageId: accepted.id, clientMessageId, deliveryState: "accepted" });
-      }
+      if (clientMessageId) accepted.set(clientMessageId, content);
+      try {
+        await sessionRuntime.sendMessage(sessionId, content, { ingressAt, clientMessageId, reuseClientMessageRow: retryingFailedPrompt, ...(userMessageSequence!==undefined ? {userMessageSequence} : {}) }, req.authPrincipal);
+      } catch (error) { if (clientMessageId) accepted.delete(clientMessageId); throw error; }
+      if (retryingFailedPrompt && clientMessageId) await updatePromptDeliveryByClientMessageId(sessionId, clientMessageId, "accepted");
 
-      res.json({
+      res.setHeader("X-Barry-Timing", messageTimingHeader({ ingress_ms: performance.now() - ingressAt, admit_ms: performance.now() - ingressAt }, wasWarm));
+      res.status(202).json({
         ok: true,
+        turn: "queued",
+        warm: wasWarm ? 1 : 0,
         message: "Message sent to active session",
         sessionId,
         status: activePs.status,
@@ -210,6 +248,12 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
       });
     }
   } catch (err) {
+    if (err instanceof PersistenceBacklogError) {
+      const active=sessionRuntime.getActiveSession(req.params.sessionId);
+      if(active) sessionRuntime.sendInTurn(active, { type: "error", sessionId: req.params.sessionId,
+        error: err.message, metadata: { code: err.code, retryable: true } });
+      return res.status(503).json({ ok: false, error: err.message, code: err.code, retryable: true });
+    }
     log.error("sessions.message_failed", { sessionId: req.params.sessionId, error: err instanceof Error ? err.message : String(err) });
 
     if (requestClientMessageId && requestContent) {
@@ -244,6 +288,7 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
       const admitted =
         updated ??
         await recordPromptDelivery(req.params.sessionId, requestContent, {
+          ...(sessionRuntime.getActiveSession(req.params.sessionId)?{sequence:sessionRuntime.allocateSequence(req.params.sessionId)}:{}),
           clientMessageId: requestClientMessageId,
           delivery: failureState,
           source: "api_message",
@@ -277,7 +322,7 @@ routes.route(sessionsRoutes.sendMessage, async (req, res) => {
 
     if (err instanceof AdmissionError) {
       res.setHeader("Retry-After", "5");
-      return res.status(503).json({ ok: false, error: err.message });
+      return res.status(503).json({ ok: false, error: err.message, code:err.code,retryable:true });
     }
     res.status(500).json({ ok: false, error: err instanceof Error ? err.message : "Failed to send message" });
   }

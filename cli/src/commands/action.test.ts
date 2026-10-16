@@ -34,3 +34,14 @@ it("sweeps before action runs applies its status filter", async () => {
   await actionRunsCommand({ status: "started", json: true });
   expect(vi.mocked(console.log).mock.calls[0][0]).toBe("[]");
 });
+
+it("shows workflow recovery state and its Work command without calling it an abandoned run", async () => {
+  const run = await ActionRuns.create({ action: "fixture:work", bag: "fixture" });
+  vi.spyOn(ActionRuns, "get").mockResolvedValue({ ...run, workflow: { work_id: "work-one", workflow_id: "workflow-one", owner: "owner", revision: 3,
+    state: "needs-attention", projection_current: false, facts: null, receipt_ref: null, result: null } });
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  await actionShowCommand(run.id, {});
+  const message = error.mock.calls.flat().join("\n");
+  expect(message).toContain("needs-attention"); expect(message).toContain("barry work show work-one");
+  expect(message).not.toContain("never completed"); expect(vi.mocked(console.log)).not.toHaveBeenCalled();
+});

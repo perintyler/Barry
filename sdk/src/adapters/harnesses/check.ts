@@ -1,3 +1,4 @@
+import { validVersionPolicy } from "./versions.js";
 /**
  * What any adapter must satisfy to be installed.
  *
@@ -66,12 +67,14 @@ export function checkAdapter(
     checkMode(slot, mode as Partial<Mode> & Record<string, unknown>, expect, hosted ?? null);
     const native = (mode as Partial<Mode>).native;
     if (native) {
-      const inventory = Array.isArray(adapter.nativeTools) ? adapter.nativeTools : [];
-      const grantable = Array.isArray(native.grantable) ? native.grantable : [];
-      expect(Array.isArray(native.grantable) && native.grantable.every(tool => inventory.includes(tool)), `mode "${slot}" names grantable tools outside its inventory`);
+      const rawInventory = adapter.tools;
+      const inventory = Array.isArray(rawInventory) ? rawInventory : [];
+      const rawControllable = native.controllable ?? native.grantable;
+      const controllable = Array.isArray(rawControllable) ? rawControllable : [];
+      expect(Array.isArray(rawControllable) && rawControllable.every(tool => inventory.includes(tool)), `mode "${slot}" names grantable tools outside its inventory`);
       expect(Object.keys(native.uncontrolled ?? {}).every(tool => inventory.includes(tool)), `mode "${slot}" names uncontrolled tools outside its inventory`);
-      expect(Object.keys(native.uncontrolled ?? {}).every(tool => !grantable.includes(tool)), `mode "${slot}" makes a tool both grantable and uncontrolled`);
-      expect(native.inseparable === undefined || Array.isArray(native.inseparable) && native.inseparable.every(group => Array.isArray(group) && group.every(tool => grantable.includes(tool))), `mode "${slot}" has an inseparable set outside grantable`);
+      expect(Object.keys(native.uncontrolled ?? {}).every(tool => !controllable.includes(tool)), `mode "${slot}" makes a tool both grantable and uncontrolled`);
+      expect(native.inseparable === undefined || Array.isArray(native.inseparable) && native.inseparable.every(group => Array.isArray(group) && group.every(tool => controllable.includes(tool))), `mode "${slot}" has an inseparable set outside grantable`);
     }
   }
 
@@ -106,6 +109,7 @@ function checkMode(
   );
   expect(typeof mode.egressSandbox === "boolean", `mode "${slot}" does not say whether the egress sandbox holds`);
 
+  expect(!mode.versions || validVersionPolicy(mode.versions), `mode "${slot}" has an invalid version policy`);
   const guarantees = mode.guarantees;
   if (!guarantees) {
     expect(false, `mode "${slot}" declares no guarantees`);
@@ -180,8 +184,8 @@ function checkRequirements(
     Boolean(binary.install?.darwin ?? binary.install?.linux ?? binary.install?.fallback),
     "requirements carry no install hint for any platform",
   );
-  expect(Boolean(binary.pin?.version), "requirements state no pinned build");
-  expect(Boolean(binary.pin?.enforcedBy), "requirements state a pin but nothing that holds it");
+  const recommendation = binary.recommendedVersion ?? binary.pin?.version;
+  expect(Boolean(recommendation), "requirements state no recommended build");
   // The vendor-login requirement is gone with the vendor-login modes: a
   // session authenticates with declared credentials or not at all, so there
   // is no login to check or instruct about. A package still declaring one is
@@ -195,12 +199,12 @@ function checkRequirements(
   // reports as "not installed". Fed a realistic line, it must find the pin.
   let found: string;
   try {
-    found = new RegExp(binary.versionPattern).exec(`${binary.command} ${binary.pin?.version}`)?.[1] ?? "nothing";
+    found = new RegExp(binary.versionPattern).exec(`${binary.command} ${recommendation}`)?.[1] ?? "nothing";
   } catch (err) {
     found = `an error (${err instanceof Error ? err.message : String(err)})`;
   }
   expect(
-    found === binary.pin?.version,
-    `versionPattern applied to "${binary.command} ${binary.pin?.version}" found ${found}, not the pin`,
+    found === recommendation,
+    `versionPattern applied to "${binary.command} ${recommendation}" found ${found}, not the recommendation`,
   );
 }

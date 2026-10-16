@@ -1,3 +1,7 @@
+import type {Plugin} from "esbuild";
+import { spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
+import { acquireLock } from "../services/lock.js";
 import { createLogger } from "../logging/emit.js";
 import {
   mkdirSync,
@@ -10,6 +14,7 @@ import {
   symlinkSync,
   lstatSync,
   realpathSync,
+  unlinkSync,
 } from "fs";
 import { join, dirname, basename, resolve, sep } from "path";
 import { createRequire } from "module";
@@ -18,7 +23,7 @@ import { installationPath } from "../services/home.mjs";
 import { bagBuildExternals } from "./build-configuration.js";
 import { loadRegistry } from "./registry.js";
 import { builtinBagsDir, shareBuiltinDirWithBundles } from "./builtin.js";
-import { parseManifest, registeredName } from "./manifest.js";
+import { parseManifest } from "./manifest.js";
 import { resolveBagAccess } from "./types.js";
 import { getBagBuildDir, getBagsBuildRoot } from "./paths.js";
 import type { BagSource } from "./types.js";
@@ -29,19 +34,6 @@ const log = createLogger("sdk-bags", { transport: "stderr" });
  * Bundle local bags to plain JavaScript so installed and development loading agree; missing regenerable cache output requires rebuilding rather than treating a bag as absent.
  * See docs/decisions/0011-sdk-runtime-invariants.md for the retained rationale.
  */
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /**
  * Packages esbuild must not inline.
@@ -141,6 +133,11 @@ export function discoverBuildableBags(): BuildableBag[] {
     let externals: string[];
     try {
       manifest = parseManifest(bagDir);
+      if (name.includes("/")) {
+        throw new Error(
+          `registered as "${name}", but ${bagDir}/bag.yaml declares "${manifest?.name ?? name}" — run \`barry bag doctor --fix\``,
+        );
+      }
       externals = bagBuildExternals(bagDir);
     } catch (err) {
       log.warn(
@@ -150,8 +147,6 @@ export function discoverBuildableBags(): BuildableBag[] {
       );
       continue;
     }
-
-    if (manifest?.extends && name !== registeredName(manifest)) continue;
 
     const entry = manifest?.toolsEntry?.entry ? join(bagDir, manifest.toolsEntry.entry) : undefined;
     const promptsEntry = manifest?.promptsEntry?.entry ? join(bagDir, manifest.promptsEntry.entry) : undefined;
@@ -439,6 +434,53 @@ function buildBannerFor(): string {
   ].join("\n");
 }
 
+interface FailedBuild { stamp: string; result: BagBuildResult }
+function failureFile(bag: BuildableBag): string { return join(getBagBuildDir(bag.name, bag.bagDir), bag.entry ? "tools.failed.json" : "prompt.failed.json"); }
+function readBuildFailure(bag: BuildableBag): FailedBuild | null {
+  try {
+    const failed = JSON.parse(readFileSync(failureFile(bag), "utf8")) as FailedBuild;
+    return typeof failed?.stamp === "string" && failed.result?.name === bag.name && failed.result.ok === false ? failed : null;
+  } catch { return null; }
+}
+/** Recheck failed inputs before reusing a failure, including dependency installation state. */
+export function bagBuildInputStamp(bag: BuildableBag): string {
+  const hash = createHash("sha256").update(JSON.stringify([bag.entry, bag.promptsEntry, bag.externals]));
+  const roots = [bag.bagDir];
+  const scope = join(bag.bagDir, "node_modules", "@barry-rocks");
+  try { for (const name of readdirSync(scope).sort()) {
+    const file = join(scope, name);
+    if (lstatSync(file).isSymbolicLink()) roots.push(realpathSync(file));
+  } } catch { /* A dependency installation changes the bag's package inputs. */ }
+  // pnpm can satisfy a missing import without changing any authored source.
+  for (const root of new Set([...roots, repoRoot()])) {
+    for (const path of [join(root, "node_modules"), join(root, "node_modules", "@barry-rocks"), join(root, "node_modules", ".modules.yaml"), join(root, "node_modules", ".pnpm", "lock.yaml")]) {
+      try { const st = statSync(path); hash.update(`${path}:${st.mtimeMs}:${st.ctimeMs}:${st.size}`); }
+      catch { hash.update(`missing:${path}`); }
+    }
+  }
+  const visited = new Set<string>();
+  const walk = (directory: string): void => {
+    if (visited.has(directory)) return;
+    visited.add(directory);
+    let entries: string[];
+    try { entries = readdirSync(directory).sort(); } catch { hash.update(`missing:${directory}`); return; }
+    for (const name of entries) {
+      if (["node_modules", ".git", "skills", "dist", ".barry-dev"].includes(name)) continue;
+      const file = join(directory, name);
+      const stat = lstatSync(file);
+      if (stat.isDirectory()) walk(file);
+      else if (isBuildInput(name)) hash.update(`${file}:${stat.mtimeMs}:${stat.size}`);
+    }
+  };
+  for (const directory of roots) walk(directory);
+  return hash.digest("hex");
+}
+function failureError(failed: FailedBuild): Error {
+  const error = new Error(failed.result.errors?.map(entry => `${entry.file ? entry.file + ": " : ""}${entry.text}`).join("; ") || failed.result.error || "cached bag build failure");
+  Object.assign(error, { cachedBuildFailure: true });
+  return error;
+}
+
 export async function buildBag(bag: BuildableBag): Promise<BagBuildResult> {
   const outDir = getBagBuildDir(bag.name, bag.bagDir);
   const outFile = bag.entry ? join(outDir, "tools.js") : join(outDir, "prompt.js");
@@ -448,6 +490,32 @@ export async function buildBag(bag: BuildableBag): Promise<BagBuildResult> {
     mkdirSync(dirname(outFile), { recursive: true });
 
     const options = {
+      plugins: [{name:"inline-shipped-vendors",setup(build) {
+        build.onLoad({filter:/[/\\]shipped-models\.(?:ts|js)$/},args=>{
+          const modelsYaml=join(dirname(args.path),"shipped-models.yaml");
+          return {contents:`import {parseVendorModels} from "./models.js"; export const SHIPPED_VENDORS_YAML=${JSON.stringify(readFileSync(modelsYaml,"utf8"))}; export const SHIPPED_VENDORS=parseVendorModels(SHIPPED_VENDORS_YAML); export const SHIPPED_MODELS=SHIPPED_VENDORS;`,loader:"js",resolveDir:dirname(args.path),watchFiles:[modelsYaml]};
+        });
+      }} satisfies Plugin, {
+        name: "preserve-zod-initializers",
+        setup(build) {
+          // Zod's sideEffects:false can drop a lazy initializer when static and
+          // dynamic imports meet. Preserve Zod initialization, not all packages'
+          // annotations or pure-call optimizations.
+          const inZod = (path: string) => /[/\\]node_modules[/\\]zod[/\\]/.test(path);
+          build.onResolve({ filter: /^(?:zod(?:\/|$)|\.{1,2}[/\\])|[/\\]node_modules[/\\]zod[/\\]/ }, async args => {
+            if (args.pluginData?.barryZodResolved) return;
+            if (!/^zod(?:\/|$)/.test(args.path) && !inZod(args.path) && !inZod(args.importer)) return;
+            const resolved = await build.resolve(args.path, {
+              importer: args.importer,
+              namespace: args.namespace,
+              resolveDir: args.resolveDir,
+              kind: args.kind,
+              pluginData: { barryZodResolved: true },
+            });
+            return inZod(resolved.path) ? { ...resolved, sideEffects: true } : resolved;
+          });
+        },
+      } satisfies Plugin],
       bundle: true,
       format: "esm",
       platform: "node",
@@ -499,6 +567,7 @@ export async function buildBag(bag: BuildableBag): Promise<BagBuildResult> {
     // 'require' before initialization" under tsx. Declared, both hosts agree.
     writeFileSync(join(outDir, "package.json"), '{ "type": "module" }\n');
 
+    try { unlinkSync(failureFile(bag)); } catch { /* No failure recorded. */ }
     return { name: bag.name, ok: true, outFile, bytes: statSync(outFile).size };
   } catch (error) {
     // esbuild throws a BuildFailure carrying `errors: Message[]` (file, line,
@@ -506,7 +575,7 @@ export async function buildBag(bag: BuildableBag): Promise<BagBuildResult> {
     // first line is just a count header — so a caller that truncates to one
     // line reports a failure with no detail at all. Carry both.
     const esbuildErrors = (error as { errors?: { text?: string; location?: { file?: string; line?: number; column?: number } | null }[] }).errors;
-    return {
+    const result: BagBuildResult = {
       name: bag.name,
       ok: false,
       error: error instanceof Error ? error.message : String(error),
@@ -521,6 +590,8 @@ export async function buildBag(bag: BuildableBag): Promise<BagBuildResult> {
           }
         : {}),
     };
+    try { mkdirSync(outDir, { recursive: true }); writeFileSync(failureFile(bag), JSON.stringify({ stamp: bagBuildInputStamp(bag), result })); } catch { /* Preserve build diagnostics if the cache cannot be written. */ }
+    return result;
   }
 }
 
@@ -550,6 +621,8 @@ function linkBagExternals(bag: BuildableBag, outDir: string): void {
 export interface BuildBagsOptions {
   /** Rebuild even when the existing output is newer than every source file. */
   force?: boolean;
+  /** Return/build only stale outputs; skip failures with unchanged inputs. */
+  ifStale?: boolean;
   /** Restrict the build to these bag names. */
   only?: string[];
   onProgress?: (result: BagBuildResult) => void;
@@ -563,9 +636,17 @@ export async function buildBags(options: BuildBagsOptions = {}): Promise<BagBuil
     bags = bags.filter((p) => wanted.has(p.name));
   }
 
+  const release = acquireLock(getBagsBuildRoot(), "build");
+  try {
   const results: BagBuildResult[] = [];
   for (const bag of bags) {
+    const failure = !force ? readBuildFailure(bag) : null;
+    if (failure && failure.stamp === bagBuildInputStamp(bag)) {
+      if (!options.ifStale) { results.push(failure.result); onProgress?.(failure.result); }
+      continue;
+    }
     if (!force && !isBagBuildStale(bag)) {
+      if (options.ifStale) continue;
       const outFile = join(getBagBuildDir(bag.name, bag.bagDir), bag.entry ? "tools.js" : "prompt.js");
       const cached: BagBuildResult = {
         name: bag.name,
@@ -584,6 +665,7 @@ export async function buildBags(options: BuildBagsOptions = {}): Promise<BagBuil
   }
 
   return results;
+  } finally { release(); }
 }
 
 /**
@@ -645,7 +727,9 @@ export async function ensureToolsBuilt(bag: BuildableBag): Promise<string> {
   if (!bag.entry) throw new Error(`bag "${bag.name}" declares no tools entry`);
   const toolsOnly: BuildableBag = { name: bag.name, bagDir: bag.bagDir, entry: bag.entry, externals: bag.externals };
   const existing = getBuiltBagEntry(bag.name, bag.bagDir);
-  if (existing && !isBagBuildStale(toolsOnly)) return existing;
+  if (existing && (process.env.BARRY_BAGS_REBUILD !== "1" || !isBagBuildStale(toolsOnly))) return existing;
+  const failure = readBuildFailure(toolsOnly);
+  if (failure && failure.stamp === bagBuildInputStamp(toolsOnly)) throw failureError(failure);
   linkExternals(repoRoot());
   const result = await buildBag(toolsOnly);
   if (!result.ok) throw new Error(`[bag "${bag.name}"] ${result.errors?.map(error => `${error.file ? error.file + ": " : ""}${error.text}`).join("; ") || result.error || "tools build failed"}`);
@@ -658,7 +742,9 @@ export async function ensurePromptBuilt(bag: BuildableBag): Promise<string> {
   if (!bag.promptsEntry) throw new Error(`bag "${bag.name}" declares no prompts entry`);
   const promptOnly: BuildableBag = { name: bag.name, bagDir: bag.bagDir, promptsEntry: bag.promptsEntry };
   const existing = getBuiltPromptEntry(bag.name, bag.bagDir);
-  if (existing && !isBagBuildStale(promptOnly)) return existing;
+  if (existing && (process.env.BARRY_BAGS_REBUILD !== "1" || !isBagBuildStale(promptOnly))) return existing;
+  const failure = readBuildFailure(promptOnly);
+  if (failure && failure.stamp === bagBuildInputStamp(promptOnly)) throw failureError(failure);
   linkExternals(repoRoot());
   const result = await buildBag(promptOnly);
   if (!result.ok) throw new Error(result.errors?.map((e) => e.text).join("; ") || result.error || "prompt build failed");
@@ -870,4 +956,21 @@ export function writeBuildMarker(): void {
     "Generated by `barry bag build`. Safe to delete — Barry rebuilds on demand.\n",
     "utf-8",
   );
+}
+
+
+/** Build in a worker process so source walks never stall the API's event loop. */
+export function startBagBuildMaintenance(intervalMs = 10 * 60 * 1000): () => void {
+  let worker: ChildProcess | null = null;
+  let stopped = false;
+  const check = () => {
+    if (worker || stopped) return;
+    worker = spawn(process.execPath, [join(repoRoot(), "cli", "bin", "barry.js"), "bag", "build", "--if-stale"], { stdio: "ignore", env: process.env });
+    worker.once("error", error => { worker = null; log.warn("bags.background_build_skipped", { error: error.message }); });
+    worker.once("close", code => { worker = null; if (code) log.warn("bags.background_build_failed", { code }); });
+  };
+  const initial = setTimeout(check, 1000);
+  const interval = setInterval(check, intervalMs);
+  initial.unref(); interval.unref();
+  return () => { stopped = true; clearTimeout(initial); clearInterval(interval); worker?.kill(); };
 }

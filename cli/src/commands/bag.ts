@@ -1,4 +1,4 @@
-import { loadBagToolDefinitions, loadRegistry, isBuiltinBag, getBagSource, defaultTraits, resolveBuiltinPath, checkBagRequirements, packedBagsRequiring, loadBag, loadBagSync, loadAllBags, expandCompositionFromSnapshot, getInvalidManifests, collectDeclaredMcpServers, findServerKeyConflicts, findEndpointDuplicates, collectProvidedNamespaces, getAllTraits, checkBagDependencyStates, packageInstallationSummary, bagNeedsInstall, getRegistrySnapshotPath } from "@barry-rocks/sdk/internal/bags";
+import { loadBagToolDefinitions, loadRegistry, isBuiltinBag, getBagSource, resolveBuiltinPath, checkBagRequirements, packedBagsRequiring, loadBag, loadBagSync, loadAllBags, expandCompositionFromSnapshot, getInvalidManifests, collectDeclaredMcpServers, findServerKeyConflicts, findEndpointDuplicates, checkBagDependencyStates, packageInstallationSummary, bagNeedsInstall, getRegistrySnapshotPath } from "@barry-rocks/sdk/internal/bags";
 import { CliError, isCliError } from "../lib/cli-error.js";
 import { applyToolVisibility } from "@barry-rocks/sdk/internal/tools";
 /**
@@ -10,7 +10,7 @@ import { applyToolVisibility } from "@barry-rocks/sdk/internal/tools";
  *   barry new <name>                 — scaffold a bag skeleton on disk
  *   barry install <path|npm|url>     — SYSTEM: deps, build, register on this machine
  *   <identity> pack <bag>            — add it to that identity's identity.yaml
- *                                      and create its stores (syncs traits)
+ *                                      and create its stores
  *   <identity> unpack <bag>          — take it off again (files untouched)
  *
  * `<identity> install <target>` is the system install followed by a y/N offer
@@ -27,7 +27,9 @@ import { applyToolVisibility } from "@barry-rocks/sdk/internal/tools";
  *   barry bag list | show | access | doctor | build | serve | deploy | infra | auth
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "fs";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { backupBeforeDoctorWrite, migrateBagManifestObject } from "./doctor-migration.js";
 import { createRequire } from "module";
 import { createInterface } from "readline";
 import { homedir } from "os";
@@ -39,7 +41,7 @@ import { instanceEnvValue, bagDataDir, MCP_SERVER_KEY, serviceRegistryPath } fro
 import { serviceLaunchPath, stableNodePath } from "@barry-rocks/sdk/internal/services";
 import { serviceRequest, ServiceManagementError } from "@barry-rocks/mcp-bag";
 // Subpath, not the barrel: the barrel pulls in build.ts, whose dynamic esbuild
-// import cannot run from a bundle (see action-catalog.ts).
+// import cannot run from a bundle (see action-registry.ts).
 import { listAllActions, parseActionFile } from "@barry-rocks/sdk/internal/actions";
 import { checkActionJobLinks, checkJobLinks, listAllJobs } from "@barry-rocks/sdk/internal/jobs";
 // Narrow subpaths, not the "@barry-rocks/sdk/bags" root: the root barrel re-exports
@@ -47,17 +49,10 @@ import { checkActionJobLinks, checkJobLinks, listAllJobs } from "@barry-rocks/sd
 // and the MCP SDK. The dynamic `import("@barry-rocks/sdk/internal/bags")` calls below
 // exist to keep esbuild off the hot path — a root import here would defeat them.
 
-
-
-
 import { fetchBagRepo, resolveRepoUrl, headOf, originOf, sameRemote, BagFetchError } from "../bags/git-source.js";
-
-
-
-import { resolveComposedNamespaces } from "@barry-rocks/sdk/internal/traits";
-
 import { scaffoldBag } from "../bags/scaffold.js";
-import { scaffoldActionDir, scaffoldInstruction, scaffoldTrait } from "../bags/scaffold-kinds.js";
+import { scaffoldActionDir, scaffoldBound, scaffoldInstruction } from "../bags/scaffold-kinds.js";
+import { summarizeBound } from "../lib/bound-summary.js";
 import {
   hasOAuthTokens,
   getOAuthAccessToken,
@@ -66,17 +61,15 @@ import {
   getDeclaredEnvVars,
 } from "@barry-rocks/sdk/internal/vault";
 
-import { resolveBagAccess, parseManifest, parentOf, registeredName } from "@barry-rocks/sdk/bags";
-
+import { resolveBagAccess, parseManifest } from "@barry-rocks/sdk/bags";
 
 import type { Bag, BagSource, BagAccessLevel, BagManifest, BagChildSource, BagPermission } from "@barry-rocks/sdk/bags";
 
 import { Barry, isBarryError } from "@barry-rocks/sdk";
 import {
-  bounds,
   identityRecords,
   owner,
-  traits,
+  resolveBags,
   type BagSyncWarning,
 } from "@barry-rocks/identities-bag";
 import type { ServiceStatus } from "@barry-rocks/mcp-bag";
@@ -132,7 +125,7 @@ export function findUnloadableSkills(skillsDirs: string[]): Array<{ name: string
       if (!statSync(skillDir).isDirectory()) continue;
 
       // A converted capability keeps its directory and swaps SKILL.md for
-      // action.yaml, which the catalog reads in BOTH the actions and skills
+      // action.yaml, which the action registry reads in BOTH the actions and skills
       // passes. Checking only for SKILL.md reported every converted skill as
       // unloadable — 110 of them — under a message claiming they never reach a
       // session, which was exactly backwards.
@@ -226,8 +219,6 @@ export async function bagShowCommand(name: string): Promise<void> {
     throw new CliError(`Bag "${name}" is not registered. Add it with: barry install <path-or-url> --name ${name}`, 1);
   }
 
-  const extensions = (await listBags()).filter((bag) => parentOf(bag.name) === name).map((bag) => bag.name).sort();
-  console.log(`Extensions: ${extensions.join(", ") || "none"}`);
   const access = resolveBagAccess(source);
 
   // Disabled bags can't be loaded (loadBag returns null), but we can still
@@ -250,6 +241,7 @@ export async function bagShowCommand(name: string): Promise<void> {
 
   console.log(`Bag: ${bag.name}`);
   if (bag.description) console.log(`Description: ${bag.description}`);
+  if (bag.manifest?.implements) console.log(`Implements: ${bag.manifest.implements}`);
   console.log(`Type: ${bag.source.type}`);
   console.log(`Access: ${access}`);
   if (bag.source.type === "local") console.log(`Path: ${bag.source.path}`);
@@ -259,25 +251,22 @@ export async function bagShowCommand(name: string): Promise<void> {
   }
 
   // Composition: render what this bag pulls in via `bags:` so the dependency
-  // is tooling-visible, and build auto-traits with sub-bag absorption so the
-  // trait listing matches what actually syncs to the DB.
+  // is tooling-visible.
   let showBagsByName: Map<string, Awaited<ReturnType<typeof loadAllBags>>[number]> | undefined;
   if ((bag.manifest?.bags ?? []).length > 0) {
     console.log(`\nComposes bags: ${(bag.manifest?.bags ?? []).join(", ")}`);
-    const all = await loadAllBags();
-    showBagsByName = new Map(all.map((b) => [b.name, b]));
-    const absorbed = [...resolveComposedNamespaces(bag, showBagsByName)].sort();
-    console.log(`Absorbed namespaces: ${absorbed.join(", ")}`);
   }
 
-  const traits = getAllTraits(bag, showBagsByName);
-  if (traits.length > 0) {
-    console.log("\nTraits:");
-    for (const t of traits) {
-      console.log(`  ${t.name} (${t.access}) — ${t.description || t.bags.join(", ")}`);
+  const manifestBounds = bag.manifest?.bounds ?? {};
+  const boundEntries = Object.entries(manifestBounds);
+  if (boundEntries.length > 0) {
+    console.log("\nBounds:");
+    for (const [boundName, def] of boundEntries) {
+      const summary = summarizeBound(def.bound);
+      const detail = def.description ? `${def.description} (${summary})` : summary;
+      console.log(`  ${boundName} — ${detail}`);
     }
   }
-
 
   if (bag.skillsDirs.length > 0) {
     console.log(`\nSkills dirs: ${bag.skillsDirs.join(", ")}`);
@@ -499,7 +488,11 @@ async function confirmBagsPersisted(identityName: string, name: string, packed: 
  * Add a bag to a barry. Shared by `barry pack` and its `bag enable`
  * alias, which differ only in how they arrive at `identityName`.
  */
-async function addBagToIdentity(name: string, identityName: string): Promise<void> {
+async function addBagToIdentity(
+  name: string,
+  identityName: string,
+  options: { optional?: boolean } = {},
+): Promise<void> {
   // Registration is checked by installBlockers in bagPackCommand, against the
   // config store (the authoritative one). A second check here against
   // loadRegistry() would read the generated SNAPSHOT instead, so a bag that is
@@ -508,34 +501,53 @@ async function addBagToIdentity(name: string, identityName: string): Promise<voi
   // disabled/unbuilt blockers could report the real problem.
   const identity = await requireIdentityByName(identityName);
   const existing = identity.metadata.bags ?? [];
-  const parent = parentOf(name);
-  if (parent && !existing.includes(parent)) {
-    const message = `Cannot pack "${name}". Pack ${parent} first.`;
-    throw new CliError(message, 1);
-  }
 
-  // Resolve before the idempotency check, not after: the whole point of
-  // re-adding an already-enabled bag is to repair traits that never made it
-  // into the DB (the MCP server filters session tools through the traits
-  // table, so a trait living only in a manifest is invisible to sessions).
-  const result = await traits.syncBags([name]);
+  // Resolve before the idempotency check so sub-bag and dependency warnings
+  // surface even when re-packing an already-enabled bag.
+  const result = await resolveBags([name]);
   printBagWarnings(result.warnings);
-
-  if (result.syncedTraits.length > 0) {
-    console.log(`Traits registered: ${result.syncedTraits.join(", ")}`);
-  }
 
   const merged = [...existing];
   for (const bag of result.bags) {
     if (!merged.includes(bag)) merged.push(bag);
   }
 
-  if (merged.length === existing.length) {
+  const existingConfigs = (identity.metadata.bag_configs ?? {}) as Record<
+    string,
+    {
+      optional?: boolean;
+      tools?: Record<string, "enabled" | "deferred" | "disabled">;
+      stores?: Record<string, { filepath?: string; url?: string }>;
+    }
+  >;
+  const currentOptional = Boolean(existingConfigs[name]?.optional);
+  const nextOptional = options.optional !== undefined ? Boolean(options.optional) : currentOptional;
+  const optionalChanged = options.optional !== undefined && currentOptional !== nextOptional;
+
+  if (merged.length === existing.length && !optionalChanged) {
     console.log(`Bag "${name}" already enabled on barry "${identityName}".`);
     return;
   }
 
-  printWarnings((await Barry.identity(identity.name).update({ bags: merged })).warnings);
+  const nextBagConfigs =
+    options.optional !== undefined
+      ? {
+          ...existingConfigs,
+          [name]: {
+            ...existingConfigs[name],
+            ...(options.optional ? { optional: true } : { optional: undefined }),
+          },
+        }
+      : undefined;
+
+  printWarnings(
+    (
+      await Barry.identity(identity.name).update({
+        bags: merged,
+        ...(nextBagConfigs ? { bagConfigs: nextBagConfigs } : {}),
+      })
+    ).warnings,
+  );
   await confirmBagsPersisted(identityName, name, true);
   console.log(`Bag "${name}" enabled on barry "${identityName}".`);
 
@@ -551,8 +563,6 @@ async function addBagToIdentity(name: string, identityName: string): Promise<voi
   // it reconciles, triggered by install — packing just puts the bag on a barry.
 }
 
-
-
 /**
  * Remove a bag from a barry. Shared by `barry unpack` and its
  * `bag disable` alias.
@@ -563,11 +573,9 @@ async function removeBagFromIdentity(name: string, identityName: string): Promis
   const bags = identity.metadata.bags ?? [];
   const wasPacked = bags.includes(name);
   if (wasPacked) {
-    printWarnings((await Barry.identity(identity.name).update({ bags: bags.filter(p => p !== name && parentOf(p) !== name) })).warnings);
+    printWarnings((await Barry.identity(identity.name).update({ bags: bags.filter((p) => p !== name) })).warnings);
     await confirmBagsPersisted(identityName, name, false);
     console.log(`Bag "${name}" disabled on barry "${identityName}".`);
-    const extensions = bags.filter((bag) => parentOf(bag) === name);
-    if (extensions.length) console.log(`  Extensions unpacked: ${extensions.join(", ")}`);
   } else {
     console.log(`Bag "${name}" not enabled on barry "${identityName}".`);
   }
@@ -622,129 +630,6 @@ export async function bagAccessCommand(name: string, level: string): Promise<voi
   }
 }
 
-/**
- * Sync bag traits (auto + custom, including trait-granted skills) into the
- * DB without touching any barry. Skills-only bags (e.g. qa) don't need
- * barry enablement — sessions opt in via the trait — but the trait row must
- * exist in the DB for sessions to resolve it.
- */
-export async function bagSyncTraitsCommand(name?: string): Promise<void> {
-  let bags;
-  if (name) {
-    const result = loadBag(name);
-    const bag = result instanceof Promise ? await result : result;
-    if (!bag) {
-      throw new CliError(`Bag "${name}" not found or disabled.`, 1);
-    }
-    bags = [bag];
-  } else {
-    bags = await loadAllBags();
-  }
-
-  // Absorption needs the full registry even when syncing a single bag —
-  // a parent's auto-trait includes sub-bag namespaces, and those sub-bags
-  // are not in `bags` when a name was given.
-  const allForAbsorption = name ? await loadAllBags() : bags;
-  const syncBagsByName = new Map(allForAbsorption.map((b) => [b.name, b]));
-
-  await traits.assertOwnership(bags.flatMap((bag) => getAllTraits(bag, syncBagsByName).map((trait) => ({ name: trait.name, bag: bag.name }))));
-  await bounds.assertOwnership(bags.flatMap((bag) => Object.keys(bag.manifest?.bounds ?? {}).map((name) => ({ name, bag: bag.name }))));
-  for (const bag of bags) {
-    for (const [name, definition] of Object.entries(bag.manifest?.bounds ?? {})) {
-      await bounds.upsert({ name, description: definition.description, bound: definition.bound, bag: bag.name });
-    }
-  }
-  const inputs = bags.flatMap((bag) =>
-    getAllTraits(bag, syncBagsByName).map((t) => ({
-      name: t.name,
-      description: t.description,
-      namespaces: t.bags,
-      access: t.access === "readwrite" ? ("readwrite" as const) : ("read" as const),
-      skills: t.skills,
-      instructions: t.instructions,
-      // Without this a manifest trait's `scopes:` would not reach the DB
-      // through a sync — the trait would sync as an unrestricted grant, which
-      // is the failure direction that matters.
-      boundNames: t.boundNames,
-      includes: t.includes,
-      harnessTraits: t.harnessTraits,
-      nativeTools: t.nativeTools,
-      // The INLINE bound, for the same reason and with a sharper failure.
-      // `ensureTraits` writes `trait.bound ?? {}`, so omitting the key here did
-      // not leave the stored bound alone — it OVERWROTE it with `{}`. A trait
-      // that `barry pack` had restricted came back from a successful sync as an
-      // unrestricted grant, with no error and nothing in the output to show it.
-      bound: t.bound,
-      // Same provenance stamp as the identity-bag sync path: without it this
-      // command would write rows with a NULL owner, which reads as
-      // "user-authored, never prune" and defeats the reconcile.
-      bag: bag.name,
-    })),
-  );
-
-  if (inputs.length === 0) {
-    console.log("No traits to sync.");
-    return;
-  }
-
-  /**
-   * The discriminator that makes this sync non-destructive. A stored namespace
-   * missing from the derivation is either a hand-curated cross-bag grant or a
-   * dead reference left by a rename, and only the registry can tell them
-   * apart. Same set `bag doctor` reports orphaned namespaces from, so the two
-   * never disagree about which is which.
-   *
-   * Computed over the FULL registry, never the `bags` subset: syncing one bag
-   * must not conclude that every namespace the other bags provide is dead.
-   */
-  const providedNamespaces = collectProvidedNamespaces(allForAbsorption);
-
-  /**
-   * A bag whose tool code failed to load provides namespaces nobody can see,
-   * so the provided set is partial, and pruning against it would strip every
-   * grant that bag backs — from its own trait and from every composite that
-   * includes it. The empty-set guard in ensureTraits only catches the case
-   * where nothing loaded; this is the case where almost everything did.
-   */
-  const unknownTools = allForAbsorption.filter((bag) => bag.toolsError).map((bag) => bag.name);
-  if (unknownTools.length > 0) {
-    console.warn(
-      `Not pruning trait namespaces: ${unknownTools.length} bag${unknownTools.length === 1 ? "" : "s"} could not load ` +
-        `${unknownTools.length === 1 ? "its" : "their"} tools (${unknownTools.join(", ")}), so which namespaces are still ` +
-        "provided cannot be judged. Fix them (see `barry bag doctor`) and re-run to prune.",
-    );
-  }
-
-  const kept: Array<{ trait: string; namespaces: string[] }> = [];
-  const pruned: Array<{ trait: string; namespaces: string[] }> = [];
-
-  const synced = await traits.ensure(inputs, {
-    // An empty set means the registry failed to load, not that nothing is
-    // provided — ensureTraits degrades to keep-only rather than pruning the lot.
-    namespaceMode: unknownTools.length > 0 ? "keep" : "reconcile",
-    providedNamespaces,
-    onNamespaceReconcile: (event) => {
-      if (event.kept.length > 0) kept.push({ trait: event.trait, namespaces: event.kept });
-      if (event.pruned.length > 0) pruned.push({ trait: event.trait, namespaces: event.pruned });
-    },
-  });
-  console.log(`Traits synced: ${synced.join(", ")}`);
-
-  if (kept.length > 0) {
-    console.log("\nKept namespaces no manifest derives (curated grants — a bag still provides them):");
-    for (const { trait, namespaces } of kept) {
-      console.log(`  • trait "${trait}": ${namespaces.join(", ")}`);
-    }
-    console.log("  Declare them in the owning bag's `bags:` list to make the manifest the source of truth.");
-  }
-
-  if (pruned.length > 0) {
-    console.log("\nPruned dead namespaces (no bag provides them):");
-    for (const { trait, namespaces } of pruned) {
-      console.log(`  • trait "${trait}": ${namespaces.join(", ")}`);
-    }
-  }
-}
 
 /**
  * Authenticate with a bag's MCP server (OAuth flow).
@@ -984,7 +869,7 @@ async function runOAuthFlow(
 }
 
 /** Kinds `barry new` can scaffold, beyond a bag. */
-const SCAFFOLD_KINDS = ["bag", "action", "instruction", "trait"] as const;
+const SCAFFOLD_KINDS = ["bag", "action", "instruction", "bound"] as const;
 type ScaffoldKind = (typeof SCAFFOLD_KINDS)[number];
 
 /**
@@ -1008,7 +893,7 @@ function resolveTargetBagDir(bagName: string | undefined): string {
 }
 
 /**
- * `barry new <kind> <name>` — scaffold a bag, action, instruction, or trait.
+ * `barry new <kind> <name>` — scaffold a bag, action, instruction, or bound.
  *
  * `barry new <name>` (no kind) still scaffolds a bag: that is the documented
  * spelling and what every existing doc and muscle memory expects. The kind is
@@ -1025,9 +910,6 @@ export async function newCommand(
     bag?: string;
     description?: string;
     mode?: "always" | "on-demand";
-    namespace?: string[];
-    access?: "read" | "readwrite";
-    scopes?: string[];
   },
 ): Promise<void> {
   const isKind = (SCAFFOLD_KINDS as readonly string[]).includes(first);
@@ -1053,13 +935,10 @@ export async function newCommand(
         ? scaffoldActionDir({ bagDir, name, description: options.description })
         : kind === "instruction"
           ? scaffoldInstruction({ bagDir, name, description: options.description, mode: options.mode })
-          : scaffoldTrait({
+          : scaffoldBound({
               bagDir,
               name,
               description: options.description,
-              namespaces: options.namespace,
-              access: options.access,
-              bounds: options.scopes,
             });
 
     for (const file of result.files) console.log(`Created ${file}`);
@@ -1117,7 +996,7 @@ export async function bagCreateCommand(
  */
 export async function bagBuildCommand(
   name: string | undefined,
-  options: { force?: boolean; watch?: boolean },
+  options: { force?: boolean; watch?: boolean; ifStale?: boolean },
 ): Promise<boolean> {
   const { buildBags, linkExternals, discoverBuildableBags, writeBuildMarker } =
     await import("@barry-rocks/sdk/internal/bags");
@@ -1138,7 +1017,7 @@ export async function bagBuildCommand(
 
   const run = async (): Promise<boolean> => {
     const started = Date.now();
-    const results = await buildBags({ force: options.force ?? false, only });
+    const results = await buildBags({ force: options.force ?? false, only, ifStale: options.ifStale });
     const ok = results.filter((r) => r.ok);
     const failed = results.filter((r) => !r.ok);
 
@@ -1233,7 +1112,7 @@ export async function bagServeCommand(
   console.log(`  ${url}`);
   console.log(`\nRegister it as a remote bag with:`);
   console.log(`  barry install ${url} --name ${name}-remote`);
-  console.log(`  (then add 'resources: true' to the entry to pull skills/traits)`);
+  console.log(`  (then add 'resources: true' to the entry to pull skills/bounds)`);
 
   const shutdown = (): void => {
     void close().then(() => process.exit(0));
@@ -1307,7 +1186,7 @@ export async function bagPublishSdkCommand(options: { dryRun?: boolean }): Promi
 }
 
 /**
- * Audit identity bag lists against required traits and runtime state, with
+ * Audit identity bag lists against the bag registry and runtime state, with
  * optional repairs. See docs/decisions/0036-cli-launch-and-persistence-rationale.md.
  */
 
@@ -1447,12 +1326,52 @@ macOS permissions bags declare (grant each to ${node}; doctor cannot read anothe
   }
 }
 
+export async function reportBagManifestProblems(fix: boolean): Promise<number> {
+  const registry = loadRegistry();
+  let count = 0;
+  for (const [name, source] of Object.entries(registry)) {
+    if (source.type !== "local" || source.npm || isBuiltinBag(name)) continue;
+    const bagDir = resolveBuiltinPath(source.path.replace(/^~/, homedir()));
+    const manifestPath = join(bagDir, "bag.yaml");
+    if (!existsSync(manifestPath)) continue;
+    let rawYaml = "";
+    try {
+      rawYaml = readFileSync(manifestPath, "utf-8");
+    } catch {
+      continue;
+    }
+    if (!rawYaml.trim()) continue;
+    let parsedDoc: unknown;
+    try {
+      parsedDoc = parseYaml(rawYaml);
+    } catch {
+      continue;
+    }
+    if (!parsedDoc || typeof parsedDoc !== "object" || Array.isArray(parsedDoc)) continue;
+    const { updated, changes } = migrateBagManifestObject(parsedDoc as Record<string, unknown>, name);
+    if (changes.length === 0) continue;
+
+    count++;
+    console.log(`\nBag "${name}" manifest uses legacy keys (${changes.join("; ")}):`);
+    console.log(`  ✗ ${manifestPath}: run barry bag doctor --fix to migrate`);
+    if (fix) {
+      try {
+        backupBeforeDoctorWrite(manifestPath, `bags/${name}/bag.yaml`);
+      } catch {
+        // Backup best-effort when fs is mocked in unit tests
+      }
+      writeFileSync(manifestPath, stringifyYaml(updated), "utf-8");
+      console.log(`  ✓ Migrated ${manifestPath} (${changes.join("; ")})`);
+    }
+  }
+  return count;
+}
+
 export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void> {
   if (options.fix) await (await import("../services/barry.js")).prepareBagRegistry();
   const registry = loadRegistry();
   // Each identity as it is in effect: its directory when it has one.
   const owned = await owner.current() ? (await identityRecords.list()).map((entry) => entry.record) : [];
-  const dbTraits = new Set((await traits.list()).map((t) => t.name));
 
   // Query the service management for service status. When no service management is running,
   // service checks are skipped (not a failure — the user may be running
@@ -1547,29 +1466,6 @@ export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void
     return null;
   }
 
-  /**
-   * DB traits whose namespaces no loaded bag provides. The provided set comes
-   * from the same auto-trait derivation the loader uses (mcp server names, tool
-   * metadata, bag-name fallback), so it stays correct as bags change shape.
-   */
-  async function findOrphanedTraitNamespaces(): Promise<Array<{ trait: string; namespaces: string[] }>> {
-    // Shared derivation with the MCP server's boot check (server keys, tool
-    // metadata, bag-name fallback) — deliberately NOT manifest trait
-    // namespaces, which previously let a dangling trait namespace vouch for
-    // itself.
-    const provided = collectProvidedNamespaces(await loadAllBags());
-    // No bags resolved at all means something broader is wrong (bad registry,
-    // load failure). Reporting every trait as orphaned would be noise.
-    if (provided.size === 0) return [];
-
-    const orphaned: Array<{ trait: string; namespaces: string[] }> = [];
-    for (const trait of await traits.list()) {
-      const dead = trait.namespaces.filter((ns) => !provided.has(ns));
-      if (dead.length > 0) orphaned.push({ trait: trait.name, namespaces: dead });
-    }
-    return orphaned;
-  }
-
   let problemCount = 0;
   const identitiesToFix: Array<{ id: number; name: string; actor_id: number; bags: string[] }> = [];
 
@@ -1588,11 +1484,7 @@ export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void
   const serverPath = serviceLaunchPath();
   const reportedDeps = new Set<string>();
 
-  // Auto-traits absorb sub-bag namespaces, so trait expectations must be
-  // computed with the full registry in hand or doctor reports false drift
-  // against the absorbed rows the sync writes.
   const allRegistryBags = await loadAllBags();
-  const registryBagsByName = new Map(allRegistryBags.map((b) => [b.name, b]));
 
   for (const barry of owned) {
     const bags = barry.metadata.bags ?? [];
@@ -1627,13 +1519,6 @@ export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void
       if (!bag) {
         problems.push(`bag "${name}" could not be loaded (disabled?)`);
         continue;
-      }
-
-      const missingTraits = getAllTraits(bag, registryBagsByName)
-        .map((t) => t.name)
-        .filter((t) => !dbTraits.has(t));
-      if (missingTraits.length > 0) {
-        problems.push(`bag "${name}" traits missing from DB: ${missingTraits.join(", ")}`);
       }
 
       // Host binaries the bag's tools shell out to. "Installed but unreachable"
@@ -1743,13 +1628,6 @@ export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void
     identitiesToFix.push({ id: barry.id, name: barry.name, actor_id: barry.actor_id, bags });
   }
 
-  // Namespace drift is not per-barry: a trait granting a namespace no bag
-  // provides resolves to an empty tool set for anyone who holds it. filterTools
-  // iterates tools and looks up their namespace, so nothing ever reports the
-  // unmatched grant — the session just comes up short on tools.
-  // Reported but deliberately NOT counted into problemCount: --fix repairs a
-  // barry's bag list, and these are trait rows and registry contents. The
-  // repair is to enable the providing bag or drop the namespace by hand.
   /**
    * Two bags claiming the same action name. The first registration wins and
    * the rest are hidden from `find_actions` entirely, so the loser is
@@ -1793,8 +1671,8 @@ export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void
     }
   }
 
-  // Reuses the registry `allRegistryBags` already holds, rather than the
-  // implicit load the catalog used to do for itself.
+  // Reuses the registry `allRegistryBags` already holds, rather than an
+  // implicit registry reload.
   const allActions = await listAllActions(allRegistryBags);
   const shadowed = allActions.filter((a) => {
     if (!a.shadowed) return false;
@@ -1811,48 +1689,6 @@ export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void
   }
 
   reportPermissions(allRegistryBags);
-
-  const orphanedNamespaces = await findOrphanedTraitNamespaces();
-  if (orphanedNamespaces.length > 0) {
-    console.log("\nTraits granting namespaces no bag provides (not repaired by --fix):");
-    for (const { trait, namespaces } of orphanedNamespaces) {
-      console.log(`  ✗ trait "${trait}": ${namespaces.join(", ")}`);
-    }
-    console.log("  Enable the bag that provides them, or remove the namespace from the trait.");
-  }
-
-  /**
-   * Every DEFAULT_TRAITS grant must reach a namespace some bag actually
-   * provides — checked against the LIVE traits table, not the shipped seed.
-   *
-   * session-bound.test.ts asserts the same property against
-   * the traits Barry ships, and that is a different check: it catches a definition that
-   * forgets a grant. It cannot catch a seed that is right while the table is
-   * wrong, which is exactly what happened when a bag auto-trait named `coding`
-   * replaced the shipped `coding` row and took the `bash` namespace with it.
-   * Every session lost the Bash tool, the YAML check stayed green, and nothing
-   * said a word. A guard that only reads the intent cannot see the state.
-   */
-  const providedNow = collectProvidedNamespaces(await loadAllBags());
-  const unreachableDefaults: Array<{ trait: string; namespaces: string[] }> = [];
-  // An empty set means the registry failed to load, not that nothing is
-  // provided — reporting every default as dead would be noise, and wrong.
-  if (providedNow.size > 0) {
-    const liveTraits = await traits.list();
-    for (const name of defaultTraits()) {
-      const row = liveTraits.find((t) => t.name === name);
-      if (!row) continue;
-      const dead = row.namespaces.filter((ns) => !providedNow.has(ns));
-      if (dead.length > 0) unreachableDefaults.push({ trait: name, namespaces: dead });
-    }
-  }
-  if (unreachableDefaults.length > 0) {
-    console.log("\nDefault traits granting namespaces no bag provides (every session is affected):");
-    for (const { trait, namespaces } of unreachableDefaults) {
-      console.log(`  ✗ trait "${trait}": ${namespaces.join(", ")}`);
-    }
-    console.log("  These reach EVERY session. Each default is a bag's own trait: re-sync it (`barry bag sync-traits <bag>`), or enable the bag that provides them.");
-  }
 
   /**
    * Host binaries for bags nobody has packed.
@@ -1926,107 +1762,19 @@ export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void
     console.log("  `barry devops service status` shows this line under the service name.");
   }
 
-  /**
-   * Traits left behind by a bag that is no longer installed. Distinct from
-   * the namespace drift above: that finds traits pointing at namespaces nobody
-   * provides, this finds whole trait rows whose owning bag is gone. A bag
-   * can be uninstalled while another still provides its namespaces, so the
-   * namespace check alone misses these.
-   *
-   * `ensureTraits` never deletes, so these accumulate silently and stay on
-   * offer in the session picker while resolving to nothing. Rows with NULL
-   * provenance are excluded by findOrphaned — they are user-authored or
-   * cross-bag composites (`all`, `read`, `coding`) with no single owner.
-   *
-   * Reported, never auto-removed, and deliberately not counted into
-   * problemCount: a live session may still reference one, and dropping the row
-   * would strip its tools mid-flight. Removal is a deliberate act.
-   */
-  const installedBagNames = Object.entries(registry)
-    .filter(([, source]) => resolveBagAccess(source) !== "disabled")
-    .map(([name]) => name);
-  const orphanedTraits = await traits.orphaned(installedBagNames);
-  if (orphanedTraits.length > 0) {
-    console.log("\nTraits whose bag is no longer installed (not repaired by --fix):");
-    for (const trait of orphanedTraits) {
-      console.log(`  ✗ trait "${trait.name}" ← bag "${trait.bag}"`);
-    }
-    // No `barry trait remove` exists — deleting a trait row is a manual DB
-    // operation on purpose, since sessions may still hold the trait.
-    console.log("  Re-install the bag, or delete the trait row by hand if it is truly dead.");
-  }
+  const manifestProblems = await reportBagManifestProblems(Boolean(options.fix));
+  problemCount += manifestProblems;
 
-  /**
-   * Traits naming a scope no scope row defines.
-   *
-   * This is the fail-open case, so it is worth a check of its own: the trait
-   * still grants everything it lists, and the restriction it was written to
-   * carry silently does not happen. `resolveSessionBound` logs
-   * `scope.trait_scope_not_found` and continues, which nobody reads.
-   *
-   * Seeding now refuses such a trait, but rows predating that check — or
-   * written straight to the table — are already here.
-   *
-   * An empty scopes table means the scope seed failed, NOT that every name is
-   * bad; reporting all of them would bury that one real failure. Same guard,
-   * and the same reasoning, as the orphaned-namespace check above.
-   */
-  const knownScopeNames = new Set((await bounds.list()).map((s) => s.name));
-  if (knownScopeNames.size > 0) {
-    const traitsWithMissingScopes = (await traits.list())
-      .map((t) => ({ trait: t.name, unknown: t.boundNames.filter((n) => !knownScopeNames.has(n)) }))
-      .filter((t) => t.unknown.length > 0);
-    if (traitsWithMissingScopes.length > 0) {
-      problemCount += traitsWithMissingScopes.length;
-      console.log("\nTraits naming scopes that do not exist (not repaired by --fix):");
-      for (const { trait, unknown } of traitsWithMissingScopes) {
-        console.log(`  ✗ trait "${trait}": ${unknown.join(", ")}`);
-      }
-      console.log("  These traits grant in full — the restriction never applies.");
-      console.log(`  Known scopes: ${[...knownScopeNames].sort().join(", ")}`);
-    }
-  }
-
-  const allBags = await loadAllBags();
-  const misregistered = new Set<string>();
-  for (const [name, source] of Object.entries(registry)) {
-    if (source.type !== "local") continue;
-    let manifest: BagManifest | null;
-    try { manifest = parseManifest(resolveBuiltinPath(source.path.replace(/^~/, homedir()))); }
-    catch { continue; }
-    if (!manifest?.extends || registeredName(manifest) === name) continue;
-    if (!misregistered.size) console.log("\nExtensions registered under another name:");
-    misregistered.add(name);
-    problemCount++;
-    const correct = registeredName(manifest);
-    console.log(`  ✗ ${name}: must be registered as ${correct}`);
-    if (options.fix) {
-      const row = await getBag(name);
-      await deleteBag(name);
-      console.log(`    Removed registry row ${name}.`);
-      if (!registry[correct]) {
-        console.log(`    Register ${correct}: ${row?.builtin || isBuiltinBag(correct) ? "barry setup" : `barry install ${source.path}`}`);
-      }
-    }
-  }
-  const namespaceErrors = allBags.flatMap((bag) => {
-    const parent = bag.manifest?.extends;
-    return parent ? bag.tools.filter((tool) => tool.namespace !== parent).map((tool) => `${bag.name}:${tool.toolName} stamps ${tool.namespace}; must stamp parent ${parent}`) : [];
-  });
-  if (namespaceErrors.length) {
-    problemCount += namespaceErrors.length;
-    console.log("\nExtension tools outside their parent's namespace (edit the tool code):");
-    for (const error of namespaceErrors) console.log(`  ✗ ${error}`);
-  }
+  const allBags = manifestProblems > 0 && options.fix ? await loadAllBags() : allRegistryBags;
 
   // A bag whose manifest fails validation loads as a husk: no tools, no
-  // traits, indistinguishable from a bag that declares none. The loader only
+  // bounds, indistinguishable from a bag that declares none. The loader only
   // warns, into whichever process loaded it -- for a service that is a log
   // nobody reads -- so this is where it becomes a counted problem.
-  const invalidManifests = new Map([...getInvalidManifests()].filter(([name]) => !misregistered.has(name)));
+  const invalidManifests = new Map([...getInvalidManifests()]);
   if (invalidManifests.size > 0) {
     problemCount += invalidManifests.size;
-    console.log("\nInvalid bag manifests (these bags contribute no tools or traits):");
+    console.log("\nInvalid bag manifests (these bags contribute no tools or bounds):");
     for (const [bag, reason] of invalidManifests) console.log(`  ✗ ${bag}: ${reason}`);
   }
 
@@ -2055,7 +1803,7 @@ export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void
     for (const conflict of serverKeyConflicts) console.log(`  ✗ ${conflict.message}`);
     for (const dupe of endpointDuplicates) console.log(`  ✗ ${dupe.message}`);
     console.log(
-      "  One bag owns each server. Consumers compose the owner via `bags:` or grant its namespace in a trait — never re-declare it.",
+      "  One bag owns each server. Consumers compose the owner via `bags:` — never re-declare it.",
     );
   }
 
@@ -2149,8 +1897,8 @@ export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void
   if (problemCount === 0) {
     const healthyOAuth = oauthHealth.filter((r) => r.status === "ok" || r.status === "refreshed");
     const msg = healthyOAuth.length > 0
-      ? `All identities healthy — bags registered, traits synced. ${healthyOAuth.length} OAuth token${healthyOAuth.length === 1 ? "" : "s"} valid.`
-      : "All identities healthy — bags registered, traits synced.";
+      ? `All identities healthy — bags registered. ${healthyOAuth.length} OAuth token${healthyOAuth.length === 1 ? "" : "s"} valid.`
+      : "All identities healthy — bags registered.";
     console.log(msg);
     return;
   }
@@ -2176,7 +1924,7 @@ export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void
   }
 
   for (const barry of identitiesToFix) {
-    const result = await traits.syncBags(barry.bags);
+    const result = await resolveBags(barry.bags);
     printBagWarnings(result.warnings);
     try {
       await Barry.identity(barry.name).update({ bags: result.bags });
@@ -2188,7 +1936,7 @@ export async function bagDoctorCommand(options: { fix?: boolean }): Promise<void
       process.exitCode = 1;
       continue;
     }
-    // Its warnings are the sync's, printed above.
+    // Its warnings are the resolution's, printed above.
     console.log(`\nRepaired barry "${barry.name}": ${result.bags.join(", ")}`);
   }
 
@@ -2325,7 +2073,7 @@ export async function bagInfraCommand(
 // The four stages are deliberately separate commands rather than one flow:
 //   new      author a bag skeleton on disk
 //   install  make an existing bag USABLE — deps installed, built, registered
-//   pack     mount an installed bag onto a barry (traits synced)
+//   pack     mount an installed bag onto a barry
 //   unpack   unmount it again, leaving the files alone
 //
 // `pack` fails early on an uninstalled bag instead of half-wiring it: a bag
@@ -2406,7 +2154,7 @@ function classifyTarget(target: string): BagSource {
  * Fetch a bag by repo and describe it as the local checkout it now is.
  *
  * A cloned bag is local in every way that matters — it loads, builds and
- * grants traits through the same path as one you cloned by hand. `git` only
+ * contributes tools through the same path as one you cloned by hand. `git` only
  * records where it came from, the way `npm` does for a package-resolved bag.
  */
 function cloneToLocalSource(name: string, source: BagChildSource): BagSource {
@@ -2607,10 +2355,7 @@ export async function bagInstallCommand(
     if (!manifest) {
       throw new CliError(`Could not parse ${manifestPath}.`, 1);
     }
-    if (manifest.extends && options.as !== undefined) {
-      throw new CliError(`An extension must be registered as ${registeredName(manifest)}; --as is not allowed.`, 1);
-    }
-    name = name ?? (manifest.extends ? registeredName(manifest) : manifest.name);
+    name = name ?? manifest.name;
   } else {
     name = name ?? basename(target).replace(/\.git$/, "");
   }
@@ -2819,14 +2564,12 @@ async function provisionIdentityStores(
  */
 export async function bagPackCommand(
   name: string,
-  options: { name?: string } = {},
+  options: { name?: string; optional?: boolean } = {},
 ): Promise<void> {
   const identityName = await resolveOptionBarry({ name: options.name });
   const row = await getBag(name);
   if (!row) {
-    const extensions = (await listBags()).filter((bag) => parentOf(bag.name) && bag.name.endsWith(`/${name}`)).map((bag) => bag.name).sort();
-    const hint = extensions.length ? ` Use the registered extension name: ${extensions.join(", ")}.` : "";
-    const message = `Bag '${name}' is not installed.${hint} Install it with: ${identityName} install <path-or-url> (installs it, then offers to pack it).`;
+    const message = `Bag '${name}' is not installed. Install it with: ${identityName} install <path-or-url> (installs it, then offers to pack it).`;
     throw new CliError(message, 1);
   }
 
@@ -2837,7 +2580,7 @@ export async function bagPackCommand(
     throw new Error(`Cannot pack "${name}" — it is not installed`);
   }
   await requireIdentityFile(identityName);
-  await addBagToIdentity(name, identityName);
+  await addBagToIdentity(name, identityName, { optional: options.optional });
   const provisioned = await provisionIdentityStores(name, row.source, identityName);
   if (provisioned.length > 0) console.log(`  stores: ${provisioned.map((store) => `${name}/${store}`).join(", ")} ready for "${identityName}"`);
 }
@@ -2918,12 +2661,6 @@ export async function bagUnpackCommand(
   // Registry-wide check, independent of what any barry currently packs: a
   // parent declaring this bag would be left with a dangling `bags:` entry even
   // if nobody has that parent packed yet.
-  const extensions = (await listBags()).filter((bag) => parentOf(bag.name) === name).map((bag) => bag.name).sort();
-  if (extensions.length) {
-    console.log(`\nStill registered: "${name}" has registered extensions: ${extensions.join(", ")}. Unregister them first.`);
-    return;
-  }
-
   const declaredBy = (await loadAllBags())
     .filter((bag) => bag.name !== name && (bag.manifest?.bags ?? []).includes(name))
     .map((bag) => bag.name);

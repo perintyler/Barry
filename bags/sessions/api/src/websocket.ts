@@ -19,8 +19,7 @@ import { attachAgUiSubscription } from "./ag-ui-websocket.js";
 import { SocketPublications } from "./socket-publications.js";
 import { sessionMcpServers } from "./mcp-config.js";
 import { getDescribeAdapter } from "./agent-runtime.js";
-import { Barry, requestCaller, type Caller, type Grants } from "@barry-rocks/sdk";
-import { sessionGrants } from "@barry-rocks/sessions-bag";
+import { Barry, requestCaller, type Bound, type Caller, type Tool } from "@barry-rocks/sdk";
 
 const log = createLogger("barry-ws");
 const compatibilitySubscriptions = new WeakMap<SocketPublications, Map<string, () => void>>();
@@ -41,6 +40,7 @@ interface ClientMessage {
   type:
     | "subscribe"
     | "unsubscribe"
+    | "activity"
     | "message"
     | "start"
     | "stop"
@@ -51,6 +51,7 @@ interface ClientMessage {
     | "register_listener"
     | "ruling";
   protocolVersion?: number;
+  afterSequence?: number;
   /** Bus topic for subscribe_topic / unsubscribe_topic. */
   topic?: string;
   sessionId?: string;
@@ -60,9 +61,9 @@ interface ClientMessage {
   name?: string;
   mcpPreset?: string;
   mcpTools?: string[];
-  traits?: string[];
-  scope?: Record<string, unknown> | null;
-  bounds?: string[];
+  bags?: string[];
+  bounds?: Array<Bound | string>;
+  bound?: Bound | null;
   metadata?: Record<string, unknown>;
   identityId?: number;
   useWorktree?: boolean;
@@ -159,6 +160,7 @@ export function createWebSocketServer(server: Server, options: { authorizationIn
     let authorizationTimer: NodeJS.Timeout | undefined;
     let pending: Promise<void> | undefined;
     let invalidated = false;
+    let publications: SocketPublications | undefined;
     let unsubscribeAuthorization: (() => void) | undefined;
     const dispose = () => {
       if (authorizationTimer) clearTimeout(authorizationTimer);
@@ -178,7 +180,7 @@ export function createWebSocketServer(server: Server, options: { authorizationIn
       await revalidate();
       if (ws.readyState === 1) { authorizationTimer = setTimeout(() => { void poll(); }, authorizationIntervalMs); authorizationTimer.unref(); }
     };
-    unsubscribeAuthorization = access.subscribe(() => { invalidated = true; void revalidate(); });
+    unsubscribeAuthorization = access.subscribe(() => { invalidated = true; publications?.invalidateAuthorization(); void revalidate(); });
     authorizationTimer = setTimeout(() => { void poll(); }, authorizationIntervalMs); authorizationTimer.unref();
     ws.once("close", dispose);
     if (new URL(request?.url ?? "/", "http://localhost").pathname === "/api/v2/ws") {
@@ -189,27 +191,34 @@ export function createWebSocketServer(server: Server, options: { authorizationIn
       return;
     }
     log.info("websocket.connect", { clients: wss.clients.size });
-    const publications = new SocketPublications(ws, authorization);
+    const native = ws as WebSocket & { _socket?: { cork():void; uncork():void } };
+    publications = new SocketPublications({
+      get readyState(){return ws.readyState;}, get bufferedAmount(){return ws.bufferedAmount;},
+      send:(data,callback)=>ws.send(data,callback), close:(code,reason)=>ws.close(code,reason),
+      on:(event,listener)=>ws.on(event,listener),
+      cork:()=>native._socket?.cork(), uncork:()=>native._socket?.uncork(),
+    }, authorization);
+    const publisher = publications;
 
-    sessionRuntime.broadcastSessionList(publications);
+    sessionRuntime.broadcastSessionList(publisher);
 
     ws.on("message", async (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString()) as ClientMessage;
         if (!await authorization.revalidate()) { authorization.dispose(); ws.close(1008, "Authorization unavailable"); return; }
-        await handleMessage(publications, message, authorization);
+        await handleMessage(publisher, message, authorization);
       } catch (err) {
         log.error("websocket.message_error", { error: err instanceof Error ? err.message : String(err) });
-        sendError(publications, "Invalid message format");
+        sendError(publisher, "Invalid message format");
       }
     });
 
     ws.on("close", () => {
       log.info("websocket.disconnect", { clients: wss.clients.size });
-      sessionRuntime.unsubscribeAll(publications);
-      for (const stop of compatibilitySubscriptions.get(publications)?.values() ?? []) stop();
-      compatibilitySubscriptions.delete(publications);
-      clearTopics(publications);
+      sessionRuntime.unsubscribeAll(publisher);
+      for (const stop of compatibilitySubscriptions.get(publisher)?.values() ?? []) stop();
+      compatibilitySubscriptions.delete(publisher);
+      clearTopics(publisher);
     });
 
     ws.on("error", (err) => {
@@ -277,11 +286,17 @@ async function handleMessage(ws: SocketPublications, message: ClientMessage, aut
           sendError(ws, `Unsupported protocol version ${message.protocolVersion}. Supported version: 1`);
           return;
         }
-        sessionRuntime.subscribe(sessionId, ws, { protocolVersion: message.protocolVersion });
+        sessionRuntime.subscribe(sessionId, ws, { protocolVersion: message.protocolVersion, afterSequence: message.afterSequence });
         await subscribeTurns(ws, sessionId);
       }
       break;
 
+    case "activity":
+      if (sessionId) {
+        const active=sessionRuntime.getActiveSession(sessionId);
+        if (active?.subscribers.has(ws)) active.session?.touch?.();
+      }
+      break;
     case "unsubscribe":
       if (sessionId) {
         sessionRuntime.unsubscribe(sessionId, ws);
@@ -359,15 +374,15 @@ async function handleMessage(ws: SocketPublications, message: ClientMessage, aut
         const repoPath = validated.path;
 
         try {
-          const mcpServers = await sessionMcpServers(sessionId, await startGrants(message, requestCaller(authorization.principal)));
+          const mcpServers = await sessionMcpServers(sessionId, await startTools(message, requestCaller(authorization.principal)));
           const activeSession = await sessionRuntime.startSession({
             sessionId,
             prompt: message.prompt,
             prepareOnly: true,
             repoPath,
             name: message.name,
-            traits: message.traits,
-            scope: message.scope,
+            bags: message.bags,
+            bound: message.bound,
             bounds: message.bounds,
             mcpServers,
             metadata: message.metadata,
@@ -425,16 +440,22 @@ async function handleMessage(ws: SocketPublications, message: ClientMessage, aut
 }
 
 /**
- * What a session a client starts is granted: its row's grants when it names
- * one; otherwise, before the row exists, what the start selects. Only the
- * namespaces are read, which a start's bounds do not change.
+ * The tools a session a client starts receives: its row's tools when it names
+ * an existing session; otherwise what the start selects.
  */
-async function startGrants(message: ClientMessage, caller: Caller): Promise<Grants> {
-  if (message.sessionId) return sessionGrants(message.sessionId, caller);
-  const harness = message.provider ? getDescribeAdapter()?.(message.provider)?.id ?? message.provider : undefined;
-  const selection = { bounds: message.bounds ?? [], traits: message.traits ?? [], ...(harness ? { harness } : {}) };
+async function startTools(message: ClientMessage, caller: Caller): Promise<Tool[]> {
   const asked = Barry.as(caller);
-  return message.identityId ? asked.identity(message.identityId).grants(selection) : asked.grants(selection);
+  if (message.sessionId) {
+    const row = await getSessionRecord(message.sessionId);
+    if (row) {
+      return asked.tools(row.identity_id ?? null, row.bags ?? [], (row.bound as Bound | null) ?? row.bounds ?? []);
+    }
+  }
+  const requestedBounds: Array<Bound | string> = [
+    ...(message.bounds ?? []),
+    ...(message.bound ? [message.bound] : []),
+  ];
+  return asked.tools(message.identityId ?? null, message.bags, requestedBounds);
 }
 
 function send(ws: SocketPublications, message: WsMessage): void {

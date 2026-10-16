@@ -574,3 +574,9 @@ describe("a TUI attached to a hosted codex session", () => {
     await vi.waitFor(() => expect(codex.warnings).toHaveLength(1));
   });
 });
+
+import {describeSessionContract} from "@barry-rocks/sdk/testing";
+describeSessionContract("Codex app server",()=>{
+ const h=session();let live:FakeEngine;let number=0;
+ return {session:h.codex,ready:async()=>{live=await h.engine();if(number===0)await live.answer("thread/start",{thread:{id:"thread-1"}});number++;await live.answer("turn/start",{turn:{id:`contract-${number}`}});},complete:async()=>{await new Promise(resolve=>setImmediate(resolve));const request=live.sent.find(m=>m.method==="turn/interrupt");if(request && !h.engines.some(e=>e.stop.mock.calls.length)) {await live.answer("turn/interrupt",{});live.sent.splice(live.sent.indexOf(request),1);}live.notify("turn/completed",{turn:{id:`contract-${number}`,status:"completed"}});},resourcesReleased:()=>h.engines.every(e=>e.stop.mock.calls.length>0)};
+},{describe,it});

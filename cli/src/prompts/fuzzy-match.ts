@@ -1,5 +1,5 @@
 /**
- * Subsequence matching for the trait picker's filter.
+ * Subsequence matching for the session picker's filter.
  *
  * The picker used to filter on `includes`, which meant the query had to be a
  * contiguous run of the name: finding `amazon-trade-desk` required typing a
@@ -8,9 +8,9 @@
  *
  * Looser matching makes ranking load-bearing. Substring filtering could leave
  * the list in its original order because everything shown was an equally good
- * hit; a subsequence match will happily pair `atd` with a trait whose letters
+ * hit; a subsequence match will happily pair `atd` with an item whose letters
  * are scattered across a long description, so the score below exists to keep
- * that below the trait that actually starts with those initials. Callers must
+ * that below the item that actually starts with those initials. Callers must
  * sort by score — matching alone no longer implies relevance.
  */
 
@@ -47,7 +47,7 @@ const isBoundary = (haystack: string, index: number): boolean => {
  * treats that as "no filter" rather than "no matches".
  *
  * Greedy, not optimal: it takes the first occurrence of each query character
- * rather than searching for the best-scoring alignment. For a picker over trait
+ * rather than searching for the best-scoring alignment. For a picker over item
  * names that difference is invisible, and it keeps the scan linear.
  */
 export const fuzzyMatch = (query: string, haystack: string): FuzzyMatch | null => {
@@ -131,7 +131,7 @@ export const filterAndRank = <T extends Matchable>(
   });
 
   // Sorted on a plain number, so ties keep input order (Array#sort is stable)
-  // and equally-ranked traits stay in the order the caller supplied.
+  // and equally-ranked items stay in the order the caller supplied.
   scored.sort((a, b) => b.score - a.score);
 
   return scored.map(({ item, matchIndices }) => ({

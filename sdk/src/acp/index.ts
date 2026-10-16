@@ -1,3 +1,4 @@
+import {stopProcess} from "../sessions/stop-process.js";
 /**
  * A hosted mode for any harness that speaks the Agent Client Protocol.
  *
@@ -77,9 +78,7 @@ async function startAcp(
     Writable.toWeb(child.stdin) as WritableStream<Uint8Array>,
     Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
   );
-  const release = () => {
-    if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
-  };
+  const release = () => stopProcess(child);
 
   try {
     return await openAcpSession({
@@ -90,7 +89,7 @@ async function startAcp(
       ...extra,
     });
   } catch (err) {
-    release();
+    await release();
     const reason = err instanceof Error ? err.message : String(err);
     throw new Error(`${launch.command} did not start an ACP session: ${reason}${stderrTail ? `\n${stderrTail.trim()}` : ""}`);
   }

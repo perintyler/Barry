@@ -1,0 +1,53 @@
+{
+  "step": 1,
+  "date": "2026-10-14",
+  "entry": "tsx",
+  "command": "node cli/bin/barry.js --identity-binding <bux binding> --none",
+  "before": {
+    "ui_spawn_ms": 11052.6,
+    "load_bags_ms": 3449.1,
+    "parallel_identity_env_ms": 4904.2
+  },
+  "after": {
+    "ui_spawn_ms": [
+      9293.2,
+      7088.8
+    ],
+    "composition_ms": [
+      7495.8,
+      5205.1
+    ],
+    "precreate_ms": [
+      101.4,
+      202.9
+    ],
+    "absent_stages": [
+      "launch:identity-env",
+      "launch:load-bags",
+      "launch:preflight",
+      "launch:catalog",
+      "launch:settings"
+    ]
+  },
+  "verification": {
+    "preparation_launch_parity_context": "26 tests passed",
+    "lifecycle": "15 tests passed",
+    "authenticated_API": "13 tests passed",
+    "typechecks": [
+      "CLI",
+      "sessions bag",
+      "sessions API"
+    ],
+    "openapi": "only NativeSessionRequest traits/model/model_provider/mode properties changed; generated after SDK build"
+  },
+  "step_0_live_header": "warm=0;identity_resolve=180.5;bag_status=39.7;bags=5919.7;native_policy=10.3;prepare_total=6171.5",
+  "environment_issue": "First-message delivery refused the installed Claude adapter because its contract/version/declarations stamp is stale. Refresh the adapter after building the warm-start seam before the step 3 live gate.",
+  "remaining_steps": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ]
+}

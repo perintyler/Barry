@@ -3,7 +3,7 @@ import { mkdir, chmod, lstat } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 import type { StoreBinding } from "@barry-rocks/sdk/stores";
 import { ArtifactError, IdentityIdSchema } from "../types.js";
-import { createSqliteArtifactRepository } from "./catalog.js";
+import { createSqliteArtifactRepository } from "./index-store.js";
 import { createLocalArtifactBlobs } from "./blobs.js";
 import { createLocalArtifactMaintenance } from "./maintenance.js";
 import { captureArtifactSnapshot } from "./snapshot.js";

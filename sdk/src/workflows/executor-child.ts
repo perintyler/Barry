@@ -2,6 +2,7 @@ import { verifyArtifact, type WorkflowArtifact } from "./artifacts.js";
 import { evaluate, type ReplaySnapshot } from "./evaluator.js";
 import { encode, encodeRecord, PayloadLimit, type Activity, type ActivityTask, type WorkflowDefinition } from "./types.js";
 import { createBootstrapLogger } from "../logging/emit-bootstrap.js";
+import { validateAgainstSchema } from "../tools/validate.js";
 
 const log = createBootstrapLogger("workflow-child");
 
@@ -17,7 +18,12 @@ function send(value: unknown) {
   process.stdout.write(Buffer.concat([header, payload]), () => process.exit(0));
 }
 async function main() {
-  const request = JSON.parse(input.toString("utf8")) as { artifact: WorkflowArtifact; snapshot?: ReplaySnapshot; task?: ActivityTask };
+  const request = JSON.parse(input.toString("utf8")) as { artifact: WorkflowArtifact; snapshot?: ReplaySnapshot; task?: ActivityTask; validation?: { schema: Record<string, unknown>; value: unknown } };
+  if (request.validation) {
+    try { send({ validation: validateAgainstSchema(request.validation.schema, request.validation.value) }); }
+    catch { send({ validation: { ok: false, errors: ["Declared output schema cannot be compiled."] } }); }
+    return;
+  }
   const artifactBytes = verifyArtifact(request.artifact);
   // Application stdout cannot corrupt the framed protocol; logs are capped by the parent on stderr.
   const output = (...args: unknown[]) => log.info("workflow.output", { args: args.map(value => value instanceof Error ? { name: value.name, message: value.message, stack: value.stack } : value) });

@@ -23,7 +23,7 @@ import { DurationSchema } from "../schedules/duration.js";
  *
  * ADVISORY ONLY for an action — this never grants and never bags. Barry's MCP
  * layer already enforces tool access by *not registering* ungranted tools
- * (resolveSessionBound -> filterTools, then the tools/list filter), so an
+ * (sessionBound -> filterTools, then the tools/list filter), so an
  * action naming a tool the session lacks simply cannot invoke it. A second
  * check here would be a redundant enforcement point that drifts from the real
  * one. What this buys is a good early warning: find_actions can say "this

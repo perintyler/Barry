@@ -4,7 +4,7 @@
 import {adapterSettings, defaultHarness, FALLBACK_HARNESS} from "@barry-rocks/sdk/internal/identities";
 import {identityRecords, type IdentityRecord} from "@barry-rocks/identities-bag";
 import {Barry, isBarryError, requestCaller} from "@barry-rocks/sdk";
-import {qualifyToolId, type ExecutionContext} from "@barry-rocks/sdk/bounds";
+import {qualifyToolId, type Bound} from "@barry-rocks/sdk/bounds";
 import {actionsRoutes} from "@barry-rocks/sdk/internal/routes";
 import type { AuthPrincipal } from "@barry-rocks/sdk/internal/auth";
 import {createLogger} from "@barry-rocks/sdk/logging";
@@ -21,10 +21,6 @@ import {ActionRuns, MAX_OUTPUT_CHARS, composeActionPrompt, describeActionInvocat
 import type { ActionMeta, RunnableAction } from "@barry-rocks/sdk/internal/actions";
 import {isScriptAction, validateActionInputs, MAX_ADHOC_TIMEOUT_S, runActionPreflight, runActionValidation, resolveRunAgent} from "@barry-rocks/sdk/internal/actions";
 
-
-
-
-
 import {installedModels, routedVendorOf} from "@barry-rocks/sdk/adapters/models";
 import {requiredCredentials} from "@barry-rocks/sdk/internal/env";
 import {findInstruction} from "@barry-rocks/sdk/internal/instructions";
@@ -34,8 +30,8 @@ import {IdentityEnvironmentError, resolveEnvForBarry, type IdentityEnv} from "..
 import {TERMINAL_JOB_STATUSES, acceptJobRun, awaitJobRun, serializeJobRun} from "../job-runs.js";
 import {buildMcpConfig} from "../mcp-config.js";
 import {detachedRunSlots} from "../run-slots.js";
-import {canDenyNativeTools, nativeToolPolicy, resolveEgressSandbox} from "../session-agent-guards.js";
-import {callerScriptContext, permitsRawProcess, resolveCallerGrant, type CallerGrant} from "./caller-grant.js";
+import {canDenyNativeTools, resolveEgressSandbox, resolveSessionNativeTools} from "../session-agent-guards.js";
+import {callerScriptBound, permitsRawProcess, resolveCallerBounds, type CallerBounds, type CallerScriptBound} from "./caller-bounds.js";
 import {ADHOC_RUN_MAX_TURNS, BAG_RUN_MAX_TURNS, DEFAULT_TIMEOUT_S, ExecutorCancelled, ExecutorTimeout, MAX_DECLARED_TIMEOUT_S, MAX_REPORT_SUMMARY_CHARS, MAX_TIMEOUT_S, REPORT_SCHEMA, WAIT_ELAPSED, agentFailureReason, hardCeilingS, runningAgents, waitElapsed, wrapSchemaRoot} from "./actions-executor-support.js";
 
 const log = createLogger("barry-server");
@@ -44,7 +40,13 @@ export type DetachedRunRequest = z.infer<typeof actionsRoutes.runAction.body> & 
   /** Who started it, when not a caller of this route. */
   trigger?: "api" | "schedule" | "cli" | "job";
   /** Internal, resolved by the schedule owner rather than supplied by HTTP clients. */
-  executionContext?: ExecutionContext;
+  executionContext?: {
+    identity?: string;
+    bags?: string[];
+    bound: Bound | null;
+    allowedToolIds: string[];
+    harness?: string;
+  };
 };
 
 /** A detached run's HTTP answer, so the route and the schedules route answer alike. */
@@ -66,15 +68,15 @@ const reply = (status: number, body: Record<string, unknown>): DetachedRunResult
  * has no owner to act for without its session.
  */
 type RunAuthority =
-  | { actsFor: "caller"; action: RunnableAction; caller: CallerGrant }
+  | { actsFor: "caller"; action: RunnableAction; caller: CallerBounds }
   | { actsFor: "bag"; action: ActionMeta };
 
 /** What a detached run may reach and where it starts, settled before anything is created. */
-interface RunGrant {
+interface RunBounds {
   /** The session-row columns the engine resolves the run's tools and bounds from. */
   identityId: number | undefined;
-  traits: string[];
-  bound: Record<string, unknown> | null;
+  bags: string[];
+  bound: Bound | Record<string, unknown> | null;
   bounds: string[];
   cwd: string;
   maxTurns: number;
@@ -135,7 +137,7 @@ export async function executeDetached(
     }
     let authority: RunAuthority;
     if (body.caller_session_id) {
-      const checked = await resolveCallerGrant(body.caller_session_id, body);
+      const checked = await resolveCallerBounds(body.caller_session_id, body, principal);
       if ("status" in checked) return checked;
       // Resolution already scoped an ad-hoc lookup to the caller. Checked
       // again because this function has callers other than that route.
@@ -148,10 +150,16 @@ export async function executeDetached(
         error: "no_caller_session",
         message: "An ad-hoc action runs with the access of the session that asks for it, and this request names none.",
       });
-    } else if (body.traits && !body.executionContext) {
+    } else if (
+      (body.bags || body.bounds) &&
+      !body.executionContext &&
+      body.trigger !== "schedule" &&
+      body.trigger !== "job" &&
+      !body.schedule_id
+    ) {
       return reply(400, {
         error: "no_caller_session",
-        message: "`traits` narrows a calling session's access, and this request names no calling session.",
+        message: "`bags` and `bounds` narrow a calling session's access, and this request names no calling session.",
       });
     } else {
       authority = { actsFor: "bag", action };
@@ -196,15 +204,16 @@ export async function executeDetached(
         : body.executionContext?.identity ? { kind: "identity", uuid: body.executionContext.identity } : { kind: "installation" };
       if (authority.actsFor === "caller") {
         try {
-          context = await callerScriptContext(authority.caller);
+          context = await callerScriptBound(authority.caller, principal);
         } catch {
-          return reply(409, { error: "unenforceable_grant", message: "The calling session's execution policy could not be resolved." });
+          return reply(409, { error: "unenforceable_grant", message: "The calling session's execution bounds could not be resolved." });
         }
       }
       if (authority.actsFor === "bag" && (body.identity || body.identity_id !== undefined)) {
         let identityId: number | undefined;
+        let selected: Awaited<ReturnType<typeof identityRecords.resolve>>;
         try {
-          const selected = await identityRecords.resolve({
+          selected = await identityRecords.resolve({
             ...(body.identity ? { name: body.identity } : {}),
             ...(body.identity_id !== undefined ? { id: body.identity_id } : {}),
           }, requestCaller(principal));
@@ -215,29 +224,38 @@ export async function executeDetached(
           return reply(404, { error: "unknown_identity", message: "The selected identity could not be resolved." });
         }
         try {
-          const granted = await Barry.identity(identityId).grants({
-            traits: context?.traits ?? [],
-            defaults: false,
-            inlineBound: context?.bound ?? null,
-          });
-          const selected: ExecutionContext = {
-            traits: granted.traits,
-            bound: granted.bound,
-            allowedToolIds: granted.tools.map((tool) => qualifyToolId(tool.namespace, tool.name)),
+          const identityCfg = identityRecords.config(selected.barry);
+          const defaultBags = (identityCfg.bags ?? [])
+            .filter((b: string | { name: string; optional?: boolean }) => typeof b === "string" || !b.optional)
+            .map((b: string | { name: string; optional?: boolean }) => (typeof b === "string" ? b : b.name));
+          const requestedBags = body.bags ?? context?.bags ?? defaultBags;
+          const resolvedBound = context?.bound
+            ? context.bound
+            : (await Barry.as(requestCaller(principal)).bound(identityId, body.bounds ?? [])) ?? {};
+          const tools = await Barry.as(requestCaller(principal)).tools(
+            identityId,
+            requestedBags,
+            resolvedBound,
+          );
+          const selectedContext: CallerScriptBound = {
+            bags: requestedBags,
+            bound: resolvedBound,
+            tools,
+            allowedToolIds: tools.map((tool) => qualifyToolId(tool.namespace, tool.name)),
           };
           if (context) {
             const ceiling = context.allowedToolIds;
-            selected.allowedToolIds = selected.allowedToolIds.filter(id => ceiling.includes(id));
+            selectedContext.allowedToolIds = selectedContext.allowedToolIds.filter(id => ceiling.includes(id));
           }
-          context = selected;
+          context = selectedContext;
         } catch {
-          return reply(409, { error: "unenforceable_grant", message: "The selected identity's execution policy could not be resolved." });
+          return reply(409, { error: "unenforceable_grant", message: "The selected identity's execution bounds could not be resolved." });
         }
       }
       if (context && !permitsRawProcess(context)) {
         return reply(409, {
           error: "unenforceable_grant",
-          message: "Raw script actions require Bash access and an unrestricted execution policy; use guarded Barry tools for restricted work.",
+          message: "Raw script actions require Bash access and an unrestricted execution bound; use guarded Barry tools for restricted work.",
         });
       }
       const { run } = await runScriptAction(action, {
@@ -258,7 +276,7 @@ export async function executeDetached(
       });
     }
 
-    // Exactly the caller's, even when null: the engine adds a barry's traits
+    // Exactly the caller's, even when null: the engine adds a barry's bags
     // and bound only for a session that records one, so substituting a
     // default here would hand the run access its caller never had.
     const callerBarryId = authority.actsFor === "caller" ? authority.caller.session.identity_id : null;
@@ -269,10 +287,10 @@ export async function executeDetached(
     // retried until the executor timeout. Resolved the same way the trigger
     // route resolves it, so a detached run and a triggered session for the
     // same user act for the same barry.
-    const identityFreeSchedule = Boolean(body.executionContext && !body.identity && !body.identity_id);
-    if (identityFreeSchedule && (!action.agent?.agent || !action.agent.model)) return reply(400, { error: "explicit_agent_required", message: "Identity-free agent schedules require an explicit agent and model in the action." });
+    const identityFreeSchedule = Boolean((body.executionContext || body.bags || body.bounds) && !body.identity && !body.identity_id && (body.trigger === "schedule" || body.trigger === "job" || body.schedule_id));
+    if (identityFreeSchedule && Boolean(body.executionContext && !body.identity && !body.identity_id) && (!action.agent?.agent || !action.agent.model)) return reply(400, { error: "explicit_agent_required", message: "Identity-free agent schedules require an explicit agent and model in the action." });
     let selection: { barry: IdentityRecord | null };
-    if (identityFreeSchedule) {
+    if (Boolean(body.executionContext && !body.identity && !body.identity_id)) {
       selection = { barry: null };
     } else {
       try {
@@ -291,7 +309,7 @@ export async function executeDetached(
       }
     }
     const identityId = selection.barry ? (await identityRecords.rowId(selection.barry)) ?? undefined : undefined;
-    const identityConfig = selection.barry ? identityRecords.config(selection.barry) : { env: {}, vault: undefined, traits: [], bounds: [], bags: [], bag_configs: {}, secrets: {}, bound: undefined, adapters: {}, status_notify: undefined, bag_grant: "session" as const };
+    const identityConfig = selection.barry ? identityRecords.config(selection.barry) : { env: {}, vault: undefined, bounds: [], bags: [], bag_configs: {}, secrets: {}, bound: undefined, adapters: {}, status_notify: undefined };
 
     // Resolved before the row is written so the row can record the decision,
     // and before the concurrency slot is taken so a refusal below costs none.
@@ -305,7 +323,7 @@ export async function executeDetached(
       fallbackAgent: providerFieldId(FALLBACK_HARNESS),
     });
     let identityEnv: IdentityEnv | null = null;
-    if (!identityFreeSchedule) {
+    if (!Boolean(body.executionContext && !body.identity && !body.identity_id)) {
       try {
         identityEnv = await resolveEnvForBarry(identityId);
       } catch (error) {
@@ -344,7 +362,7 @@ export async function executeDetached(
     }
 
     const adhoc = action.source === "adhoc";
-    let grant: RunGrant;
+    let grant: RunBounds;
     if (authority.actsFor === "caller") {
       const agent = runAgent.agent;
       // A denied-tools list restricts only an agent that enforces it. On any
@@ -365,13 +383,16 @@ export async function executeDetached(
       if (adhoc && (!isAbsolute(cwd) || !existsSync(cwd) || !statSync(cwd).isDirectory())) {
         return reply(400, { error: "invalid_cwd", message: `"${cwd}" is not an existing absolute directory.` });
       }
-      const native = await nativeToolPolicy({ id: authority.caller.session.id, provider: runAgent.agent }, authority.caller.traits);
+      const native = await resolveSessionNativeTools(
+        { id: authority.caller.session.id, provider: runAgent.agent, identityId: callerBarryId },
+        { bags: authority.caller.bags, bound: authority.caller.bound },
+      );
       if (Object.keys(native.conflicts).length) return reply(409, { error: "unenforceable_grant", message: `session bounds cannot take back ${Object.keys(native.conflicts).join(", ")} on ${runAgent.agent} (hosted): ${[...new Set(Object.values(native.conflicts))].join("; ")}` });
       grant = {
         identityId: callerBarryId ?? undefined,
-        traits: authority.caller.traits,
-        bound: authority.caller.session.bound,
-        bounds: authority.caller.session.bounds,
+        bags: authority.caller.bags,
+        bound: authority.caller.bound,
+        bounds: authority.caller.bounds.filter((b): b is string => typeof b === "string"),
         cwd,
         maxTurns: adhoc ? ADHOC_RUN_MAX_TURNS : BAG_RUN_MAX_TURNS,
         timeoutCeilingS: adhoc ? MAX_ADHOC_TIMEOUT_S : MAX_DECLARED_TIMEOUT_S,
@@ -384,25 +405,35 @@ export async function executeDetached(
         },
       };
     } else {
+      const requestedBags = body.bags ?? body.executionContext?.bags ?? [...new Set(["actions", authority.action.bag])];
+      const requestedBounds = body.bounds ?? [];
+      let pinnedBound: Bound | null = body.executionContext?.bound ? { ...body.executionContext.bound } : null;
+      if (!pinnedBound && requestedBounds.length > 0) {
+        try {
+          const resolved = await Barry.as(requestCaller(principal)).bound(identityId ?? null, requestedBounds);
+          if (resolved && Object.keys(resolved).length > 0) {
+            pinnedBound = resolved;
+          }
+        } catch {
+          pinnedBound = null;
+        }
+      }
       grant = {
         identityId,
-        traits: body.executionContext?.traits ?? [...new Set(["actions", authority.action.bag])],
-        bound: body.executionContext?.bound ? { ...body.executionContext.bound } : null,
-        bounds: [],
+        bags: requestedBags,
+        bound: pinnedBound,
+        bounds: requestedBounds.filter((b): b is string => typeof b === "string"),
         cwd: authority.action.dir,
         maxTurns: BAG_RUN_MAX_TURNS,
         timeoutCeilingS: MAX_DECLARED_TIMEOUT_S,
       };
     }
 
-    // The MCP server filters tools by the SESSION's traits (looked up via
+    // The MCP server filters tools by the SESSION's bags and pinned bound (looked up via
     // ?sessionId=), so the one-shot agent needs a real sessions row — an
-    // anonymous connection gets only untraited tools (cli/src/sdk.ts learned
-    // this the hard way). A run a session started copies that session's row
-    // (see RunGrant), which is what makes its access the caller's exactly. A
-    // run with no caller gets its bag's auto-trait (readwrite) — the tools its
-    // own prompt most plausibly calls. An unsynced trait resolves to no tools
-    // rather than an error.
+    // anonymous connection gets only unbound tools. A run a session started copies
+    // that session's row (see RunApproval), which is what makes its access the caller's
+    // exactly. A run with no caller gets its bag's tools alongside `actions`.
     //
     // A session that runs an agent action itself is starting a subagent, and
     // a subagent is a job run: recorded as one, with the session that asked
@@ -440,7 +471,7 @@ export async function executeDetached(
         // the API executes itself, so there is no actor to name.
         agent_token: null,
         ...(grant.identityId !== undefined ? { identity_id: grant.identityId } : {}),
-        traits: grant.traits,
+        bags: grant.bags,
         ...(grant.bound ? { bound: grant.bound } : {}),
         bounds: grant.bounds,
         metadata: {
@@ -537,7 +568,7 @@ export async function executeDetached(
           ...(grant.caller
             ? {
                 grant: {
-                  traits: grant.traits,
+                  bags: grant.bags,
                   bounds: grant.bounds,
                   narrowed: grant.caller.narrowed,
                   native_tools_denied: grant.caller.deniedTools,
@@ -639,7 +670,7 @@ export async function executeDetached(
       });
       void cancelled.catch(() => {});
 
-      /** Persist settled run output even after the caller's wait ends; see docs/decisions/0020-session-route-catalog-and-cache-invariants.md. */
+      /** Persist settled run output even after the caller's wait ends; see docs/decisions/0020-session-route-and-cache-invariants.md. */
       const recordResult = async (settled: Awaited<typeof runPromise>): Promise<DetachedRunResult> => {
         // Unwrap the synthetic object root, then serialize by the same rule
         // resolveOutput applies at the complete_action boundary: a string-typed

@@ -1,8 +1,6 @@
 /**
- * Startup-time bag loading, extracted verbatim from application.ts so the
- * composition root stays readable. Behaviour is byte-faithful to the inlined
- * versions; the only change is that `log` and the shared `bagToolDefinitions`
- * map are passed in rather than closed over.
+ * Startup-time bag loading. Existing bundles and the source fallback serve
+ * requests while the service's worker maintains the build cache.
  */
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -10,7 +8,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Logger } from "@barry-rocks/sdk/logging";
-import { applyToolVisibility, collectToolMeta } from "@barry-rocks/sdk/internal/tools";
+import { applyToolVisibility, collectToolDefinitions } from "@barry-rocks/sdk/internal/tools";
 import {
   checkBagRequirements,
   checkBagDependencyStates,
@@ -20,7 +18,6 @@ import {
   collectDeclaredMcpServers,
   findServerKeyConflicts,
   findEndpointDuplicates,
-  findDanglingTraitNamespaces,
 } from "@barry-rocks/sdk/internal/bags";
 import { resolveBagAccess } from "@barry-rocks/sdk/bags";
 import type { BagRegistrySnapshot, Bag } from "@barry-rocks/sdk/bags";
@@ -69,10 +66,10 @@ export async function loadBagTools(
   bagToolDefinitions.clear();
   const resourceRegistrars: BagResourceRegistrar[] = [];
 
-  // Bags are bundled to plain JS ahead of time. The build directory is a cache
-  // and may be purged, so rebuild anything missing or stale before loading —
-  // otherwise a purge would silently drop every bag's tools.
-  if (process.env.BARRY_BAGS_BUILT !== "0") {
+  // Use existing bundles immediately. The service's maintenance worker repairs
+  // the cache; missing bundles retain the source fallback below. Only the
+  // explicit rollback switch puts stale checks and builds back on startup.
+  if (process.env.BARRY_BAGS_BUILT !== "0" && process.env.BARRY_BAGS_REBUILD === "1") {
     try {
       const results = await ensureBagsBuilt();
       const failed = results.filter((r) => !r.ok);
@@ -295,14 +292,6 @@ export function loadBagConfigs(
       message: dupe.message,
     });
   }
-  for (const dangling of findDanglingTraitNamespaces(snapshot.bags)) {
-    log.warn("bag_configs.dangling_trait_namespace", {
-      bag: dangling.bag,
-      trait: dangling.trait,
-      namespace: dangling.namespace,
-      message: dangling.message,
-    });
-  }
 
   for (const bag of snapshot.bags) {
     for (const [name, server] of Object.entries(bag.mcpServers)) {
@@ -352,7 +341,7 @@ export async function loadBagPool(
   snapshot: BagRegistrySnapshot,
   log: Logger,
 ): Promise<BagConnectionPool> {
-  const registry = await collectToolMeta(snapshot);
+  const registry = await collectToolDefinitions(snapshot);
   const pool = new BagConnectionPool(registry);
 
   // Bags the user marked `access: deferred` in the registry — their proxied

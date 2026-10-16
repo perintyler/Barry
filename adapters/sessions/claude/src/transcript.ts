@@ -44,9 +44,9 @@ interface TranscriptLine {
  * flattening is the vendor's, and it is why `cwd` is needed as well as the
  * session id.
  */
-export function transcriptPath(providerSessionId: string, cwd: string, home = homedir()): string {
+export function transcriptPath(harnessSessionId: string, cwd: string, home = homedir()): string {
   const projectDir = cwd.replace(/\//g, "-");
-  return join(home, ".claude", "projects", projectDir, `${providerSessionId}.jsonl`);
+  return join(home, ".claude", "projects", projectDir, `${harnessSessionId}.jsonl`);
 }
 
 export const claudeTranscript: TranscriptSource = {

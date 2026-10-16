@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Barry, type Caller, type Grants } from "@barry-rocks/sdk";
+import { Barry, type Caller, type Tool } from "@barry-rocks/sdk";
 import { fakeSessions } from "@barry-rocks/sdk/testing";
 import { openInstance } from "@barry-rocks/sdk/internal/services";
 import { ServiceManagement, type ServiceDefinition } from "./management.js";
@@ -21,11 +21,8 @@ let declarations: ServiceDefinition[];
 const owner: Caller = { kind: "owner" };
 const session: Caller = { kind: "session", identity: "bux", sessionId: "s1" };
 const device: Caller = { kind: "device", principal: { kind: "device", credentialId: "d1", actorId: 1, identityIds: [], scopes: [] } };
-const grants = (write: boolean): Grants => ({
-  traits: write ? ["mcp:services"] : ["mcp:read"], bound: null, namespaces: ["mcp"],
-  tools: write ? [{ name: "services_restart", namespace: "mcp", bag: "mcp", access: "write" }] : [],
-  skills: [], instructions: [],
-});
+const sessionTools = (write: boolean): Tool[] =>
+  write ? [{ name: "services_restart", namespace: "mcp", bag: "mcp", access: "write" }] : [];
 beforeEach(async () => {
   home = mkdtempSync(join(tmpdir(), "barry-mcp-services-"));
   vi.stubEnv("BARRY_HOME", home); vi.stubEnv("BARRY_SERVICE", "");
@@ -35,7 +32,7 @@ beforeEach(async () => {
   await management.apply("fixture.api", "add"); await management.apply("other.api", "add");
   injected.management.mockImplementation(() => management);
   writeServiceRegistry({ version: 2, generated: new Date().toISOString(), resources: { "fixture.api": { bag: "fixture", name: "api", kind: "service" } } });
-  Barry.use(services, fakeSessions({ grants: async () => grants(false) }));
+  Barry.use(services, fakeSessions({ tools: async () => sessionTools(false) }));
 });
 afterEach(() => { Barry.reset(); vi.unstubAllEnvs(); vi.restoreAllMocks(); rmSync(home, { recursive: true, force: true }); });
 
@@ -74,22 +71,34 @@ it("lets the owner restart and refuses devices before touching the OS", async ()
   expect(os.unload).not.toHaveBeenCalled();
 });
 
-it("allows a bag its own service and requires a write grant for any other service", async () => {
+it("allows a bag its own service and requires the mcp write tool for any other service", async () => {
   const bag = { ...session, bag: "fixture" };
   await Barry.as(bag).service("fixture.api").restart();
-  await expect(Barry.as(bag).service("other.api").restart()).rejects.toMatchObject({ reason: "forbidden" });
-  await expect(Barry.as(session).service("fixture.api").restart()).rejects.toMatchObject({ reason: "forbidden" });
-  const granted = vi.fn(async () => grants(true)); Barry.use(fakeSessions({ grants: granted }));
+  await expect(Barry.as(bag).service("other.api").restart()).rejects.toMatchObject({
+    reason: "forbidden",
+    message: "this session cannot control services",
+    hint: "pack the mcp bag without a read-only bound",
+  });
+  await expect(Barry.as(session).service("fixture.api").restart()).rejects.toMatchObject({
+    reason: "forbidden",
+    message: "this session cannot control services",
+    hint: "pack the mcp bag without a read-only bound",
+  });
+  const resolveTools = vi.fn(async () => sessionTools(true)); Barry.use(fakeSessions({ tools: resolveTools }));
   await Barry.as(session).service("other.api").restart();
-  expect(granted).toHaveBeenCalledWith("bux", "s1", session);
+  expect(resolveTools).toHaveBeenCalledWith("bux", "s1", session);
   await Barry.as(bag).service("other.api").restart();
 });
 
 it("refuses after a read-only bound removes the write tool", async () => {
   let allowed = true;
-  Barry.use(fakeSessions({ grants: async () => grants(allowed) }));
+  Barry.use(fakeSessions({ tools: async () => sessionTools(allowed) }));
   await Barry.as(session).service("fixture.api").restart(); allowed = false;
-  await expect(Barry.as(session).service("fixture.api").restart()).rejects.toMatchObject({ reason: "forbidden" });
+  await expect(Barry.as(session).service("fixture.api").restart()).rejects.toMatchObject({
+    reason: "forbidden",
+    message: "this session cannot control services",
+    hint: "pack the mcp bag without a read-only bound",
+  });
 });
 
 it("refuses self-restart with a terminal hint", async () => {
@@ -116,16 +125,16 @@ it("propagates unexpected failures unchanged and reads prepared services for eve
   expect(injected.management.mock.calls.length).toBeGreaterThan(1);
 });
 
-it.each(["start", "stop"] as const)("authorizes %s for every caller and grant state", async operation => {
+it.each(["start", "stop"] as const)("authorizes %s for every caller and tool state", async operation => {
   await Barry.service("fixture.api")[operation]();
   await expect(Barry.as(device).service("fixture.api")[operation]()).rejects.toMatchObject({ reason: "forbidden" });
   await Barry.as({ ...session, bag: "fixture" }).service("fixture.api")[operation]();
   await expect(Barry.as({ ...session, bag: "other" }).service("fixture.api")[operation]()).rejects.toMatchObject({ reason: "forbidden" });
   await expect(Barry.as(session).service("fixture.api")[operation]()).rejects.toMatchObject({ reason: "forbidden" });
-  Barry.use(fakeSessions({ grants: async () => grants(true) }));
+  Barry.use(fakeSessions({ tools: async () => sessionTools(true) }));
   await Barry.as(session).service("fixture.api")[operation]();
   await Barry.as({ ...session, bag: "other" }).service("fixture.api")[operation]();
-  Barry.use(fakeSessions({ grants: async () => grants(false) }));
+  Barry.use(fakeSessions({ tools: async () => sessionTools(false) }));
   await expect(Barry.as(session).service("fixture.api")[operation]()).rejects.toMatchObject({ reason: "forbidden" });
 });
 it("refuses self-stop while allowing an explicit self-start", async () => {

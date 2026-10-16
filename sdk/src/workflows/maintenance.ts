@@ -14,18 +14,18 @@ export class WorkflowMaintenance {
   private nextAt = 0;
   private lastSnapshotAt: number | null = null;
   private failure = false;
-  constructor(private readonly options: { owner: WorkflowOwner; database: string; archiveDirectory: string; artifacts: WorkflowArtifact[]; retainDays?: number; now?: () => number }) {
+  constructor(private readonly options: { owner: WorkflowOwner; database: string; archiveDirectory: string; artifacts: WorkflowArtifact[]; workArtifactRoot?: string; retainDays?: number; now?: () => number }) {
     if (!isAbsolute(options.archiveDirectory) || !isAbsolute(options.database)) throw new Error("maintenance requires absolute database and archive paths");
     if (!Number.isInteger(options.retainDays ?? 30) || (options.retainDays ?? 30) < 1) throw new Error("retention must be at least one day");
     mkdirSync(options.archiveDirectory, { recursive: true, mode: 0o700 });
   }
-  status() { return { enabled: true, state: this.stopped ? "stopped" : this.pending ? "snapshotting" : this.failure ? "archive_failed" : this.archive ? "ready" : "starting", lastSnapshotAt: this.lastSnapshotAt, nextSnapshotInMs: Math.max(0, this.nextAt - performance.now()), retainDays: this.options.retainDays ?? 30, snapshotDeletion: "operator-managed" }; }
+  status() { return { enabled: true, scope: "owner-archive", executorStoresIncluded: false, state: this.stopped ? "stopped" : this.pending ? "snapshotting" : this.failure ? "archive_failed" : this.archive ? "ready" : "starting", lastSnapshotAt: this.lastSnapshotAt, nextSnapshotInMs: Math.max(0, this.nextAt - performance.now()), retainDays: this.options.retainDays ?? 30, snapshotDeletion: "operator-managed" }; }
   tick(): void {
     if (this.stopped || this.pending || !this.options.owner.storageAccounted) return;
     const at = (this.options.now ?? Date.now)();
     if (performance.now() >= this.nextAt) {
       const destination = join(this.options.archiveDirectory, `workflow-${randomUUID()}`);
-      this.pending = snapshotWorkflows(this.options.database, destination, this.options.owner.id, this.options.artifacts).then(() => {
+      this.pending = snapshotWorkflows(this.options.database, destination, this.options.owner.id, this.options.artifacts, this.options.workArtifactRoot).then(() => {
         const archive = new DatabaseSync(join(destination, "workflows.db"), { readOnly: true });
         this.archive?.close(); this.archive = archive; this.lastSnapshotAt = at; this.failure = false;
         this.nextAt = performance.now() + 86_400_000;

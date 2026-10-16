@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { barryCacheDir } from "@barry-rocks/sdk/services";
 /**
  * `barry doctor [adapter]` — is each agent adapter usable on this machine?
  *
@@ -18,7 +22,7 @@ import { checkRequirements, formatChecks, preflightLine, type Check, type HostPr
 import { MODE_IDS } from "@barry-rocks/sdk/ids";
 
 /** What doctor reads of an adapter — the record is enough, so no adapter code has to load. */
-export type AdapterUnderTest = Pick<InstalledAdapter, "id" | "aliases" | "requirements" | "modes" | "bag">;
+export type AdapterUnderTest = Pick<InstalledAdapter, "id" | "aliases" | "requirements" | "modes" | "bag" | "defaultMode">;
 
 /**
  * The real host probes.
@@ -58,6 +62,51 @@ export function hostProbes(): HostProbes {
       }
     },
     platform: process.platform,
+    env: process.env,
+  };
+}
+
+/** Launch-only cache. Login checks and explicit doctor runs always stay live. */
+export function cachedHostProbes(probes: HostProbes = hostProbes(), cacheDir = join(barryCacheDir(), "preflight")): HostProbes {
+  const paths = new Map<string, { path: string; stamp: string }>();
+  const stamp = (path: string) => {
+    const file = statSync(path);
+    return `${file.ino}:${file.size}:${file.mtimeMs}:${file.ctimeMs}`;
+  };
+  return {
+    platform: probes.platform,
+    env: probes.env,
+    which(command) {
+      const previous = paths.get(command);
+      try { if (previous && stamp(previous.path) === previous.stamp) return previous.path; } catch { /* Re-resolve a missing binary. */ }
+      const path = probes.which(command);
+      if (path) { try { paths.set(command, { path, stamp: stamp(path) }); } catch { /* Uncacheable probe result. */ } }
+      return path;
+    },
+    run(command, args) {
+      if (args.length !== 1 || args[0] !== "--version") return probes.run(command, args);
+      const path = paths.get(command)?.path ?? (command.startsWith("/") ? command : probes.which(command));
+      if (!path) return probes.run(command, args);
+      let fingerprint: string;
+      try { fingerprint = stamp(path); } catch { return probes.run(command, args); }
+      const file = join(cacheDir, `${createHash("sha256").update(path).digest("hex")}.json`);
+      try {
+        if (existsSync(file)) {
+          const cached = JSON.parse(readFileSync(file, "utf8")) as { path: string; stamp: string; result: { stdout: string; code: number } };
+          if (cached.path === path && cached.stamp === fingerprint && typeof cached.result?.stdout === "string" && cached.result.code === 0) return cached.result;
+        }
+      } catch { /* Missing or corrupt caches use live probes. */ }
+      const result = probes.run(path, args);
+      if (result?.code === 0) {
+        try {
+          mkdirSync(cacheDir, { recursive: true, mode: 0o700 });
+          const temporary = `${file}.${process.pid}.tmp`;
+          writeFileSync(temporary, JSON.stringify({ path, stamp: fingerprint, result }), { mode: 0o600 });
+          renameSync(temporary, file);
+        } catch { /* A diagnostic cache cannot make a launch fail. */ }
+      }
+      return result;
+    },
   };
 }
 
@@ -78,7 +127,8 @@ export interface DoctorOptions {
  */
 export async function adapterPreflightNotices(
   adapterId: string,
-  probes: HostProbes = hostProbes(),
+  probes: HostProbes = cachedHostProbes(),
+  modeId?: keyof InstalledAdapter["modes"],
 ): Promise<string[]> {
   try {
     const { adapterStore } = await import("../adapters/installed.js");
@@ -86,7 +136,7 @@ export async function adapterPreflightNotices(
     // Only a recorded adapter: one that was refused is not one a session can use.
     const record = findInstalled(adapters.installed(), adapterId);
     if (!record) return [];
-    return [`Preflight ${preflightLine(record.id, checkRequirements(record.requirements, probes))}`];
+    return [`Preflight ${preflightLine(record.id, checkRequirements(record.requirements, probes, record.modes[modeId ?? record.defaultMode] ?? undefined))}`];
   } catch (err) {
     // A diagnostic that BROKE is not an adapter with nothing to report, and
     // returning [] here made the two identical — the doc comment above says a
@@ -98,7 +148,7 @@ export async function adapterPreflightNotices(
 }
 
 /** The modes this adapter declares that are verified on this platform. */
-function modesAvailable(adapter: AdapterUnderTest, platform: NodeJS.Platform): string[] {
+function modesAvailable(adapter: AdapterUnderTest, platform: NodeJS.Platform): (typeof MODE_IDS)[number][] {
   if (adapter.requirements.platforms && !adapter.requirements.platforms.includes(platform)) return [];
   return MODE_IDS.filter((id) => {
     const mode = adapter.modes[id];
@@ -115,8 +165,8 @@ function isUsable(checks: readonly Check[]): boolean {
  * What stops `barry adapter add` recording an adapter on this machine: its
  * binary is missing. The rest doctor reports without refusing.
  */
-export function blockingProblems(adapter: Pick<Adapter, "requirements">, probes: HostProbes = hostProbes()): string[] {
-  const binary = checkRequirements(adapter.requirements, probes).find((check) => check.name === "binary");
+export function blockingProblems(adapter: Pick<Adapter, "requirements" | "modes" | "defaultMode">, probes: HostProbes = hostProbes()): string[] {
+  const binary = checkRequirements(adapter.requirements, probes, adapter.modes[adapter.defaultMode] ?? undefined).find((check) => check.name === "binary");
   if (!binary || binary.status === "ok") return [];
   return [`${binary.observed}${binary.fix ? ` — ${binary.fix}` : ""}`];
 }
@@ -143,13 +193,17 @@ export function runDoctor(
 
   const failing: string[] = [];
   for (const adapter of selected) {
-    const checks = checkRequirements(adapter.requirements, probes);
+    const checks = checkRequirements(adapter.requirements, probes, adapter.modes[adapter.defaultMode] ?? undefined);
     const [title, ...rest] = formatChecks(adapter.id, checks);
     const fixes = rest.filter((line) => line.startsWith("  fix "));
     const lines = rest.filter((line) => !line.startsWith("  fix "));
     const available = modesAvailable(adapter, probes.platform);
     write(title ?? adapter.id);
     for (const line of lines) write(line);
+    for (const id of modesAvailable(adapter, probes.platform)) {
+      const mode = adapter.modes[id]!;
+      if (id !== adapter.defaultMode) write(`  ${id}: ${preflightLine(adapter.id, checkRequirements(adapter.requirements, probes, mode))}`);
+    }
     write(`  ${"modes".padEnd(8)} ${available.join(", ") || "none available on this platform"}`);
     // Declared credentials, read off the manifest — no adapter code loads. A
     // session needs each of these from the identity's env map or this
@@ -163,7 +217,7 @@ export function runDoctor(
     }
     for (const line of fixes) write(line);
     write("");
-    if (!isUsable(checks)) failing.push(adapter.id);
+    if (!isUsable(checks) || checks.some(check => check.name === "compatibility" && check.status === "failed")) failing.push(adapter.id);
   }
 
   // Printed even when everything passed — a silent doctor cannot be told from

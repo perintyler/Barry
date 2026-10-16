@@ -14,6 +14,8 @@ services:
     serves: http
     health: /health
     secrets: [BARRY_SECRET]
+    env:
+      - BARRY_ACTIONS_ORIGIN=
 
 scripts:
   skill-to-action:

@@ -51,7 +51,7 @@ const barry = (options: ConstructorParameters<typeof BarryClient>[0] = {}) =>
 
 const SESSION = {
   id: "abc", name: "n", systemPrompt: null, summary: null, repoPath: null, identityId: null,
-  identitySource: null, status: "running", traits: [], bound: null, pinned: false, useWorktree: false,
+  identitySource: null, status: "running", bags: [], bounds: [], bound: null, pinned: false, useWorktree: false,
   worktreeStatus: null, worktreePath: null, baseRepoPath: null, source: null, provider: "claude",
   model: null, createdAt: "2026-09-24T00:00:00.000Z", startedAt: null,
 };
@@ -178,14 +178,13 @@ describe("sessions", () => {
 });
 
 describe("identities", () => {
-  it("reads traits as the traits route serves them, composites and harness variants included", async () => {
-    handler = json(200, { traits: [{
-      name: "git", description: null, access: "readwrite", namespaces: ["git"], tools: [], skills: [], instructions: [],
-      bound: {}, boundNames: [], bag: "git", includes: ["git:read"], harnessTraits: { "claude-code": "git:claude" },
+  it("reads bounds as the bounds route serves them", async () => {
+    handler = json(200, { bounds: [{
+      name: "readonly", description: "Read-only bound", tools: { deny: ["*:write"] },
     }] });
-    const traits = await barry({ identities: { baseUrl: origin, secret: "s3cret" } }).identities.traits();
-    expect(traits[0]).toMatchObject({ name: "git", includes: ["git:read"], harnessTraits: { "claude-code": "git:claude" } });
-    expect(seen[0].url).toBe("/api/v1/traits");
+    const bounds = await barry({ identities: { baseUrl: origin, secret: "s3cret" } }).identities.bounds();
+    expect(bounds[0]).toMatchObject({ name: "readonly", tools: { deny: ["*:write"] } });
+    expect(seen[0].url).toBe("/api/v1/bounds");
   });
 });
 
@@ -264,14 +263,14 @@ describe("schedules", () => {
   });
 
   it.each([
-    { identity: "fixture", traits: ["script"], bounds: ["restricted"] },
-    { traits: [], bounds: [] },
+    { identity: "fixture", bags: ["script"], bounds: ["restricted"] },
+    { bags: [], bounds: [] },
     {},
   ])("preserves explicit schedule permissions on the HTTP wire: %j", async (permissions) => {
     handler = json(201, { schedule: SCHEDULE });
     await barry().schedules.schedule("2030-01-01", { action: "maint:reap", ...permissions });
     const body = seen[0].body as Record<string, unknown>;
-    for (const key of ["identity", "traits", "bounds"] as const) {
+    for (const key of ["identity", "bags", "bounds"] as const) {
       expect(Object.hasOwn(body, key)).toBe(Object.hasOwn(permissions, key));
       expect(body[key]).toEqual(permissions[key]);
     }
@@ -634,7 +633,7 @@ describe("session writes", () => {
     handler = json(201, SESSION);
     const result = await barry().sessions.create({ systemPrompt: "Assist with the project", identityId: 12, reviewPolicy: { mode: "review_required" } });
     expect(result).toEqual(SESSION);
-    expect(seen[0]).toMatchObject({ method: "POST", url: "/api/v1/sessions", body: { systemPrompt: "Assist with the project", identityId: 12, traits: [], reviewPolicy: { mode: "review_required" } } });
+    expect(seen[0]).toMatchObject({ method: "POST", url: "/api/v1/sessions", body: { systemPrompt: "Assist with the project", identityId: 12, reviewPolicy: { mode: "review_required" } } });
     expect("started" in result).toBe(false);
   });
 
@@ -643,9 +642,9 @@ describe("session writes", () => {
     { started: false, startError: "Selected provider is unavailable" },
   ])("preserves a created session's first-turn outcome %j", async outcome => {
     handler = json(201, { ...SESSION, ...outcome });
-    const result = await barry().sessions.create({ systemPrompt: "Assist", prompt: "Start the task", traits: ["browser"], bound: { tools: [] } });
+    const result = await barry().sessions.create({ systemPrompt: "Assist", prompt: "Start the task", bags: ["browser"], bound: { tools: { deny: [] } } });
     expect(result).toEqual({ ...SESSION, ...outcome });
-    expect(seen[0].body).toMatchObject({ prompt: "Start the task", traits: ["browser"], bound: { tools: [] } });
+    expect(seen[0].body).toMatchObject({ prompt: "Start the task", bags: ["browser"], bound: { tools: { deny: [] } } });
     expect(seen).toHaveLength(1);
   });
 
@@ -663,9 +662,9 @@ describe("session writes", () => {
     handler = json(200, { ...SESSION, pinned: true });
     await barry().sessions.update("id/with space", { pinned: true });
     expect(seen[0]).toMatchObject({ method: "PATCH", url: "/api/v1/sessions/id%2Fwith%20space", body: { pinned: true } });
-    expect(seen[0].body).not.toHaveProperty("traits");
-    await barry().sessions.update("abc", { traits: [], bounds: [], bound: null });
-    expect(seen[1].body).toEqual({ traits: [], bounds: [], bound: null });
+    expect(seen[0].body).not.toHaveProperty("bags");
+    await barry().sessions.update("abc", { bags: [], bounds: [], bound: null });
+    expect(seen[1].body).toEqual({ bags: [], bounds: [], bound: null });
   });
 
   it("rejects invalid creation and ignored update fields without resolving credentials", async () => {
@@ -694,7 +693,7 @@ describe("session writes", () => {
 
 const IDENTITY = {
   id: 1, token: "barry-test", name: "assistant", displayName: null,
-  bags: [], traits: [], bounds: [], adapters: {}, envKeys: [], vaultEmail: null, isDefault: false,
+  bags: [], bounds: [], adapters: {}, envKeys: [], vaultEmail: null, isDefault: false,
   createdAt: "2026-10-03T00:00:00.000Z", lastUsedAt: null,
 };
 
@@ -750,13 +749,13 @@ describe("identity service client", () => {
   it("preserves mutation warnings and sends only requested updates", async () => {
     const warnings = [{ kind: "missing_binary", bag: "browser", message: "Install browser" }];
     handler = json(201, { identity: IDENTITY, warnings });
-    expect(await client().identities.create({ name: "assistant", bags: ["browser"], traits: [], source: "file" })).toEqual({ identity: IDENTITY, warnings });
-    expect(seen[0]).toMatchObject({ method: "POST", url: "/admin/api/v1/identities", body: { name: "assistant", bags: ["browser"], traits: [], source: "file" } });
+    expect(await client().identities.create({ name: "assistant", bags: ["browser"], source: "file" })).toEqual({ identity: IDENTITY, warnings });
+    expect(seen[0]).toMatchObject({ method: "POST", url: "/admin/api/v1/identities", body: { name: "assistant", bags: ["browser"], source: "file" } });
     handler = json(200, { identity: IDENTITY, warnings });
     expect((await client().identities.update(1, { displayName: "Assistant" })).warnings).toEqual(warnings);
     expect(seen[1]).toMatchObject({ method: "PATCH", body: { displayName: "Assistant" } });
-    await client().identities.update(1, { traits: [], bags: [], bounds: [] });
-    expect(seen[2].body).toEqual({ traits: [], bags: [], bounds: [] });
+    await client().identities.update(1, { bags: [], bounds: [] });
+    expect(seen[2].body).toEqual({ bags: [], bounds: [] });
   });
 
   it("resolves service credentials independently without eager authentication", async () => {
@@ -791,7 +790,7 @@ describe("identity service client", () => {
   });
 
   it("rejects malformed identity responses", async () => {
-    handler = json(200, { identity: { ...IDENTITY, traits: "invalid" } });
+    handler = json(200, { identity: { ...IDENTITY, bags: "invalid" } });
     await expect(client().identities.get(1)).rejects.toMatchObject({ code: "malformed_response" });
   });
 
@@ -829,4 +828,14 @@ it("encodes a named identity and refuses an empty reference before HTTP", async 
   expect(seen[0].url).toBe("/api/v1/identities/named%2Fidentity");
   await expect(client.identities.get("")).rejects.toMatchObject({ code: "invalid_request" });
   expect(seen).toHaveLength(1);
+});
+
+it("accepts hosted message admission 202 and keeps the queued/warm receipt",async()=>{
+ handler=json(202,{ok:true,sessionId:"abc",deliveryState:"accepted",turn:"queued",warm:0});
+ const result=await barry().sessions.send("abc","hello",{clientMessageId:"once"});
+ expect(result).toMatchObject({ok:true,turn:"queued",warm:0});expect(seen[0].body).toEqual({content:"hello",clientMessageId:"once"});
+});
+it("surfaces retryable recording-backlog 503 instead of treating it as admission",async()=>{
+ handler=json(503,{ok:false,error:"Recording delayed",code:"persistence_lagging",retryable:true});
+ await expect(barry().sessions.send("abc","later")).rejects.toMatchObject({status:503});
 });

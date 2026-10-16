@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { parseHostingPolicy } from "@barry-rocks/sdk/services";
+import { parseHostingConfig } from "@barry-rocks/sdk/services";
 import { resolveHosting, type HostedService, type HostingProvider } from "../services/hosting/resolve.js";
 import type { AppliedFile } from "@barry-rocks/sdk/services";
 import { chooseWorkflowsUrl, routesFor } from "./workers-url.js";
@@ -12,7 +12,7 @@ const providers: HostingProvider[] = [
 const applied = (provider: string): AppliedFile | null => provider === "private-tunnel"
   ? { version: 1, provider, generation: 1, reported: new Date().toISOString(), routes: [], instances: { personal: { address: "barry-mac.example.ts.net" } } }
   : null;
-const plan = (yaml: string) => resolveHosting(parseHostingPolicy(yaml), services, providers);
+const plan = (yaml: string) => resolveHosting(parseHostingConfig(yaml), services, providers);
 
 it("addresses a private route by the instance name its provider reported, and a public one by its domain", () => {
   const routes = routesFor(plan(`

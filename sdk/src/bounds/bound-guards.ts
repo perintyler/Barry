@@ -1,7 +1,39 @@
-import { homedir } from "os";
-import { isAbsolute, join, normalize, resolve, dirname, basename } from "path";
-import { realpathSync } from "node:fs";
 import { resolveUserPath } from "../tools/paths.js";
+
+const getBuiltin = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }).process?.getBuiltinModule;
+const nodeOs = getBuiltin?.("node:os") as typeof import("node:os") | undefined;
+const nodePath = getBuiltin?.("node:path") as typeof import("node:path") | undefined;
+const nodeFs = getBuiltin?.("node:fs") as typeof import("node:fs") | undefined;
+
+function homedir(): string {
+  return nodeOs?.homedir?.() ?? process.env.HOME ?? "/";
+}
+function isAbsolute(p: string): boolean {
+  return nodePath ? nodePath.isAbsolute(p) : p.startsWith("/");
+}
+function join(...parts: string[]): string {
+  return nodePath ? nodePath.join(...parts) : parts.filter(Boolean).join("/").replace(/\/+/g, "/");
+}
+function normalize(p: string): string {
+  return nodePath ? nodePath.normalize(p) : p.replace(/\/+/g, "/");
+}
+function resolve(...parts: string[]): string {
+  return nodePath ? nodePath.resolve(...parts) : join(...parts);
+}
+function dirname(p: string): string {
+  if (nodePath) return nodePath.dirname(p);
+  const idx = p.replace(/\/+$/, "").lastIndexOf("/");
+  return idx <= 0 ? "/" : p.slice(0, idx);
+}
+function basename(p: string): string {
+  if (nodePath) return nodePath.basename(p);
+  const trimmed = p.replace(/\/+$/, "");
+  const idx = trimmed.lastIndexOf("/");
+  return idx === -1 ? trimmed : trimmed.slice(idx + 1);
+}
+function realpathSync(p: string): string {
+  return nodeFs ? nodeFs.realpathSync(p) : p;
+}
 
 /** Resolve existing links, or the nearest existing ancestor for a new path. */
 export function canonicalFilePath(path: string, requireParent = false): string {
@@ -114,7 +146,7 @@ function segmentGlob(glob: string): string {
 }
 
 /**
- * One allowOnly pattern against one path. Unlike a deny pattern, which may
+ * One allow pattern against one path. Unlike a deny pattern, which may
  * over-match because that only denies more, an allow pattern must name exactly
  * the paths it allows: an absolute (or `~/`) pattern is a root the path must
  * sit at or under, after `..` is resolved, so `/a/b/**` admits neither
@@ -124,6 +156,10 @@ function segmentGlob(glob: string): string {
 function allowsPath(filePath: string, pattern: string): boolean {
   filePath = filesystemCase(canonicalFilePath(filePath));
   const expanded = expandHomePattern(pattern);
+  if (expanded.startsWith("**/")) {
+    const glob = segmentGlob(filesystemCase(expanded.slice(3)));
+    return new RegExp(`(^|/)${glob}(/.*)?$`).test(normalize(filePath).replace(/(.)\/$/, "$1"));
+  }
   const p = canonicalPattern(isAbsolute(expanded) ? expanded : resolve(expanded));
   if (p.startsWith("*.")) return filePath.endsWith(p.slice(1));
   const root = p.replace(/\/\*+$/, "").replace(/\/+$/, "");
@@ -136,12 +172,25 @@ function allowsPath(filePath: string, pattern: string): boolean {
 }
 
 /**
- * Check if a file path matches any allowOnly pattern. Returns the matching
- * pattern, or null when NOTHING allows it — under an allowOnly bound that
- * null is a denial, and the caller treats it as one.
+ * Check if a file path matches any allow pattern (and every conjunctive clause
+ * when multiple allow clauses were merged). Returns the matching pattern, or
+ * null when nothing allows it.
  */
-export function isFileAllowed(filePath: string, allowOnly: string[]): string | null {
-  for (const pattern of allowOnly) {
+export function isFileAllowed(
+  filePath: string,
+  allow: string[],
+  allowClauses?: readonly (readonly string[])[],
+): string | null {
+  if (allowClauses && allowClauses.length > 0) {
+    let firstMatch: string | null = null;
+    for (const clause of allowClauses) {
+      const matched = clause.find((pattern) => allowsPath(filePath, pattern));
+      if (!matched) return null;
+      firstMatch ??= matched;
+    }
+    return firstMatch;
+  }
+  for (const pattern of allow) {
     if (allowsPath(filePath, pattern)) return pattern;
   }
   return null;
@@ -161,3 +210,34 @@ export function isBashDenied(command: string, deny: string[]): string | null {
 // Re-export network guards from their module so consumers can import from
 // either bound-guards or network-classifier.
 export { isDomainDenied, isNetworkActionDenied } from "./network-classifier.js";
+
+import type { Bound } from "./types.js";
+
+/**
+ * Returns `true` when `bound` carries restrictions on `files`, `bash`,
+ * `network`, or `inputs` that an uninstrumented child process cannot enforce.
+ * Ignores `tools` and `nodes` so `<bag>:read` (`tools.deny: ["<bag>:write"]`)
+ * does not block process/script execution when `bash:Bash` is permitted.
+ */
+export function boundHasProcessRestrictions(bound?: Bound | null): boolean {
+  if (!bound) return false;
+  return Boolean(
+    bound.files ||
+      bound.bash ||
+      bound.network ||
+      bound.inputs,
+  );
+}
+
+/**
+ * Synthesize the automatic `<bag>:read` bound (`{ tools: { deny: ["<bag>:write"] } }`).
+ */
+export function readTwin(bagName: string): Bound {
+  const cleanBag = bagName.endsWith(":read") ? bagName.slice(0, -5) : bagName;
+  return {
+    name: `${cleanBag}:read`,
+    description: `Read-only access to ${cleanBag} tools`,
+    tools: { deny: [`${cleanBag}:write`] },
+  };
+}
+

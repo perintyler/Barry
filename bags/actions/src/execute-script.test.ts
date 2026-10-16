@@ -234,8 +234,8 @@ describe("runScriptAction", () => {
 });
 
 it.each([
-  { traits: [], bound: null, allowedToolIds: ["filesystem:Read"] },
-  { traits: [], bound: { files: { allowOnly: ["/tmp/**"] } }, allowedToolIds: ["bash:Bash"] },
+  { bags: [], traits: [], bound: null, allowedToolIds: ["filesystem:Read"] },
+  { bags: [], traits: [], bound: { files: { allow: ["/tmp/**"] } }, allowedToolIds: ["bash:Bash"] },
 ])("refuses a raw script before child side effects under a restricted caller policy", async execution => {
   const marker = join(dir, "started");
   const action = scriptAction(`touch '${marker}'`);
@@ -249,9 +249,15 @@ it("refuses session-origin scripts when caller policy is absent", async () => {
   expect(result.run.status).toBe("failed");
   expect(result.run.summary).toContain("execution policy");
 });
-it("runs a real child with an explicit unbounded Bash grant", async () => {
-  const result = await withStoreContext({ execution: { traits: [], bound: null, allowedToolIds: ["bash:Bash"] } },
+it("runs a real child with an explicit unbounded Bash grant or a tools-only bound that still permits bash:Bash", async () => {
+  const result = await withStoreContext({ execution: { bags: ["bash"], bound: null, allowedToolIds: ["bash:Bash"] } },
     () => runScriptAction(scriptAction("echo permitted"), { trigger: "session", logRoot }));
   expect(result.run.status).toBe("complete");
   expect(readFileSync(result.run.process!.log_path!, "utf8")).toContain("permitted");
+
+  const toolsOnlyBound = await withStoreContext({
+    execution: { bags: ["bash", "git"], bound: { tools: { deny: ["git:write"] } }, allowedToolIds: ["bash:Bash"] },
+  }, () => runScriptAction(scriptAction("echo permitted-with-tool-bound"), { trigger: "session", logRoot }));
+  expect(toolsOnlyBound.run.status).toBe("complete");
+  expect(readFileSync(toolsOnlyBound.run.process!.log_path!, "utf8")).toContain("permitted-with-tool-bound");
 });

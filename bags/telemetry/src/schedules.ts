@@ -23,13 +23,13 @@ export async function scheduleOverview() {
       })),
     };
   }));
-  const oneOffs = await Promise.all((["running", "pending", "uncertain", "failed"] as const).map(status =>
-    Barry.oneOffs({ status, limit: status === "failed" ? 10 : 50 })));
+  const atSchedules = await Promise.all((["running", "pending", "uncertain", "failed"] as const).map(status =>
+    Barry.atSchedules({ status, limit: status === "failed" ? 10 : 50 })));
   return {
     state: "ok", generatedAt: now,
     scheduler: { status: health.status, ...(health.reason ? { reason: health.reason } : {}), heartbeat_at: health.heartbeatAt },
     load_errors: health.loadErrors, schedules: rows,
-    one_offs: oneOffs.flat().map(o => ({
+    one_offs: atSchedules.flat().map(o => ({
       id: o.id, action: o.job ? `job ${o.job}` : o.action ?? "inline", ...(o.job ? { job: o.job } : {}),
       due_at: o.dueAt, status: o.status, ...(o.reason ? { reason: o.reason } : {}),
       ...(Object.keys(o.inputs).length ? { inputs: o.inputs } : {}), failures: o.failures, recoveries: o.recoveries,

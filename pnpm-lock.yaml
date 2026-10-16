@@ -537,6 +537,12 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
+      '@axe-core/playwright':
+        specifier: 4.11.1
+        version: 4.11.1(playwright-core@1.62.0)
+      '@playwright/test':
+        specifier: 1.62.0
+        version: 1.62.0
       '@types/better-sqlite3':
         specifier: 7.6.13
         version: 7.6.13
@@ -1006,6 +1012,34 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1(supports-color@7.2.0))(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.8.3))
 
+  bags/session-vector-search:
+    dependencies:
+      '@barry-rocks/embeddings-bag':
+        specifier: workspace:*
+        version: link:../embeddings
+      '@barry-rocks/sdk':
+        specifier: workspace:*
+        version: link:../../sdk
+      '@barry-rocks/sessions-bag':
+        specifier: workspace:*
+        version: link:../sessions
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 22.15.0
+        version: 22.15.0
+      tsx:
+        specifier: 4.23.12
+        version: 4.23.12
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1(supports-color@7.2.0))(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.8.3))
+
   bags/sessions:
     dependencies:
       '@agentclientprotocol/sdk':
@@ -1066,9 +1100,6 @@ importers:
       '@barry-rocks/sdk':
         specifier: workspace:*
         version: link:../../../sdk
-      '@barry-rocks/search-bag':
-        specifier: workspace:*
-        version: link:../extensions/search
       '@barry-rocks/sessions-bag':
         specifier: workspace:*
         version: link:..
@@ -1112,6 +1143,9 @@ importers:
       '@barry-rocks/embedding-ollama':
         specifier: workspace:*
         version: link:../../../adapters/embeddings/ollama
+      '@barry-rocks/workflows-bag':
+        specifier: workspace:*
+        version: link:../../workflows
       '@types/better-sqlite3':
         specifier: 7.6.13
         version: 7.6.13
@@ -1124,34 +1158,6 @@ importers:
       '@types/ws':
         specifier: 8.5.13
         version: 8.5.13
-      typescript:
-        specifier: 5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: 4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.15.0)(jsdom@25.0.1(supports-color@7.2.0))(vite@8.1.5(@types/node@22.15.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.8.3))
-
-  bags/sessions/extensions/search:
-    dependencies:
-      '@barry-rocks/embeddings-bag':
-        specifier: workspace:*
-        version: link:../../../embeddings
-      '@barry-rocks/sdk':
-        specifier: workspace:*
-        version: link:../../../../sdk
-      '@barry-rocks/sessions-bag':
-        specifier: workspace:*
-        version: link:../..
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@types/node':
-        specifier: 22.15.0
-        version: 22.15.0
-      tsx:
-        specifier: 4.23.12
-        version: 4.23.12
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -1291,6 +1297,9 @@ importers:
 
   bags/workflows/runtime:
     dependencies:
+      '@barry-rocks/actions-bag':
+        specifier: workspace:*
+        version: link:../../actions
       '@barry-rocks/identities-bag':
         specifier: workspace:*
         version: link:../../identities

@@ -1,3 +1,5 @@
+import { apiRequest } from "./api-request.js";
+import { reportServerTiming } from "../lib/timing.js";
 import { configureSession } from "@barry-rocks/sdk/sessions";
 /**
  * Running what an agent's `planLaunch` describes.
@@ -8,6 +10,7 @@ import { configureSession } from "@barry-rocks/sdk/sessions";
  * `agent-runtime`.
  */
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,7 +58,7 @@ export interface BuildLaunchConfigInput {
   deniedTools: string[];
   allowedNativeTools?: string[];
   skillsDirs: string[];
-  traitSkillDirs: string[];
+  bagSkillDirs: string[];
   slashCommandActions: Parameters<typeof buildActionCommandsDir>[0];
   resume?: ResumeRequest;
   /** Directories created here are appended so the caller can clean them up. */
@@ -74,7 +77,7 @@ function materializeBagDirs(input: BuildLaunchConfigInput): { pluginDirs: string
   const pluginDirs: string[] = [];
   const projectRoots: string[] = [];
 
-  const skillsPluginDir = buildSkillsPlugin(input.skillsDirs, input.traitSkillDirs);
+  const skillsPluginDir = buildSkillsPlugin(input.skillsDirs, input.bagSkillDirs);
   if (skillsPluginDir) {
     input.tmpDirs.push(skillsPluginDir);
     pluginDirs.push(skillsPluginDir);
@@ -119,6 +122,7 @@ export function buildSessionConfig(input: BuildSessionConfigInput): SessionConfi
   // address and key, never asked to look them up.
   const endpoint = routedEndpoint(input.harness, model, input.vendors, input.childEnv, input.baseURL ? { baseUrl: input.baseURL } : {});
   const resume = input.resume;
+  const resumedSessionId = resume?.harnessSessionId;
   return configureSession({
     sessionId: input.sessionId,
     cwd: input.repoDir,
@@ -137,7 +141,7 @@ export function buildSessionConfig(input: BuildSessionConfigInput): SessionConfi
     ...(resume
       ? {
           resume: {
-            ...(resume.providerSessionId ? { harnessSessionId: resume.providerSessionId } : {}),
+            ...(resumedSessionId ? { harnessSessionId: resumedSessionId } : {}),
             ...(resume.last ? { last: true } : {}),
             ...(resume.picker ? { picker: true } : {}),
           },
@@ -204,14 +208,10 @@ export async function startServerTurn(
   turn: ServerTurn,
   api: SessionApi,
 ): Promise<string | null> {
-  const request = api.fetch ?? fetch;
   const recorded = await recordHarness(sessionId, turn, api);
   if (!recorded.ok) return await problemOf(recorded);
-  const sent = await request(`${api.base}/sessions/${sessionId}/message`, {
-    method: "POST",
-    headers: api.headers,
-    body: JSON.stringify({ content: turn.prompt, repoPath: turn.repoPath }),
-  });
+  const sent = await postSessionMessage(sessionId, { content: turn.prompt, repoPath: turn.repoPath }, api);
+  reportServerTiming(sent.headers?.get("X-Barry-Timing"));
   return sent.ok ? null : await problemOf(sent);
 }
 
@@ -219,6 +219,18 @@ export interface SessionApi {
   base: string;
   headers: Record<string, string>;
   fetch?: typeof fetch;
+}
+
+/** Cold preparation can precede admission. Retry uncertain sends with one durable key. */
+export async function postSessionMessage(sessionId: string, message: { content: string; repoPath?: string }, api: SessionApi): Promise<Response> {
+  const clientMessageId = randomUUID();
+  const init = { method: "POST", headers: api.headers, body: JSON.stringify({ ...message, clientMessageId }) };
+  const send = () => apiRequest(api.fetch ?? fetch, `${api.base}/sessions/${sessionId}/message`, init, 60_000);
+  try { return await send(); }
+  catch {
+    try { return await send(); }
+    catch (error) { throw new Error(`${error instanceof Error ? error.message : String(error)}. Delivery may already be running; inspect session ${sessionId} before submitting again (message ${clientMessageId}).`); }
+  }
 }
 
 /** The harness and model a session runs on, as the server starts it. */
@@ -232,11 +244,11 @@ export type SessionHarness = Pick<ServerTurn, "harness" | "model" | "modelProvid
 export async function attachToHostedSession(sessionId: string, harness: SessionHarness, api: SessionApi): Promise<RendererAttachment> {
   const recorded = await recordHarness(sessionId, harness, api);
   if (!recorded.ok) throw new Error(await problemOf(recorded));
-  const attached = await (api.fetch ?? fetch)(`${api.base}/sessions/${sessionId}/attach`, {
+  const attached = await apiRequest(api.fetch ?? fetch, `${api.base}/sessions/${sessionId}/attach`, {
     method: "POST",
     headers: api.headers,
     body: JSON.stringify({ launcherPid: process.pid }),
-  });
+  }, 60_000);
   if (!attached.ok) throw new Error(await problemOf(attached));
   return RendererAttachmentSchema.parse(await attached.json());
 }
@@ -278,8 +290,8 @@ export function detachWhenGone(
   signals.on("SIGTERM", onSignal);
 }
 
-function recordHarness(sessionId: string, harness: SessionHarness, api: SessionApi): Promise<Response> {
-  return (api.fetch ?? fetch)(`${api.base}/sessions/${sessionId}`, {
+export function recordHarness(sessionId: string, harness: SessionHarness, api: SessionApi): Promise<Response> {
+  return apiRequest(api.fetch ?? fetch, `${api.base}/sessions/${sessionId}`, {
     method: "PATCH",
     headers: api.headers,
     body: JSON.stringify({
@@ -307,7 +319,7 @@ export interface RunChildOptions {
 /**
  * Spawn the child an adapter described.
  *
- * One spawn site for every provider, which is what keeps the pid recorded
+ * One spawn site for every harness, which is what keeps the pid recorded
  * exactly once and the signal handling identical everywhere.
  */
 export function runChildSession(plan: LaunchPlan, options: RunChildOptions): void {
@@ -370,7 +382,7 @@ export function usesServerForPrompt(
 
 /** Which conversation a launch continues: one by the harness's id, the latest, or the harness's own picker. */
 export interface ResumeRequest {
-  providerSessionId?: string;
+  harnessSessionId?: string;
   last?: boolean;
   picker?: boolean;
 }

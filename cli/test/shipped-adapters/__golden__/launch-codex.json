@@ -56,7 +56,9 @@
         "OPENAI_API_KEY": "sk-golden"
       },
       "tmpDirs": [],
-      "warnings": [],
+      "warnings": [
+        "codex: unknown version; recommended 0.162.0; could not establish the runtime version"
+      ],
       "discoversConversation": true
     },
     "written": {

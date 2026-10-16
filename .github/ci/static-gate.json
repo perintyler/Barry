@@ -6,7 +6,6 @@
   "check:stale-paths",
   "check:stale-references",
   "check:identity-residue",
-  "check:bound-vocabulary",
   "stores:check",
   "check:monorepo",
   "bags:lint",

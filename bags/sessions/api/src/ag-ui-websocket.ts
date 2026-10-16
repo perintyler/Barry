@@ -1,3 +1,4 @@
+import { watchTurnEvents } from "@barry-rocks/sessions-bag/store/turn-continuations";
 import { AgUiSubscriptionRequestSchema, projectAgUi, type ExecutionEvent, type AgUiSubscriptionDelivery } from "@barry-rocks/sdk/apps";
 import { sessionIdentity } from "@barry-rocks/sdk/stores";
 import { withStoreContext } from "@barry-rocks/sdk/internal/stores";
@@ -20,8 +21,9 @@ export interface AgUiSocket {
 
 export function attachAgUiSubscription(ws: AgUiSocket, authorization: CredentialAuthorization): void {
   let timer: NodeJS.Timeout | undefined; let generation = 0; let handling = false;
+  let unwatch=()=>{};
   let controller = new AbortController();
-  const stop = () => { generation++; controller.abort(); if (timer) clearTimeout(timer); timer = undefined; };
+  const stop = () => { unwatch(); unwatch=()=>{}; generation++; controller.abort(); if (timer) clearTimeout(timer); timer = undefined; };
   const close = (code: number, reason: string) => { stop(); authorization.dispose(); ws.close(code, reason); };
   const send = (value: AgUiSubscriptionDelivery): boolean => {
     if (ws.readyState !== 1) return false;
@@ -66,8 +68,11 @@ export function attachAgUiSubscription(ws: AgUiSocket, authorization: Credential
         // A fresh subscriber gets a consistent snapshot/cursor. Reconnecting
         // clients replay after their acknowledged frame without replacing it.
         if (request.after === undefined && (!await allowed() || !send({ type: "snapshot", sessionId: request.sessionId, snapshot }))) return;
+        let pumping=false, pending=false;
         const pump = async () => {
+          if (pumping) {pending=true;return;}
           if (ownGeneration !== generation || ws.readyState !== 1) return;
+          pumping=true;
           try {
             if (!await allowed()) return;
             const records = store.replay(request.sessionId, sequence, 128, true);
@@ -82,10 +87,12 @@ export function attachAgUiSubscription(ws: AgUiSocket, authorization: Credential
               sequence = record.sequence; index = Number.MAX_SAFE_INTEGER;
             }
             if (ownGeneration === generation && ws.readyState === 1) {
-              timer = setTimeout(() => { void pump(); }, records.length >= 128 ? 0 : 150); timer.unref();
+              timer = setTimeout(() => { void pump(); }, records.length >= 128 ? 0 : 1000); timer.unref();
             }
           } catch { close(1011, "Event subscription failed"); }
+          finally {pumping=false;if (pending) {pending=false;queueMicrotask(()=>void pump());}}
         };
+        unwatch=watchTurnEvents(request.sessionId,()=>{if (timer) clearTimeout(timer);void pump();});
         void pump();
       });
     } catch {

@@ -1,10 +1,10 @@
+import { timingHeader } from "../runtime/timing.js";
 import {identityRecords, owner} from "@barry-rocks/identities-bag";
-import {Barry, requestCaller} from "@barry-rocks/sdk";
+import {Barry, requestCaller, type Bound} from "@barry-rocks/sdk";
 import type { AuthPrincipal } from "@barry-rocks/sdk/internal/auth";
 import {createLogger} from "@barry-rocks/sdk/logging";
 import {sessionsRoutes} from "@barry-rocks/sdk/internal/routes";
 import {serve} from "@barry-rocks/sdk/services/http";
-import {sessionGrants} from "@barry-rocks/sessions-bag";
 import {getAttachment, listAttachments, saveAttachment} from "@barry-rocks/sessions-bag/attachments";
 import {authorizeSessionExecution, SessionExecutionResourceUnavailable} from "@barry-rocks/sessions-bag/execution-authorization";
 import express, { Router } from "express";
@@ -29,8 +29,7 @@ const log = createLogger("barry-server");
 
 import {registerPersistRoutes} from "./session-lifecycle-persist.js";
 import {registerSendMessageRoute} from "./session-lifecycle-send.js";
-import {registerToolRoutes, mergeActiveIntoSelectable} from "./session-lifecycle-tools.js";
-export { mergeActiveIntoSelectable };
+import {registerToolRoutes} from "./session-lifecycle-tools.js";
 import {registerBackfillRoute} from "./session-lifecycle-backfill.js";
 /**
  * Point-guard worktrees are owned by its verification + merge queue: a direct
@@ -97,6 +96,10 @@ export function parseIdentityIdParam(
   return { ok: true, identityId: parsed };
 }
 
+function recordingPending(sessionId:string):boolean {
+  return sessionRuntime.pendingPersistence(sessionId).length>0 || (sessionRuntime.drainingSessions?.has(sessionId)??false);
+}
+
 // List and member reads belong to sessionsRouter, mounted first in index.ts.
 // Lifecycle routes accept working directories without requiring a git repository.
 // See docs/decisions/0035-session-route-and-summary-rationale.md.
@@ -109,7 +112,7 @@ routes.route(sessionsRoutes.listMessages, async (req, res) => {
   const startedAt = Date.now();
   try {
     const sessionId = req.params.sessionId;
-    const after = req.query.after !== undefined ? parseInt(req.query.after as string, 10) : undefined;
+    const after = req.query.after !== undefined ? (Number.isSafeInteger(Number(req.query.after)) ? Number(req.query.after) : undefined) : undefined;
     const before = req.query.before !== undefined ? parseInt(req.query.before as string, 10) : undefined;
     const limit = req.query.limit !== undefined ? parseInt(req.query.limit as string, 10) : 5000;
 
@@ -120,7 +123,8 @@ routes.route(sessionsRoutes.listMessages, async (req, res) => {
 
     const summary = req.query.summary === "1" || req.query.summary === "true";
 
-    const { messages, hasMore } = await getSessionMessages(sessionId, {
+    const durable = await sessionRuntime.flushPersistence(sessionId);
+    const page = await getSessionMessages(sessionId, {
       afterSequence: Number.isNaN(after) ? undefined : after,
       beforeSequence: Number.isNaN(before) ? undefined : before,
       // Clamp to [1, 5000]: a negative or zero limit reached the DB layer as a
@@ -129,8 +133,25 @@ routes.route(sessionsRoutes.listMessages, async (req, res) => {
       summary,
     });
 
+    const messages=page.messages;let hasMore=page.hasMore;
+    if (!durable) {
+      const pending=sessionRuntime.pendingPersistence(sessionId);
+      for (const frame of pending) {
+        if (frame.type === "tool_result") {
+          const call=messages.find(row=>row.toolUseId===frame.toolUseId && row.type==="tool_start");
+          if (call) { call.result=frame.result; call.status=frame.status; }
+        } else if (frame.sequence !== undefined && (after === undefined || frame.sequence>after) && (before === undefined || frame.sequence<before) && !messages.some(row=>row.sequence===frame.sequence)) messages.push(Object.fromEntries(Object.entries({
+          ...frame, sessionId, createdAt: frame.createdAt??new Date().toISOString(),
+          ...(typeof frame.metadata?.clientMessageId==="string" ? {clientMessageId:frame.metadata.clientMessageId,deliveryState:frame.metadata.delivery==="queued"?"queued":"accepted"} : {}),
+        }).filter(([key])=>["type","sessionId","sequence","dedupeKey","role","content","name","input","result","error","status","taskStatus","toolUseId","parentToolUseId","createdAt","clientMessageId","deliveryState"].includes(key))));
+      }
+      messages.sort((a,b)=>Number(a.sequence)-Number(b.sequence));
+      const bounded=Number.isNaN(limit) ? 5000 : Math.max(1,Math.min(limit,5000));
+      if (messages.length>bounded) {hasMore=true;messages.splice(after===undefined ? 0 : bounded, messages.length-bounded);}
+      res.setHeader("X-Barry-Durability", "pending");
+    }
     const nextSequence = messages.length > 0 ? messages[messages.length - 1].sequence : null;
-    res.json({ messages, nextSequence, hasMore });
+    res.json({ messages, nextSequence, hasMore, durable });
   } catch (err) {
     // Keep query context in the error message to avoid unbounded log-field cardinality.
     const shape = `limit=${req.query.limit ?? "-"} summary=${req.query.summary ?? "-"}`;
@@ -260,6 +281,9 @@ routes.route(sessionsRoutes.archiveSession, async (req, res) => {
       await endSessionLifecycle({ session_id: req.params.sessionId, reason: "removed" });
     }
 
+    if(recordingPending(req.params.sessionId)){
+      return res.json({ok:true,message:"Session removed; transcript still draining",recordingPending:true});
+    }
     await updateSessionRecord(req.params.sessionId, { status: "cancelled", completed_at: new Date() });
 
     res.json({ ok: true, message: "Session removed" });
@@ -297,7 +321,7 @@ routes.route(sessionsRoutes.archiveSession, async (req, res) => {
 async function startSessionWithFirstMessage(
   sessionId: string,
   prompt: string,
-  ps: { metadata?: Record<string, unknown> },
+  ps: { identity_id?: number | null; bags?: string[]; bounds?: Array<Bound | string>; bound?: Record<string, unknown> | null; metadata?: Record<string, unknown> },
   principal?: AuthPrincipal,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const workDir = ps.metadata?.working_directory as string | undefined;
@@ -308,11 +332,26 @@ async function startSessionWithFirstMessage(
   if (!validated.ok) return { ok: false, error: validated.error };
 
   try {
+    const caller = requestCaller(principal);
+    const bagNames = ps.bags ?? [];
+    let tools: Awaited<ReturnType<typeof Barry.tools>> = [];
+    try {
+      tools = await Barry.as(caller).tools(
+        ps.identity_id ?? null,
+        bagNames,
+        (ps.bound as Bound | null) ?? ps.bounds ?? [],
+      );
+    } catch {
+      tools = [];
+    }
     await sessionRuntime.startSession({
       sessionId,
       prompt,
       repoPath: validated.path,
-      mcpServers: await sessionMcpServers(sessionId, await sessionGrants(sessionId, requestCaller(principal))),
+      bags: bagNames.length > 0 ? bagNames : undefined,
+      bounds: ps.bounds ?? [],
+      bound: (ps.bound as Bound | null) ?? undefined,
+      mcpServers: await sessionMcpServers(sessionId, tools),
       useWorktree: !!ps.metadata?.use_worktree,
       provider: (ps.metadata?.provider as string) || undefined,
       model: (ps.metadata?.model as string) || undefined,
@@ -333,7 +372,8 @@ routes.route(sessionsRoutes.createSession, async (req, res) => {
   try {
     const input = parseRequestBody(req, res, sessionsRoutes.createSession.body);
     if (!input) return;
-    const { systemPrompt, prompt, repoPath, name, traits, identityId, useWorktree, provider, model, modelProvider, bounds, bound, reviewPolicy } = input;
+    const { systemPrompt, prompt, repoPath, name, bags, identityId, useWorktree, provider, model, modelProvider, bounds, bound, reviewPolicy, reviewRules } = input;
+    const activeBags = bags ?? [];
 
     const metadata: Record<string, unknown> = {};
     let resolvedRepoPath: string | null = null;
@@ -350,26 +390,45 @@ routes.route(sessionsRoutes.createSession, async (req, res) => {
     if (provider) metadata.provider = provider;
     if (model) metadata.model = model;
     if (modelProvider) metadata.model_provider = modelProvider;
-    metadata.review_policy = reviewPolicy ?? { mode: "review_required" };
+    metadata.review_policy = reviewRules ?? reviewPolicy ?? { mode: "review_required" };
 
     const user = req.authPrincipal ? await owner.users.get(req.authPrincipal.actorId) : await owner.current();
     if (!user) return sendProblem(req, res, 400, "No Barry user is configured");
     const selection = await identityRecords.resolve({ id: identityId, repoPath: resolvedRepoPath }, requestCaller(req.authPrincipal));
     metadata.barry_source = selection.source;
 
-    if (bounds && bounds.length > 0) {
-      try { await Barry.as(requestCaller(req.authPrincipal)).identity(selection.barry.id).grants({ traits: traits ?? [], bounds, inlineBound: bound, ...(provider ? { harness: provider } : {}) }); }
-      catch (error) { return sendProblem(req, res, 400, "Unknown bound", String(error)); }
+    const effectiveIdentityId = (await identityRecords.rowId(selection.barry, { actorId: user.id })) ?? undefined;
+    const requestedBounds: Array<Bound | string> = [
+      ...(bounds ?? []),
+      ...(bound ? [bound as Bound] : []),
+    ];
+    let pinnedBound: Bound | null = bound ? (bound as Bound) : null;
+    if (requestedBounds.length > 0) {
+      try {
+        pinnedBound = await Barry.as(requestCaller(req.authPrincipal)).bound(
+          selection.barry.id,
+          requestedBounds,
+        );
+      } catch (error) {
+        return sendProblem(req, res, 400, "Unknown bound", String(error));
+      }
+    } else {
+      try {
+        pinnedBound = await Barry.as(requestCaller(req.authPrincipal)).bound(selection.barry.id, []);
+      } catch {
+        // Fallback when identity subject is not wired in isolated unit tests.
+      }
     }
+
     const ps = await Sessions.createInert({
       user_id: user.id,
       system_prompt: systemPrompt,
-      traits: traits || [],
+      bags: activeBags,
       // A file-based Barry's id is a name hash with no matching row; this
       // syncs its cache row and returns an id the FK accepts.
-      identity_id: (await identityRecords.rowId(selection.barry, { actorId: user.id })) ?? undefined,
+      identity_id: effectiveIdentityId,
       bounds: bounds ?? [],
-      bound: bound ?? null,
+      bound: pinnedBound,
       metadata,
     });
 
@@ -434,11 +493,25 @@ routes.route(sessionsRoutes.updateSession, async (req, res) => {
 
     const input = parseRequestBody(req, res, sessionsRoutes.updateSession.body);
     if (!input) return;
-    const { repoPath, systemPrompt, name, traits, bound, bounds, pinned, identityId, selectedNamespaces, selectedTools, provider, model, modelProvider, reviewPolicy, pid, pidStartedAt, command, processName, appName, parentPid } = input;
+    const { repoPath, systemPrompt, name, bags, bound, bounds, pinned, identityId, selectedNamespaces, selectedTools, provider, model, modelProvider, reviewPolicy, reviewRules, pid, pidStartedAt, command, processName, appName, parentPid, prepare, metadata } = input;
+    const activeBags = bags;
 
+    let pinnedBound: Bound | null | undefined = undefined;
     if (bounds !== undefined) {
-      try { await sessionGrants({ ...ps, bounds, bound: bound === undefined ? ps.bound : bound, metadata: { ...ps.metadata, ...(provider ? { provider } : {}) } }); }
-      catch (error) { return sendProblem(req, res, 400, "Unknown bound", String(error)); }
+      const effectiveIdentity = identityId !== undefined ? identityId : ps.identity_id;
+      const requestBound = bound === undefined ? ps.bound : bound;
+      const requestedBounds: Array<Bound | string> = [
+        ...bounds,
+        ...(requestBound ? [requestBound as Bound] : []),
+      ];
+      try {
+        pinnedBound = await Barry.as(requestCaller(req.authPrincipal)).bound(
+          effectiveIdentity ?? null,
+          requestedBounds,
+        );
+      } catch (error) {
+        return sendProblem(req, res, 400, "Unknown bound", String(error));
+      }
     }
 
     // Update metadata fields atomically (read-merge-write in a transaction)
@@ -457,7 +530,8 @@ routes.route(sessionsRoutes.updateSession, async (req, res) => {
     if (provider !== undefined) metadataUpdates.provider = provider;
     if (model !== undefined) metadataUpdates.model = model;
     if (modelProvider !== undefined) metadataUpdates.model_provider = modelProvider;
-    if (reviewPolicy !== undefined) metadataUpdates.review_policy = reviewPolicy;
+    if (metadata?.effort !== undefined) metadataUpdates.effort = metadata.effort;
+    if (reviewRules !== undefined || reviewPolicy !== undefined) metadataUpdates.review_policy = reviewRules ?? reviewPolicy;
 
     if (Object.keys(metadataUpdates).length > 0) {
       await Sessions.updateMetadataNormalized(req.params.sessionId, metadataUpdates);
@@ -484,9 +558,13 @@ routes.route(sessionsRoutes.updateSession, async (req, res) => {
 
     const updates: Record<string, unknown> = {};
     if (systemPrompt !== undefined) updates.system_prompt = systemPrompt;
-    if (traits !== undefined) updates.traits = traits;
-    if (bound !== undefined) updates.bound = bound;
-    if (bounds !== undefined) updates.bounds = bounds;
+    if (activeBags !== undefined) updates.bags = activeBags;
+    if (bounds !== undefined) {
+      updates.bounds = bounds;
+      updates.bound = pinnedBound;
+    } else if (bound !== undefined) {
+      updates.bound = bound;
+    }
     if (identityId !== undefined || (repoPath !== undefined && ps.metadata?.barry_source !== "explicit")) {
       const effectiveRepoPath = repoPath !== undefined
         ? metadataUpdates.working_directory as string
@@ -503,14 +581,36 @@ routes.route(sessionsRoutes.updateSession, async (req, res) => {
       await updateSessionRecord(req.params.sessionId, updates);
     }
 
-    // If traits or tool config changed, invalidate the active SDK session so
-    // the next turn re-creates MCP connections with the updated bound.
-    if (traits !== undefined || selectedNamespaces !== undefined || selectedTools !== undefined) {
-      sessionRuntime.invalidateSessionTools(req.params.sessionId);
+    const resident = sessionRuntime.getActiveSession(req.params.sessionId);
+    if (resident && metadata?.effort !== undefined) {
+      resident.effort = metadata.effort ?? resident.identityEffort;
     }
+    const changedConfiguration = resident && (
+      (provider !== undefined && provider !== resident.provider) ||
+      (model !== undefined && model !== resident.model) ||
+      (modelProvider !== undefined && modelProvider !== resident.modelProvider) ||
+      (repoPath !== undefined && repoPath !== resident.repoPath) ||
+      (identityId !== undefined && identityId !== resident.identityId)
+    );
+    if (changedConfiguration && (resident.warm || resident.warming)) {
+      const previous = await sessionRuntime.dropResident(req.params.sessionId);
+      if (previous) {
+        const replacement = await residentSession(req.params.sessionId, req.authPrincipal);
+        for (const subscriber of previous.subscribers) replacement.subscribers.add(subscriber);
+        void sessionRuntime.warmHarness(replacement.id);
+        log.info("session.warm_miss", { sessionId: replacement.id, reason: "configuration_changed" });
+      }
+    }
+    // If bags, bounds, or tool config changed, invalidate the active SDK session so
+    // the next turn re-creates MCP connections with the updated bound.
+    if (activeBags !== undefined || bounds !== undefined || bound !== undefined || selectedNamespaces !== undefined || selectedTools !== undefined) {
+      sessionRuntime.invalidateSessionTools(req.params.sessionId, {reason: "grants"});
+    }
+    if (systemPrompt !== undefined) sessionRuntime.invalidateSessionTools(req.params.sessionId, {reason: "system_prompt"});
 
     const updated = await getSessionRecord(req.params.sessionId);
     if (!updated) return sendProblem(req, res, 404, "Session not found");
+    if (prepare) { await residentSession(updated.id, req.authPrincipal); void sessionRuntime.warmHarness(updated.id); }
     res.json(serializeSession(updated, await Processes.getLive(updated.id)));
   } catch (err) {
     log.error("sessions.update_failed", { sessionId: req.params.sessionId, error: err instanceof Error ? err.message : String(err) });
@@ -538,7 +638,7 @@ routes.route(sessionsRoutes.stopSession, async (req, res) => {
       });
     }
 
-    res.json({ ok: true, message: "Session stopped" });
+    res.json({ ok: true, message: "Session stopped", recordingPending:recordingPending(req.params.sessionId) });
   } catch (err) {
     log.error("sessions.stop_failed", { sessionId: req.params.sessionId, error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ ok: false, error: "Failed to stop session" });
@@ -552,8 +652,10 @@ routes.route(sessionsRoutes.interruptSession, async (req, res) => {
     if (!ps) {
       return res.status(404).json({ ok: false, error: "Session not found" });
     }
+    const control=sessionRuntime.getActiveSession(req.params.sessionId)?.turnControl;
     const interrupted = await sessionRuntime.interruptTurn(req.params.sessionId, req.authPrincipal);
-    res.json({ ok: true, message: interrupted ? "Turn interrupted" : "No turn was running" });
+    const forced=control?.force.signal.aborted===true;
+    res.json({ ok: true, status:interrupted?(forced?"forced":"interrupted"):"none", message: interrupted ? (forced?"Turn forced to stop":"Turn interrupted") : "No turn was running" });
   } catch (err) {
     log.error("sessions.interrupt_failed", { sessionId: req.params.sessionId, error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ ok: false, error: "Failed to interrupt the turn" });
@@ -561,6 +663,22 @@ routes.route(sessionsRoutes.interruptSession, async (req, res) => {
 });
 
 // POST /sessions/:id/attach - Open the hosted session to a TUI the caller launches
+routes.route(sessionsRoutes.prepareSession, async (req, res) => {
+  const id = req.params.sessionId;
+  try {
+    const row = await getSessionRecord(id);
+    if (!row) return sendProblem(req, res, 404, "Session not found");
+    const active = await residentSession(id, req.authPrincipal);
+    void sessionRuntime.warmHarness(id);
+    res.setHeader("X-Barry-Timing", timingHeader({ ...active.timings, warm_hit: active.session?.isWarm?.() === true ? 1 : 0 }));
+    return res.status(202).json({ ok: true });
+  } catch (error) {
+    if (error instanceof ExecutionConflict) return sendProblem(req, res, 409, "Session is driven elsewhere", error.message);
+    log.warn("session.prepare_failed", { sessionId: id, error: String(error) });
+    return sendProblem(req, res, 500, "Could not prepare session");
+  }
+});
+
 routes.route(sessionsRoutes.attachRenderer, async (req, res) => {
   const input = parseRequestBody(req, res, sessionsRoutes.attachRenderer.body);
   if (!input) return;
@@ -678,6 +796,9 @@ routes.route(sessionsRoutes.discardSessionWorktree, async (req, res) => {
 
     if (sessionRuntime.getActiveSession(sessionId)) {
       await sessionRuntime.removeSession(sessionId, req.authPrincipal);
+    }
+    if(recordingPending(sessionId)){
+      return res.status(409).json({ok:false,error:"Transcript still draining; retry discard when recording catches up"});
     }
     await removeWorktree(absBaseRepo, absWorktree, sessionId);
     await endSessionLifecycle({ session_id: sessionId, reason: "discarded" });

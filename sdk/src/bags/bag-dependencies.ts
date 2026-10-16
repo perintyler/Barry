@@ -133,3 +133,90 @@ export function bagNeedsInstall(bagDir: string): boolean {
 
   return declares && !existsSync(join(resolved, "node_modules"));
 }
+
+function nonOptionalChildBags(bag: Bag | undefined): string[] {
+  const manifest = bag?.manifest;
+  if (!manifest?.bags?.length) return [];
+  const optional = new Set(manifest.optionalBags ?? []);
+  return manifest.bags.filter(
+    (child) => !optional.has(child) && !manifest.bagSources?.[child]?.optional,
+  );
+}
+
+/**
+ * Expand bag names through manifest `bags:` composition, skipping child bags
+ * marked `optional: true` unless explicitly included in `names`.
+ */
+export function expandComposition(
+  names: readonly string[],
+  byName: ReadonlyMap<string, Bag>,
+): string[] {
+  const out: string[] = [];
+  const visited = new Set<string>();
+  const queue: string[] = [];
+
+  for (const name of names) {
+    if (visited.has(name)) continue;
+    visited.add(name);
+    out.push(name);
+    queue.push(...nonOptionalChildBags(byName.get(name)));
+  }
+
+  while (queue.length > 0) {
+    const name = queue.shift() as string;
+    if (visited.has(name)) continue;
+    visited.add(name);
+    const sub = byName.get(name);
+    if (!sub) continue;
+    out.push(name);
+    queue.push(...nonOptionalChildBags(sub));
+  }
+
+  return out;
+}
+
+/**
+ * Validate a bag's `implements.tools` declarations against `requires:` and the
+ * loaded bag registry. Returns human-readable error strings (empty when valid).
+ */
+export function validateBagImplements(
+  bag: Bag,
+  byName?: ReadonlyMap<string, Bag>,
+): string[] {
+  const tools = bag.manifest?.implements?.tools;
+  if (!tools?.length) return [];
+  const errors: string[] = [];
+  const requires = bag.manifest?.requires ?? {};
+
+  for (const entry of tools) {
+    const sep = entry.indexOf(":");
+    if (sep <= 0 || sep === entry.length - 1) {
+      errors.push(`${bag.name}: implements.tools entry "${entry}" must be <bag>:<toolName>`);
+      continue;
+    }
+    const targetBagName = entry.slice(0, sep);
+    const toolName = entry.slice(sep + 1);
+    if (targetBagName === bag.name) {
+      errors.push(`${bag.name}: implements.tools cannot target own bag "${bag.name}"`);
+      continue;
+    }
+    if (!Object.hasOwn(requires, targetBagName)) {
+      errors.push(`${bag.name}: implements.tools target "${targetBagName}" (${entry}) must be declared in requires`);
+      continue;
+    }
+    if (byName) {
+      const targetBag = byName.get(targetBagName);
+      if (!targetBag) {
+        errors.push(`${bag.name}: implements.tools target bag "${targetBagName}" is not registered`);
+      } else if (!targetBag.toolsError && targetBag.tools.length > 0) {
+        const found = targetBag.tools.some((t) => t.toolName === toolName);
+        if (!found) {
+          errors.push(`${bag.name}: implements.tools "${entry}" does not match any tool on bag "${targetBagName}"`);
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+

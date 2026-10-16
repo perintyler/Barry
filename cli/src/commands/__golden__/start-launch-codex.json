@@ -19,7 +19,9 @@
         "OPENAI_API_KEY": "sk-parity"
       },
       "tmpDirs": [],
-      "warnings": [],
+      "warnings": [
+        "codex: unknown version; recommended 0.162.0; could not establish the runtime version"
+      ],
       "discoversConversation": true
     },
     "written": {
@@ -55,8 +57,10 @@
         "OPENAI_API_KEY": "sk-parity"
       },
       "tmpDirs": [],
-      "warnings": [],
-      "providerSessionId": "prior-conversation"
+      "warnings": [
+        "codex: unknown version; recommended 0.162.0; could not establish the runtime version"
+      ],
+      "harnessSessionId": "prior-conversation"
     },
     "written": {
       "barry-tool-gate-launcher.cjs": "const { spawnSync } = require('node:child_process');\nconst { join } = require('node:path');\nconst deny = () => console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Barry tool gate unavailable' } }));\nlet data = '';\nprocess.stdin.on('data', chunk => { data += chunk; });\nprocess.stdin.on('end', () => {\n  const result = spawnSync(process.execPath, [join(__dirname, 'barry-tool-gate.cjs')], { input: data, encoding: 'utf8', timeout: 8000, maxBuffer: 1024 * 1024 });\n  if (result.error || result.status !== 0) { deny(); return; }\n  if (!result.stdout.trim()) return;\n  try {\n    const output = JSON.parse(result.stdout);\n    if (output.hookSpecificOutput?.hookEventName !== 'PreToolUse' || output.hookSpecificOutput.permissionDecision !== 'deny') { deny(); return; }\n    console.log(JSON.stringify(output));\n  } catch { deny(); }\n});\n",
@@ -94,7 +98,9 @@
         "OPENAI_API_KEY": "sk-parity"
       },
       "tmpDirs": [],
-      "warnings": [],
+      "warnings": [
+        "codex: unknown version; recommended 0.162.0; could not establish the runtime version"
+      ],
       "discoversConversation": true
     },
     "written": {
@@ -127,7 +133,9 @@
         "OPENAI_API_KEY": "sk-parity"
       },
       "tmpDirs": [],
-      "warnings": [],
+      "warnings": [
+        "codex: unknown version; recommended 0.162.0; could not establish the runtime version"
+      ],
       "discoversConversation": true
     },
     "written": {
@@ -157,7 +165,9 @@
         "OPENAI_API_KEY": "sk-parity"
       },
       "tmpDirs": [],
-      "warnings": [],
+      "warnings": [
+        "codex: unknown version; recommended 0.162.0; could not establish the runtime version"
+      ],
       "discoversConversation": true
     },
     "written": {

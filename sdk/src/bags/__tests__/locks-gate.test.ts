@@ -1,18 +1,17 @@
 /**
  * Locks must stay opt-in, and there are two ways that quietly stops being true.
  *
- * The `locks` tools are gated by the auto-trait generated from the namespace
- * they stamp. A session gets them only by holding the `locks` trait — not by
- * holding `coding`, which every default session has.
+ * The `locks` tools live in the `locks` bag namespace. A session gets them only
+ * by selecting the `locks` bag — not from the default session bags.
  *
  * Both failure modes are silent: the tools simply appear in sessions that never
  * asked for them, and nothing errors. So both are asserted here.
  *
- *   1. RESTAMPING — if the locks tools stamped `filesystem`, their auto-trait
- *      would grant the whole file surface and `coding` would carry them.
- *   2. COMPOSITION — generateAutoTraits folds every sub-bag's namespaces into
- *      the parent's trait, transitively. Listing `locks` under bags/filesystem's
- *      `bags:` would make the `filesystem` trait grant `locks`, reaching the
+ *   1. RESTAMPING — if the locks tools stamped `filesystem`, selecting the
+ *      `filesystem` bag would expose them on every default session.
+ *   2. COMPOSITION — `expandComposition` folds every required sub-bag into
+ *      the parent bag transitively. Listing `locks` under bags/filesystem's
+ *      `bags:` would make `filesystem` include `locks`, reaching the
  *      same place by a different road.
  *
  * Verified by breaking each in turn and confirming this file goes red.
@@ -58,20 +57,14 @@ describe("the locks gate", () => {
       .toBeGreaterThan(0);
     expect(
       composed,
-      "bags/filesystem must not compose locks: generateAutoTraits would fold the " +
-        "locks namespace into the filesystem trait, which `coding` grants to every " +
-        "default session",
+      "bags/filesystem must not compose locks: expandComposition would fold the " +
+        "locks bag into the filesystem bag, which every default session selects",
     ).not.toContain("locks");
   });
 
-  it("no default trait grants the locks namespace", () => {
-    // The base identity's traits themselves, not a copy: the copy this replaced
-    // still listed `reminders` after that bag left the repo.
-    //
-    // Every default is a BAG's own auto-trait, so resolve each to the bag that
-    // owns the name and check what that bag composes, which is where a locks
-    // grant could actually come from.
-    const defaults = baseIdentitySelection(join(root, "bags")).traits;
+  it("no default bag composes the locks bag", () => {
+    const defaults = baseIdentitySelection(join(root, "bags")).bags;
+    expect(defaults.length).toBeGreaterThan(0);
     const resolved = defaults.map((name) => {
       const bagPath = join(root, "bags", name, "bag.yaml");
       if (!existsSync(bagPath)) return null;
@@ -80,16 +73,13 @@ describe("the locks gate", () => {
       return { name, composes };
     }).filter((entry): entry is { name: string; composes: string[] } => entry !== null);
 
-    // Anti-tautology: if no default resolves, "none of them grant locks" is
-    // true for the wrong reason. This is exactly how the check went quiet once
-    // the composites were retired.
     expect(
       resolved.length,
-      "no default trait resolves to a builtin bag — did the default set change shape?",
+      "no default bag resolves to a builtin bag — did the default set change shape?",
     ).toBe(defaults.length);
 
     for (const { name, composes } of resolved) {
-      expect(composes, `default trait "${name}" must not grant locks`).not.toContain("locks");
+      expect(composes, `default bag "${name}" must not compose locks`).not.toContain("locks");
     }
   });
 });

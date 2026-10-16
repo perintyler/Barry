@@ -16,7 +16,7 @@ import { parseManifestObject } from "@barry-rocks/sdk/bags";
 import { setDb as setActionsDb, closeDb as closeActionsDb } from "@barry-rocks/actions-bag";
 import { ActionRuns } from "@barry-rocks/actions-bag";
 import { setDb, closeDb } from "@barry-rocks/schedules-bag";
-import { claimOne, createOneOff, type CreateOneOffInput } from "@barry-rocks/schedules-bag";
+import { claimOne, createAtSchedule, type CreateAtScheduleInput } from "@barry-rocks/schedules-bag";
 
 let bags: Array<{ name: string; jobs: unknown[] }> = [];
 vi.mock("@barry-rocks/sdk/internal/bags", async (importOriginal) => ({
@@ -25,10 +25,15 @@ vi.mock("@barry-rocks/sdk/internal/bags", async (importOriginal) => ({
 }));
 let bounds: Record<string, unknown> = {};
 vi.mock("@barry-rocks/identities-bag", () => ({
-  bounds: { get: async (ref: { name: string }) => (bounds[ref.name] ? { name: ref.name, ...(bounds[ref.name] as Record<string, unknown>) } : undefined) },
+  bounds: {
+    get: async (nameOrRef: string | { name: string }) => {
+      const name = typeof nameOrRef === "string" ? nameOrRef : nameOrRef.name;
+      return bounds[name] ? { name, ...(bounds[name] as Record<string, unknown>) } : undefined;
+    },
+  },
 }));
 
-const { runJobOneOff } = await import("./job-runner.js");
+const { runJobAtSchedule } = await import("./job-runner.js");
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 let home: string;
@@ -90,12 +95,12 @@ function useJobs(jobs: Record<string, unknown>): void {
   bags = [{ name: "ops", jobs: Object.entries(manifest.jobs ?? {}).map(([name, job]) => ({ ...job, name, dir: bagDir })) }];
 }
 
-async function runJob(job: string, input: Partial<CreateOneOffInput> = {}) {
-  const { oneOff } = createOneOff({ bag: "ops", action: null, job, inputs: { name: "barry" }, dueAt: new Date(), ...input });
-  const claim = claimOne(oneOff.id, { now: new Date(), runnerPid: process.pid, runnerStartedAt: null })!;
-  const result = await runJobOneOff(claim.oneOff, claim.attemptId, claim.attempt, { baseEnv: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` } });
+async function runJob(job: string, input: Partial<CreateAtScheduleInput> = {}) {
+  const { schedule } = createAtSchedule({ bag: "ops", action: null, job, inputs: { name: "barry" }, dueAt: new Date(), ...input });
+  const claim = claimOne(schedule.id, { now: new Date(), runnerPid: process.pid, runnerStartedAt: null })!;
+  const result = await runJobAtSchedule(claim.schedule, claim.attemptId, claim.attempt, { baseEnv: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` } });
   const run = result.runId ? await ActionRuns.get(result.runId) : null;
-  return { result, run, oneOff };
+  return { result, run, schedule };
 }
 
 describe("running a job", () => {
@@ -107,12 +112,12 @@ describe("running a job", () => {
         runs: { using: "process", command: ["python3", "jobs/echo.py"] },
       },
     });
-    const { result, run, oneOff } = await runJob("ops:greet", { idempotencyKey: "step-1" });
+    const { result, run, schedule } = await runJob("ops:greet", { idempotencyKey: "step-1" });
     expect(result.outcome).toBe("succeeded");
     expect(run?.trigger).toBe("job");
     expect(run?.action).toBe("ops:job/greet");
     expect(JSON.parse(run!.output!)).toEqual({ greeting: "hello barry", key: "step-1", attempt: "1" });
-    expect(oneOff.idempotencyKey).toBe("step-1");
+    expect(schedule.idempotencyKey).toBe("step-1");
   });
 
   it("runs a TypeScript node job with Barry's own Node, whatever PATH says", async () => {
@@ -163,7 +168,7 @@ describe("bounds per kind", () => {
     const allowed = mkdtempSync(join(tmpdir(), "job-runner-allowed-"));
     writeFileSync(join(allowed, "notes.txt"), "ok");
     writeFileSync(join(home, "secret.txt"), "no");
-    bounds = { "ops:notes-only": { files: { allowOnly: [`${allowed}/**`] } } };
+    bounds = { "ops:notes-only": { files: { allow: [`${allowed}/**`] } } };
     useJobs({ peek: { bounds: ["ops:notes-only"], input_schema: peek, output_schema: { type: "object" }, runs: { using: "node", main: "src/peek.mjs" } } });
     const { result, run } = await runJob("ops:peek", { inputs: { paths: [join(allowed, "notes.txt"), join(home, "secret.txt")] } });
     rmSync(allowed, { recursive: true, force: true });
@@ -172,7 +177,7 @@ describe("bounds per kind", () => {
   });
 
   it("does not start a bounded node job whose bound Node cannot enforce", async () => {
-    bounds = { "ops:no-push": { network: { actions: ["git:push"] } } };
+    bounds = { "ops:no-push": { network: { deny: ["git:push"] } } };
     useJobs({ peek: { bounds: ["ops:no-push"], input_schema: peek, runs: { using: "node", main: "src/peek.mjs" } } });
     const { result, run } = await runJob("ops:peek", { inputs: { paths: [] } });
     expect(result.outcome).toBe("unavailable");
@@ -180,10 +185,10 @@ describe("bounds per kind", () => {
     expect(run).toBeNull();
   });
 
-  it("does not start a job whose bound has not been synced", async () => {
+  it("does not start a job whose bound does not exist", async () => {
     bounds = {};
     useJobs({ peek: { bounds: ["ops:gone"], input_schema: peek, runs: { using: "node", main: "src/peek.mjs" } } });
-    expect((await runJob("ops:peek", { inputs: { paths: [] } })).result.reason).toMatch(/unknown bound ops:gone; run `barry bag sync-traits ops`/);
+    expect((await runJob("ops:peek", { inputs: { paths: [] } })).result.reason).toMatch(/unknown bound ops:gone/);
   });
 });
 

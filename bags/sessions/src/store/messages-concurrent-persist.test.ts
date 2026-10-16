@@ -238,3 +238,54 @@ describe("concurrent persistence of tool_start/tool_result", () => {
     expect(readToolCall(first, toolUseId)?.result).toBeNull();
   });
 });
+
+it("records resident rows on a worker while a WAL writer holds the database",async()=>{
+ const {default:Database}=await import("better-sqlite3");
+ const {closeRecordingWorkers}=await import("./threaded-persist.js");
+ const sessionId=`threaded-${randomUUID()}`;makeSession(sessionId);
+ const path=getSessionsSqlite().name;
+ const stamp=(sequence:number)=>({type:"text",role:"user" as const,content:`row ${sequence}`,sequence,dedupeKey:`engine:${randomUUID()}`});
+ const holder=new Database(path);
+ try {
+  expect(await appendMessageSqlite(sessionId,stamp(0),null,{channel:"engine"})).toBe(0);
+  holder.exec("BEGIN IMMEDIATE");
+  const pending=appendMessageSqlite(sessionId,stamp(1),null,{channel:"engine"});
+  const started=performance.now();await new Promise(resolve=>setTimeout(resolve,25));
+  expect(performance.now()-started).toBeLessThan(1000);
+  holder.exec("COMMIT");expect(await pending).toBe(1);
+ } finally {if(holder.inTransaction)holder.exec("ROLLBACK");holder.close();await closeRecordingWorkers();closeSessionsDb();}
+},20_000);
+
+it("recovers published sequence collisions with an independent prompt writer and rebases the FIFO",async()=>{
+ const {persistInThread,closeRecordingWorkers}=await import("./threaded-persist.js");
+ const {queuePromptSqlite}=await import("./sessions-sqlite-writes.js");
+ const id=`repair-${randomUUID()}`;makeSession(id);
+ const db=getSessionsSqlite();
+ try {
+  queuePromptSqlite(id,"from MCP",{clientMessageId:"peer"});
+  const frame=(sequence:number)=>({type:"text",role:"assistant" as const,content:`reply-${sequence}`,sequence,dedupeKey:`engine:${id}:${sequence}`});
+  expect(await persistInThread(db.name,id,frame(0),null,null)).toBe(1);
+  expect(await persistInThread(db.name,id,frame(0),null,null)).toBe(1);
+  expect(await persistInThread(db.name,id,frame(1),null,null)).toBe(2);
+  expect(await persistInThread(db.name,id,frame(2),null,null)).toBe(3);
+  expect(db.prepare("SELECT content_text FROM messages WHERE session_id=? ORDER BY sequence").all(id)).toHaveLength(4);
+ } finally {await closeRecordingWorkers();}
+});
+it("refuses a direct prompt insert into a live foreign resident",async()=>{
+ const {hostname}=await import("node:os");const {readProcessStartTime}=await import("../process-liveness.js");
+ const {queuePromptSqlite}=await import("./sessions-sqlite-writes.js");const id=`foreign-${randomUUID()}`;makeSession(id);
+ getSessionsSqlite().prepare("UPDATE sessions SET metadata=? WHERE id=?").run(JSON.stringify({hosted_runtime_pid:process.ppid,hosted_runtime_started_at:readProcessStartTime(process.ppid),hosted_runtime_hostname:hostname()}),id);
+ expect(()=>queuePromptSqlite(id,"must route through owner")).toThrow("resident owner");
+});
+it("queues resident inbox prompts off the API thread and preserves their explicit order",async()=>{
+ const {enqueuePromptInThread,closeRecordingWorkers,persistInThread}=await import("./threaded-persist.js");
+ const {default:Database}=await import("better-sqlite3");const id=`prompt-worker-${randomUUID()}`;makeSession(id);const path=getSessionsSqlite().name;const holder=new Database(path);
+ try{
+  holder.exec("BEGIN IMMEDIATE");
+  const prompt=enqueuePromptInThread(path,id,"from MCP",{sequence:0,clientMessageId:"worker-prompt"});
+  await new Promise(resolve=>setTimeout(resolve,25));holder.exec("COMMIT");
+  expect((await prompt).sequence).toBe(0);
+  expect((await enqueuePromptInThread(path,id,"from MCP",{sequence:1,clientMessageId:"worker-prompt"})).duplicate).toBe(true);
+  expect(await persistInThread(path,id,{type:"text",role:"assistant",content:"answer",sequence:1,dedupeKey:`engine:${id}`},null,null)).toBe(1);
+ }finally{if(holder.inTransaction)holder.exec("ROLLBACK");holder.close();await closeRecordingWorkers();}
+},20000);

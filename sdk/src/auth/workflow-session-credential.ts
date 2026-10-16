@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { executionScopeSchema, scopeFingerprint } from "../bounds/execution-scope.js";
+import { approvedBoundsSchema, matchesApprovedFingerprint } from "../bounds/workflow-bounds.js";
 
 const schema = z.strictObject({
   version: z.literal(3),
@@ -9,7 +9,7 @@ const schema = z.strictObject({
   identityId: z.number().int().positive(),
   sessionId: z.string().min(1).max(500),
   identity: z.string().min(1).max(200),
-  scopeFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  boundFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   expiresAt: z.number().int().positive(),
 });
 export type WorkflowSessionCredential = z.infer<typeof schema>;
@@ -65,13 +65,12 @@ export function verifyWorkflowSessionCredentialForSession(
     || record.identity_id !== credential.identityId || !record.metadata) {
     throw new Error("workflow session credential record binding mismatch");
   }
-  const scope = executionScopeSchema.parse(record.metadata.workflow_scope);
-  const { fingerprint, ...evidence } = scope;
+  const scope = approvedBoundsSchema.parse(record.metadata.workflow_bound);
   if (
     record.metadata.workflow_identity_id !== record.identity_id ||
     credential.identity !== scope.identity ||
-    credential.scopeFingerprint !== scope.fingerprint ||
-    scopeFingerprint(evidence) !== fingerprint
+    credential.boundFingerprint !== scope.fingerprint ||
+    !matchesApprovedFingerprint(scope)
   ) throw new Error("workflow session credential identity or scope binding mismatch");
   return credential;
 }

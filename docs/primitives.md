@@ -5,44 +5,35 @@ introduction read the [quick start](quick-start.md), and for the authoritative
 module and ownership map read [`sdk/docs/modules.md`](../sdk/docs/modules.md).
 
 The whole model reduces to one sentence: an **identity** packs **bags**, which
-grant **traits** and may apply **bounds**; a **session** runs under that identity
-with the resulting capabilities, optionally invoking **actions** and guided by
-**instructions**, with **schedules** running work later.
+give capabilities, and may apply **bounds**, which restrict them; a **session**
+runs under that identity with the resulting capabilities, optionally invoking
+**actions** and guided by **instructions**, with **schedules** running work later.
 
 ## The capability model
 
 ### Bag
 
 A unit of capability: tools, an MCP server, a store, actions, instructions,
-schedules, apps, vault items, or jobs, in any combination. A bag with only
+schedules, apps, vault items, bounds, or jobs, in any combination. A bag with only
 declarations needs no code. You install a bag on a machine and pack it onto an
-identity. Bags can contain other bags.
+identity. Bags can compose other bags.
 See [bags](../sdk/docs/bags.md).
-
-### Trait
-
-A named grant. Packing a bag auto-generates a same-named trait that enables
-everything in it; hand-authored traits compose bags and bounds. Traits only ever
-grant; they never restrict.
 
 ### Bound
 
-A named restriction that takes capability back along independent axes:
-`deniedTools`, `deniedAccess`, `files.deny`/`files.allowOnly`,
-`bash.deny`/`bash.denyPrograms`, and `network`. Denials union, allowlists
-intersect, and a deny always wins. Bounds are enforced, not advisory.
+A named restriction that narrows capability along six `{ allow, deny }` dimensions:
+`tools`, `inputs`, `files`, `bash`, `network`, and `nodes`. Denials union,
+allowlists preserve every bound's clause (each must match), and a deny always wins.
+Bounds are enforced, not advisory.
 See [bounds](../sdk/docs/bounds.md).
 
 ```yaml
-# traits grant, bounds take back
-traits:
-  debug:
-    includes: [datadog, slack]
-    bounds: [read-only]
+# bags give capabilities, bounds restrict them
+bags:
+  - datadog
+  - slack
 bounds:
-  read-only:
-    bound:
-      deniedAccess: [write]
+  - readonly
 ```
 
 ## Who and where

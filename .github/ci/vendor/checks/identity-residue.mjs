@@ -40,7 +40,7 @@ const WALK_ROOTS = [
   // `packages` was dissolved into sdk/bag-host. Adding `adapters`, `engine` and
   // `sdk` at the same time: they are live top-level trees this list had never
   // named, so the scan was not merely pointing at a dead root -- it had never
-  // looked at three real ones. Same lesson bound-vocabulary's list records.
+  // looked at three real ones.
   //
   // `docs` was dropped when e3b4660a dissolved docs/ (guide to the web,
   // operations to barry-devops, history to its own repo). The missing-root

@@ -1,3 +1,4 @@
+import { buildBag } from "../../bags/build.js";
 /**
  * Bag prompt contributors, end to end: each fixture is a real bag directory
  * whose TypeScript entry is bundled by the real builder and run in the real
@@ -118,7 +119,7 @@ describe("collectPromptSections", () => {
     expect(await collectPromptSections([once, once], { cwd: root }, limits())).toEqual(["single"]);
   }, 30_000);
 
-  it("rebuilds when a module the entry imports changes", async () => {
+  it("uses the current bundle until maintenance rebuilds changed imports", async () => {
     const dir = writeBag("edited", 'const { value } = await import("./src/value.js"); return [{ text: value }];',
       { "src/value.ts": 'export const value = "first";\n' });
     const bag = asBag(dir);
@@ -127,6 +128,9 @@ describe("collectPromptSections", () => {
     writeFileSync(file, 'export const value = "second";\n');
     const later = new Date(Date.now() + 10_000);
     utimesSync(file, later, later);
+    expect(await collectPromptSections([bag], { cwd: root }, limits())).toEqual(["first"]);
+    const rebuilt = await buildBag({ name: bag.name, bagDir: dir, promptsEntry: join(dir, bag.manifest.promptsEntry!.entry) });
+    expect(rebuilt.ok, rebuilt.error).toBe(true);
     expect(await collectPromptSections([bag], { cwd: root }, limits())).toEqual(["second"]);
   }, 30_000);
 

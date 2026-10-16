@@ -256,6 +256,7 @@ function unwrapAccountKey(
 
 export class VaultClient {
   private registrationSecret?: string;
+  private itemLists = new WeakMap<VaultAuth, Promise<VaultItemSummary[]>>();
 
   private readonly serverUrl: string;
 
@@ -289,7 +290,7 @@ export class VaultClient {
   async register(email: string, masterPassword?: string): Promise<RegistrationResult> {
     const password = masterPassword ?? generateMasterPassword();
     const kdfSalt = generateKdfSalt();
-    const { masterPasswordHash, encKey, macKey } = deriveKeys(password, email, kdfSalt);
+    const { masterPasswordHash, encKey, macKey } = await deriveKeys(password, email, kdfSalt);
 
     const symKey = generateSymmetricKey();
     const encryptedKey = encryptSymmetricKey(symKey, encKey, macKey);
@@ -345,9 +346,24 @@ export class VaultClient {
     return data.salt;
   }
 
+  private async authenticatedSession(data: { token: string; encryptedKey: string }, encKey: Buffer, macKey: Buffer, email: string): Promise<VaultAuth> {
+    try {
+      const itemKeys = unwrapAccountKey(data.encryptedKey, encKey, macKey, email);
+      return { accountId: this.extractSub(data.token), token: data.token, encKey: itemKeys.encKey, macKey: itemKeys.macKey };
+    } catch (error) {
+      // Authentication can succeed before a wrong password/email fails local
+      // decryption. No session is returned to the caller to close in that case.
+      if (typeof data.token === "string" && data.token) {
+        try { await this.request("/api/auth/logout", { method: "POST", headers: { Authorization: `Bearer ${data.token}` } }); }
+        catch { /* Lost cleanup evidence cannot replace the original key error. */ }
+      }
+      throw error;
+    }
+  }
+
   async login(email: string, masterPassword: string): Promise<VaultAuth> {
     const kdfSalt = await this.getSalt(email);
-    const { masterPasswordHash, encKey, macKey } = deriveKeys(masterPassword, email, kdfSalt);
+    const { masterPasswordHash, encKey, macKey } = await deriveKeys(masterPassword, email, kdfSalt);
 
     const res = await this.request("/api/auth/token", {
       method: "POST",
@@ -360,19 +376,12 @@ export class VaultClient {
     }
 
     const data = await res.json() as { token: string; encryptedKey: string; kdfSalt: string | null };
-    const itemKeys = unwrapAccountKey(data.encryptedKey, encKey, macKey, email);
-
-    return {
-      accountId: this.extractSub(data.token),
-      token: data.token,
-      encKey: itemKeys.encKey,
-      macKey: itemKeys.macKey,
-    };
+    return this.authenticatedSession(data, encKey, macKey, email);
   }
 
   async loginWithApiKey(clientId: string, clientSecret: string, masterPassword: string, email: string): Promise<VaultAuth> {
     const kdfSalt = await this.getSalt(email);
-    const { encKey, macKey } = deriveKeys(masterPassword, email, kdfSalt);
+    const { encKey, macKey } = await deriveKeys(masterPassword, email, kdfSalt);
 
     const res = await this.request("/api/auth/api-key", {
       method: "POST",
@@ -385,25 +394,28 @@ export class VaultClient {
     }
 
     const data = await res.json() as { token: string; encryptedKey: string };
-    const itemKeys = unwrapAccountKey(data.encryptedKey, encKey, macKey, email);
-
-    return {
-      accountId: this.extractSub(data.token),
-      token: data.token,
-      encKey: itemKeys.encKey,
-      macKey: itemKeys.macKey,
-    };
+    return this.authenticatedSession(data, encKey, macKey, email);
   }
 
   async listItems(session: VaultAuth): Promise<VaultItemSummary[]> {
-    const res = await this.authedFetch(session, "/api/items");
-    const data = await res.json() as { items: Array<{ id: string; name: string; type: number }> };
+    let pending = this.itemLists.get(session);
+    if (!pending) {
+      pending = (async () => {
+        const res = await this.authedFetch(session, "/api/items");
+        const data = await res.json() as { items: Array<{ id: string; name: string; type: number }> };
+        return data.items.map(item => ({ id: item.id, name: this.decryptField(item.name, session), type: item.type }));
+      })();
+      this.itemLists.set(session, pending);
+      const request = pending;
+      void request.catch(() => { if (this.itemLists.get(session) === request) this.itemLists.delete(session); });
+    }
+    return pending;
+  }
 
-    return data.items.map((item) => ({
-      id: item.id,
-      name: this.decryptField(item.name, session),
-      type: item.type,
-    }));
+  private async invalidateItems(): Promise<void> {
+    this.itemLists = new WeakMap();
+    // All identities sharing this vault can hold stale values in this process.
+    (await import("../env/identity.js")).invalidateIdentityEnvironment();
   }
 
   async getItem(session: VaultAuth, name: string): Promise<VaultItem> {
@@ -411,7 +423,11 @@ export class VaultClient {
     const match = items.find((i) => i.name === name);
     if (!match) throw new VaultItemNotFoundError(name);
 
-    const res = await this.authedFetch(session, `/api/items/${match.id}`);
+    return this.getItemById(session, match.id);
+  }
+
+  async getItemById(session: VaultAuth, id: string): Promise<VaultItem> {
+    const res = await this.authedFetch(session, `/api/items/${encodeURIComponent(id)}`);
     const raw = await res.json() as {
       id: string;
       name: string;
@@ -456,6 +472,7 @@ export class VaultClient {
     });
 
     const data = await res.json() as { id: string };
+    await this.invalidateItems();
     return data.id;
   }
 
@@ -473,13 +490,16 @@ export class VaultClient {
       method: "PUT",
       body: JSON.stringify(body),
     });
+    await this.invalidateItems();
   }
 
   async deleteItem(session: VaultAuth, id: string): Promise<void> {
     await this.authedFetch(session, `/api/items/${id}`, { method: "DELETE" });
+    await this.invalidateItems();
   }
 
   async logout(session: VaultAuth): Promise<void> {
+    this.itemLists.delete(session);
     await this.request("/api/auth/logout", {
       method: "POST",
       headers: {

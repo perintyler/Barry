@@ -54,8 +54,8 @@ async function storeSecrets(identity: IdentityRecord, entries: Record<string, st
       catch { throw new Error("Could not open the declared vault"); }
     }
     for (const [key, value] of Object.entries(entries)) {
-      const reference = vault && ref
-        ? await storeVaultSecret({ vault }, { vaultAccount: vaultAccountFor(ref), identityName: identity.name, force: options.force }, key, value)
+      const reference = vault && typeof ref === "string"
+        ? await storeVaultSecret({ vault }, { vaultAccount: vaultAccountFor(ref), vaultName: ref, identityName: identity.name, force: options.force }, key, value)
         : await storeKeychainSecret(identity.name, key, value);
       secrets[key] = { reference: SecretReferenceSchema.parse(reference) };
     }

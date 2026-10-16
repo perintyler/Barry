@@ -13,10 +13,6 @@ const bagNeedsInstall = vi.fn();
 // "@barry-rocks/sdk/bags" root is a SILENT no-op now that the subject reaches
 // modules directly — it would never match and the suite would run against the
 // real modules.
-vi.mock("@barry-rocks/sdk/internal/traits", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@barry-rocks/sdk/internal/traits")>(),
-  expandComposition: vi.fn((n: string[]) => [...n]),
-}));
 vi.mock("@barry-rocks/sdk/internal/bags", async (importOriginal) => ({
   ...await importOriginal<typeof import("@barry-rocks/sdk/internal/bags")>(),
   discoverBuildableBags: vi.fn(() => []),
@@ -29,7 +25,6 @@ vi.mock("@barry-rocks/sdk/internal/bags", async (importOriginal) => ({
   loadBag: vi.fn(),
   loadAllBags: vi.fn(async () => []),
   expandCompositionFromSnapshot: vi.fn(async (n: string[]) => [...n]),
-  getAllTraits: vi.fn(() => []),
   getRegistrySnapshotPath: vi.fn(() => "/tmp/bags.yaml"),
   isBuiltinBag: vi.fn(() => true),
   getBagSource: vi.fn(),
@@ -56,14 +51,13 @@ vi.mock("../src/bags/scaffold.js", () => ({
   scaffoldBag: vi.fn(),
 }));
 vi.mock("../src/bags/scaffold-kinds.js", () => ({
-  scaffoldTrait: vi.fn(),
+  scaffoldBound: vi.fn(),
 }));
 
 // The identities bag's root, as bag.ts reaches it; nothing on this path calls it.
 vi.mock("@barry-rocks/identities-bag", () => ({
   identityRecords: { list: vi.fn(async () => []), directory: vi.fn() },
-  traits: { list: vi.fn(async () => []), ensure: vi.fn(async () => []), syncBags: vi.fn() },
-  bounds: {},
+  resolveBags: vi.fn(),
 }));
 vi.mock("../src/bags/registration.js", () => ({
   getBag: vi.fn(), upsertBag: vi.fn(), listBags: vi.fn(async () => []), deleteBag: vi.fn(),

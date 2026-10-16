@@ -1,5 +1,6 @@
+import { modeVersions } from "./versions.js";
 import { parseManifest } from "../../bags/manifest.js";
-import { validateNativeTools } from "../../bounds/native-policy.js";
+import { validateNativeTools } from "../../bounds/native-tools.js";
 import type { BagManifest } from "../../bags/types.js";
 /**
  * `Adapters` over a record file: which adapters are installed, from where.
@@ -19,7 +20,7 @@ import { parseInstalledAdapters } from "./records.js";
 import { dirname, join, resolve, relative, isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import { MODE_IDS, type HarnessId, type ModeId } from "../../ids.js";
-import { defineVendorCode, mergeVendorFactories, type VendorCode, type VendorFactories } from "../models/vendors/catalog.js";
+import { defineVendorCode, mergeVendorFactories, type VendorCode, type VendorFactories } from "../models/vendors/models.js";
 import type { Vendor } from "../models/vendors/index.js";
 import { checkAdapter } from "./check.js";
 import {
@@ -42,7 +43,12 @@ export interface AdapterStoreOptions {
   registerBag?: (name: string, path: string, manifest: BagManifest) => Promise<void>;
 }
 
-export function loadAdapters(options: AdapterStoreOptions): Adapters {
+export interface InstalledAdapterSelection {
+  /** Synchronous publication under the same lock as add/remove. No await in operation. */
+  withSelection<T>(id: HarnessId, operation: (record: InstalledAdapter | undefined) => T): T;
+}
+
+export function loadAdapters(options: AdapterStoreOptions): Adapters & InstalledAdapterSelection {
   const importModule = options.importModule ?? ((entry: string) => import(pathToFileURL(entry).href));
   const now = options.now ?? (() => new Date());
 
@@ -72,7 +78,7 @@ export function loadAdapters(options: AdapterStoreOptions): Adapters {
       ...(adapter.vendor ? { vendor: adapter.vendor } : {}),
       ...(adapter.offeredModels ? { offeredModels: adapter.offeredModels.map(model => ({ ...model })) } : {}),
       requirements: adapter.requirements, capabilities: adapter.capabilities,
-      nativeTools: [...adapter.nativeTools], defaultMode: adapter.defaultMode, modes: declarations(adapter),
+      tools: [...adapter.tools], defaultMode: adapter.defaultMode, modes: declarations(adapter),
       ...(vendorCode ? { vendorCode: { vendors: vendorCode.vendors } } : {}),
       path, version, installedAt: now().toISOString(),
     };
@@ -100,7 +106,7 @@ export function loadAdapters(options: AdapterStoreOptions): Adapters {
   }
 
   async function inspect(path: string): Promise<{ adapter: Adapter; packageName: string; version: string; vendorCode?: VendorCode; bag?: InstalledAdapter["bag"] }> {
-    const pkg = readPackage(path);
+    const pkg = readInstalledAdapterPackage(path);
     let loaded: { default?: unknown; vendorCode?: unknown };
     try { loaded = await importModule(join(path, pkg.entry)) as typeof loaded; }
     catch { throw new AdapterRefused(pkg.name, [`${pkg.name} could not load; reinstall it, then run barry adapter add ${path}`]); }
@@ -151,6 +157,12 @@ export function loadAdapters(options: AdapterStoreOptions): Adapters {
 
   return {
     installed,
+
+    withSelection(id, operation) {
+      const release = acquireLock(dirname(options.file), "session-adapters");
+      try { return operation(findInstalled(installed(), id)); }
+      finally { release(); }
+    },
 
     vendorRows(): Vendor[] {
       return installed().flatMap((record) => record.vendorCode?.vendors ?? []);
@@ -227,6 +239,8 @@ function declarations(adapter: Adapter): Record<ModeId, Mode | null> {
           guarantees: { ...mode.guarantees },
           ...(mode.native ? { native: structuredClone(mode.native) } : {}),
           verifiedOn: mode.verifiedOn,
+          versions: structuredClone(modeVersions(mode)),
+          ...(mode.build ? { build: mode.build } : {}),
           evidence: { ...mode.evidence },
           egressSandbox: mode.egressSandbox,
           ...(mode.approvalContinuation ? { approvalContinuation: mode.approvalContinuation } : {}),
@@ -238,7 +252,8 @@ function declarations(adapter: Adapter): Record<ModeId, Mode | null> {
   return out;
 }
 
-function readPackage(directory: string): { name: string; version: string; entry: string } {
+/** Resolve recorded package metadata without importing mutable adapter code. */
+export function readInstalledAdapterPackage(directory: string): { name: string; version: string; entry: string } {
   const file = join(directory, "package.json");
   if (!existsSync(file)) throw new Error(`No session adapter package at ${directory}; install it, then run barry adapter add <package-directory>`);
   const pkg = JSON.parse(readFileSync(file, "utf8"));

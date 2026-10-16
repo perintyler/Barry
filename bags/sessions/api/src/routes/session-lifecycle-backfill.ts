@@ -1,3 +1,4 @@
+import {sessionRuntime} from "../session-runtime.js";
 // Transcript backfill route for the sessions lifecycle router.
 // Extracted verbatim from session-lifecycle.ts for file size; no behavior change.
 import { createLogger } from "@barry-rocks/sdk/logging";
@@ -25,6 +26,7 @@ routes.route(sessionsRoutes.backfillSession, async (req, res) => {
   if (!input) return;
   const session = await getSessionRecord(sessionId);
   if (!session) return sendProblem(req, res, 404, "Session not found");
+  if (sessionRuntime.getActiveSession(sessionId)) return res.status(202).json({ok:true});
   const recorded = session.metadata.transcript_path;
   if (typeof recorded !== "string" || !recorded || (input.transcriptPath !== undefined && input.transcriptPath !== recorded)) {
     return sendProblem(req, res, 400, "Recorded transcript path required");

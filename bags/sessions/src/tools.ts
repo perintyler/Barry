@@ -8,6 +8,7 @@ import {
   queuePrompt,
   getListeners,
   recordWake,
+  searchMessages,
 } from "@barry-rocks/sessions-bag/client";
 import { reportDelivery } from "./delivery/report.js";
 import { engineFor, getEngine } from "./engines/index.js";
@@ -168,7 +169,7 @@ export const getSession = Barry.Tool({
 // Callers use `list({ directory })`. That is a PARTIAL match (`LIKE %…%`) where
 // this tool matched the directory exactly, which is the right trade for a listing
 // tool: asking for `~/repos/barry` and also seeing its subdirectories' sessions is
-// useful, whereas `barry resume` reusing a SUBDIRECTORY's session id and traits
+// useful, whereas `barry resume` reusing a SUBDIRECTORY's session id and bags
 // was not. The exact reader (`getRecentByDirectory`) goes with this tool, since
 // this was its only consumer.
 
@@ -285,20 +286,45 @@ export const getSessionMessages = Barry.Tool({
   },
 });
 
-// `search_session_messages` was here (70 calls) — folded into
-// `mcp__sessions__search_messages`, which lives in the `sessions/search` extension.
-//
-// It was a strict SUBSET of that tool: `recall` (now `search_messages`) already
-// called this same `searchMessages` as its UNCONDITIONAL lexical floor, then
-// blended semantic hits on top. Two tools for "find what was said" meant a caller
-// had to guess which one searched properly — and the archive says they guessed
-// this one: 70 calls here against 8 for `recall`.
-//
-// So the surviving tool kept THIS name and `recall`'s behaviour, not the reverse.
-// It stays in `sessions/search` because the semantic path needs
-// `@barry-rocks/embeddings-bag` and an Ollama embed model, which the sessions bag should
-// not depend on for a single tool. That extension publishes into the `sessions`
-// namespace, so callers see no relocation.
+/**
+ * Lexical FTS5 message search built into the `sessions` bag.
+ *
+ * When `session-vector-search` is also packed in a session, its `implements:
+ * { tools: [sessions:search_messages] }` declaration replaces this tool with
+ * the hybrid semantic + lexical search.
+ */
+export const searchMessagesTool = Barry.Tool({
+  deferred: true,
+  namespace: "sessions",
+  access: "read",
+  name: "search_messages",
+  description:
+    "Search what was actually SAID inside past sessions — user and assistant message content "
+    + "(lexical FTS5 word match). To search session NAMES and directories rather than their "
+    + "contents, use `search`.",
+  schema: {
+    query: z.string().min(1).describe("What you are trying to remember, in natural language."),
+    limit: z.number().int().positive().max(50).optional().describe("How many results (default 10)."),
+    session_id: z.string().optional().describe("Restrict to one session."),
+    role: z.enum(["user", "assistant"]).optional().describe("Only messages from this side of the conversation."),
+  },
+  handler: async ({ query, limit, session_id, role }) => {
+    const want = limit ?? 10;
+    const rows = await searchMessages(query, {
+      limit: want,
+      ...(session_id ? { session_id } : {}),
+      ...(role ? { role } : {}),
+    });
+    if (rows.length === 0) return "No matches.";
+    return rows
+      .map((m) => {
+        const where = m.session_name ? `${m.session_name} (${m.session_id})` : m.session_id;
+        const seq = m.sequence === null || m.sequence === undefined ? "" : `#${m.sequence}`;
+        return `[words] ${where}${seq} ${m.role ?? ""}\n${m.content_snippet.slice(0, 400)}`;
+      })
+      .join("\n\n");
+  },
+});
 
 // `get_session_changes` was here. It is a duplicate of the filesystem bag's
 // `get_changes_for_session`, which owns the tracker data this read went to — the

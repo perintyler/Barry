@@ -36,8 +36,8 @@ describe.runIf(LIVE)("antigravity TUI modes, live", { timeout: 180_000 }, () => 
     expect(
       version,
       "the agy on PATH is not the build the guarantees were verified on",
-    ).toContain(ANTIGRAVITY_REQUIREMENTS.binary.pin.version);
-    expect(ANTIGRAVITY_REQUIREMENTS.binary.pin.version).toBe(VERIFIED_ON);
+    ).toContain(ANTIGRAVITY_REQUIREMENTS.binary.recommendedVersion!);
+    expect(ANTIGRAVITY_REQUIREMENTS.binary.recommendedVersion!).toBe(VERIFIED_ON);
     probe = await startProbe(IDENTITY_KEY);
   });
 

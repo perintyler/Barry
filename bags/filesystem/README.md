@@ -1,8 +1,8 @@
 # filesystem
 
 The file tools every session gets: `Read`, `Write`, `Edit`, `MultiEdit`, `Glob`,
-`Grep`, `LS` and `open`, as `mcp__filesystem__*`. A session must be granted the
-filesystem trait or its tools; packing a bag does not grant access.
+`Grep`, `LS` and `open`, as `mcp__filesystem__*`. Every session gets the
+`filesystem` bag by default unless narrowed by a bound.
 `Glob` and `Grep` run ripgrep, which `bag.yaml` declares; missing `rg` is an error.
 
 ## Entry points
@@ -15,7 +15,7 @@ filesystem trait or its tools; packing a bag does not grant access.
   carry the `filesystem` namespace, so it adds none.
 - [`locks/`](locks/README.md): coordination between sessions editing one
   checkout. Deliberately left out of this bag's `bags:` list, which would fold
-  the `locks` namespace into the `filesystem` trait and give its tools to
+  the `locks` namespace into the `filesystem` bag and give its tools to
   every session.
 
 ## What the engine adds

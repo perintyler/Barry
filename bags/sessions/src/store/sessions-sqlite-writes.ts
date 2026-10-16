@@ -1,3 +1,6 @@
+import {classify} from "../process-liveness.js";
+import { persistInThread } from "./threaded-persist.js";
+import { forgetSessionIdentity } from "@barry-rocks/sdk/stores";
 /**
  * Session writes against the SQLite store.
  *
@@ -20,7 +23,15 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { persistOne, MODEL_AUTHORED } from "./messages.js";
+import { resolveModelId } from "./models-registry.js";
+import { getSessionsDb } from "./sessions-db.js";
 import { getSessionsSqlite } from "./sessions-db.js";
+import {
+  assertInteractiveSession,
+  retireWorkflowDestination,
+  type RetiredWorkflowDestination,
+} from "./workflow-ownership.js";
 import { generateId } from "@barry-rocks/sdk/ids";
 // `WsMessageInput` rather than `Parameters<typeof persistOne>[2]`: the
 // derived form names a symbol `index.ts` does not re-export, so declaration
@@ -52,6 +63,7 @@ import {
   parseMetadata,
   EMPTY_SESSION_IDLE_MS,
 } from "./session-helpers.js";
+import type { Bound } from "@barry-rocks/sdk";
 import type { SessionMetadata, SessionRecord } from "./session-records.js";
 
 /**
@@ -86,17 +98,17 @@ export function createSessionSqlite(data: {
   identity_id?: number | null;
   status?: SessionRecord["status"];
   system_prompt?: string | null;
-  traits?: string[];
-  bounds?: string[];
-  bound?: Record<string, unknown> | null;
-  bound_id?: null;
+  bags?: string[];
+  bounds?: Array<string | Bound | Record<string, unknown>>;
+  bound?: Bound | Record<string, unknown> | null;
   metadata: SessionMetadata;
 }): void {
+  forgetSessionIdentity(data.id);
   getSessionsSqlite()
     .prepare(
       `INSERT INTO sessions (
          id, active, state, agent_token, user_id, identity_id, status,
-         system_prompt, summary, traits, bound, bounds, metadata, created_at
+         system_prompt, summary, bags, bound, bounds, metadata, created_at
        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
     .run(
@@ -109,7 +121,7 @@ export function createSessionSqlite(data: {
       data.status ?? "pending",
       data.system_prompt ?? null,
       null,
-      toJson(data.traits ?? []),
+      toJson(data.bags ?? []),
       toJson(data.bound ?? null),
       toJson(data.bounds ?? []),
       toJson(data.metadata),
@@ -137,10 +149,9 @@ export function updateSessionSqlite(
     summary?: string;
     system_prompt?: string;
     identity_id?: number | null;
-    traits?: string[];
-  bounds?: string[];
-    bound?: Record<string, unknown> | null;
-    bound_id?: null;
+    bags?: string[];
+    bounds?: Array<string | Bound | Record<string, unknown>>;
+    bound?: Bound | Record<string, unknown> | null;
     started_at?: Date | string | null;
     completed_at?: Date | string | null;
     active?: boolean;
@@ -148,42 +159,52 @@ export function updateSessionSqlite(
     metadata?: Record<string, unknown>;
   },
 ): SessionRecord | undefined {
-  const columns: string[] = [];
-  const params: unknown[] = [];
-  const set = (column: string, value: unknown) => {
-    columns.push(`${column} = ?`);
-    params.push(value);
-  };
+  const workflowDb = getSessionsSqlite();
+  return workflowDb
+    .transaction(() => {
+      assertInteractiveSession(workflowDb, id);
+      const columns: string[] = [];
+      const params: unknown[] = [];
+      const set = (column: string, value: unknown) => {
+        columns.push(`${column} = ?`);
+        params.push(value);
+      };
 
-  if (updates.status !== undefined) {
-    set("status", updates.status);
-    const terminal = updates.status === "completed" || updates.status === "failed" || updates.status === "cancelled";
-    if (updates.completed_at === undefined && terminal) set("completed_at", nowIso());
-  }
-  if (updates.state !== undefined) set("state", updates.state);
-  if (updates.summary !== undefined) set("summary", updates.summary);
-  if (updates.system_prompt !== undefined) set("system_prompt", updates.system_prompt);
-  if (updates.identity_id !== undefined) set("identity_id", updates.identity_id);
-  if (updates.traits !== undefined) set("traits", toJson(updates.traits));
-  if (updates.bounds !== undefined) set("bounds", toJson(updates.bounds));
-  if (updates.bound !== undefined) set("bound", toJson(updates.bound));
-  if (updates.bound_id !== undefined) set("bound_id", updates.bound_id);
-  if (updates.started_at !== undefined) set("started_at", toIso(updates.started_at));
-  if (updates.completed_at !== undefined) set("completed_at", toIso(updates.completed_at));
-  if (updates.active !== undefined) set("active", updates.active ? 1 : 0);
-  if (updates.ended_at !== undefined) set("ended_at", toIso(updates.ended_at));
-  if (updates.metadata !== undefined) {
-    const formatted = { ...updates.metadata };
-    if (typeof formatted.name === "string") formatted.name = cleanSessionName(formatted.name);
-    set("metadata", toJson(formatted));
-  }
+      if (updates.status !== undefined) {
+        set("status", updates.status);
+        const terminal =
+          updates.status === "completed" ||
+          updates.status === "failed" ||
+          updates.status === "cancelled";
+        if (updates.completed_at === undefined && terminal) set("completed_at", nowIso());
+      }
+      if (updates.state !== undefined) set("state", updates.state);
+      if (updates.summary !== undefined) set("summary", updates.summary);
+      if (updates.system_prompt !== undefined) set("system_prompt", updates.system_prompt);
+      if (updates.identity_id !== undefined) set("identity_id", updates.identity_id);
+      if (updates.bags !== undefined) {
+        set("bags", toJson(updates.bags));
+      }
+      if (updates.bounds !== undefined) set("bounds", toJson(updates.bounds));
+      if (updates.bound !== undefined) set("bound", toJson(updates.bound));
+      if (updates.started_at !== undefined) set("started_at", toIso(updates.started_at));
+      if (updates.completed_at !== undefined) set("completed_at", toIso(updates.completed_at));
+      if (updates.active !== undefined) set("active", updates.active ? 1 : 0);
+      if (updates.ended_at !== undefined) set("ended_at", toIso(updates.ended_at));
+      if (updates.metadata !== undefined) {
+        const formatted = { ...updates.metadata };
+        if (typeof formatted.name === "string") formatted.name = cleanSessionName(formatted.name);
+        set("metadata", toJson(formatted));
+      }
 
-  if (columns.length === 0) return getSessionSqlite(id);
+      if (columns.length === 0) return getSessionSqlite(id);
 
-  getSessionsSqlite()
-    .prepare(`UPDATE sessions SET ${columns.join(", ")} WHERE id = ?`)
-    .run(...params, id);
-  return getSessionSqlite(id);
+      getSessionsSqlite()
+        .prepare(`UPDATE sessions SET ${columns.join(", ")} WHERE id = ?`)
+        .run(...params, id);
+      return getSessionSqlite(id);
+    })
+    .immediate();
 }
 
 /**
@@ -198,9 +219,15 @@ export function updateSessionSqlite(
  * different key is not silently overwritten by a stale copy.
  */
 export function updateSessionMetadataSqlite(id: string, updates: Record<string, unknown>): void {
-  getSessionsSqlite()
-    .prepare("UPDATE sessions SET metadata = json_patch(metadata, ?) WHERE id = ?")
-    .run(JSON.stringify(updates), id);
+  const workflowDb = getSessionsSqlite();
+  return workflowDb
+    .transaction(() => {
+      assertInteractiveSession(workflowDb, id);
+      getSessionsSqlite()
+        .prepare("UPDATE sessions SET metadata = json_patch(metadata, ?) WHERE id = ?")
+        .run(JSON.stringify(updates), id);
+    })
+    .immediate();
 }
 
 /**
@@ -222,19 +249,38 @@ export function updateSessionMetadataNormalizedSqlite(
 
 export function issueWorkflowCredentialSqlite(
   id: string,
-  expected: { actorId: number; identityId: number; scopeFingerprint: string },
+  expected: { actorId: number; identityId: number; boundFingerprint: string },
 ): string | null {
+  const fingerprint = expected.boundFingerprint;
+  if (!fingerprint) return null;
   const credentialId = randomUUID();
+  const workflowDb = getSessionsSqlite();
   // Compare and rotate under the same write lock; concurrent starts cannot share authority.
-  const issued = getSessionsSqlite().prepare(`
+  return workflowDb
+    .transaction(() => {
+      assertInteractiveSession(workflowDb, id);
+      const issued = workflowDb
+        .prepare(
+          `
     UPDATE sessions SET workflow_credential_id = ?
     WHERE id = ? AND user_id = ? AND identity_id = ?
       AND state = 'open' AND ended_at IS NULL
       AND json_extract(metadata, '$.workflow_identity_id') = ?
-      AND json_extract(metadata, '$.workflow_scope.fingerprint') = ?
+      AND json_extract(metadata, '$.workflow_bound.fingerprint') = ?
     RETURNING workflow_credential_id
-  `).get(credentialId, id, expected.actorId, expected.identityId, expected.identityId, expected.scopeFingerprint);
-  return issued ? credentialId : null;
+  `,
+        )
+        .get(
+          credentialId,
+          id,
+          expected.actorId,
+          expected.identityId,
+          expected.identityId,
+          fingerprint,
+        );
+      return issued ? credentialId : null;
+    })
+    .immediate();
 }
 
 /**
@@ -254,37 +300,49 @@ export function issueWorkflowCredentialSqlite(
  * `ended_at` -- exactly the half-closed state the reaper exists to clean up.
  */
 export function endSessionSqlite(id: string, reason?: string | null): SessionRecord | undefined {
-  const now = nowIso();
-  const terminal =
-    reason === "evicted" ? "'pending'" : "CASE WHEN status IN ('completed','failed','cancelled') THEN status ELSE 'completed' END";
-  const completedAt = reason === "evicted" ? "NULL" : "COALESCE(completed_at, ?)";
-  const sqlite = getSessionsSqlite();
+  const workflowDb = getSessionsSqlite();
+  return workflowDb
+    .transaction(() => {
+      assertInteractiveSession(workflowDb, id);
+      const now = nowIso();
+      const terminal =
+        reason === "evicted"
+          ? "'pending'"
+          : "CASE WHEN status IN ('completed','failed','cancelled') THEN status ELSE 'completed' END";
+      const completedAt = reason === "evicted" ? "NULL" : "COALESCE(completed_at, ?)";
+      const sqlite = getSessionsSqlite();
 
-  if (reason) {
-    // The reason is MERGED into metadata, never assigned: an assignment would
-    // drop the working directory, name and everything else the session holds.
-    sqlite
-      .prepare(
-        `UPDATE sessions
-         SET active = 0, state = 'closed', ended_at = ?,
-             status = ${terminal},
-             completed_at = ${completedAt},
-             metadata = json_patch(metadata, ?)
-         WHERE id = ?`,
-      )
-      .run(...(reason === "evicted" ? [now, JSON.stringify({ end_reason: reason }), id] : [now, now, JSON.stringify({ end_reason: reason }), id]));
-  } else {
-    sqlite
-      .prepare(
-        `UPDATE sessions
-         SET active = 0, state = 'closed', ended_at = ?,
-             status = ${terminal},
-             completed_at = COALESCE(completed_at, ?)
-         WHERE id = ?`,
-      )
-      .run(now, now, id);
-  }
-  return getSessionSqlite(id);
+      if (reason) {
+        // The reason is MERGED into metadata, never assigned: an assignment would
+        // drop the working directory, name and everything else the session holds.
+        sqlite
+          .prepare(
+            `UPDATE sessions
+           SET active = 0, state = 'closed', ended_at = ?,
+               status = ${terminal},
+               completed_at = ${completedAt},
+               metadata = json_patch(metadata, ?)
+           WHERE id = ?`,
+          )
+          .run(
+            ...(reason === "evicted"
+              ? [now, JSON.stringify({ end_reason: reason }), id]
+              : [now, now, JSON.stringify({ end_reason: reason }), id]),
+          );
+      } else {
+        sqlite
+          .prepare(
+            `UPDATE sessions
+           SET active = 0, state = 'closed', ended_at = ?,
+               status = ${terminal},
+               completed_at = COALESCE(completed_at, ?)
+           WHERE id = ?`,
+          )
+          .run(now, now, id);
+      }
+      return getSessionSqlite(id);
+    })
+    .immediate();
 }
 
 /**
@@ -295,9 +353,82 @@ export function endSessionSqlite(id: string, reason?: string | null): SessionRec
  * connection in sessions-db.ts. Without it SQLite silently ignores the FK and
  * this leaves orphaned messages behind with no error.
  */
+function deleteSessionTurnChildren(
+  workflowDb: ReturnType<typeof getSessionsSqlite>,
+  sessionId: string,
+): void {
+  if (
+    !workflowDb
+      .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_turns'")
+      .get()
+  )
+    return;
+  workflowDb.prepare("DELETE FROM session_execution_events WHERE session_id = ?").run(sessionId);
+  workflowDb
+    .prepare(
+      "DELETE FROM session_interrupts WHERE turn_id IN (SELECT id FROM session_turns WHERE session_id = ?)",
+    )
+    .run(sessionId);
+  workflowDb
+    .prepare(
+      "DELETE FROM session_resolution_receipts WHERE turn_id IN (SELECT id FROM session_turns WHERE session_id = ?)",
+    )
+    .run(sessionId);
+  workflowDb
+    .prepare(
+      "DELETE FROM session_call_outcomes WHERE turn_id IN (SELECT id FROM session_turns WHERE session_id = ?)",
+    )
+    .run(sessionId);
+  workflowDb
+    .prepare(
+      "DELETE FROM session_run_segments WHERE turn_id IN (SELECT id FROM session_turns WHERE session_id = ?)",
+    )
+    .run(sessionId);
+  workflowDb.prepare("DELETE FROM session_turns WHERE session_id = ?").run(sessionId);
+}
+
+export function retireWorkflowSessionSqlite(id: string): RetiredWorkflowDestination {
+  return retireWorkflowDestination(getSessionsSqlite(), id);
+}
+
+export function retireWorkflowSessionsByIdentitySqlite(
+  identityId: number,
+): RetiredWorkflowDestination[] {
+  const workflowDb = getSessionsSqlite();
+  return workflowDb
+    .transaction((): RetiredWorkflowDestination[] => {
+      if (
+        !workflowDb
+          .prepare(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_workflow_destinations'",
+          )
+          .get()
+      ) {
+        return [];
+      }
+      const rows = workflowDb
+        .prepare(
+          `SELECT d.session_id FROM session_workflow_destinations d
+       LEFT JOIN sessions s ON s.id = d.session_id
+       WHERE d.identity_id = ? OR s.identity_id = ?
+       ORDER BY d.session_id`,
+        )
+        .all(identityId, identityId) as { session_id: string }[];
+      return rows.map((row) => retireWorkflowDestination(workflowDb, row.session_id));
+    })
+    .immediate();
+}
+
 export function deleteSessionSqlite(id: string): void {
-  getSessionsSqlite().prepare("DELETE FROM sessions WHERE id = ?").run(id);
-  getSessionsSqlite();
+  const workflowDb = getSessionsSqlite();
+  return workflowDb
+    .transaction(() => {
+      assertInteractiveSession(workflowDb, id);
+      deleteSessionTurnChildren(workflowDb, id);
+      getSessionsSqlite().prepare("DELETE FROM sessions WHERE id = ?").run(id);
+      getSessionsSqlite();
+    })
+    .immediate();
 }
 
 /**
@@ -319,11 +450,18 @@ export function deleteSessionSqlite(id: string): void {
  * sessions-db.ts sets `PRAGMA foreign_keys=ON` per connection.
  */
 export function deleteSessionsByIdentitySqlite(identityId: number): number {
-  const result = getSessionsSqlite()
-    .prepare("DELETE FROM sessions WHERE identity_id = ?")
-    .run(identityId);
-  getSessionsSqlite();
-  return result.changes;
+  const workflowDb = getSessionsSqlite();
+  return workflowDb
+    .transaction(() => {
+      const sessions = workflowDb
+        .prepare("SELECT id FROM sessions WHERE identity_id=?")
+        .all(identityId) as { id: string }[];
+      for (const session of sessions) assertInteractiveSession(workflowDb, session.id);
+      for (const session of sessions) deleteSessionTurnChildren(workflowDb, session.id);
+      return workflowDb.prepare("DELETE FROM sessions WHERE identity_id = ?").run(identityId)
+        .changes;
+    })
+    .immediate();
 }
 
 /** One provider_sessions row, as stored. */
@@ -347,25 +485,31 @@ export function createProviderSessionSqlite(data: {
   provider: string;
   provider_session_id?: string | null;
 }): ProviderSessionRow {
-  const sqlite = getSessionsSqlite();
-  sqlite.prepare("INSERT OR IGNORE INTO agent_adapters (id) VALUES (?)").run(data.provider);
-  const result = sqlite
-    .prepare(
-      `INSERT INTO provider_sessions (session_id, provider, provider_session_id, created_at)
-       VALUES (?,?,?,?)`,
-    )
-    .run(data.session_id, data.provider, data.provider_session_id ?? null, nowIso());
+  const workflowDb = getSessionsSqlite();
+  return workflowDb
+    .transaction(() => {
+      assertInteractiveSession(workflowDb, data.session_id);
+      const sqlite = getSessionsSqlite();
+      sqlite.prepare("INSERT OR IGNORE INTO agent_adapters (id) VALUES (?)").run(data.provider);
+      const result = sqlite
+        .prepare(
+          `INSERT INTO provider_sessions (session_id, provider, provider_session_id, created_at)
+         VALUES (?,?,?,?)`,
+        )
+        .run(data.session_id, data.provider, data.provider_session_id ?? null, nowIso());
 
-  return sqlite
-    .prepare("SELECT * FROM provider_sessions WHERE id = ?")
-    .get(result.lastInsertRowid) as ProviderSessionRow;
+      return sqlite
+        .prepare("SELECT * FROM provider_sessions WHERE id = ?")
+        .get(result.lastInsertRowid) as ProviderSessionRow;
+    })
+    .immediate();
 }
 
 /** Mark a provider session ended, by the provider's own id. */
-export function endProviderSessionByProviderIdSqlite(providerSessionId: string): void {
+export function endProviderSessionByProviderIdSqlite(harnessSessionId: string): void {
   getSessionsSqlite()
     .prepare("UPDATE provider_sessions SET ended_at = ? WHERE provider_session_id = ? AND ended_at IS NULL")
-    .run(nowIso(), providerSessionId);
+    .run(nowIso(), harnessSessionId);
 }
 
 /**
@@ -394,9 +538,8 @@ export function markCrashedSessionsSqlite(
   // pass one) must not make the empty-session rule the LOOSER of the two.
   const emptyCutoff = new Date(Date.now() - Math.min(idleMs, EMPTY_SESSION_IDLE_MS)).toISOString();
 
-  const exclusion = excludeIds.length > 0
-    ? ` AND id NOT IN (${excludeIds.map(() => "?").join(",")})`
-    : "";
+  const exclusion =
+    excludeIds.length > 0 ? ` AND id NOT IN (${excludeIds.map(() => "?").join(",")})` : "";
 
   const result = getSessionsSqlite()
     .prepare(
@@ -408,6 +551,7 @@ export function markCrashedSessionsSqlite(
            status = CASE WHEN status IN ('completed','failed','cancelled') THEN status ELSE 'completed' END,
            metadata = json_patch(metadata, '{"end_reason":"crashed"}')
        WHERE active = 1
+         AND NOT EXISTS (SELECT 1 FROM session_workflow_destinations d WHERE d.session_id=sessions.id)
          AND NOT EXISTS (SELECT 1 FROM session_turns t WHERE t.session_id=sessions.id AND (t.state IN ('running','waiting_for_input','recovery_required') OR t.owner IS NOT NULL))
          AND (
            (SELECT MAX(m.created_at) FROM messages m WHERE m.session_id = sessions.id) < ?
@@ -425,15 +569,21 @@ export function markCrashedSessionsSqlite(
  * Archive one session.
  */
 export function archiveSessionSqlite(id: string): void {
-  getSessionsSqlite()
-    .prepare("UPDATE sessions SET state = 'archived' WHERE id = ?")
-    .run(id);
+  const workflowDb = getSessionsSqlite();
+  return workflowDb
+    .transaction(() => {
+      assertInteractiveSession(workflowDb, id);
+      getSessionsSqlite().prepare("UPDATE sessions SET state = 'archived' WHERE id = ?").run(id);
+    })
+    .immediate();
 }
 
 /** Archive every closed session. Returns how many moved. */
 export function archiveAllClosedSessionsSqlite(): number {
   const result = getSessionsSqlite()
-    .prepare("UPDATE sessions SET state = 'archived' WHERE state = 'closed'")
+    .prepare(
+      "UPDATE sessions SET state = 'archived' WHERE state = 'closed' AND NOT EXISTS(SELECT 1 FROM session_workflow_destinations d WHERE d.session_id=sessions.id)",
+    )
     .run();
   return result.changes;
 }
@@ -453,10 +603,9 @@ export function createNamedSessionSqlite(data: {
   agent_token: string | null;
   system_prompt?: string;
   identity_id?: number | null;
-  traits?: string[];
-  bounds?: string[];
-  bound?: Record<string, unknown> | null;
-  bound_id?: null;
+  bags?: string[];
+  bounds?: Array<string | Bound | Record<string, unknown>>;
+  bound?: Bound | Record<string, unknown> | null;
   metadata?: Record<string, unknown>;
 }): SessionRecord {
   const metadata = { ...(data.metadata ?? {}) };
@@ -484,10 +633,9 @@ export function createInertSessionSqlite(data: {
   agent_token: string | null;
   system_prompt?: string;
   identity_id?: number | null;
-  traits?: string[];
-  bounds?: string[];
-  bound?: Record<string, unknown> | null;
-  bound_id?: null;
+  bags?: string[];
+  bounds?: Array<string | Bound | Record<string, unknown>>;
+  bound?: Bound | Record<string, unknown> | null;
   metadata?: Record<string, unknown>;
 }): SessionRecord {
   const metadata = { ...(data.metadata ?? {}) };
@@ -504,18 +652,18 @@ function insertInactiveSession(data: {
   agent_token: string | null;
   system_prompt?: string;
   identity_id?: number | null;
-  traits?: string[];
-  bounds?: string[];
-  bound?: Record<string, unknown> | null;
-  bound_id?: null;
+  bags?: string[];
+  bounds?: Array<string | Bound | Record<string, unknown>>;
+  bound?: Bound | Record<string, unknown> | null;
   metadata: Record<string, unknown>;
 }): SessionRecord {
-  if (data.user_id !== undefined && (!Number.isSafeInteger(data.user_id) || data.user_id <= 0)) throw new Error("Session user must be a positive actor ID");
+  if (data.user_id !== undefined && (!Number.isSafeInteger(data.user_id) || data.user_id <= 0))
+    throw new Error("Session user must be a positive actor ID");
   getSessionsSqlite()
     .prepare(
       `INSERT INTO sessions (
          id, active, state, agent_token, user_id, identity_id, status,
-         system_prompt, summary, traits, bound, bounds, metadata,
+         system_prompt, summary, bags, bound, bounds, metadata,
          created_at, started_at
        ) VALUES (?,0,'open',?,?,?,'pending',?,NULL,?,?,?,?,?,NULL)`,
     )
@@ -525,13 +673,14 @@ function insertInactiveSession(data: {
       data.user_id ?? null,
       data.identity_id ?? null,
       data.system_prompt ?? null,
-      toJson(data.traits ?? []),
+      toJson(data.bags ?? []),
       toJson(data.bound ?? null),
       toJson(data.bounds ?? []),
       toJson(data.metadata),
       nowIso(),
     );
 
+  forgetSessionIdentity(data.id);
   const session = getSessionSqlite(data.id);
   // Reading back rather than constructing the record: the row is the truth,
   // and a hand-built return value would drift from whatever the columns
@@ -551,7 +700,6 @@ export function maxMessageSequenceSqlite(sessionId: string): number {
   return row.seq ?? -1;
 }
 
-
 /**
  * Append one WS message to its session and answer the sequence it was stored
  * under, or null when nothing was stored (a repeat of a captured row, a
@@ -568,20 +716,31 @@ export function maxMessageSequenceSqlite(sessionId: string): number {
  * on `message.role`, because the system rows set their role inside
  * persistOne's switch.
  */
+const modelIds = new Map<string, Promise<number | null>>();
+
 export async function appendMessageSqlite(
   sessionId: string,
   message: WsMessageInput,
-  providerSessionId?: string | null,
+  harnessSessionId?: string | null,
   origin?: { provider?: string | null; model?: string | null; channel?: string | null },
 ): Promise<number | null> {
-  const { persistOne, MODEL_AUTHORED } = await import("./messages.js");
-  const { resolveModelId } = await import("./models-registry.js");
-  const { getSessionsDb } = await import("./sessions-db.js");
   const m = message as { type?: string; role?: string };
   const modelId = !MODEL_AUTHORED.has(m.type as string) || m.role === "user"
     ? null
-    : await resolveModelId(origin?.provider, origin?.model);
-  return persistOne(getSessionsDb(), sessionId, message, providerSessionId, modelId, origin?.channel ?? null);
+    : await (()=>{
+      const key=JSON.stringify([getSessionsSqlite().name,sessionId,origin?.provider,origin?.model]);
+      let pending=modelIds.get(key);
+      if (!pending) {
+        if (modelIds.size>=10_000) modelIds.delete(modelIds.keys().next().value!);
+        pending=resolveModelId(origin?.provider,origin?.model);modelIds.set(key,pending);
+        void pending.catch(()=>{if(modelIds.get(key)===pending)modelIds.delete(key);});
+      }
+      return pending;
+    })();
+  if (origin?.channel==="engine" && message.dedupeKey?.startsWith("engine:")) {
+    return persistInThread(getSessionsSqlite().name,sessionId,message,harnessSessionId,modelId);
+  }
+  return persistOne(getSessionsDb(), sessionId, message, harnessSessionId, modelId, origin?.channel ?? null);
 }
 
 /** Re-exported for callers that need to read metadata off a written row. */
@@ -608,9 +767,7 @@ export function deleteMessagesOlderThanSqlite(
   // string comparison. A Date bound would throw in better-sqlite3 anyway.
   const cutoffIso = cutoff.toISOString();
 
-  const scope = sessionIds
-    ? ` AND session_id IN (${sessionIds.map(() => "?").join(",")})`
-    : "";
+  const scope = sessionIds ? ` AND session_id IN (${sessionIds.map(() => "?").join(",")})` : "";
   const statement = getSessionsSqlite().prepare(
     `DELETE FROM messages WHERE id IN (
        SELECT id FROM messages WHERE created_at < ?${scope} LIMIT ?
@@ -644,7 +801,6 @@ export function deleteMessagesOlderThanSqlite(
 
   return { deletedRows, batches, budgetExhausted };
 }
-
 
 /**
  * The prompt delivery state machine, against SQLite.
@@ -713,6 +869,7 @@ function insertPromptSqlite(
   sessionId: string,
   content: string,
   options: {
+    sequence?: number;
     clientMessageId?: string;
     source: "web_prompt" | "api_message" | "session";
     delivery: PromptDeliveryState;
@@ -723,11 +880,23 @@ function insertPromptSqlite(
   },
 ): PromptEnqueueResult {
   const { clientMessageId, source, delivery, status, error, fromSession } = options;
+  const residentRow=getSessionsSqlite().prepare("SELECT metadata FROM sessions WHERE id=?").get(sessionId) as {metadata:string}|undefined;
+  const residentMetadata=residentRow?JSON.parse(residentRow.metadata??"{}"):{};
+  const residentPid=residentMetadata.hosted_runtime_pid;
+  if(typeof residentPid==="number" && residentPid!==process.pid && classify({pid:residentPid,pid_started_at:residentMetadata.hosted_runtime_started_at,hostname:residentMetadata.hosted_runtime_hostname}).state!=="dead") {
+    throw new Error("Session has a resident owner; enqueue this prompt through the sessions API");
+  }
+
 
   if (clientMessageId) {
     const existing = reads.getMessageByClientMessageIdSqlite(sessionId, clientMessageId);
     if (existing) {
-      return { id: existing.id, sequence: existing.sequence, state: existing.state, duplicate: true };
+      return {
+        id: existing.id,
+        sequence: existing.sequence,
+        state: existing.state,
+        duplicate: true,
+      };
     }
   }
 
@@ -749,12 +918,13 @@ function insertPromptSqlite(
     .prepare(
       `INSERT OR IGNORE INTO messages
          (id, session_id, type, sequence, role, content, content_text, metadata, created_at)
-       VALUES (?, ?, 'message', (SELECT COALESCE(MAX(sequence), -1) + 1 FROM messages WHERE session_id = ?), 'user', ?, ?, ?, ?)
+       VALUES (?, ?, 'message', COALESCE(?, (SELECT COALESCE(MAX(sequence), -1) + 1 FROM messages WHERE session_id = ?)), 'user', ?, ?, ?, ?)
        RETURNING sequence`,
     )
     .get(
       eventId,
       sessionId,
+      options.sequence ?? null,
       sessionId,
       JSON.stringify([{ type: "text", text: content }]),
       // `content_text` is denormalized on insert the way the persist path does
@@ -770,7 +940,12 @@ function insertPromptSqlite(
     if (clientMessageId) {
       const existing = reads.getMessageByClientMessageIdSqlite(sessionId, clientMessageId);
       if (existing) {
-        return { id: existing.id, sequence: existing.sequence, state: existing.state, duplicate: true };
+        return {
+          id: existing.id,
+          sequence: existing.sequence,
+          state: existing.state,
+          duplicate: true,
+        };
       }
     }
     throw new Error("Prompt insert conflicted without a matching clientMessageId");
@@ -779,24 +954,41 @@ function insertPromptSqlite(
   return { id: eventId, sequence: inserted.sequence, state: delivery, duplicate: false };
 }
 
+/** The worker's inbox insert shares one write transaction with sequence repair. */
+export function queuePromptOrderedSqlite(sessionId:string,content:string,options:Parameters<typeof queuePromptSqlite>[2]={}):PromptEnqueueResult {
+  const sqlite=getSessionsSqlite();
+  return sqlite.transaction(()=>{
+    const next=(sqlite.prepare("SELECT COALESCE(MAX(sequence),-1)+1 AS sequence FROM messages WHERE session_id=?").get(sessionId) as {sequence:number}).sequence;
+    return queuePromptSqlite(sessionId,content,{...options,...(options.sequence!==undefined?{sequence:Math.max(options.sequence,next)}:{})});
+  }).immediate();
+}
+
 /** Queue a prompt for delivery. Idempotent on `clientMessageId`. */
 export function queuePromptSqlite(
   sessionId: string,
   content: string,
   options: {
+    sequence?: number;
     clientMessageId?: string;
     /** "session" marks a prompt queued by another session's send_prompt tool. */
     source?: "web_prompt" | "session";
     fromSession?: string;
   } = {},
 ): PromptEnqueueResult {
-  return insertPromptSqlite(sessionId, content, {
-    clientMessageId: options.clientMessageId,
-    source: options.source ?? "web_prompt",
-    delivery: "queued",
-    status: "pending",
-    fromSession: options.fromSession,
-  });
+  const workflowDb = getSessionsSqlite();
+  return workflowDb
+    .transaction(() => {
+      assertInteractiveSession(workflowDb, sessionId);
+      return insertPromptSqlite(sessionId, content, {
+        sequence: options.sequence,
+        clientMessageId: options.clientMessageId,
+        source: options.source ?? "web_prompt",
+        delivery: "queued",
+        status: "pending",
+        fromSession: options.fromSession,
+      });
+    })
+    .immediate();
 }
 
 /**
@@ -811,6 +1003,7 @@ export function recordPromptDeliverySqlite(
   sessionId: string,
   content: string,
   options: {
+    sequence?: number;
     clientMessageId?: string;
     delivery: PromptDeliveryState;
     source?: "web_prompt" | "api_message";
@@ -819,6 +1012,7 @@ export function recordPromptDeliverySqlite(
   },
 ): PromptEnqueueResult {
   return insertPromptSqlite(sessionId, content, {
+    sequence: options.sequence,
     clientMessageId: options.clientMessageId,
     source: options.source ?? "api_message",
     delivery: options.delivery,
@@ -928,7 +1122,9 @@ export function claimFailedPromptRetrySqlite(
 export function popPromptsSqlite(sessionId: string): PromptRecord[] {
   const sqlite = getSessionsSqlite();
   const drain = sqlite.transaction((id: string): PromptRecord[] => {
-    const prompts = reads.getPromptsSqlite(id).map((p) => ({ ...p, session_id: p.session_id || id }));
+    const prompts = reads
+      .getPromptsSqlite(id)
+      .map((p) => ({ ...p, session_id: p.session_id || id }));
     if (prompts.length === 0) return prompts;
 
     const ids = prompts.map((p) => p.id);

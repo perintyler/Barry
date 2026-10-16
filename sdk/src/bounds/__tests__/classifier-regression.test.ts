@@ -33,7 +33,7 @@ const blockedDomains = [
 ];
 describe("original domain guard regressions", () => {
   async function run(command: string) {
-    const [tool] = applyBoundGuards([{ name: "Bash", handler: async () => "allowed" }], { network: { domains: ["evil.com"] } });
+    const [tool] = applyBoundGuards([{ name: "Bash", handler: async () => "allowed" }], { network: { deny: ["evil.com"] } });
     return tool.handler({ command }, { secrets: {} });
   }
   it.each(blockedDomains)("refuses %s", command => expect(run(command)).rejects.toThrow("Access denied"));

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { scopeFingerprint, executionScopeSchema, type ExecutionScope } from "../bounds/execution-scope.js";
+import { boundFingerprint, approvedBoundsSchema, matchesApprovedFingerprint, type ApprovedBounds } from "../bounds/workflow-bounds.js";
 import { encodeEffectJson } from "../tools/effect-json.js";
 
 export type TurnState = { state: "active" | "uncertain" | "interrupted" } | { state: "complete"; result: unknown };
@@ -18,12 +18,12 @@ export interface WorkflowSessionJournalStore {
   updateTurn(key: string, state: WorkflowSessionTurnStatus, result?: string): Promise<WorkflowSessionTurnStatus>;
 }
 export interface WorkflowSessionBackend {
-  lookupSession(id: string): Promise<{ identity: string; scopeFingerprint: string } | undefined>;
-  createSession(request: { id: string; identity: string; scope: ExecutionScope }): Promise<void>;
+  lookupSession(id: string): Promise<{ identity: string; boundFingerprint: string } | undefined>;
+  createSession(request: { id: string; identity: string; scope: ApprovedBounds }): Promise<void>;
   lookupTurn(sessionId: string, turnId: string): Promise<TurnState | undefined>;
-  runTurn(request: { sessionId: string; turnId: string; input: unknown; scope: ExecutionScope }): Promise<unknown>;
+  runTurn(request: { sessionId: string; turnId: string; input: unknown; scope: ApprovedBounds }): Promise<unknown>;
   interruptTurn(sessionId: string, turnId: string): Promise<boolean>;
-  enforceable(scope: ExecutionScope): boolean;
+  enforceable(scope: ApprovedBounds): boolean;
 }
 export class SessionReconciliationRequired extends Error {
   constructor(options?: ErrorOptions) { super("OutcomeUnknown: reconcile the existing session turn before starting another", options); }
@@ -33,28 +33,27 @@ export class SessionReconciliationRequired extends Error {
 export function workflowSessionId(key: string, identity: string): string {
   z.string().min(1).max(500).parse(key);
   z.string().min(1).max(200).parse(identity);
-  return `job-${scopeFingerprint({ key, identity }).slice(0, 40)}`;
+  return `job-${boundFingerprint({ key, identity }).slice(0, 40)}`;
 }
 
 /** Sessions owns this journal and the supplied backend's harness processes. */
 export class WorkflowSessionTurns {
   constructor(private readonly store: WorkflowSessionJournalStore, private readonly backend: WorkflowSessionBackend) {}
-  private validate(scope: ExecutionScope): string {
-    scope = executionScopeSchema.parse(scope);
+  private validate(scope: ApprovedBounds): string {
+    scope = approvedBoundsSchema.parse(scope);
     if (!scope.identity) throw new Error("session-backed jobs require an identity");
-    const { fingerprint, ...evidence } = scope;
-    if (scopeFingerprint(evidence) !== fingerprint || !this.backend.enforceable(scope)) throw new Error("session scope is invalid or cannot be enforced");
+    if (!matchesApprovedFingerprint(scope) || !this.backend.enforceable(scope)) throw new Error("session scope is invalid or cannot be enforced");
     return scope.identity;
   }
-  async ensure(key: string, scope: ExecutionScope, existingSessionId?: string): Promise<string> {
+  async ensure(key: string, scope: ApprovedBounds, existingSessionId?: string): Promise<string> {
     z.string().min(1).max(500).parse(key);
     const identity = this.validate(scope);
     const id = existingSessionId ?? workflowSessionId(key, identity);
-    const hash = scopeFingerprint({ key, identity, scope, existingSessionId });
+    const hash = boundFingerprint({ key, identity, scope, existingSessionId });
     const before = await this.store.getBinding(key);
     if (before && (before.requestHash !== hash || before.sessionId !== id)) throw new Error("session binding request conflict");
     const found = await this.backend.lookupSession(id);
-    if (found && (found.identity !== identity || found.scopeFingerprint !== scope.fingerprint)) throw new Error("session identity or execution ceiling mismatch");
+    if (found && (found.identity !== identity || found.boundFingerprint !== scope.fingerprint)) throw new Error("session identity or execution ceiling mismatch");
     if (existingSessionId && !found) throw new Error("session to attach does not exist");
     if (before) {
       if (!found) throw new SessionReconciliationRequired();
@@ -77,11 +76,11 @@ export class WorkflowSessionTurns {
       catch (error) { throw new SessionReconciliationRequired({ cause: error }); }
     }
     const verified = await this.backend.lookupSession(id);
-    if (!verified || verified.identity !== identity || verified.scopeFingerprint !== scope.fingerprint) throw new SessionReconciliationRequired();
+    if (!verified || verified.identity !== identity || verified.boundFingerprint !== scope.fingerprint) throw new SessionReconciliationRequired();
     await this.store.readyBinding(key);
     return id;
   }
-  async turn(key: string, sessionId: string, input: unknown, scope: ExecutionScope): Promise<unknown> {
+  async turn(key: string, sessionId: string, input: unknown, scope: ApprovedBounds): Promise<unknown> {
     z.string().min(1).max(500).parse(key); this.validate(scope);
     const binding = await this.store.getBindingBySession(sessionId);
     if (!binding || binding.state !== "ready" || binding.identity !== scope.identity || binding.scopeHash !== scope.fingerprint) throw new Error("turn has no matching approved session binding");
@@ -89,9 +88,9 @@ export class WorkflowSessionTurns {
     // Check the destination even for completed receipt reads.
     const session = await this.backend.lookupSession(sessionId);
     if (!session) throw new SessionReconciliationRequired();
-    if (session.identity !== scope.identity || session.scopeFingerprint !== scope.fingerprint) throw new Error("session identity or execution ceiling mismatch");
+    if (session.identity !== scope.identity || session.boundFingerprint !== scope.fingerprint) throw new Error("session identity or execution ceiling mismatch");
     encodeEffectJson(input);
-    const hash = scopeFingerprint({ sessionId, input, scope });
+    const hash = boundFingerprint({ sessionId, input, scope });
     const before = await this.store.getTurn(key);
     if (before) {
       if (before.requestHash !== hash) throw new Error("turn request conflict");

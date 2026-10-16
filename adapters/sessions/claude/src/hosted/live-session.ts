@@ -1,7 +1,9 @@
+import {createLogger} from "@barry-rocks/sdk/logging";
+const cancellationLog=createLogger("claude-live");
 /** Claude hosted keeps one streaming Agent SDK query open across turns.
  * Rationale: docs/decisions/0033-tracked-capture-and-transport-rationale.md.
  */
-import { NotSupportedInMode } from "@barry-rocks/sdk/sessions";
+import { withDeadline, envMs, NotSupportedInMode } from "@barry-rocks/sdk/sessions";
 import type { Guarantees } from "@barry-rocks/sdk/adapters/harnesses";
 import type { JsonSchema } from "@barry-rocks/sdk/ids";
 import type {
@@ -33,12 +35,13 @@ export interface ClaudeLiveOptions {
   id: string;
   guarantees: Guarantees;
   /** Open the streaming query over `prompt`, continuing `resume` when given. */
-  open(prompt: AsyncIterable<UserMessage>, resume: string | undefined): Promise<LiveQuery>;
+  open(prompt: AsyncIterable<UserMessage>, resume: string | undefined, warm?: boolean): Promise<LiveQuery>;
   /** One SDK message, as session events. */
   toEvents(message: unknown): Iterable<SessionEvent>;
   /** A turn with an output schema: one-shot, in a conversation of its own. */
   structuredTurn(content: string, schema: JsonSchema, signal: AbortSignal): AsyncIterable<SessionEvent>;
   /** The conversation to continue rather than start. */
+  abortOpen?():void;
   resume?: string;
   /** How long an idle session keeps its process. Absent keeps it until close. */
   releaseAfterMs?: number;
@@ -124,6 +127,12 @@ export class ClaudeLiveSession implements Session {
    * A turn that cannot start ends with an error event rather than a rejection
    * here: the events are where a turn's outcome is read.
    */
+  async warm(): Promise<void> {
+    if (this.closed) throw new Error(`session ${this.options.id} is closed`);
+    await this.linked(true);
+    this.scheduleRelease();
+  }
+
   async deliver(content: string, options: DeliveryOptions = {}): Promise<DeliveryReceipt> {
     if (this.closed) throw new Error(`session ${this.options.id} is closed`);
     const messageId = `${this.options.id}-msg-${++this.messageCount}`;
@@ -142,6 +151,7 @@ export class ClaudeLiveSession implements Session {
 
   async interrupt(): Promise<void> {
     if (!this.turnOpen) return;
+    cancellationLog.info("interrupt.received",{sessionId:this.id,turn:this.turnNumber});
     if (this.turnStructured) {
       this.turnStructured.abort();
       return;
@@ -151,7 +161,7 @@ export class ClaudeLiveSession implements Session {
       this.interruptWanted = true;
       return;
     }
-    await this.link.query.interrupt();
+    await withDeadline(this.link.query.interrupt(),envMs("BARRY_INTERRUPT_DEADLINE_MS",10_000));
   }
 
   async answer(_request: PermissionRequest, _decision: PermissionDecision): Promise<void> {
@@ -172,6 +182,8 @@ export class ClaudeLiveSession implements Session {
 
   async close(): Promise<void> {
     if (this.closed) return;
+    cancellationLog.info("session.close",{sessionId:this.id,turn:this.turnNumber});
+    this.options.abortOpen?.();
     this.cancelRelease();
     this.pending.length = 0;
     // The turn's reader is owed its end even when the session goes first.
@@ -185,17 +197,17 @@ export class ClaudeLiveSession implements Session {
 
 
   /** The live query, opened once: two opens would split the conversation between two processes. */
-  private linked(): Promise<Link> {
+  private linked(warm = false): Promise<Link> {
     if (this.link) return Promise.resolve(this.link);
-    this.opening ??= this.openLink().finally(() => {
+    this.opening ??= this.openLink(warm).finally(() => {
       this.opening = null;
     });
     return this.opening;
   }
 
-  private async openLink(): Promise<Link> {
+  private async openLink(warm: boolean): Promise<Link> {
     const prompt = new PromptStream();
-    const query = await this.options.open(prompt, this.harnessSessionId ?? undefined);
+    const query = await this.options.open(prompt, this.harnessSessionId ?? undefined, warm);
     if (this.closed) {
       prompt.close();
       query.close();
@@ -256,13 +268,16 @@ export class ClaudeLiveSession implements Session {
     }
   }
 
+  touch(): void { if (!this.turnOpen) this.scheduleRelease(); }
+  isWarm(): boolean { return this.link !== null; }
+
   private scheduleRelease(): void {
     const after = this.options.releaseAfterMs;
     if (!after || this.closed) return;
     this.cancelRelease();
     this.releaseTimer = setTimeout(() => {
       this.releaseTimer = null;
-      if (!this.turnOpen && !this.closed) this.dropLink();
+      if (!this.turnOpen && !this.closed) { this.dropLink(); }
     }, after);
     this.releaseTimer.unref();
   }
@@ -295,12 +310,19 @@ export class ClaudeLiveSession implements Session {
 
   private async sendLive(number: number, content: string): Promise<void> {
     try {
-      const link = await this.linked();
+      let link: Link;
+      try { link = await this.linked(); }
+      catch (error) {
+        if (this.closed || this.turnNumber !== number || !this.turnOpen || this.interruptWanted) throw error;
+        if (!/Subprocess initialization did not complete|initializ(?:e|ation|ing).*?(?:timeout|timed out)|(?:timeout|timed out).*initializ/i.test(messageOf(error))) throw error;
+        this.emit({ type: "status", status: "retrying" });
+        link = await this.linked();
+      }
       if (this.turnNumber !== number || !this.turnOpen) return;
       link.prompt.push(content, this.harnessSessionId);
       if (this.interruptWanted) {
         this.interruptWanted = false;
-        await link.query.interrupt();
+        await withDeadline(link.query.interrupt(),envMs("BARRY_INTERRUPT_DEADLINE_MS",10_000));
       }
     } catch (err) {
       if (this.turnNumber === number && this.turnOpen) this.endTurn({ error: messageOf(err) });

@@ -24,7 +24,10 @@ function actionOf(action: RunnableAction): Action {
 function runOf(run: ActionRunRecord): ActionRun {
   return {
     id: run.id, action: run.action, sessionId: run.session_id, summary: run.summary,
-    status: run.status === "started" ? "running" : run.status === "complete" ? "succeeded" : run.status,
+    status: run.workflow && !["completed", "failed", "cancelled"].includes(run.workflow.state) ? run.workflow.state as ActionRun["status"] :
+      run.status === "started" ? "running" : run.status === "complete" ? "succeeded" : run.status,
+    ...(run.workflow ? { work: { workId: run.workflow.work_id, workflowId: run.workflow.workflow_id, owner: run.workflow.owner,
+      revision: run.workflow.revision, state: run.workflow.state, current: run.workflow.projection_current } } : {}),
     startedAt: run.started_at.toISOString(), endedAt: run.completed_at?.toISOString() ?? null,
     ...(run.output !== null ? { output: run.output } : {}),
     ...(run.status === "failed" && run.summary ? { error: run.summary } : {}),

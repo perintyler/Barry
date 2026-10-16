@@ -4,5 +4,6 @@
  * holding only a session id asks of it, and how a session row reads as the
  * Session `Barry` hands out.
  */
-export { sessions, sessionGrants, selectionOf } from "./subject.js";
+export { sessions, selectionOf, sessionBound, resolveSessionBags, resolveSessionTools } from "./subject.js";
 export { sessionOf, encodeSessionCursor, decodeSessionCursor } from "./domain.js";
+

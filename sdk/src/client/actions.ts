@@ -1,6 +1,8 @@
 import { BarryApiError } from "./errors.js";
 import { actionsRoutes } from "../routes/actions.js";
 
+import type { ActionWorkReference } from "../barry/types.js";
+import type { ActionWorkflow, ActionWorkItem, ActionWorkResult, ActionWorkStopAck } from "../actions/types.js";
 import type { ApiTransport, RequestOptions } from "./http.js";
 
 /**
@@ -9,7 +11,7 @@ import type { ApiTransport, RequestOptions } from "./http.js";
  * is camelCase like the rest of the client.
  */
 
-export interface ActionCatalogEntry {
+export interface ActionEntry {
   name: string;
   qualifiedName: string;
   bag: string;
@@ -43,6 +45,7 @@ export interface ActionRunResult {
 }
 
 export interface ActionRun {
+  work?: ActionWorkReference;
   runId: string;
   action: string;
   bag: string | null;
@@ -54,6 +57,25 @@ export interface ActionRun {
   output: string | null;
   outputType: "json" | "text" | null;
   metadata: Record<string, unknown> | null;
+}
+
+/** Select an identity-backed session partition; the server revalidates its authority. */
+export interface ActionRunRequest extends RequestOptions { sessionId?: string }
+export interface ActionWorkflowAdmission { runId: string; workId: string; workflowId: string; idempotencyKey: string; created: boolean }
+
+function selectedRequest(request: ActionRunRequest) {
+  const { sessionId, ...controls } = request;
+  if (sessionId !== undefined && !actionsRoutes.getActionRun.query.safeParse({ session_id: sessionId }).success)
+    throw new BarryApiError("sessionId must be a nonempty session identifier of at most 500 characters", { status: null, code: "invalid_request" });
+  return { sessionId, controls };
+}
+
+function selectedWorkRequest(workId: string, request: ActionRunRequest & { sessionId: string }) {
+  const { sessionId, controls } = selectedRequest(request);
+  const params = actionsRoutes.getSessionWorkflowWork.params.safeParse({ id: workId });
+  const query = actionsRoutes.getSessionWorkflowWork.query.safeParse({ session_id: sessionId });
+  if (!params.success || !query.success) throw new BarryApiError("Canonical workflow access requires a work ID and explicit selected session", { status: null, code: "invalid_request" });
+  return { params: params.data, query: query.data, controls };
 }
 
 /** The server's ceiling for a detached run, in seconds. */
@@ -70,9 +92,9 @@ export class Actions {
   }
 
   /** Actions the active identity can run, and how that scope was decided. */
-  async catalog(options: RequestOptions & { sessionId?: string } = {}, request: RequestOptions = {}): Promise<{ actions: ActionCatalogEntry[]; scope: { kind: "identity" | "all"; identity: string | null; bags: string[] } }> {
+  async catalog(options: RequestOptions & { sessionId?: string } = {}, request: RequestOptions = {}): Promise<{ actions: ActionEntry[]; scope: { kind: "identity" | "all"; identity: string | null; bags: string[] } }> {
     const { sessionId, ...controls } = options;
-    const catalog = (await this.http.call(actionsRoutes.listActionCatalog, { query: { session_id: sessionId } }, { ...controls, ...request }))!;
+    const catalog = (await this.http.call(actionsRoutes.listActions, { query: { session_id: sessionId } }, { ...controls, ...request }))!;
     return {
       actions: catalog.actions.map((a) => ({
         name: a.name,
@@ -157,11 +179,65 @@ export class Actions {
     };
   }
 
+  /** Explicit installed-work admission. Preserve this key and inputs after an unconfirmed reply. */
+  async startWorkflowRun(name: string, input: { requestId: string; idempotencyKey: string; inputs: Record<string, unknown>; recoveryEpoch?: string }, request: ActionRunRequest & { sessionId: string }): Promise<ActionWorkflowAdmission> {
+    const { sessionId, controls } = selectedRequest(request);
+    const query = actionsRoutes.startSessionWorkflowAction.query.safeParse({ session_id: sessionId });
+    const body = actionsRoutes.startSessionWorkflowAction.body.safeParse({ request_id: input.requestId, idempotency_key: input.idempotencyKey, inputs: input.inputs, ...(input.recoveryEpoch === undefined ? {} : { recovery_epoch: input.recoveryEpoch }) });
+    if (!query.success || !body.success) throw new BarryApiError("Workflow admission requires an explicit session, UUID request ID, stable key and JSON inputs", { status: null, code: "invalid_request" });
+    const intent = structuredClone(body.data);
+    const ack = (await this.http.call(actionsRoutes.startSessionWorkflowAction, { params: { name }, query: query.data, body: intent }, controls))!;
+    if (ack.idempotency_key !== body.data.idempotency_key) throw new BarryApiError("Admission acknowledgement differs from the original key. Preserve the same session, key and inputs for recovery.", { status: 202, code: "malformed_response" });
+    return { runId: ack.run_id, workId: ack.work_id, workflowId: ack.workflow_id, idempotencyKey: ack.idempotency_key, created: ack.created };
+  }
+
+  /** Read accepted-key recovery. A missing result does not prove an in-flight submission cannot commit. */
+  async lookupWorkflowRun(key: string, request: ActionRunRequest & { sessionId: string }): Promise<ActionWorkflowAdmission | null> {
+    const { sessionId, controls } = selectedRequest(request), query = actionsRoutes.lookupSessionWorkflowAction.query.safeParse({ session_id: sessionId });
+    if (!query.success) throw new BarryApiError("Workflow lookup requires an explicit session", { status: null, code: "invalid_request" });
+    const ack = await this.http.call(actionsRoutes.lookupSessionWorkflowAction, { params: { key }, query: query.data }, { ...controls, notFound: "null" });
+    if (!ack) return null;
+    if (ack.idempotency_key !== key || ack.created) throw new BarryApiError("Operation lookup differs from the original key", { status: 200, code: "malformed_response" });
+    return { runId: ack.run_id, workId: ack.work_id, workflowId: ack.workflow_id, idempotencyKey: ack.idempotency_key, created: false };
+  }
+
+  /** Inspect canonical identity work even while its Actions history projection is absent. */
+  async getWorkflowWork(workId: string, request: ActionRunRequest & { sessionId: string }): Promise<ActionWorkItem> {
+    const { params, query, controls } = selectedWorkRequest(workId, request);
+    const work = (await this.http.call(actionsRoutes.getSessionWorkflowWork, { params, query }, controls))!;
+    if (work.work_id !== workId || work.namespace.principal_kind !== "identity" || work.namespace.identity_id !== work.namespace.principal_id)
+      throw new BarryApiError("Canonical workflow response differs from the requested identity work", { status: 200, code: "malformed_response" });
+    return work;
+  }
+
+  /** Fetch authorized canonical output; payload denials remain explicit failures. */
+  async getWorkflowWorkResult(workId: string, request: ActionRunRequest & { sessionId: string }): Promise<ActionWorkResult> {
+    const { params, query, controls } = selectedWorkRequest(workId, request);
+    const result = (await this.http.call(actionsRoutes.getSessionWorkflowWorkResult, { params, query }, controls))!;
+    if (result.work_id !== workId) throw new BarryApiError("Canonical workflow result differs from the requested work", { status: 200, code: "malformed_response" });
+    return result;
+  }
+
+  /** Projection-independent Stop; acknowledgement does not establish physical cessation. */
+  async stopWorkflowWork(workId: string, input: { reason: string; requestId: string; expectedRevision: number }, request: ActionRunRequest & { sessionId: string }): Promise<ActionWorkStopAck> {
+    const { params, query, controls } = selectedWorkRequest(workId, request), body = actionsRoutes.stopSessionWorkflowWork.body.safeParse({
+      reason: input.reason, request_id: input.requestId, expected_revision: input.expectedRevision,
+    });
+    if (!body.success) throw new BarryApiError("Workflow Stop requires the original request ID, revision and reason", { status: null, code: "invalid_request" });
+    const intent = structuredClone(body.data);
+    const ack = (await this.http.call(actionsRoutes.stopSessionWorkflowWork, { params, query, body: intent }, controls))!;
+    if (ack.work_id !== workId || ack.request_id !== intent.request_id || ack.applied_revision < intent.expected_revision)
+      throw new BarryApiError("Workflow Stop acknowledgement differs from its original intent; preserve the selected session, work ID, request ID, revision and reason", { status: 202, code: "malformed_response" });
+    return ack;
+  }
+
   /** A recorded run with its output, or null when no run has this id. */
-  async getRun(runId: string, request: RequestOptions = {}): Promise<ActionRun | null> {
-    const run = await this.http.call(actionsRoutes.getActionRun, { params: { runId } }, { ...request, notFound: "null" });
+  async getRun(runId: string, request: ActionRunRequest = {}): Promise<ActionRun | null> {
+    const { sessionId, controls } = selectedRequest(request);
+    const run = await this.http.call(actionsRoutes.getActionRun, { params: { runId }, query: { session_id: sessionId } }, { ...controls, responseProfile: "action-work-v1", notFound: "null" });
     if (!run) return null;
     return {
+      ...(run.workflow ? { work: actionWorkReference(run.workflow) } : {}),
       runId: run.run_id,
       action: run.action,
       bag: run.bag,
@@ -176,10 +252,26 @@ export class Actions {
     };
   }
 
+  /** Request Stop from a workflow owner. This acknowledgement is not physical cessation. */
+  async stopWorkflowRun(runId: string, input: { reason: string; requestId: string; expectedRevision: number }, request: ActionRunRequest = {}) {
+    const { sessionId, controls } = selectedRequest(request), intent = { ...input };
+    const current = await this.getRun(runId, { ...controls, sessionId });
+    if (!current?.work?.current || current.work.stopProtocol !== "work-stop-v1")
+      throw new BarryApiError("This server does not offer workflow Stop for the current run. Inspect Background work; no legacy cancellation was attempted.", { status: 409, code: "work_control_unsupported", detail: { stopRequestId: intent.requestId } });
+    const ack = (await this.http.call(sessionId === undefined ? actionsRoutes.stopWorkflowAction : actionsRoutes.stopSessionWorkflowAction, { params: { id: runId }, ...(sessionId === undefined ? {} : { query: { session_id: sessionId } }), body: {
+      reason: intent.reason, request_id: intent.requestId, expected_revision: intent.expectedRevision,
+    } }, controls))!;
+    if (ack.run_id !== runId || ack.work_id !== current.work.workId || ack.request_id !== intent.requestId || ack.applied_revision < intent.expectedRevision)
+      throw new BarryApiError("Workflow Stop acknowledgement did not match this request. Preserve the request ID, revision and reason for recovery.", { status: 202, code: "malformed_response", detail: { stopRequestId: intent.requestId } });
+    return { runId: ack.run_id, workId: ack.work_id, requestId: ack.request_id, appliedRevision: ack.applied_revision,
+      stopRequested: ack.stop_requested, status: ack.status };
+  }
+
   /** Recorded runs, newest first, without outputs. */
   async listRuns(options: { sessionId?: string; scheduleId?: string; action?: string; status?: "started" | "complete" | "failed"; trigger?: "session" | "api" | "cli" | "schedule" | "job"; limit?: number } = {}, request: RequestOptions = {}) {
-    const page = (await this.http.call(actionsRoutes.listActionRuns, { query: { schedule_id: options.scheduleId, session_id: options.sessionId, action: options.action, status: options.status, trigger: options.trigger, limit: options.limit } }, { ...request }))!;
+    const page = (await this.http.call(actionsRoutes.listActionRuns, { query: { schedule_id: options.scheduleId, session_id: options.sessionId, action: options.action, status: options.status, trigger: options.trigger, limit: options.limit } }, { ...request, responseProfile: "action-work-v1" }))!;
     return page.runs.map((r) => ({
+      ...(r.workflow ? { work: actionWorkReference(r.workflow) } : {}),
       runId: r.run_id,
       action: r.action,
       bag: r.bag,
@@ -196,4 +288,9 @@ export class Actions {
 
 function knownStatus(status: string): ActionRun["status"] {
   return status === "complete" || status === "failed" || status === "cancelled" ? status : "started";
+}
+
+function actionWorkReference(work: ActionWorkflow): ActionWorkReference {
+  return { workId: work.work_id, workflowId: work.workflow_id, owner: work.owner, revision: work.revision,
+    state: work.state, current: work.current, ...(work.stop_protocol ? { stopProtocol: work.stop_protocol } : {}), ...(work.url ? { url: work.url } : {}) };
 }

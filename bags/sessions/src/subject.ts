@@ -2,9 +2,7 @@
  * The sessions subject: this bag's answer to `Barry.identity(ref).session(id)`
  * and `Barry.identity(ref).sessions()`. A session belongs to its identity, so
  * every call names both; asking for a session through another identity is
- * refused as not found. What a session is granted is composed by the
- * identities subject from what the session's row selected, so a session and a
- * launch can never disagree about it.
+ * refused as not found.
  *
  * Reads and settings are answered here, through this bag's store client.
  * Starting, messaging and ending a session need the runtime that runs its
@@ -12,15 +10,28 @@
  * API's own included. The subject checks the caller itself first: the API is
  * asked with the instance's secret, which would allow anything.
  */
-import { MODE_IDS, type ModeId } from "@barry-rocks/sdk/ids";
 import type { z } from "zod";
-import { Barry, BarryError, type BarryErrorReason, type Caller, type GrantSelection, type Grants, type IdentityReference, type Sessions } from "@barry-rocks/sdk";
-import type { Bound } from "@barry-rocks/sdk/bounds";
+import {
+  Barry,
+  BarryError,
+  isBarryError,
+  type Bag,
+  type BagToolInput,
+  type BarryErrorReason,
+  type Caller,
+  type IdentityReference,
+  type Sessions,
+  type Tool,
+} from "@barry-rocks/sdk";
+import { filterToolObjects, mergeBounds, type Bound } from "@barry-rocks/sdk/bounds";
 import { hasScope } from "@barry-rocks/sdk/internal/auth";
 import { BarryApiError, BarryClient } from "@barry-rocks/sdk/internal/client";
 import { getServiceUrl, instanceEnvValue } from "@barry-rocks/sdk/services";
-
-import { CreateSessionRequestSchema, SendMessageRequestSchema, UpdateSessionRequestSchema } from "@barry-rocks/sdk/internal/sessions";
+import {
+  CreateSessionRequestSchema,
+  SendMessageRequestSchema,
+  UpdateSessionRequestSchema,
+} from "@barry-rocks/sdk/internal/sessions";
 import {
   archiveSession,
   deleteSessionsByIdentity,
@@ -34,6 +45,7 @@ import {
   updateSessionMetadataNormalized,
   type SessionRecord,
 } from "./client/index.js";
+import { MODE_IDS, type ModeId } from "@barry-rocks/sdk/ids";
 import { decodeSessionCursor, encodeSessionCursor, harnessOf, messageOf, sessionOf } from "./domain.js";
 
 const SESSION_PAGE = 50;
@@ -46,37 +58,142 @@ const MESSAGE_PAGE = 500;
 const RUNTIME_TIMEOUT_MS = 60_000;
 
 /** What a session's row selected on top of its identity. */
-export function selectionOf(row: SessionRecord): GrantSelection {
-  if (row.bound_id != null) throw new BarryError("conflict", `Session ${row.id} still carries bound_id`, "barry doctor --fix");
+export function selectionOf(row: SessionRecord) {
   const metadata = row.metadata ?? {};
   const harness = harnessOf(metadata.provider);
   const namespaces = Array.isArray(metadata.selected_namespaces) ? metadata.selected_namespaces : [];
   const tools = Array.isArray(metadata.selected_tools) ? metadata.selected_tools : [];
   return {
-    traits: row.traits,
+    bags: row.bags,
     ...(harness ? { harness } : {}),
     ...(typeof metadata.mode === "string" && MODE_IDS.includes(metadata.mode as ModeId) ? { mode: metadata.mode as ModeId } : {}),
     bounds: row.bounds,
-    inlineBound: row.bound,
-    // A session started for an execution context is granted only what that context names.
+    bound: row.bound,
     defaults: !metadata.execution_context,
     ...(namespaces.length > 0 ? { namespaces } : {}),
     ...(tools.length > 0 ? { tools } : {}),
   };
 }
 
+function askedBarry(caller?: Caller) {
+  return caller ? Barry.as(caller) : Barry;
+}
+
 /**
- * What a session is granted, for a process that holds only its id (the MCP
- * server's `?sessionId=`, a harness hook), or its row when it already read
- * one. An unknown session is granted what a session that selected nothing is:
- * the defaults. Without a caller it asks as the process's ambient one.
+ * Resolve the active bag names for a session row.
+ *
+ * When a session explicitly selects `bags` (or runs under an explicit execution
+ * context / `explicit_bags`), those bags are used directly; otherwise it
+ * inherits its identity's configured bags.
  */
-export async function sessionGrants(session: string | SessionRecord, caller?: Caller): Promise<Grants> {
+export async function resolveSessionBags(
+  row: SessionRecord,
+  caller?: Caller,
+): Promise<string[]> {
+  const metadata = row.metadata ?? {};
+  if (row.bags.length > 0 || metadata.execution_context || metadata.explicit_bags) {
+    return [...row.bags];
+  }
+  if (row.identity_id !== null) {
+    try {
+      const identity = await askedBarry(caller).identity(row.identity_id).get();
+      return [...identity.bags];
+    } catch (error) {
+      if (isBarryError(error) && (error.reason === "not_found" || error.reason === "forbidden")) {
+        return [];
+      }
+      throw error;
+    }
+  }
+  return [];
+}
+
+/**
+ * Resolve the effective `Bound` for a session.
+ *
+ * Returns `row.bound` when pinned on the session row ([DESIGN.md §7.1.4]) so
+ * live `identity.yaml` or `bag.yaml` edits never alter a running session's
+ * bound. Falls back to resolving `Barry.bound(identity, row.bounds)` when the
+ * row has no pinned `bound`.
+ */
+export async function sessionBound(
+  session: string | SessionRecord | null | undefined,
+  caller?: Caller,
+): Promise<Bound | null> {
   const row = typeof session === "string" ? await getSession(session) : session;
-  const asked = caller ? Barry.as(caller) : Barry;
-  if (!row) return asked.grants({});
-  const selection = selectionOf(row);
-  return row.identity_id === null ? asked.grants(selection) : asked.identity(row.identity_id).grants(selection);
+  const asked = askedBarry(caller);
+  if (!row) {
+    return asked.bound(null, []);
+  }
+  if (row.bound !== null && row.bound !== undefined) {
+    return row.bound as Bound;
+  }
+  return asked.bound(row.identity_id ?? null, row.bounds ?? []);
+}
+
+/**
+ * Resolve the tools available to a session given its active bags and pinned bound.
+ */
+export async function resolveSessionTools(
+  session: string | SessionRecord | null | undefined,
+  caller?: Caller,
+  servedTools?: readonly BagToolInput[],
+): Promise<Tool[]> {
+  const row = typeof session === "string" ? await getSession(session) : session;
+  const asked = askedBarry(caller);
+  const pinnedBound = await sessionBound(row, caller);
+  const activeBags = row ? await resolveSessionBags(row, caller) : undefined;
+  const isExplicit = Boolean(row?.metadata?.execution_context || row?.metadata?.explicit_bags);
+  let tools = await asked.tools(
+    isExplicit ? null : (row?.identity_id ?? null),
+    activeBags,
+    pinnedBound ?? undefined,
+  );
+  if (servedTools?.length) {
+    const activeSet = activeBags ? new Set(activeBags) : null;
+    const existingNames = new Set(tools.map((t) => `${t.namespace}:${t.name}`));
+    const extraCandidates: { namespace: string; toolName: string; access: "read" | "write" }[] = [];
+    for (const meta of servedTools) {
+      const namespace = meta.namespace ?? meta.bag ?? "";
+      const toolName = meta.toolName ?? meta.name ?? "";
+      if (!namespace || !toolName) continue;
+      const qualified = `${namespace}:${toolName}`;
+      if (existingNames.has(qualified)) continue;
+      if (activeSet && !activeSet.has(namespace) && namespace !== "barry") continue;
+      extraCandidates.push({ namespace, toolName, access: meta.access === "read" ? "read" : "write" });
+    }
+    if (extraCandidates.length > 0) {
+      const allowedExtras = filterToolObjects(extraCandidates, pinnedBound);
+      tools = [
+        ...tools,
+        ...allowedExtras.map((meta) => ({
+          name: meta.toolName ?? "",
+          namespace: meta.namespace,
+          bag: meta.namespace,
+          access: (meta.access === "read" ? "read" : "write") as Tool["access"],
+        })),
+      ];
+    }
+  }
+  const metadata = row?.metadata ?? {};
+  const selectedNamespaces = Array.isArray(metadata.selected_namespaces)
+    ? metadata.selected_namespaces
+    : [];
+  const selectedTools = Array.isArray(metadata.selected_tools)
+    ? metadata.selected_tools
+    : [];
+  if (selectedNamespaces.length > 0 || selectedTools.length > 0) {
+    const nsSet = new Set(selectedNamespaces);
+    const toolSet = new Set(selectedTools);
+    tools = tools.filter(
+      (tool) =>
+        tool.namespace === "barry" ||
+        nsSet.has(tool.namespace) ||
+        toolSet.has(tool.name) ||
+        toolSet.has(`${tool.namespace}:${tool.name}`),
+    );
+  }
+  return tools;
 }
 
 function mayReadSessions(caller: Caller): void {
@@ -117,7 +234,7 @@ function valid<T>(schema: z.ZodType<T>, body: unknown): T {
 }
 
 /** A bound as a request body carries it: a plain JSON object. */
-function plain(bound: Bound | null): Record<string, unknown> | null {
+function plain(bound: Bound | null | undefined): Record<string, unknown> | null {
   return bound ? Object.fromEntries(Object.entries(bound)) : null;
 }
 
@@ -155,6 +272,25 @@ async function current(id: string): Promise<SessionRecord> {
   return row;
 }
 
+function splitBoundsInput(
+  bounds: readonly (Bound | string)[] | undefined,
+): { names: string[]; bound: Bound | null; combined: (Bound | string)[] } {
+  const names: string[] = [];
+  const objects: Bound[] = [];
+  for (const entry of bounds ?? []) {
+    if (typeof entry === "string") {
+      names.push(entry);
+    } else if (entry && typeof entry === "object") {
+      objects.push(entry);
+    }
+  }
+  return {
+    names,
+    bound: objects.length > 0 ? mergeBounds(...objects) : null,
+    combined: [...names, ...objects],
+  };
+}
+
 export const sessions: Sessions = {
   name: "sessions",
   async list(identity, query, cursor, caller) {
@@ -164,7 +300,6 @@ export const sessions: Sessions = {
     if (before === null) throw new BarryError("invalid", "The session cursor is malformed");
     if (query.since !== undefined && Number.isNaN(Date.parse(query.since))) throw new BarryError("invalid", `since is not a date: ${query.since}`);
     const rows = await listSessions({
-      // A device's own access rule: the identities it was granted, and no other user's sessions.
       ...(caller.kind === "device" ? { access: { actorId: caller.principal.actorId, identityIds: [owner.id] } } : {}),
       identityId: owner.id,
       ...(query.active !== undefined ? { active: query.active } : {}),
@@ -177,8 +312,6 @@ export const sessions: Sessions = {
     const page = rows.slice(0, SESSION_PAGE);
     const live = await getLiveProcessesBySessions(page.map((row) => row.id));
     const statuses = typeof query.status === "string" ? [query.status] : query.status;
-    // Status and pinned are matched after the page, so it can come back short.
-    // Status is matched as the session reports it, which a closed row's column is not.
     const items = page
       .map((row) => sessionOf(row, live.get(row.id) ?? null))
       .filter((session) => (statuses === undefined || statuses.includes(session.status)) && (query.pinned === undefined || session.pinned === query.pinned));
@@ -191,39 +324,52 @@ export const sessions: Sessions = {
     mayControl(caller, "start sessions");
     const owner = await Barry.as(caller).identity(identity).get();
     if (!input.systemPrompt) throw new BarryError("invalid", "Starting a session needs a systemPrompt");
+    const bags = input.bags;
+    const hasBounds = input.bounds !== undefined;
+    const split = splitBoundsInput(input.bounds);
+    if (hasBounds) {
+      await Barry.as(caller).bound(identity, split.combined);
+    }
     const request = valid(CreateSessionRequestSchema, {
       systemPrompt: input.systemPrompt,
       identityId: owner.id,
       ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
       ...(input.repoPath !== undefined ? { repoPath: input.repoPath } : {}),
       ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.traits !== undefined ? { traits: [...input.traits] } : {}),
+      ...(bags !== undefined ? { bags: [...bags] } : {}),
       ...(input.harness !== undefined ? { provider: input.harness } : {}),
       ...(input.model !== undefined ? { model: input.model } : {}),
       ...(input.modelProvider !== undefined ? { modelProvider: input.modelProvider } : {}),
-      ...(input.bounds !== undefined ? { bounds: [...input.bounds] } : {}),
-      ...(input.inlineBound !== undefined ? { bound: plain(input.inlineBound) } : {}),
+      ...(input.bounds !== undefined ? { bounds: split.names } : {}),
+      ...(split.bound ? { bound: plain(split.bound) } : {}),
       ...(input.useWorktree !== undefined ? { useWorktree: input.useWorktree } : {}),
     });
     const created = await translated((runtime) => runtime.sessions.create(request));
-    // Created but not running: the caller asked for an agent, and has none.
     if ("startError" in created) throw new BarryError("unavailable", `Session ${created.id} was created, but its agent did not start: ${created.startError}`);
     return sessionOf(await current(created.id), await getLiveProcess(created.id));
   },
   async update(identity, id, changes, caller) {
     mayControl(caller, "change sessions");
     const row = await owned(identity, id, caller);
+    const bags = changes.bags;
+    const hasBoundsChange = changes.bounds !== undefined;
+    const split = splitBoundsInput(
+      changes.bounds !== undefined ? changes.bounds : row.bounds,
+    );
     const request = valid(UpdateSessionRequestSchema, {
       ...(changes.name !== undefined ? { name: changes.name } : {}),
-      ...(changes.traits !== undefined ? { traits: [...changes.traits] } : {}),
+      ...(bags !== undefined ? { bags: [...bags] } : {}),
       ...(changes.pinned !== undefined ? { pinned: changes.pinned } : {}),
-      ...(changes.bounds !== undefined ? { bounds: [...changes.bounds] } : {}),
-      ...(changes.inlineBound !== undefined ? { bound: plain(changes.inlineBound) } : {}),
+      ...(changes.bounds !== undefined ? { bounds: split.names } : {}),
+      ...(split.bound !== null ? { bound: plain(split.bound) } : {}),
       ...(changes.harness !== undefined ? { provider: changes.harness } : {}),
       ...(changes.model !== undefined ? { model: changes.model } : {}),
       ...(changes.modelProvider !== undefined ? { modelProvider: changes.modelProvider } : {}),
     });
-    if (request.bounds !== undefined) await Barry.as(caller).identity(identity).grants({ ...selectionOf(row), bounds: request.bounds });
+    let pinnedBound: Bound | null | undefined;
+    if (hasBoundsChange) {
+      pinnedBound = await Barry.as(caller).bound(identity, split.combined);
+    }
     const metadata = {
       ...(request.name !== undefined ? { name: request.name } : {}),
       ...(request.pinned !== undefined ? { pinned: request.pinned } : {}),
@@ -233,17 +379,58 @@ export const sessions: Sessions = {
     };
     if (Object.keys(metadata).length > 0) await updateSessionMetadataNormalized(id, metadata);
     const columns = {
-      ...(request.traits !== undefined ? { traits: request.traits } : {}),
-      ...(request.bound !== undefined ? { bound: request.bound } : {}),
-      ...(request.bounds !== undefined ? { bounds: request.bounds } : {}),
+      ...(request.bags !== undefined ? { bags: request.bags } : {}),
+      ...(changes.bounds !== undefined ? { bounds: split.names } : {}),
+      ...(hasBoundsChange ? { bound: plain(pinnedBound) } : {}),
     };
     if (Object.keys(columns).length > 0) await updateSession(id, columns);
     return sessionOf(await current(id), await getLiveProcess(id));
   },
-  async grants(identity, id, caller) {
+  async bags(identity, id, caller) {
     const row = await owned(identity, id, caller);
-    const selection = selectionOf(row);
-    return Barry.as(caller).identity(row.identity_id ?? identity).grants(selection);
+    const bagNames = await resolveSessionBags(row, caller);
+    let installed: Bag[] = [];
+    try {
+      installed = await Barry.as(caller).bags();
+    } catch {
+      installed = [];
+    }
+    const byName = new Map(installed.map((bag) => [bag.name, bag]));
+    return bagNames.map(
+      (name) =>
+        byName.get(name) ?? {
+          name,
+          type: "local" as const,
+          description: null,
+        },
+    );
+  },
+  async bounds(identity, id, caller) {
+    const row = await owned(identity, id, caller);
+    return [...row.bounds];
+  },
+  async bound(identity, id, caller) {
+    const row = await owned(identity, id, caller);
+    return sessionBound(row, caller);
+  },
+  async tools(identity, id, caller) {
+    const row = await owned(identity, id, caller);
+    return resolveSessionTools(row, caller);
+  },
+  async skills(identity, id, caller) {
+    const row = await owned(identity, id, caller);
+    const activeBags = await resolveSessionBags(row, caller);
+    return Barry.as(caller).skills(row.identity_id ?? identity, activeBags);
+  },
+  async instructions(identity, id, caller) {
+    const row = await owned(identity, id, caller);
+    const activeBags = await resolveSessionBags(row, caller);
+    return Barry.as(caller).instructions(row.identity_id ?? identity, activeBags);
+  },
+  async actions(identity, id, caller) {
+    const row = await owned(identity, id, caller);
+    const activeBags = await resolveSessionBags(row, caller);
+    return Barry.as(caller).actions(row.identity_id ?? identity, activeBags);
   },
   async messages(identity, id, query, cursor, caller) {
     await owned(identity, id, caller);
@@ -267,7 +454,6 @@ export const sessions: Sessions = {
     return messageOf(found);
   },
   async listening(identity, id, caller) {
-    // The delivery route serves the installation alone, so over HTTP a device is refused; in-process it is too.
     if (caller.kind === "device") throw new BarryError("forbidden", "A device may not read whether a session is listened to");
     await owned(identity, id, caller);
     const listeners = (await getListeners([id]))[id];

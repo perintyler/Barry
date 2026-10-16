@@ -78,7 +78,7 @@ An ad-hoc run's row has no bag and carries the definition, so replacing an actio
 
 ## Detached runs
 
-**A run a session starts gets exactly that session's access**, whether the action is installed or ad-hoc. Its session row copies the caller's barry, traits, named bound and inline bound. Its agent gets the same native-tool denials and egress sandbox as a session's own agent ([session-agent-guards](../sessions/api/src/session-agent-guards.ts)). So an installed action reaches its bag's tools only if the caller already holds them, just as when the session follows it inline with `begin_action`. `traits` on `run_action` narrows the caller's recorded traits and cannot add one.
+**A run a session starts gets that session's access**, whether the action is installed or ad-hoc. Its session row copies the caller's barry, packed bags, and merged bound. Its agent gets the same native-tool denials and egress sandbox as a session's own agent ([session-agent-guards](../sessions/api/src/session-agent-guards.ts)). So an installed action reaches its bag's tools only if the caller already holds them, just as when the session follows it inline with `begin_action`. `bags` and `bounds` on `run_action` narrow the caller's packed bags and intersect additional bounds, and cannot widen access.
 
 Refused before anything is created:
 - an unknown caller, rather than falling back to the bag's access;
@@ -86,8 +86,8 @@ Refused before anything is created:
 - another barry than the caller's;
 - a caller that is itself a detached run.
 
-A run with no calling session (a schedule, `barry action run`, the Actions app) acts for the action's bag: its auto-trait plus `actions`, and no bound. Only installed actions can run that way.
+A run with no calling session (a schedule, `barry action run`, the Actions app) acts for the action's bag: its bag plus `actions`, and no bound. Only installed actions can run that way.
 
 At most 4 detached agent runs per calling session, 16 for everything that is not a schedule (the runaway-loop backstop), and 4 for schedules on their own, so sessions cannot starve them ([run-slots](../sessions/api/src/run-slots.ts)). Script actions are not counted.
 
-See [manifest validation](../../sdk/src/actions/action-manifest.ts), [catalog resolution](../../sdk/src/actions/action-catalog.ts), and [tool handlers](src/tools.ts) for exact fields and limits.
+See [manifest validation](../../sdk/src/actions/action-manifest.ts), [action registry](../../sdk/src/actions/action-registry.ts), and [tool handlers](src/tools.ts) for exact fields and limits.

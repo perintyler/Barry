@@ -1,68 +1,62 @@
 name: base
 displayName: Base
-description: Base bags, traits every session starts with, and bounds Barry ships
+description: Base bags every session starts with, optional base bags, and bounds Barry ships
 
 bags:
-  - actions
-  - artifacts
-  - bash
-  - decisions
-  - embeddings
-  - events
-  - filesystem
-  - identities
-  - instructions
-  - mcp
-  - memory
-  - nodes
-  - schedules
-  - sessions:
-      extensions: [search]
-  - telemetry
-
-traits:
+  # Enabled by default in every session:
   - artifacts
   - bash
   - filesystem
   - instructions
   - sessions
+  # Installed on the identity (services/stores run; selectable in session picker):
+  - actions: { optional: true }
+  - decisions: { optional: true }
+  - embeddings: { optional: true }
+  - events: { optional: true }
+  - identities: { optional: true }
+  - mcp: { optional: true }
+  - memory: { optional: true }
+  - nodes: { optional: true }
+  - schedules: { optional: true }
+  - session-vector-search: { optional: true }
+  - telemetry: { optional: true }
 
 bounds:
   - readonly:
       optional: true
-      description: "Denies supported write tools, Bash, and recognized network writes; best effort, not a sandbox"
-      deniedTools: [Bash, Write, Edit]
-      deniedAccess: [write]
+      description: "Denies supported write tools, shell execution, and recognized network writes; best effort, not a sandbox"
+      tools:
+        deny: [ "*:write", "*:Bash", "*:Write", "*:Edit" ]
       network:
-        actions: [write]
+        deny: [ write ]
 
   - no-secrets:
       optional: true
-      description: "Guards structured filesystem tools on common secret paths and withholds Bash and supported native file/shell tools; best effort, not a filesystem sandbox"
+      description: "Denies reading or writing common secret paths and withholds unguarded native file/shell tools; best effort, not a filesystem sandbox"
       files:
-        deny: ["*.env", ".env.*", ".ssh/**", "*.pem", "*.key", "*.p12", "*.pfx"]
+        deny: [ "*.env", ".env.*", ".ssh/**", "*.pem", "*.key", "*.p12", "*.pfx" ]
 
   - no-network:
       optional: true
       description: "Denies recognized network commands and tools; best effort, not a sandbox"
       network:
-        actions: [all]
+        deny: [ all ]
 
   - no-network-write:
       optional: true
       description: "Denies recognized network writes while allowing reads; best effort, not a sandbox"
       network:
-        actions: [write]
+        deny: [ write ]
 
   - sandboxed-offline:
       optional: true
       description: "Requests proxy enforcement on supported harnesses; others fall back to guards with a diagnostic"
       network:
-        actions: [all]
         enforce: sandbox
-        allowDomains: []
+        allow: []
+        deny: [ all ]
 
-bag_grant: session
 tool_discovery: provider
 
 adapters:

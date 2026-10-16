@@ -67,7 +67,7 @@ describe("the SDK options, for claude's own models", () => {
   });
 
   it("pin adaptive thinking", async () => {
-    expect((await optionsFor({ model: "anthropic/claude-opus-5" })).thinking).toEqual({ type: "adaptive" });
+    expect((await optionsFor({ model: "anthropic/claude-opus-5" })).thinking).toEqual({ type: "adaptive", display: "summarized" });
   });
 });
 

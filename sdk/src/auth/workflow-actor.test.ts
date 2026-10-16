@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import { workflowActorSigner, verifyWorkflowActor } from "./workflow-actor.js";
 
 const key = "test-only-key-with-at-least-thirty-two-bytes";
-const context = { identity: "alice", traits: [], bound: null, allowedToolIds: ["workflows:start", "workflows:get"] };
+const context = { identity: "alice", bags: [], bound: null, allowedToolIds: ["workflows:start", "workflows:get"] };
 it("binds verified identity, operation, request and expiry", () => {
   const sign = workflowActorSigner(context, key), body = { type: "echo", id: "job", input: null };
   const token = sign("/api/runs", body);

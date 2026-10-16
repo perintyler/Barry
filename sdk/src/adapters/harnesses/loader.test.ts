@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadAdapters } from "./loader.js";
 import { AdapterRefused } from "./index.js";
-import type { VendorCode } from "../models/vendors/catalog.js";
-import { assembleVendors } from "../models/vendors/catalog.js";
+import type { VendorCode } from "../models/vendors/models.js";
+import { assembleVendors } from "../models/vendors/models.js";
 import { createModels } from "../models/create.js";
 import type { Question } from "../decisions/index.js";
 
@@ -31,7 +31,7 @@ function adapterLiteral(id: string): Record<string, unknown> {
       withoutKey: "unauthenticated",
       endpoint: "fixed",
     },
-    nativeTools: [],
+    tools: [],
     defaultMode: "guest",
     modes: {
       hosted: null,
@@ -41,7 +41,7 @@ function adapterLiteral(id: string): Record<string, unknown> {
         verifiedOn: "0.0.0",
         evidence: { check: "no check", proves: "a fixture claims nothing" },
         egressSandbox: false,
-        native: { grantable: [], uncontrolled: {}, inseparable: [], operatorOverride: "fixture override" },
+        native: { controllable: [], uncontrolled: {}, inseparable: [], operatorOverride: "fixture override" },
         plan: async () => ({ command: "fixture-bin", args: [] }),
       },
     },
@@ -113,20 +113,20 @@ function storeFor(id: string, options: { vendorCode?: VendorCode; importModule?:
 }
 
 describe("an installed adapter carrying vendor code", () => {
-  it("registers and snapshots an explicitly declared policy bag without packing it", async () => {
+  it("registers and snapshots an explicitly declared bound bag without packing it", async () => {
     const dir = join(home, "policy");
     storeFor("policy");
-    writeFileSync(join(dir, "bag.yaml"), "name: policy\ndescription: Policy only\nbounds:\n  no-shell:\n    description: No shell\n    bound:\n      nativeTools:\n        policy: [shell]\ntraits:\n  native-shell:\n    description: Native shell\n    nativeTools:\n      policy: [shell]\n");
+    writeFileSync(join(dir, "bag.yaml"), "name: policy\ndescription: Policy only\nbounds:\n  no-shell:\n    description: No shell\n    bound:\n      tools:\n        deny:\n          - policy:shell\n");
     const registerBag = vi.fn(async () => undefined);
-    const importModule = vi.fn(async () => ({ default: { ...adapterLiteral("policy"), bag: ".", nativeTools: ["shell"] } }));
+    const importModule = vi.fn(async () => ({ default: { ...adapterLiteral("policy"), bag: ".", tools: ["shell"] } }));
     const store = loadAdapters({ file: join(home, "adapters.json"), importModule, registerBag });
     const record = await store.add(dir);
     expect(registerBag).toHaveBeenCalledWith("policy", dir, record.bag?.manifest);
     importModule.mockClear();
-    expect(store.installed()[0]?.bag?.manifest.traits["policy:native-shell"]?.nativeTools).toEqual({ policy: ["shell"] });
-    expect(store.installed()[0]?.modes.guest?.native).toEqual({ grantable: [], uncontrolled: {}, inseparable: [], operatorOverride: "fixture override" });
+    expect(store.installed()[0]?.bag?.manifest.bounds["policy:no-shell"]?.bound.tools?.deny).toEqual(["policy:shell"]);
+    expect(store.installed()[0]?.modes.guest?.native).toEqual({ controllable: [], uncontrolled: {}, inseparable: [], operatorOverride: "fixture override" });
     expect(importModule).not.toHaveBeenCalled();
-    writeFileSync(join(dir, "bag.yaml"), "name: policy\ndescription: Broken policy\nbounds:\n  bad:\n    description: Typo\n    bound:\n      nativeTools:\n        policy: [typo]\n");
+    writeFileSync(join(dir, "bag.yaml"), "name: policy\ndescription: Broken policy\nbounds:\n  bad:\n    description: Typo\n    bound:\n      tools:\n        deny:\n          - policy:typo\n");
     await expect(store.load("policy")).rejects.toThrow(/no native tools/);
     expect(store.installed()[0]?.bag?.manifest.description).toBe("Policy only");
   });
@@ -408,4 +408,40 @@ it("snapshots experimental evidence and refuses a changed reason", async () => {
   expect(store.installed()[0].experimental).toBe(experimental);
   experimental = "another missing check";
   await expect(store.load("experimental")).rejects.toThrow("changed its contract");
+});
+
+it("preserves bundled runtime metadata and multiple tested builds in registrations", async () => {
+  const literal = adapterLiteral("bundled");
+  const modes = literal.modes as Record<string, Record<string, unknown>>;
+  modes.guest.build = "bundled";
+  modes.guest.versions = { recommendedVersion: "0.0.1", testedVersions: ["0.0.0", "0.0.1"], supportedVersions: [{ min: "0.0.0", max: "0.0.1" }] };
+  const store = storeFor("bundled", { importModule: async () => ({ default: literal }) });
+  await store.add(join(home, "bundled"));
+  expect(store.installed()[0].modes.guest).toMatchObject({ build: "bundled", versions: modes.guest.versions });
+});
+
+it("reads legacy pin/verifiedOn records without inventing a supported major range", async () => {
+  const store = storeFor("legacy");
+  await store.add(join(home, "legacy"));
+  const file = join(home, "adapters.json");
+  const records = JSON.parse(readFileSync(file, "utf8"));
+  records[0].requirements.binary.pin = { version: "0.0.0", enforcedBy: "legacy" };
+  delete records[0].requirements.binary.recommendedVersion;
+  delete records[0].modes.guest.versions;
+  writeFileSync(file, JSON.stringify(records));
+  const restored = store.installed()[0];
+  expect(restored.requirements.binary.recommendedVersion).toBe("0.0.0");
+  expect(restored.requirements.binary.pin).toBeUndefined();
+  expect(restored.modes.guest?.versions).toEqual({ recommendedVersion: "0.0.0", testedVersions: ["0.0.0"], supportedVersions: [{ min: "0.0.0", max: "0.0.0" }] });
+  await expect(store.load("legacy")).resolves.toHaveProperty("id", "legacy");
+});
+
+it("keeps older custom adapters with opaque build labels loadable", async () => {
+  const literal = adapterLiteral("opaque");
+  const modes = literal.modes as Record<string, Record<string, unknown>>;
+  modes.guest.verifiedOn = "fixture SDK 1";
+  const store = storeFor("opaque", { importModule: async () => ({ default: literal }) });
+  await store.add(join(home, "opaque"));
+  expect(store.installed()[0].modes.guest?.versions?.testedVersions).toEqual(["fixture SDK 1"]);
+  await expect(store.load("opaque")).resolves.toHaveProperty("id", "opaque");
 });

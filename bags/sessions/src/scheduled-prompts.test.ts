@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Barry, type OneOffInput, type OneOff } from "@barry-rocks/sdk";
+import { Barry, type AtScheduleInput, type AtSchedule } from "@barry-rocks/sdk";
 import { fakeSchedules } from "@barry-rocks/sdk/testing";
 
 vi.mock("@barry-rocks/sessions-bag/client", () => ({
@@ -67,7 +67,7 @@ describe("deliverScheduledPrompt", () => {
     expect(result).toMatch(/queued/);
   });
 
-  it("fails the run when the API refuses, so the one-off retries", async () => {
+  it("fails the run when the API refuses, so the schedule retries", async () => {
     const { fn } = fakeFetch([{ status: 404, body: { ok: false, error: "Session not found" } }]);
     await expect(deliverScheduledPrompt(inputs, { apiBase: "http://api/v1", secret: "s", scheduleId: "sch_1", fetch: fn })).rejects.toThrow(/404 Session not found/);
   });
@@ -97,29 +97,29 @@ describe("deliverScheduledPrompt", () => {
 });
 
 describe("schedule_prompt", () => {
-  const scheduleOnce = vi.fn(async (input: OneOffInput): Promise<OneOff> => ({
+  const scheduleAt = vi.fn(async (input: AtScheduleInput): Promise<AtSchedule> => ({
     id: "sch_9", bag: "sessions", action: input.action, inputs: input.inputs ?? {},
     dueAt: new Date(input.dueAt).toISOString(), createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-01T00:00:00Z",
     status: "pending", reason: null, idempotencyKey: null, timeoutS: 600, retryAttempts: input.attempts ?? 1, failures: 0, recoveries: 0,
   }));
-  const oneOffs = vi.fn(async (): Promise<OneOff[]> => []);
-  beforeEach(() => { vi.clearAllMocks(); Barry.use(fakeSchedules({ scheduleOnce, oneOffs })); });
+  const atSchedules = vi.fn(async (): Promise<AtSchedule[]> => []);
+  beforeEach(() => { vi.clearAllMocks(); Barry.use(fakeSchedules({ scheduleAt, atSchedules })); });
   afterEach(() => Barry.reset());
-  it("books a one-off of deliver-prompt for the current session", async () => {
+  it("books a schedule of deliver-prompt for the current session", async () => {
     const result = await schedulePrompt.handler({ prompt: "check the deploy", in: "20m" }, { sessionId: "sess_1" } as never);
-    expect(scheduleOnce).toHaveBeenCalledWith(expect.objectContaining({
+    expect(scheduleAt).toHaveBeenCalledWith(expect.objectContaining({
       action: DELIVER_PROMPT_ACTION, inputs: expect.objectContaining({ sessionId: "sess_1", prompt: "check the deploy" }), attempts: 3,
     }), { kind: "owner" });
     expect(result).toMatchObject({ scheduled: true, id: "sch_9", sessionId: "sess_1" });
   });
   it("refuses a session that does not exist, without booking anything", async () => {
     await expect(schedulePrompt.handler({ prompt: "p", in: "20m", sessionId: "sess_gone" }, {} as never)).rejects.toThrow(/not found/);
-    expect(scheduleOnce).not.toHaveBeenCalled();
+    expect(scheduleAt).not.toHaveBeenCalled();
   });
   it("asks for the sessions bag's pending prompts or its full history", async () => {
     await listScheduledPrompts.handler({}, { sessionId: "sess_1" } as never);
-    expect(oneOffs).toHaveBeenLastCalledWith({ bag: "sessions", status: "pending" }, { kind: "owner" });
+    expect(atSchedules).toHaveBeenLastCalledWith({ bag: "sessions", status: "pending" }, { kind: "owner" });
     await listScheduledPrompts.handler({ all: true }, { sessionId: "sess_1" } as never);
-    expect(oneOffs).toHaveBeenLastCalledWith({ bag: "sessions", limit: 200 }, { kind: "owner" });
+    expect(atSchedules).toHaveBeenLastCalledWith({ bag: "sessions", limit: 200 }, { kind: "owner" });
   });
 });

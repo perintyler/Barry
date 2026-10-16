@@ -609,7 +609,7 @@ export function classifyBashCommand(command: string): BashClassification {
 }
 
 /**
- * Decide whether a command is denied by `denyPrograms` rules.
+ * Decide whether a command is denied by program/subcommand rules.
  *
  * Rules:
  *   - `"git"` — deny any invocation of git.
@@ -626,12 +626,12 @@ export function classifyBashCommand(command: string): BashClassification {
  *
  * @returns the matched rule string, or null if allowed.
  */
-export function isProgramDenied(command: string, denyPrograms: string[]): string | null {
-  if (!denyPrograms || denyPrograms.length === 0) return null;
+export function isProgramDenied(command: string, programRules: string[]): string | null {
+  if (!programRules || programRules.length === 0) return null;
 
   const denyAll = new Set<string>(); // "git"
   const denySub = new Map<string, Set<string>>(); // "gh" -> {"pr:create"}
-  for (const rule of denyPrograms) {
+  for (const rule of programRules) {
     const idx = rule.indexOf(":");
     if (idx === -1) {
       denyAll.add(rule);
@@ -672,3 +672,131 @@ export function isProgramDenied(command: string, denyPrograms: string[]): string
 
   return null;
 }
+
+function bashGlobMatch(text: string, pattern: string): boolean {
+  if (!pattern.includes("*")) return text === pattern || text.startsWith(`${pattern} `);
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+  return new RegExp(`^${escaped}$`).test(text);
+}
+
+function extractSubcommandPrefixes(prog: string, argv: string[]): string[] {
+  const valueOpts = VALUE_OPTIONS[prog];
+  const chain: string[] = [];
+  for (let k = 1; k < argv.length && chain.length < 2; k++) {
+    const a = argv[k];
+    if (a.startsWith("-")) {
+      if (valueOpts?.has(a) && !a.includes("=")) k++;
+      continue;
+    }
+    chain.push(a.toLowerCase());
+  }
+  if (prog === "gh" && chain[0] === "api" && ghApiIsMutating(argv)) {
+    chain[1] = "write";
+  }
+  const prefixes: string[] = [];
+  for (let n = 1; n <= chain.length; n++) {
+    prefixes.push(chain.slice(0, n).join(":"));
+  }
+  return prefixes;
+}
+
+function matchesBashAllowPattern(argv: string[], pattern: string): boolean {
+  if (argv.length === 0) return false;
+  const prog = basename(argv[0]).toLowerCase();
+  const cmdStr = [prog, ...argv.slice(1)].join(" ");
+  if (pattern === "*") return true;
+  if (pattern.includes(":") && !pattern.includes(" ")) {
+    const colon = pattern.indexOf(":");
+    const wantProg = pattern.slice(0, colon).toLowerCase();
+    const wantSub = pattern.slice(colon + 1).toLowerCase();
+    if (prog !== wantProg) return false;
+    if (wantSub === "*") return true;
+    const subPrefixes = extractSubcommandPrefixes(prog, argv);
+    if (wantSub.includes("*")) {
+      return subPrefixes.some((sub) => bashGlobMatch(sub, wantSub));
+    }
+    return subPrefixes.includes(wantSub);
+  }
+  if (!pattern.includes(" ") && !pattern.includes("*")) {
+    return prog === pattern.toLowerCase();
+  }
+  return bashGlobMatch(cmdStr, pattern);
+}
+
+/**
+ * Evaluate a command line against `bound.bash` (`{ allow, deny, allowClauses }`).
+ * Returns a denial reason string if blocked, or `null` if permitted.
+ */
+export function checkBashBound(
+  command: string,
+  bash?: { allow?: string[]; deny?: string[]; allowClauses?: string[][] },
+): string | null {
+  if (!bash) return null;
+
+  const denyRules = bash.deny ?? [];
+  if (denyRules.length > 0) {
+    const programRules: string[] = [];
+    const patternRules: string[] = [];
+    for (const rule of denyRules) {
+      if (!rule.includes(" ") && !rule.includes("*")) {
+        programRules.push(rule);
+      } else if (/^[a-z0-9._-]+(?:\s+[a-z0-9._-]+)*\s+\*$/i.test(rule)) {
+        const parts = rule.replace(/\s+\*$/, "").trim().split(/\s+/);
+        programRules.push(parts.join(":"));
+      } else {
+        patternRules.push(rule);
+      }
+    }
+
+    if (programRules.length > 0) {
+      const deniedProg = isProgramDenied(command, programRules);
+      if (deniedProg) return deniedProg;
+    }
+
+    if (patternRules.length > 0) {
+      const { argvs, unparseable } = classifyBashCommand(command);
+      for (const pattern of patternRules) {
+        if (pattern.includes("*")) {
+          const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+          const re = new RegExp(`^${escaped}$`);
+          if (re.test(command)) return pattern;
+          for (const argv of argvs) {
+            const cmdStr = [basename(argv[0]).toLowerCase(), ...argv.slice(1)].join(" ");
+            if (re.test(cmdStr)) return pattern;
+          }
+        } else {
+          if (command.includes(pattern)) return pattern;
+          for (const argv of argvs) {
+            const cmdStr = [basename(argv[0]).toLowerCase(), ...argv.slice(1)].join(" ");
+            if (cmdStr.includes(pattern)) return pattern;
+          }
+        }
+      }
+      if (unparseable) return "<unparseable-command>";
+    }
+  }
+
+  const clauses = bash.allowClauses?.length
+    ? bash.allowClauses
+    : bash.allow !== undefined
+      ? [bash.allow]
+      : undefined;
+
+  if (clauses !== undefined) {
+    if (clauses.some((c) => c.length === 0)) return "<empty-bash-allow>";
+    const { argvs, unparseable } = classifyBashCommand(command);
+    if (unparseable) return "<unparseable-command>";
+    if (argvs.length === 0) return null;
+    for (const argv of argvs) {
+      for (const clause of clauses) {
+        if (!clause.some((pattern) => matchesBashAllowPattern(argv, pattern))) {
+          return basename(argv[0]).toLowerCase();
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+

@@ -1,18 +1,19 @@
+import { apiRequest, apiFailure } from "./api-request.js";
 /**
  * The data-returning steps of `barry start`'s launch-context resolution.
  *
  * `resolveLaunchContext` in commands/start.ts used to inline all of this as one
  * ~500-line function with nested closures and a large transport branch, which
  * meant the only way to exercise any of its logic was to spawn a real child
- * session. These four steps return DATA (grants + native policy, an MCP config
+ * session. These four steps return DATA (native tool selection, an MCP config
  * written to disk, the session pre-create request body, the child env) rather
  * than performing their side effects inline, so each can be called directly in
  * a unit test:
  *
- *   - `resolveGrants`     — native-tool policy from resolved grants (pure)
- *   - `buildMcpConfig`    — materialize an McpConfig to a temp dir (fs only)
- *   - `preCreateSession`  — POST a session row, built from a pure request body
- *   - `buildLaunchEnv`    — the child env scaffold (pure) + provenance keys
+ *   - `resolveSessionNativeTools` — native-tool selection from resolved bound + tools (pure)
+ *   - `buildMcpConfig`            — materialize an McpConfig to a temp dir (fs only)
+ *   - `preCreateSession`          — POST a session row, built from a pure request body
+ *   - `buildLaunchEnv`            — the child env scaffold (pure) + provenance keys
  *
  * `resolveLaunchContext` composes them, so the behavior the golden launch tests
  * pin is unchanged: this is a refactor, not a behavior change.
@@ -21,36 +22,32 @@ import { writeFileSync, mkdtempSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import type { McpConfig } from "../config.js";
-import type { Grants } from "@barry-rocks/sdk";
+import type { Bound, Tool } from "@barry-rocks/sdk";
 import type { ModeId } from "@barry-rocks/sdk/ids";
-import { resolveNativePolicy, type NativePolicy, type NativeHarness } from "@barry-rocks/sdk/bounds";
+import { resolveNativeTools, type NativeToolResolution, type NativeHarness } from "@barry-rocks/sdk/bounds";
 
-/** The native-tool decision for a session, derived from its resolved grants. */
-export interface GrantResolution {
-  native: NativePolicy;
-  /** Native inventory less allowed trait grants, plus explicit denials. */
+/** The native-tool decision for a session, derived from its resolved bound and tools. */
+export interface SessionNativeToolResolution {
+  native: NativeToolResolution;
+  /** Native inventory withheld by the session's bound or mode. */
   deniedTools: string[];
-  /** Native tools the session's grants turn on and the mode can grant. */
+  /** Native tools the session's bound allows and the mode can control. */
   allowedNativeTools: string[];
 }
 
 /**
- * The native-tool policy a session runs under, from its already-resolved
- * grants. Pure: no store, no network, no console — `resolveNativePolicy` is a
- * pure function of grants + harness + mode, and this names its two derived
- * lists so a caller (and a test) does not have to reach into the policy to get
- * them.
- *
- * The caller still resolves `granted` (via `Barry.grants`/`Barry.identity`) and
- * reports `native.conflicts`/`refused`/`uncontrolled`; those are launch-time
- * decisions that belong next to the console output, not here.
+ * The native-tool selection a session runs under, from its already-resolved
+ * bound and tools. Pure: no store, no network, no console — `resolveNativeTools`
+ * is a pure function of bound + tools + harness + mode, and this names its two
+ * derived lists so a caller (and a test) does not have to reach into the
+ * resolution to get them.
  */
-export function resolveGrants(
-  granted: Pick<Grants, "bound" | "tools">,
+export function resolveSessionNativeTools(
+  session: { bound: Bound | null; tools?: readonly Tool[] },
   harnessRecord: NativeHarness,
   mode: ModeId,
-): GrantResolution {
-  const native = resolveNativePolicy(granted, harnessRecord, mode);
+): SessionNativeToolResolution {
+  const native = resolveNativeTools(session.bound, session.tools ?? [], harnessRecord, mode);
   return { native, deniedTools: native.denied, allowedNativeTools: native.allowed };
 }
 
@@ -67,13 +64,6 @@ export interface McpConfigArtifact {
 /**
  * Write an already-resolved `McpConfig` to a fresh temp dir and hand back the
  * path, the servers, and the dir to track for cleanup.
- *
- * The transport branch in `resolveLaunchContext` decides WHAT the config is —
- * which traits are selected, whether it is the http/sse grant or the stdio
- * subprocess set — through the picker, prompts and the API; that stays there.
- * This is the step every branch shared verbatim: `mkdtemp`, write the JSON,
- * remember the dir, expose `mcpServers`. Pulled out so it is exercised with a
- * real config and no spawning, and so the three copies cannot drift.
  *
  * `tmpRoot` defaults to the OS temp dir, matching the inline code; a test can
  * point it at its own scratch dir.
@@ -93,16 +83,22 @@ export interface PreCreateSessionInput {
   source: string;
   identityId: number | null;
   selectedBounds: string[];
-  provider: string;
+  harness?: string;
+  provider?: string;
   directive?: string | null;
   name?: string;
+  bags?: string[];
+  model?: string;
+  modelProvider?: string;
+  mode?: ModeId;
+  status?: "pending" | "running";
 }
 
 /**
  * The JSON body a session pre-create POSTs. Pure, so the exact shape the row is
  * created with can be asserted without a running API — the field names here are
- * a contract with the sessions API (`sessionId`, `bounds`, `provider`, …), and
- * a rename on either side silently drops data.
+ * a contract with the sessions API (`sessionId`, `bags`, `bounds`, `provider`, …),
+ * and a rename on either side silently drops data.
  */
 export function preCreateRequestBody(input: PreCreateSessionInput): Record<string, unknown> {
   return {
@@ -113,11 +109,16 @@ export function preCreateRequestBody(input: PreCreateSessionInput): Record<strin
     name: input.name,
     identityId: input.identityId,
     bounds: input.selectedBounds,
-    provider: input.provider,
+    provider: input.harness ?? input.provider ?? "",
+    ...(input.bags !== undefined ? { bags: input.bags } : {}),
+    ...(input.model ? { model: input.model } : {}),
+    ...(input.modelProvider ? { model_provider: input.modelProvider } : {}),
+    ...(input.mode ? { mode: input.mode } : {}),
+    ...(input.status ? { status: input.status } : {}),
   };
 }
 
-/** How a pre-create attempt ended. `scoped` is false when a bound could not be applied. */
+/** How a pre-create attempt ended. */
 export interface PreCreateResult {
   ok: boolean;
   /** The body that was (or would have been) sent. */
@@ -134,6 +135,7 @@ export interface PreCreateResult {
 export interface PreCreateSessionDeps {
   fetch: typeof fetch;
   endpoint: string;
+  timeoutMs?: number;
   headers: Record<string, string>;
 }
 
@@ -152,18 +154,18 @@ export async function preCreateSession(
 ): Promise<PreCreateResult> {
   const body = preCreateRequestBody(input);
   try {
-    const resp = await deps.fetch(deps.endpoint, {
+    const resp = await apiRequest(deps.fetch, deps.endpoint, {
       method: "POST",
       headers: deps.headers,
       body: JSON.stringify(body),
-    });
+    }, deps.timeoutMs ?? 5000);
     if (!resp.ok) {
       const detail = await resp.text().catch(() => "");
       return { ok: false, body, warning: `session pre-create failed (HTTP ${resp.status}) — ${detail.slice(0, 200)}` };
     }
     return { ok: true, body };
   } catch (err) {
-    return { ok: false, body, warning: `Could not pre-create session — ${err instanceof Error ? err.message : String(err)}` };
+    return { ok: false, body, warning: apiFailure(deps.endpoint, err, deps.timeoutMs ?? 5000) };
   }
 }
 
@@ -202,9 +204,10 @@ export function buildLaunchEnv(input: LaunchEnvInput): Record<string, string | u
   return childEnv;
 }
 
-/** The resolved provider/model/mode a session records. */
+/** The resolved harness/model/mode a session records. */
 export interface LaunchProvenanceInput {
-  provider: string;
+  harness?: string;
+  provider?: string;
   model?: string;
   modelProvider?: string;
   mode: string;
@@ -212,14 +215,14 @@ export interface LaunchProvenanceInput {
 
 /**
  * The provenance env keys handed to the session-tracker hook, which has no
- * other way to learn the resolved provider/model/mode (its payload carries no
+ * other way to learn the resolved harness/model/mode (its payload carries no
  * such field). Only the keys with a value are set — matching the inline code,
  * which sets `BARRY_MODEL`/`BARRY_MODEL_PROVIDER` conditionally but always sets
  * `BARRY_PROVIDER` and `BARRY_MODE`.
  */
 export function launchProvenanceEnv(input: LaunchProvenanceInput): Record<string, string> {
   const env: Record<string, string> = {
-    BARRY_PROVIDER: input.provider,
+    BARRY_PROVIDER: input.harness ?? input.provider ?? "",
     BARRY_MODE: input.mode,
   };
   if (input.model) env.BARRY_MODEL = input.model;

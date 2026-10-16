@@ -71,7 +71,7 @@ export const ScheduleSchema = z
     identity: z.string().min(1).optional(),
     /** Inputs handed to the action, checked against its input_schema when it runs. */
     inputs: z.record(z.string(), z.unknown()).optional(),
-    traits: z.array(z.string().min(1)).optional(),
+    bags: z.array(z.string().min(1)).optional(),
     bounds: z.array(z.string().min(1)).optional(),
     /** A fire that lands while the last run is still going: skip it (default) or run it after. */
     overlap: z.enum(["skip", "queue"]).optional(),
@@ -164,7 +164,7 @@ export interface BagSchedule {
   payload: SchedulePayload;
   inputs?: Record<string, unknown>;
   identity?: string;
-  traits?: string[];
+  bags?: string[];
   bounds?: string[];
   overlap: "skip" | "queue";
   catchUp: "none" | "once";
@@ -216,7 +216,7 @@ export function normalizeSchedule(
     payload,
     ...(raw.inputs ? { inputs: raw.inputs } : {}),
     ...(raw.identity ? { identity: raw.identity } : {}),
-    ...(raw.traits ? { traits: raw.traits } : {}),
+    ...(raw.bags ? { bags: raw.bags } : {}),
     ...(raw.bounds ? { bounds: raw.bounds } : {}),
     overlap: raw.overlap ?? "skip",
     catchUp: raw.catch_up ?? "once",

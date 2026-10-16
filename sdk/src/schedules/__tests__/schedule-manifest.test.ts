@@ -116,10 +116,10 @@ describe("calendar schedule contract", () => {
 
 describe("a job payload", () => {
   it("names a job, with the schedule's inputs and permissions", () => {
-    const s = parse({ reaper: { every: "5m", traits: ["bash"], job: "reaper", inputs: { dry: true } } }).reaper;
+    const s = parse({ reaper: { every: "5m", bags: ["bash"], job: "reaper", inputs: { dry: true } } }).reaper;
     expect(s.payload).toEqual({ kind: "job", ref: "reaper" });
     expect(s.inputs).toEqual({ dry: true });
-    expect(s.traits).toEqual(["bash"]);
+    expect(s.bags).toEqual(["bash"]);
   });
 
   it("is the one payload, and leaves the job its own execution requirements", () => {

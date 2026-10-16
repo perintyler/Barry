@@ -10,16 +10,19 @@ import type { TokenUsage } from "@barry-rocks/sdk/adapters/models";
 import type { SessionEvent } from "@barry-rocks/sdk/sessions";
 
 /** A turn's usage as the runtime records it: tokens, and what the harness said of the turn itself. */
-export type TurnUsage = TokenUsage & { numTurns?: number; durationMs?: number };
+export type TurnUsage = TokenUsage & { numTurns?: number; durationMs?: number; sdk?: Extract<SessionEvent, {type: "done"}>["sdk"] };
 
 export type TurnEvent = { parentToolUseId?: string } & (
   | { type: "init"; sessionId: string }
   | { type: "text"; content: string; role: "assistant" }
   | { type: "partial"; content: string }
+  | { type: "thinking"; content: string }
+  | { type: "tool_input_delta"; toolUseId: string; content: string }
   | { type: "tool_start"; name: string; input: unknown; toolUseId: string }
   | { type: "tool_result"; toolUseId?: string; result: string }
   | { type: "tool_progress"; name: string; toolUseId: string; elapsedTime: number }
   | { type: "result"; result?: string; error?: string; usage?: TurnUsage }
+  | { type: "starting"; phase: "retrying" }
   | { type: "error"; error: string }
 );
 
@@ -76,6 +79,10 @@ function inRuntimeShape(event: SessionEvent): TurnEvent | null {
       return { type: "init", sessionId: event.harnessSessionId };
     case "text":
       return { type: "text", content: event.text, role: "assistant" };
+    case "thinking":
+      return { type: "thinking", content: event.text };
+    case "tool_input_delta":
+      return { type: "tool_input_delta", toolUseId: event.id, content: event.text };
     case "partial":
       return { type: "partial", content: event.text };
     case "tool_use":
@@ -94,6 +101,7 @@ function inRuntimeShape(event: SessionEvent): TurnEvent | null {
         ...(event.result !== undefined ? { result: event.result } : {}),
         ...(event.error !== undefined ? { error: event.error } : {}),
       };
+    case "status": return event.status === "retrying" ? {type:"starting",phase:"retrying"} : null;
     case "error":
       return { type: "error", error: event.error };
     default:
@@ -106,6 +114,7 @@ function turnUsageOf(done: Extract<SessionEvent, { type: "done" }>): TurnUsage |
   if (!done.usage) return undefined;
   return {
     ...done.usage,
+    ...(done.sdk ? { sdk: done.sdk } : {}),
     ...(done.turns !== undefined ? { numTurns: done.turns } : {}),
     ...(done.durationMs !== undefined ? { durationMs: done.durationMs } : {}),
   };
@@ -128,5 +137,6 @@ function addUsage(total: TurnUsage | undefined, next: TurnUsage | undefined): Tu
     ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
     ...(numTurns !== undefined ? { numTurns } : {}),
     ...(durationMs !== undefined ? { durationMs } : {}),
+    ...(next.sdk ?? total.sdk ? { sdk: next.sdk ?? total.sdk } : {}),
   };
 }

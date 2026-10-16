@@ -13,6 +13,7 @@ const diagnostics = createDiagnosticLogger("mcp.server", { transport: "stderr" }
 
 // The subjects a session's grants are composed from, answered in-process.
 Barry.use(identities, bags, sessions, actions, events, schedules, tracker, services);
+// sessions.api owns the shared bag-build maintenance cycle.
 const controller = new AbortController();
 let application: Awaited<ReturnType<typeof startMcpApplication>> | undefined;
 let stopping = false;

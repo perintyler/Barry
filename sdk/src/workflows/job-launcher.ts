@@ -10,11 +10,11 @@
  *
  * What maps (checked on Node 26.9):
  *
- * - `files.allowOnly` paths → `--allow-fs-read` / `--allow-fs-write` for each.
+ * - `files.allow` paths → `--allow-fs-read` / `--allow-fs-write` for each.
  *   A directory grants everything under it, so `/dir`, `/dir/*` and
  *   `/dir/**` all become `/dir`. `~/` is the home directory. An empty list
- *   grants no files at all. Without `allowOnly` the job may touch any file.
- * - `deniedAccess: [write]` → no `--allow-fs-write`.
+ *   grants no files at all. Without `files.allow` the job may touch any file.
+ * - `tools.deny: ["*:write"]` → no `--allow-fs-write`.
  * - Node matches a grant against the path as the job spells it, without
  *   following symlinks (`/var` is `/private/var` on macOS), so a path that
  *   resolves elsewhere is granted under both spellings — the same file.
@@ -27,10 +27,10 @@
  * - any `network.*` — Node's switch is all or nothing, and a job gets the
  *   network in v1 (`--allow-net`);
  * - `files.deny` — Node grants, it cannot carve an exception out of a grant;
- * - `allowOnly` patterns Node cannot express: relative paths, `*.ext`,
+ * - `files.allow` patterns Node cannot express: relative paths, `*.ext`,
  *   `**` anywhere but the end, or any other wildcard.
  *
- * Tool restrictions (`deniedTools`, `nativeTools`) are about MCP tools and
+ * Tool restrictions (`tools.allow`, `tools.deny`) are about MCP tools and
  * harness tools, which a job process has neither of, and `nodes` is
  * placement, decided before a job runs anywhere; none of them change flags.
  */
@@ -42,12 +42,12 @@ import type { Bound } from "../bounds/types.js";
 
 export type NodeFlags = { flags: string[] } | { refused: string };
 
-/** The directory or file a single allowOnly pattern names, or why Node cannot express it. */
+/** The directory or file a single files.allow pattern names, or why Node cannot express it. */
 function patternPath(pattern: string, home: string): { path: string } | { refused: string } {
   let path = pattern === "~" ? home : pattern.startsWith("~/") ? join(home, pattern.slice(2)) : pattern;
   path = path.replace(/\/\*\*?$/, "");
-  if (!isAbsolute(path)) return { refused: `files.allowOnly "${pattern}" is not an absolute or ~/ path` };
-  if (/[*?[\]{}]/.test(path)) return { refused: `files.allowOnly "${pattern}" uses a wildcard Node's permission model cannot express` };
+  if (!isAbsolute(path)) return { refused: `files.allow "${pattern}" is not an absolute or ~/ path` };
+  if (/[*?[\]{}]/.test(path)) return { refused: `files.allow "${pattern}" uses a wildcard Node's permission model cannot express` };
   return { path: normalize(path) };
 }
 
@@ -61,21 +61,21 @@ function resolvedPath(path: string): string | undefined {
 
 export function boundToNodeFlags(bound: Bound | null | undefined, home = homedir(), realpath: (path: string) => string | undefined = resolvedPath): NodeFlags {
   const network = bound?.network;
-  if (network && (network.actions?.length || network.domains?.length || network.allowDomains !== undefined || network.enforce !== undefined)) {
+  if (network && (network.deny?.length || network.allow !== undefined || network.enforce !== undefined)) {
     return { refused: "a network restriction cannot be enforced on a node job yet; a job's network is all or nothing" };
   }
   if (bound?.files?.deny?.length) {
-    return { refused: "files.deny cannot be enforced on a node job; name what it may touch with files.allowOnly instead" };
+    return { refused: "files.deny cannot be enforced on a node job; name what it may touch with files.allow instead" };
   }
-  const write = !bound?.deniedAccess?.includes("write");
+  const write = !bound?.tools?.deny?.includes("*:write");
   const flags = ["--permission", "--allow-net"];
-  const allowOnly = bound?.files?.allowOnly;
-  if (allowOnly === undefined) {
+  const allowedFiles = bound?.files?.allow;
+  if (allowedFiles === undefined) {
     flags.push("--allow-fs-read=*");
     if (write) flags.push("--allow-fs-write=*");
     return { flags };
   }
-  for (const pattern of allowOnly) {
+  for (const pattern of allowedFiles) {
     const resolved = patternPath(pattern, home);
     if ("refused" in resolved) return resolved;
     const real = realpath(resolved.path);

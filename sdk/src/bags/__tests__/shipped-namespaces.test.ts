@@ -95,22 +95,25 @@ async function declaredNamespaces(dir: string): Promise<Set<string>> {
 }
 
 describe("shipped bags declare the namespaces their tools carry", () => {
-  it("every shipped extension stamps exactly its parent's namespace", async () => {
-    let extensions = 0;
+  it("every shipped bag declaring implements exports the tools it claims to implement", async () => {
+    let implementers = 0;
     for (const { dir } of inRepoLocalBags()) {
       const manifest = parseManifest(dir);
-      if (!manifest?.extends) continue;
-      extensions++;
-      const tools = await loadBagToolDefinitions({ name: `${manifest.extends}/${manifest.name}`, source: { type: "local", path: dir }, manifest });
+      if (!manifest?.implements?.tools.length) continue;
+      implementers++;
+      const tools = await loadBagToolDefinitions({ name: manifest.name, source: { type: "local", path: dir }, manifest });
       expect(tools?.length).toBeGreaterThan(0);
-      expect(new Set(tools?.map((tool) => tool.namespace))).toEqual(new Set([manifest.extends]));
+      const exportedIds = new Set(tools?.map((tool) => `${tool.namespace}:${tool.name}`));
+      for (const claimed of manifest.implements.tools) {
+        expect(exportedIds).toContain(claimed);
+      }
     }
-    expect(extensions).toBeGreaterThan(0);
+    expect(implementers).toBeGreaterThan(0);
   });
 
-  it("serves search_messages from the registered sessions/search extension in the sessions namespace", async () => {
-    const search = inRepoLocalBags().find((bag) => bag.name === "sessions/search");
-    expect(search, "sessions/search is not a registered builtin").toBeDefined();
+  it("serves search_messages from the registered session-vector-search bag in the sessions namespace", async () => {
+    const search = inRepoLocalBags().find((bag) => bag.name === "session-vector-search");
+    expect(search, "session-vector-search is not a registered builtin").toBeDefined();
     const tools = await loadBagToolDefinitions({ name: search!.name, source: { type: "local", path: search!.dir }, manifest: parseManifest(search!.dir) });
     expect(tools?.find((tool) => tool.name === "search_messages")).toMatchObject({ namespace: "sessions" });
   });
@@ -135,12 +138,6 @@ describe("shipped bags declare the namespaces their tools carry", () => {
       const declared = await declaredNamespaces(dir);
       for (const ns of stamped) {
         if (declared.has(ns)) continue;
-        // Undeclared is fine when the namespace IS the bag name — that is
-        // exactly what the auto-traits fallback guesses, and it guesses right.
-        // Undeclared AND different is the bug: the fallback then invents a
-        // namespace no tool carries, and grants it while the real one goes
-        // ungranted. That is how `sessions` (tools on `session`) shipped a
-        // hollow grant inside DEFAULT_TRAITS.
         if (ns === name) continue;
         drifted.push(
           `${name}: tools stamp "${ns}" but the manifest declares ` +
@@ -164,70 +161,36 @@ describe("shipped bags declare the namespaces their tools carry", () => {
     ).toEqual([]);
   });
 
-  it("every namespace a shipped bag's trait grants is carried by a real tool or a declared server", async () => {
+  it("every namespace a shipped bag declares in tool-metadata or mcp-servers is carried by a real tool or server", async () => {
     const carried = new Set<string>();
+    const declaredByBag: Array<{ bag: string; namespaces: string[] }> = [];
 
-    // 1. What in-repo bags' tools actually stamp, read from source — NOT the
-    //    bag name. This is the whole point: `sessions` contributes `session`
-    //    here, so a trait granting `sessions` has nothing carrying it.
     for (const { name, dir } of inRepoLocalBags()) {
       const stamped = namespacesStampedInSource(dir);
       for (const ns of stamped ?? []) carried.add(ns);
-      // A declared MCP server is genuinely provided by the vendor, not by code.
-      for (const ns of await declaredNamespaces(dir)) carried.add(ns);
-      // A bag with no readable in-process tools (skills-only, app-only, or tools
-      // behind a shape this cannot parse) keeps the benefit of the doubt: the
-      // fallback would grant its name, and we have no evidence to contradict
-      // that. Only a bag whose source we DID read can convict its own grant.
+      const declared = await declaredNamespaces(dir);
+      for (const ns of declared) carried.add(ns);
       if (stamped === null || stamped.size === 0) carried.add(name);
+      if (declared.size > 0) {
+        declaredByBag.push({ bag: name, namespaces: [...declared] });
+      }
     }
 
     expect(
       carried.size,
       "no namespaces collected — the loader found nothing and this test cannot fail",
     ).toBeGreaterThan(5);
-
-    // Barry ships no traits of its own; every trait is a bag's.
-    const traits = Object.values(discoverBuiltinBags(BUILTIN_DIR).local).flatMap((rel) =>
-      Object.entries(parseManifest(join(BUILTIN_DIR, rel))?.traits ?? {}),
-    );
-    expect(traits.length, "no shipped bag declares a trait").toBeGreaterThan(0);
-
-    /**
-     * Stale names a trait keeps DELIBERATELY, beside the real one.
-     *
-     * Traits are additive, so dropping a name a live session may still hold
-     * could take its tools away mid-flight; the safe migration is to grant both
-     * for one release and remove the stale one once no trait row references it.
-     * An entry here is a promise that the real namespace is granted too — which
-     * the assertion below enforces, so this cannot be used to silence a grant
-     * that resolves to nothing.
-     */
-    const TRANSITIONAL_ALIASES: Record<string, string> = {
-      // bags/sessions declares `session`; `sessions` is the pre-fix bag-name guess.
-      sessions: "session",
-    };
+    expect(declaredByBag.length, "no shipped bag declares tool namespaces").toBeGreaterThan(0);
 
     const uncarried: string[] = [];
-    for (const [traitName, trait] of traits) {
-      const granted = trait.bags;
-      for (const ns of granted) {
-        if (carried.has(ns)) continue;
-        const real = TRANSITIONAL_ALIASES[ns];
-        if (real && granted.includes(real) && carried.has(real)) continue;
-        uncarried.push(
-          real
-            ? `${traitName} → ${ns} (stale alias, and its real namespace "${real}" is NOT granted alongside it)`
-            : `${traitName} → ${ns}`,
-        );
+    for (const { bag, namespaces } of declaredByBag) {
+      for (const ns of namespaces) {
+        if (!carried.has(ns)) {
+          uncarried.push(`${bag} → ${ns}`);
+        }
       }
     }
 
-    expect(
-      uncarried,
-      "shipped bags' traits granting namespaces no real tool carries:\n  " +
-        uncarried.join("\n  ") +
-        "\n(a grant nothing provides resolves to zero tools, silently)",
-    ).toEqual([]);
+    expect(uncarried).toEqual([]);
   });
 });

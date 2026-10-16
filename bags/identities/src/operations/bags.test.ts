@@ -68,26 +68,20 @@ it("maps loaded tool summaries and readwrite access", async () => {
   ]);
   expect(await bags.tools("local", owner)).toEqual([]);
 });
-it("lists only the named parent's extensions, in order", async () => {
-  expect(await Barry.bag("sessions").extensions()).toEqual(["sessions/search", "sessions/zebra"]);
-  expect(await bags.extensions("sessions/search", session)).toEqual([]);
-  expect(await bags.extensions("local", owner)).toEqual([]);
-});
 it("refuses unknown bags", async () => {
   await expect(bags.tools("missing", owner)).rejects.toMatchObject({ reason: "not_found" });
-  await expect(bags.extensions("missing", session)).rejects.toMatchObject({ reason: "not_found" });
 });
-it("finds the shipped sessions extension from a registry of absolute paths", async () => {
+it("finds the shipped session-vector-search bag from a registry of absolute paths", async () => {
   const dir = fileURLToPath(new URL("../../..", import.meta.url));
   const local = findBags(dir);
   snapshot(Object.fromEntries(Object.entries(local).map(([name, path]) => [name, { type: "local", path: join(dir, path) }])));
-  expect(await Barry.bag("sessions").extensions()).toEqual(["sessions/search"]);
+  expect(local["session-vector-search"]).toBe("session-vector-search");
 });
 it("refuses every method for a device before reading or reaching the API", async () => {
   vi.stubEnv("BARRY_BAGS_SNAPSHOT", join(scratch, "absent.json"));
   const connect = vi.spyOn(BarryClient, "connect");
   for (const call of [() => bags.list(device), () => bags.tools("sessions", device),
-    () => bags.extensions("sessions", device), () => bags.runJob("sessions", "work", {}, {}, device)]) {
+    () => bags.runJob("sessions", "work", {}, {}, device)]) {
     await expect(call()).rejects.toMatchObject({ reason: "forbidden" });
   }
   expect(connect).not.toHaveBeenCalled();

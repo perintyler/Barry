@@ -12,7 +12,7 @@
  * and silent truncation reads as "you have seen everything".
  */
 
-import type { InstructionMeta } from "./instruction-catalog.js";
+import type { InstructionMeta } from "./instruction-registry.js";
 
 export interface BuildInstructionsIndexOptions {
   budgetChars?: number;
@@ -133,31 +133,21 @@ export function joinAlwaysInstructions(
  */
 const DEFAULT_POINTER_BUDGET_CHARS = 600;
 
-export interface BuildTraitPointerOptions {
+export interface BuildBagPointerOptions {
   budgetChars?: number;
 }
 
 /**
- * Render the instructions a session's traits point at as fetch pointers.
- *
- * A trait names instructions relevant to what it grants — the `coding` trait
- * points at guidance on writing checks. The body stays on-demand; this is the
- * one line that tells the agent the guidance exists and when it applies, so it
- * knows to fetch rather than having to already suspect there is something to
- * look for.
- *
- * The text comes from each instruction's own `description`, so "when this
- * applies" is authored once in the instruction file rather than restated in
- * every trait that points at it.
+ * Render the instructions a session's bags point at as fetch pointers.
  *
  * Always-on instructions are skipped: their bodies are already in the prompt in
  * full, so a pointer to them would be telling the agent to fetch what it can
  * already read.
  */
-export function buildTraitInstructionPointer(
+export function buildBagInstructionPointer(
   names: string[],
   instructions: InstructionMeta[],
-  options: BuildTraitPointerOptions = {},
+  options: BuildBagPointerOptions = {},
 ): string | null {
   const { budgetChars = DEFAULT_POINTER_BUDGET_CHARS } = options;
   if (names.length === 0) return null;

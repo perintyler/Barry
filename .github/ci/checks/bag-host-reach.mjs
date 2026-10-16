@@ -19,7 +19,8 @@ export const COMPOSITION_ROOT_PACKAGES = new Set([
 export const ALLOWED_BAG_EDGES = [
   { from: "bags/actions", to: "bags/artifacts", until: "Barry.artifacts after D4" },
   { from: "bags/instructions", to: "bags/artifacts", until: "Barry.artifacts after D4" },
-  { from: "bags/sessions/extensions/search", to: "bags/embeddings", until: "a vectors surface (C4's decision for the author)" },
+  { from: "bags/session-vector-search", to: "bags/embeddings", until: "a vectors surface (C4's decision for the author)" },
+  { from: "bags/session-vector-search", to: "bags/sessions", until: "session-vector-search indexes sessions messages" },
 ];
 
 const bagOf = dir => /^bags\/[^/]+/.exec(dir)?.[0];
@@ -111,7 +112,7 @@ const WITNESS = "sdk/src/bags/loader.ts";
 const BAG_ENTRYPOINTS = [
   ["bags/actions/src/tools.ts", WITNESS],
   ["bags/identities/src/store/identity-bags.ts", WITNESS],
-  ["bags/identities/src/selectable-traits.ts", WITNESS],
+  ["bags/identities/src/bounds.ts", WITNESS],
   ["bags/instructions/src/tools.ts", WITNESS],
   ["bags/sessions/api/src/routes/actions.ts", WITNESS],
   ["bags/sessions/api/src/session-runtime.ts", WITNESS],
@@ -220,7 +221,7 @@ async function reachOf(entry, witness, pkgs) {
 
 const pkgs = workspacePackages();
 const failures = [];
-for (const module of ["traits", "bounds", "identities", "sessions", "tools", "adapters/harnesses", "adapters/decisions"]) {
+for (const module of ["bounds", "identities", "sessions", "tools", "adapters/harnesses", "adapters/decisions"]) {
   const entry = `sdk/src/${module}/index.ts`;
   if (!existsSync(join(ROOT, entry))) { failures.push(`missing standalone module: ${entry}`); continue; }
   const result = await build({ entryPoints: [join(ROOT, entry)], bundle: true, write: false, metafile: true, platform: "node", format: "esm", logLevel: "silent", plugins: [workspacePlugin(pkgs)], packages: "external" });

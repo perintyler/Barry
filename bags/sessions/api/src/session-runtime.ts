@@ -1,3 +1,6 @@
+import {envMs} from "@barry-rocks/sdk/sessions";
+import { PersistQueue } from "./runtime/persist-queue.js";
+import { TurnTimer } from "./runtime/turn-timer.js";
 import {type McpServerConfig, type Session, type SessionAttachment, type SessionConfig as HarnessSessionConfig, type SessionEvent, type PermissionRequest, type PermissionDecision} from "@barry-rocks/sdk/sessions";
 import type { AuthPrincipal } from "@barry-rocks/sdk/internal/auth";
 import {authorizeSessionExecution} from "@barry-rocks/sessions-bag/execution-authorization";
@@ -7,7 +10,7 @@ import {type TurnEvent} from "./turn-events.js";
 import type { CreateSessionFn } from "./agent-runtime-types.js";
 
 /** What the runtime does with a client's socket: check it is open, and send to it. */
-export interface SessionSubscriber { readonly readyState: number; send(data: string): void }
+export interface SessionSubscriber { readonly readyState: number; send(data: string): void; publish?(data: string, onSent: () => void): boolean }
 // Static, from the light subpath: the capability table is a types-only leaf,
 // so reading it costs nothing and no longer needs the dynamic import that
 // existed only to keep the agent SDKs off this module's load path.
@@ -101,16 +104,19 @@ export async function recordBagAuthEvent(sessionId: string, bags: string[]): Pro
 
 export const log = createLogger("session-runtime");
 
+import type { Bound } from "@barry-rocks/sdk/bounds";
+
 export type { McpServerConfig };
 
 export interface SessionConfig {
+  ingressAt?: number;
   sessionId?: string; // Optional - will be created if not provided
   prompt: string;
   repoPath: string;
   name?: string;
-  traits?: string[];
-  scope?: Record<string, unknown> | null;
-  bounds?: string[];
+  bags?: string[];
+  bounds?: Array<Bound | string>;
+  bound?: Bound | null;
   mcpServers?: Record<string, McpServerConfig>;
   continueFromSessionId?: string;
   metadata?: Record<string, unknown>;
@@ -122,11 +128,23 @@ export interface SessionConfig {
   modelProvider?: string;
   clientMessageId?: string;
   reuseClientMessageRow?: boolean;
+  userMessageSequence?: number;
+  initialHistoryContext?: string;
   /** Prepare resources without accepting a user message or starting a harness. */
   prepareOnly?: boolean;
 }
 
 export interface ActiveSession {
+  turnControl?: {force:AbortController;done:Promise<void>;finish:()=>void};
+  finalization?:Promise<void>;
+  lastEventAt?:string;
+  lastEventAtMonotonic?:number;
+  /** Startup and latest-turn durations, in milliseconds. */
+  timings: Record<string, number>;
+  turnTimer?: TurnTimer;
+  warming: Promise<void> | null;
+  warmGeneration?: number;
+  warm: { preparedAt?: number; idleSince?: number; error?: string } | null;
   id: string;
   sessionId: string | null;
   prompt: string;
@@ -154,6 +172,17 @@ export interface ActiveSession {
    */
   interruptedTurn: AbortController | null;
   outputBuffer: string;
+  acceptedMessages?: Map<string, string>;
+  persistence?: PersistQueue<WsMessage>;
+  statePersistence?: PersistQueue<null>;
+  recordingLagSources?: Set<string>;
+  turnFrames?: WsMessage[];
+  replaying?: Map<SessionSubscriber, WsMessage[]>;
+  thinkingBuffer?: string;
+  startedAtRecorded?: boolean;
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  promptCacheTtl?: "5m" | "1h";
+  identityEffort?: "low" | "medium" | "high" | "xhigh" | "max";
   /**
    * The sequence of the last message this runtime stored and sent for the
    * session (-1: none), which a new subscriber is told. Starts from the store's
@@ -165,7 +194,9 @@ export interface ActiveSession {
   unlisted: boolean;
   identityId: number | null;
   identityName: string | null;
-  traits: string[];
+  bags: string[];
+  bounds: Array<Bound | string>;
+  bound: Bound | null;
   consecutiveFailures: number;
   provider: string;
   model?: string;
@@ -240,6 +271,8 @@ export type SessionTurnOutcome =
 
 // WebSocket message types
 export interface WsMessage {
+  dedupeKey?: string;
+  createdAt?: string;
   type: string;
   sessionId?: string;
   content?: string;
@@ -248,13 +281,16 @@ export interface WsMessage {
   result?: string;
   status?: string;
   error?: string;
-  role?: "user" | "assistant";
+  role?: "user" | "assistant" | "system";
+  lastEventAt?:string|null;
   toolUseId?: string;
   elapsedTime?: number;
   sequence?: number;
   protocolVersion?: number;
   capabilities?: {
     streaming: boolean;
+    thinking?: boolean;
+    activity?: boolean;
     gating: boolean;
     listener: boolean;
     attachments: boolean;
@@ -306,6 +342,39 @@ export interface SessionRuntimeDeps {
 }
 
 export class SessionRuntime {
+  /** Detached residents retain durability ownership until their FIFO drains. */
+  readonly drainingSessions = new Map<string, ActiveSession>();
+  retainPersistence(active: ActiveSession): void {
+    if(this.drainingSessions.get(active.id)===active)return;
+    if(!active.persistence?.pending().length && !active.statePersistence?.pending().length && !active.finalization)return;
+    this.drainingSessions.set(active.id, active);
+    const drain = async () => {
+      while (!await this.flushPersistence(active.id, 1000)) { /* keep retrying without dropping accepted rows */ }
+      await active.finalization;
+      if(active.finalization || active.recordingLagSources?.size){
+        active.recordingLagSources?.clear();
+        this.sendInTurn(active,{type:"status",sessionId:active.id,status:active.status,metadata:{code:"persistence_recovered",recordingDelayed:false}});
+      }
+      if (this.drainingSessions.get(active.id) === active) this.drainingSessions.delete(active.id);
+    };
+    void drain().catch(error => log.error("session.drain_failed", {sessionId:active.id,error:String(error)}));
+  }
+  async forceTurn(active: ActiveSession): Promise<void> {
+    const control=active.turnControl;
+    const silentMs=active.lastEventAtMonotonic===undefined?0:Math.max(0,performance.now()-active.lastEventAtMonotonic);
+    active.generation++;
+    active.interruptGeneration++;
+    active.abortController?.abort();
+    control?.force.abort();
+    const session=active.session;
+    active.session=null; active.warm=null; active.warming=null; active.opening=null; active.warmGeneration=(active.warmGeneration??0)+1;
+    active.thinkingBuffer=""; active.outputBuffer=""; active.turnFrames=[];
+    if(session) void session.close().catch(error=>log.warn("session.force_close_failed",{sessionId:active.id,error:String(error)}));
+    if(control) await control.done;
+    active.status="waiting";
+    this.sendInTurn(active,{type:"status",sessionId:active.id,status:"waiting",metadata:{code:"turn_forced",silentMs}});
+  }
+
   public executionGuard?: (sessionId: string) => boolean;
   setExecutionGuard(guard: (sessionId: string) => boolean): void { this.executionGuard = guard; }
   acquireTurnSlot(): Promise<{ release(): void }> { return this.turnSemaphore.acquire(); }
@@ -386,6 +455,24 @@ export class SessionRuntime {
   // guard, so this threshold only has to be long enough that a session which
   // outlived its process is unambiguously dead. Shorter values were tried and
   // would have closed sessions that were merely paused.
+  private warmSweepTimer: ReturnType<typeof setInterval> | null = null;
+  warmHarness(sessionId: string): Promise<void> { return rt_warmHarness(this, sessionId); }
+  dropResident(sessionId: string, options: { force?: boolean } = {}): Promise<ActiveSession | null> { return rt_dropResident(this, sessionId, options); }
+  async sweepWarmSessions(): Promise<void> {
+    const idleMs = envMs("BARRY_WARM_IDLE_MS",15*60_000);
+    for (const active of this.activeSessions.values()) {
+      const since = active.warm?.idleSince ?? active.warm?.preparedAt;
+      if (since === undefined || active.lastSequence >= 0 || active.pendingTurns || active.abortController || active.warming || active.renderers.size || active.subscribers.size) continue;
+      if (Date.now() - since >= idleMs) await this.stopSession(active.id);
+    }
+  }
+  startWarmSweep(intervalMs = 60_000): void {
+    if (this.warmSweepTimer) return;
+    this.warmSweepTimer = setInterval(() => { void this.sweepWarmSessions().catch(error => log.warn("session.warm_sweep_failed", { error: String(error) })); }, intervalMs);
+    this.warmSweepTimer.unref?.();
+  }
+  stopWarmSweep(): void { if (this.warmSweepTimer) clearInterval(this.warmSweepTimer); this.warmSweepTimer = null; }
+
   startCrashedSessionSweep(intervalMs = 60 * 60 * 1000, idleMs = 24 * 60 * 60 * 1000): void {
     if (this.crashSweepTimer) return;
     const sweep = async () => {
@@ -476,7 +563,7 @@ export class SessionRuntime {
       // single-slot turn semaphore, deadlock against the very turn it is
       // queued behind.
       const activeSession = await inFlight;
-      if (!config.prepareOnly) void this.sendMessage(key, config.prompt, {}, principal).catch((err) => {
+      if (!config.prepareOnly) void this.sendMessage(key, config.prompt, {ingressAt:config.ingressAt,clientMessageId:config.clientMessageId,reuseClientMessageRow:config.reuseClientMessageRow,userMessageSequence:config.userMessageSequence,initialHistoryContext:config.initialHistoryContext}, principal).catch((err) => {
         log.error("session.joined_start_message_failed", {
           sessionId: key,
           error: err instanceof Error ? err.message : String(err),
@@ -512,8 +599,9 @@ export class SessionRuntime {
   public runSession(
     activeSession: ActiveSession,
     prompt: string,
-    mcpServers: Record<string, McpServerConfig>
-  ): Promise<SessionTurnOutcome> { return rt_runSession(this, activeSession, prompt, mcpServers); }
+    mcpServers: Record<string, McpServerConfig>,
+    ingressAt?: number,
+  ): Promise<SessionTurnOutcome> { return rt_runSession(this, activeSession, prompt, mcpServers, ingressAt); }
 
   public withActionsIndex(activeSession: ActiveSession, prompt: string): string { return rt_withActionsIndex(this, activeSession, prompt); }
 
@@ -550,11 +638,12 @@ export class SessionRuntime {
     mcpServers: Record<string, McpServerConfig>,
     gen: number,
     interruptGen: number,
-  ): Promise<SessionTurnOutcome> { return rt_runTurn(this, activeSession, prompt, mcpServers, gen, interruptGen); }
+    timer?: TurnTimer,
+  ): Promise<SessionTurnOutcome> { return rt_runTurn(this, activeSession, prompt, mcpServers, gen, interruptGen, timer); }
 
   public sweepToolTimers(sessionId: string): void { return rt_sweepToolTimers(this, sessionId); }
 
-  public turnEvents(session: Session, prompt: string, stopped: () => boolean): AsyncGenerator<TurnEvent> { return rt_turnEvents(this, session, prompt, stopped); }
+  public turnEvents(session: Session, prompt: string, stopped: () => boolean, force?:AbortSignal, onEvent?:()=>void): AsyncGenerator<TurnEvent> { return rt_turnEvents(this, session, prompt, stopped, force, onEvent); }
 
   public async handleRunnerEvent(activeSession: ActiveSession, event: TurnEvent): Promise<void> { return rt_handleRunnerEvent(this, activeSession, event); }
 
@@ -577,7 +666,7 @@ export class SessionRuntime {
   async sendMessage(
     sessionId: string,
     content: string,
-    options: { clientMessageId?: string; reuseClientMessageRow?: boolean; attachmentIds?: string[] } = {},
+    options: { ingressAt?: number; clientMessageId?: string; reuseClientMessageRow?: boolean; userMessageSequence?: number; initialHistoryContext?: string; attachmentIds?: string[] } = {},
     principal?: AuthPrincipal,
   ): Promise<void> { return rt_sendMessage(this, sessionId, content, options, principal); }
 
@@ -586,11 +675,28 @@ export class SessionRuntime {
   public async enqueueMessage(
     sessionId: string,
     content: string,
-    options: { clientMessageId?: string; reuseClientMessageRow?: boolean; attachmentIds?: string[]; workflowTurnId?: string },
+    options: { ingressAt?: number; clientMessageId?: string; reuseClientMessageRow?: boolean; userMessageSequence?: number; initialHistoryContext?: string; attachmentIds?: string[]; workflowTurnId?: string },
     waitForTurn: boolean,
   ): Promise<SessionTurnOutcome | undefined> { return rt_enqueueMessage(this, sessionId, content, options, waitForTurn); }
 
-  subscribe(sessionId: string, ws: SessionSubscriber, _options?: { protocolVersion?: number }): void { return rt_subscribe(this, sessionId, ws, _options); }
+  publishPersistenceHealth(sessionId:string,source:string,lagging:boolean):void {
+    const active=this.activeSessions.get(sessionId);if(!active)return;
+    const sources=active.recordingLagSources??=new Set<string>();
+    if(lagging)sources.add(source);else sources.delete(source);
+    const recordingDelayed=sources.size>0;
+    this.sendInTurn(active,{type:"status",sessionId,status:active.status,metadata:{code:recordingDelayed?"persistence_lagging":"persistence_recovered",recordingDelayed}});
+  }
+  allocateSequence(sessionId:string):number {const active=this.activeSessions.get(sessionId);if(!active)throw new Error("Session is not resident");return ++active.lastSequence;}
+  flushPersistence(sessionId: string, timeoutMs=1000): Promise<boolean> {
+    const active=this.activeSessions.get(sessionId)??this.drainingSessions.get(sessionId);
+    return Promise.all([active?.persistence?.flush(timeoutMs)??true,active?.statePersistence?.flush(timeoutMs)??true]).then(results=>results.every(Boolean));
+  }
+  async drainPersistence(timeoutMs=30_000): Promise<boolean> {
+    return PersistQueue.drainAll(timeoutMs);
+  }
+  pendingPersistence(sessionId: string): WsMessage[] { return (this.activeSessions.get(sessionId)??this.drainingSessions.get(sessionId))?.persistence?.pending() ?? []; }
+  assertPersistenceAdmission(sessionId: string): void { PersistQueue.assertGlobalAdmission(); this.activeSessions.get(sessionId)?.persistence?.assertAdmission(); }
+  subscribe(sessionId: string, ws: SessionSubscriber, _options?: { protocolVersion?: number; afterSequence?: number }): void { return rt_subscribe(this, sessionId, ws, _options); }
 
   unsubscribe(sessionId: string, ws: SessionSubscriber): void { return rt_unsubscribe(this, sessionId, ws); }
 
@@ -612,7 +718,7 @@ export class SessionRuntime {
 
   async removeSession(sessionId: string, principal?: AuthPrincipal): Promise<void> { return rt_removeSession(this, sessionId, principal); }
 
-  invalidateSessionTools(sessionId: string): void { return rt_invalidateSessionTools(this, sessionId); }
+  invalidateSessionTools(sessionId: string, options: {reason?: "grants" | "system_prompt"} = {}): void { return rt_invalidateSessionTools(this, sessionId, options); }
 
   getActiveSession(sessionId: string): ActiveSession | undefined {
     return this.activeSessions.get(sessionId);
@@ -676,6 +782,7 @@ export function tuiModeOf(metadata: Record<string, unknown> | null | undefined):
 
 // Delegated method bodies (split for file size; see ./runtime/*).
 import {rt_recordSessionDeclaration, rt_startSessionUncoordinated, rt_reserveResidentSession} from "./runtime/start.js";
+import { rt_warmHarness, rt_dropResident } from "./runtime/warm.js";
 import {rt_resolveHarnessEnvironment, rt_prepareHarnessConfiguration, rt_authorizeContinuationTool, rt_ensureHarnessSession, rt_openHarnessSession} from "./runtime/harness.js";
 import {rt_runSession, rt_withActionsIndex, rt_turnWasStopped, rt_isStale, rt_runTurn, rt_sweepToolTimers, rt_turnEvents, rt_handleRunnerEvent, rt_handleRunnerEventInner, rt_createDecideFunction} from "./runtime/turn.js";
 import {rt_attachRenderer, rt_detachRenderer, rt_releaseRenderer, rt_checkLaunchers, rt_recordExternalTurns} from "./runtime/renderers.js";

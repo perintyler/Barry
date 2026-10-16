@@ -39,9 +39,13 @@ beforeEach(() => {
       if (ref === 7) return { id: 7, name: "bux" } as never;
       throw new BarryError("not_found", `Identity ${String(ref)} not found`);
     },
-    grants: async (_ref, selection) => {
-      if (selection.bounds?.some(name => name !== "no-files")) throw new BarryError("invalid", "Unknown bound");
-      return { traits: [], bound: null, namespaces: [], tools: [], skills: [], instructions: [] };
+    bound: async (_ref, requested) => {
+      const names = (requested ?? []).filter((entry): entry is string => typeof entry === "string");
+      if (names.some(name => name !== "no-files")) throw new BarryError("invalid", "Unknown bound");
+      if (names.includes("no-files")) {
+        return { files: { deny: ["**/*"] } };
+      }
+      return {};
     },
   }));
 });
@@ -49,7 +53,7 @@ afterEach(() => Barry.reset());
 
 describe("startSession — existing session (update branch)", () => {
   beforeEach(() => {
-    existingSession.mockResolvedValue({ id: "sess-1", bounds: [], bound_id: null, identity_id: null, traits: [], metadata: { working_directory: "/old" } });
+    existingSession.mockResolvedValue({ id: "sess-1", bags: [], bounds: [], bound: null, identity_id: null, metadata: { working_directory: "/old" } });
   });
 
   it("applies an explicit name to a session that already exists", async () => {
@@ -78,6 +82,15 @@ describe("startSession — existing session (update branch)", () => {
     expect(updates.metadata?.name).toBeUndefined();
     expect(updates.metadata?.working_directory).toBe("/new");
   });
+
+  it("updates and pins the resolved bound when bounds is passed on resume", async () => {
+    await startSession({ session_id: "sess-1", identity_id: 7, bounds: ["no-files"] });
+
+    expect(updateSession).toHaveBeenCalledTimes(1);
+    const [, updates] = updateSession.mock.calls[0];
+    expect(updates.bounds).toEqual(["no-files"]);
+    expect(updates.bound).toEqual({ files: { deny: ["**/*"] } });
+  });
 });
 
 describe("startSession — new session (insert branch)", () => {
@@ -99,10 +112,14 @@ describe("startSession — new session (insert branch)", () => {
     expect(createSession.mock.calls[0][0].metadata.name).toBeNull();
   });
 
-  it("stores a known bound and refuses an unknown bound", async () => {
+  it("stores a known bound, pins its resolved bound, and refuses an unknown bound", async () => {
     await startSession({ session_id: "sess-2", identity_id: 7, bounds: ["no-files"] });
     await expect(startSession({ session_id: "sess-3", identity_id: 8, bounds: ["unknown"] })).rejects.toThrow("Unknown bound");
-    expect(createSession.mock.calls[0][0]).toMatchObject({ identity_id: 7, bounds: ["no-files"] });
+    expect(createSession.mock.calls[0][0]).toMatchObject({
+      identity_id: 7,
+      bounds: ["no-files"],
+      bound: { files: { deny: ["**/*"] } },
+    });
     expect(createSession).toHaveBeenCalledTimes(1);
   });
 });
@@ -128,7 +145,7 @@ describe("startSession — the mode a session ran in", () => {
   });
 
   it("records the mode when the session already exists", async () => {
-    existingSession.mockResolvedValue({ id: "sess-1", bounds: [], bound_id: null, identity_id: null, traits: [], metadata: { working_directory: "/old" } });
+    existingSession.mockResolvedValue({ id: "sess-1", bags: [], bounds: [], bound: null, identity_id: null, metadata: { working_directory: "/old" } });
 
     await startSession({ session_id: "sess-1", mode: "guest-plus" });
 
@@ -182,7 +199,7 @@ describe("startSession — what a launch guaranteed", () => {
   });
 
   it("records the guarantees when the session already exists", async () => {
-    existingSession.mockResolvedValue({ id: "sess-1", bounds: [], bound_id: null, identity_id: null, traits: [], metadata: { working_directory: "/old" } });
+    existingSession.mockResolvedValue({ id: "sess-1", bags: [], bounds: [], bound: null, identity_id: null, metadata: { working_directory: "/old" } });
 
     await startSession({ session_id: "sess-1", mode: "guest", guarantees });
 
@@ -191,11 +208,27 @@ describe("startSession — what a launch guaranteed", () => {
   });
 
   it("keeps the recorded guarantees when a later start supplies none", async () => {
-    existingSession.mockResolvedValue({ id: "sess-1", bounds: [], bound_id: null, identity_id: null, traits: [], metadata: { working_directory: "/old", guarantees } });
+    existingSession.mockResolvedValue({ id: "sess-1", bags: [], bounds: [], bound: null, identity_id: null, metadata: { working_directory: "/old", guarantees } });
 
     await startSession({ session_id: "sess-1", cwd: "/new" });
 
     const [, updates] = updateSession.mock.calls[0];
     expect(updates.metadata?.guarantees).toEqual(guarantees);
+  });
+});
+
+
+describe("startSession — bags before hosted preparation", () => {
+  it("writes bags and model provenance on create", async () => {
+    existingSession.mockResolvedValue(undefined);
+    await startSession({ session_id: "prepared", identity_id: 7, bags: ["git"], provider: "claude", model: "model", model_provider: "vendor", mode: "hosted" });
+    expect(createSession.mock.calls[0][0]).toMatchObject({ bags: ["git"], metadata: { provider: "claude", model: "model", model_provider: "vendor", mode: "hosted" } });
+  });
+  it("clears bags explicitly on resume and preserves them on a hook without a selection", async () => {
+    existingSession.mockResolvedValue({ id: "prepared", identity_id: 7, bags: ["git"], bounds: [], bound: null, metadata: {} });
+    await startSession({ session_id: "prepared", bags: [] });
+    expect(updateSession.mock.calls[0][1].bags).toEqual([]);
+    await startSession({ session_id: "prepared", provider_session_id: "vendor-session" });
+    expect(updateSession.mock.calls[1][1]).not.toHaveProperty("bags");
   });
 });

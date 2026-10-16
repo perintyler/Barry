@@ -1,0 +1,45 @@
+name: session-vector-search
+description: Semantic search over every past session — finds conversations by
+  meaning, not just by matching words
+
+requires:
+  sessions:
+    reason: reads lexical session message matches and replaces sessions:search_messages
+  embeddings:
+    reason: embeds queries and searches the session-messages vector collection
+
+implements:
+  tools:
+    - sessions:search_messages
+
+schedules:
+  embed:
+    every: 15m
+    bags: [ bash, sessions ]
+    action:
+      description: Embed new session messages so they can be searched by meaning
+      run:
+        command: npx
+        args: [ tsx, src/jobs/embed.ts ]
+        working-directory: .
+      secrets: [ BARRY_SECRET ]
+      env:
+        - BARRY_EMBED_MAX_PER_TICK=2000
+      timeout: 15m
+
+scripts:
+  backfill-embeddings:
+    description: "One-off: embed the entire session archive, not just the recent window"
+    command: npx
+    args: [ tsx, src/jobs/embed.ts ]
+    working-directory: .
+    env:
+      - BARRY_EMBED_BACKFILL=1
+
+dependencies:
+  ollama:
+    reason: Generates the embeddings locally, so the index costs nothing and no
+      session text leaves the machine
+    optional: true
+    install:
+      macos: brew install --cask ollama

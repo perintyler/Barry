@@ -27,8 +27,6 @@ export interface BagWithMcpServers {
   >;
   /** Tool metadata namespaces (native/in-process tools). */
   tools?: Array<{ namespace: string }>;
-  /** Manifest traits (not auto-traits — a trait must not vouch for itself). */
-  traits?: Array<{ name: string; bags: string[] }>;
   manifest?: { toolsEntry?: unknown } | null;
   /** Set when the bag's tool code failed to load; its namespaces are unknown. */
   toolsError?: string;
@@ -65,13 +63,6 @@ export interface ServerKeyConflict {
 export interface EndpointDuplicate {
   endpoint: string;
   claimants: Array<{ bag: string; key: string }>;
-  message: string;
-}
-
-export interface DanglingTraitNamespace {
-  bag: string;
-  trait: string;
-  namespace: string;
   message: string;
 }
 
@@ -134,7 +125,7 @@ export function findServerKeyConflicts(declared: readonly DeclaredMcpServer[]): 
       claimants,
       identical,
       message: identical
-        ? `mcp server "${key}" declared identically by ${claimants.join(", ")} — one bag must own it; the others should compose it via bags: or reference its namespace in a trait`
+        ? `mcp server "${key}" declared identically by ${claimants.join(", ")} — one bag must own it; the others should compose it via bags: or requires:`
         : `mcp server "${key}" declared with DIFFERENT configs by ${claimants.join(", ")} — one config silently wins; one bag must own it`,
     });
   }
@@ -179,20 +170,12 @@ export function findEndpointDuplicates(declared: readonly DeclaredMcpServer[]): 
 /**
  * The namespaces the registry actually provides: every server key, every
  * native-tool namespace, and the bag-name guess for bags whose in-process tools
- * are assumed to namespace by bag name (mirrors the auto-traits derivation).
- * That guess is verified against real tool source by
- * shipped-namespaces.test.ts. Deliberately NOT manifest trait namespaces — a
- * trait must not vouch for itself.
+ * are assumed to namespace by bag name.
  */
 export function collectProvidedNamespaces(bags: readonly BagWithMcpServers[]): Set<string> {
   const provided = new Set<string>();
   for (const bag of bags) {
     let hasAny = false;
-    // Mirrors the remote-bag exception in `ownNamespaces`: a remote bag's
-    // server key is its BAG NAME, so once its tools are enumerated the key
-    // names nothing. These two derivations must agree — when they drift, a
-    // namespace one of them invents is "provided" by nobody yet never pruned,
-    // and it lingers on trait rows forever.
     const remoteWithEnumeratedTools = bag.source?.type === "remote" && (bag.tools?.length ?? 0) > 0;
     if (!remoteWithEnumeratedTools) {
       for (const key of Object.keys(bag.mcpServers ?? {})) {
@@ -204,45 +187,9 @@ export function collectProvidedNamespaces(bags: readonly BagWithMcpServers[]): S
       provided.add(tool.namespace);
       hasAny = true;
     }
-    // Mirrors the bag-name guess in `ownNamespaces` — and MUST keep mirroring
-    // it. When the two drift, a namespace one of them invents is "provided" by
-    // nobody yet never pruned, and it lingers on trait rows forever. The guess
-    // itself is verified by shipped-namespaces.test.ts, which reads what each
-    // bag's tool source actually stamps; it cannot be checked here, because
-    // this function is pure by contract (no filesystem, no imports).
     if (!hasAny && !bag.toolsError && (!bag.manifest || bag.manifest.toolsEntry)) {
       provided.add(bag.name);
     }
   }
   return provided;
-}
-
-/**
- * Manifest-trait namespaces that no bag in the registry provides. A trait
- * granting a namespace nobody provides resolves to an empty tool set for
- * anyone holding it, and nothing at session time reports the unmatched grant
- * — the session just comes up short on tools.
- */
-export function findDanglingTraitNamespaces(
-  bags: readonly BagWithMcpServers[],
-  provided: Set<string> = collectProvidedNamespaces(bags),
-): DanglingTraitNamespace[] {
-  const dangling: DanglingTraitNamespace[] = [];
-  for (const bag of bags) {
-    for (const trait of bag.traits ?? []) {
-      for (const namespace of trait.bags) {
-        if (provided.has(namespace)) continue;
-        dangling.push({
-          bag: bag.name,
-          trait: trait.name,
-          namespace,
-          message: `trait "${trait.name}" (${bag.name}) grants namespace "${namespace}" which no registered bag provides — sessions holding it silently get no tools for it`,
-        });
-      }
-    }
-  }
-  return dangling.sort(
-    (a, b) =>
-      a.bag.localeCompare(b.bag) || a.trait.localeCompare(b.trait) || a.namespace.localeCompare(b.namespace),
-  );
 }

@@ -11,12 +11,11 @@ tools:
     - get_status
     - update_status
 
-traits:
-  core-read:
-    description: "Read-only access to core Barry tools"
-    access: read
-    namespaces:
-      - barry
+bounds:
+  core-readonly:
+    tools:
+      deny:
+        - "barry:write"
 
 agents:
   summarizer:

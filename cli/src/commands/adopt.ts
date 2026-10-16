@@ -24,7 +24,7 @@ export interface AdoptableSession {
   /** The mode recorded at start. Absent for a session Barry did not launch. */
   mode?: string | null;
   /** The harness's own conversation id, which hosted mode continues. */
-  providerSessionId?: string | null;
+  harnessSessionId?: string | null;
   /** Whether the process that runs its TUI is still alive. */
   driverAlive: boolean;
 }
@@ -43,7 +43,7 @@ export interface AdoptRefusal {
 export interface AdoptPlan {
   sessionId: string;
   provider: string;
-  providerSessionId: string;
+  harnessSessionId: string;
   from: ModeId | "guest-plus";
 }
 
@@ -105,7 +105,7 @@ export function planAdoption(
     };
   }
 
-  if (!session.providerSessionId) {
+  if (!session.harnessSessionId) {
     // Without the harness's own id there is nothing to continue, whatever the
     // adapter can do — and continuing nothing would start a new conversation
     // wearing this one's name.
@@ -119,7 +119,7 @@ export function planAdoption(
   return {
     sessionId: session.id,
     provider: session.provider,
-    providerSessionId: session.providerSessionId,
+    harnessSessionId: session.harnessSessionId,
     // A session Barry did not launch has no recorded mode; it is a guest by
     // definition, since Barry never held its handle.
     from: (session.mode as ModeId | "guest-plus" | undefined) ?? "guest",

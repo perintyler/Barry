@@ -1,7 +1,7 @@
 /**
  * Translate a Barry network bound into Claude Agent SDK sandbox settings.
  *
- * Barry's `Bound` is the policy language; the SDK's sandbox is the
+ * Barry's `Bound` is the constraint language; the SDK's sandbox is the
  * enforcement backend for `enforce: "sandbox"`. The SDK spawns the agent under
  * an egress proxy that filters outbound traffic **by hostname** and cannot be
  * lifted by the agent itself.
@@ -23,17 +23,33 @@
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
 
 /**
- * The network bag of a Barry `Bound`, accepted structurally.
+ * The network rules of a Barry `Bound`, accepted structurally.
  *
- * agent-runtime deliberately does not depend on @barry-rocks/sdk/bounds — the
- * runtime should not import the policy package — so the shape is restated
- * here. It is the caller's job to pass a real bound's `network`.
+ * agent-runtime deliberately does not depend on @barry-rocks/sdk/bounds, so the
+ * shape is restated here. It is the caller's job to pass a real bound's
+ * `network`.
  */
 export interface NetworkBoundInput {
-  actions?: string[];
-  domains?: string[];
-  allowDomains?: string[];
+  allow?: string[];
+  deny?: string[];
   enforce?: "guard" | "sandbox";
+}
+
+/**
+ * Extract hostnames from URL-glob patterns (`https://api.github.com/*`,
+ * `*.example.com`, `api.anthropic.com`).
+ */
+function extractHostnames(patterns: string[] | undefined): string[] {
+  if (!patterns) return [];
+  const hosts = new Set<string>();
+  for (const pattern of patterns) {
+    if (pattern === "*") continue;
+    const withoutScheme = pattern.replace(/^(?:[a-z*]+:\/\/)/i, "");
+    const hostPort = withoutScheme.split("/")[0] ?? "";
+    const host = hostPort.replace(/:\d+$/, "");
+    if (host) hosts.add(host);
+  }
+  return [...hosts];
 }
 
 /**
@@ -91,7 +107,7 @@ export function buildSandboxSettings(
     network: {
       // Absent allowlist means deny-all-but-localhost. Opening a host is
       // always an explicit act, so a misconfigured bound fails closed.
-      allowedDomains: network.allowDomains ?? [],
+      allowedDomains: extractHostnames(network.allow),
       ...(options.allowUnixSockets?.length
         ? { allowUnixSockets: options.allowUnixSockets }
         : {}),

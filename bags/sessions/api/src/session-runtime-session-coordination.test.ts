@@ -1,3 +1,4 @@
+import { PersistQueue } from "./runtime/persist-queue.js";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 /**
@@ -34,12 +35,13 @@ const sequences = new Map<string, number>();
 const rows: Array<{ sessionId: string; type: string; content?: unknown; sequence: number }> = [];
 
 // Unlike session-runtime.test.ts, an existing session RESOLVES here — starting
-// one by id is the whole subject of these tests. The runtime reads it, and so
-// does the sessions bag composing its grants.
+// one by id is the whole subject of these tests.
 const stored = vi.hoisted(() => (id: string) => ({
   id,
   system_prompt: "stored prompt",
-  traits: [],
+  bags: [],
+  bounds: [],
+  bound: null,
   metadata: { working_directory: "/repo" },
   identity_id: null,
 }));
@@ -48,7 +50,9 @@ vi.mock("./db.js", () => ({
   createNamedSession: vi.fn(async (input: Record<string, unknown>) => ({
     id: `session-db-id-${++sessionCounter}`,
     system_prompt: input.system_prompt,
-    traits: input.traits ?? [],
+    bags: input.bags ?? [],
+    bounds: input.bounds ?? [],
+    bound: input.bound ?? null,
     metadata: input.metadata ?? {},
     identity_id: input.identity_id ?? null,
   })),
@@ -72,7 +76,7 @@ vi.mock("./db.js", () => ({
     persistCompletions.push(String(message.type));
     // Folded into its call's row: nothing of its own is stored.
     if (message.type === "tool_result") return null;
-    const sequence = (sequences.get(sessionId) ?? -1) + 1;
+    const sequence = Math.max(typeof message.sequence === "number" ? message.sequence : 0,(sequences.get(sessionId) ?? -1) + 1);
     sequences.set(sessionId, sequence);
     rows.push({ sessionId, type: String(message.type), content: message.content, sequence });
     return sequence;
@@ -85,27 +89,23 @@ vi.mock("@barry-rocks/sessions-bag/lifecycle", () => ({
   endSession: vi.fn(async () => undefined),
 }));
 
-// The identities bag, at its root. The policy a session's guards enforce is
-// composed by the real shared resolver over these, installed as the
-// identities subject below (see test-helpers/identity-policy).
 vi.mock("@barry-rocks/identities-bag", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@barry-rocks/identities-bag")>();
   const identityRecords = {
     ...actual.identityRecords,
     row: vi.fn(async (id: number) => ({ id, name: "fixture", metadata: {} })),
-    config: vi.fn(() => ({ env: {}, vault: null, bags: [], traits: [] })),
+    config: vi.fn(() => ({ env: {}, vault: null, bags: [], bounds: [] })),
     resolve: vi.fn(async () => ({ barry: { id: "file-barry", name: "default" }, source: "default" })),
     rowId: vi.fn(async () => 1),
     directory: vi.fn(() => null),
   };
-  const bounds = { ...actual.bounds, get: vi.fn(async () => undefined), stored: vi.fn(async () => []) };
-  const traits = { ...actual.traits, list: vi.fn(async () => []) };
+  const bounds = { ...actual.bounds, get: vi.fn(async () => undefined), list: vi.fn(async () => []) };
   const owner = {
     ...actual.owner,
     current: vi.fn(async () => ({ id: 1, settings: {} })),
     users: { ...actual.owner.users, get: vi.fn(async (id: number) => ({ id, settings: {} })) },
   };
-  return { ...actual, identityRecords, bounds, owner, traits };
+  return { ...actual, identityRecords, bounds, owner };
 });
 
 vi.mock("@barry-rocks/sessions-bag/store/session-helpers", () => ({
@@ -215,20 +215,17 @@ import type { CreateSessionFn } from "./agent-runtime-types.js";
 import type { SessionConfig as HarnessSessionConfig } from "@barry-rocks/sdk/sessions";
 import { FakeSession } from "./test-helpers/fake-session.js";
 import { wireShippedHarnesses } from "./test-helpers/shipped-harnesses.js";
-import { grantsOver } from "./test-helpers/identity-policy.js";
-import { bounds, identityRecords, traits } from "@barry-rocks/identities-bag";
 import { Barry } from "@barry-rocks/sdk";
 import { fakeIdentities } from "@barry-rocks/sdk/testing";
 
-// Routing reads the harness's record and the vendor catalog; the sessions
-// here are created through the override below, not the wired runtime. The
-// identities subject composes grants over the mocked store, with no bag
-// declaring a tool.
 beforeEach(() => {
   wireShippedHarnesses({ createSession: vi.fn(), runStructured: vi.fn() });
-  Barry.use(fakeIdentities({ grants: grantsOver({ identityRecords, traits, bounds }, []) }));
+  Barry.use(fakeIdentities({
+    bound: async () => null,
+    tools: async () => [],
+  }));
 });
-afterEach(() => Barry.reset());
+afterEach(async () => { await PersistQueue.drainAll(2000); Barry.reset(); });
 
 function baseConfig(overrides: Partial<SessionConfig> = {}): SessionConfig {
   return { prompt: "hello", repoPath: "/repo", ...overrides };
@@ -463,7 +460,7 @@ describe("persist, then advertise", () => {
     });
   });
 
-  it("sends each stored message with the sequence the store gave it", async () => {
+  it("publishes resident-allocated sequences before recording and persists them unchanged", async () => {
     const manager = new SessionRuntime({ createSession, limits: { maxResidentSessions: 5 } });
     const sessionId = "advertised-session";
     // History, as a restarted session has.
@@ -476,7 +473,7 @@ describe("persist, then advertise", () => {
     // Another process appends to the session meanwhile (a hook, the CLI):
     // the runtime cannot know, and must not guess, what comes next.
     await vi.waitFor(() => expect(sequences.get(sessionId)).toBe(42));
-    sequences.set(sessionId, 47);
+    // Resident owns allocation; other writers must route through it.
 
     sessions[0].push({ type: "text", text: "looking" });
     sessions[0].push({ type: "tool_use", id: "tu-1", tool: "Bash", input: { command: "ls" } });
@@ -488,12 +485,31 @@ describe("persist, then advertise", () => {
     // The handshake waited for the user turn broadcast before it, and reports it.
     expect(ws.sent[0]).toMatchObject({ type: "subscribed", sequence: 42 });
     const advertised = ws.sent.filter((m) => m.type !== "subscribed" && m.sequence !== undefined).map((m) => [m.type, m.sequence]);
+    expect(await manager.flushPersistence(sessionId)).toBe(true);
     const stored = rows.filter((r) => r.sessionId === sessionId && r.sequence > 42).map((r) => [r.type, r.sequence]);
-    expect(advertised).toEqual([["text", 48], ["tool_start", 49], ["result", 50]]);
+    expect(await manager.flushPersistence(sessionId)).toBe(true);
+    expect(advertised).toEqual([["text", 43], ["tool_start", 44], ["result", 45]]);
     expect(advertised).toEqual(stored);
     // A result is folded into its call's row, so it is sent with no sequence
     // of its own, as every message the store does not keep is.
     expect(ws.sent.find((m) => m.type === "tool_result")).not.toHaveProperty("sequence");
+  });
+
+  it("recovers published sequences when another process appends meanwhile",async()=>{
+    const manager=new SessionRuntime({createSession});const id="foreign-writer";
+    sequences.set(id,41);await manager.startSession(baseConfig({sessionId:id,prompt:"go"}));
+    const ws=listener();manager.subscribe(id,ws);
+    await vi.waitFor(()=>expect(sessions[0]?.delivered).toHaveLength(1));
+    await manager.flushPersistence(id);sequences.set(id,100);
+    sessions[0].push({type:"text",role:"assistant",text:"first"});
+    sessions[0].push({type:"text",role:"assistant",text:"second"});sessions[0].end();
+    await vi.waitFor(()=>expect(ws.sent.filter(frame=>frame.type==="delivery_update")).toHaveLength(2));
+    expect(await manager.flushPersistence(id)).toBe(true);
+    expect(rows.filter(row=>row.sessionId===id).slice(-2).map(row=>row.sequence)).toEqual([101,102]);
+    const mappings=ws.sent.filter(frame=>frame.type==="delivery_update");
+    expect(mappings[0]).toMatchObject({metadata:{code:"sequence_reassigned",oldSequence:43,newSequence:101,dedupeKey:expect.any(String)}});
+    expect(manager.pendingPersistence(id)).toEqual([]);expect(()=>manager.assertPersistenceAdmission(id)).not.toThrow();
+    await manager.removeSession(id);
   });
 
   it("two appends for one session at once are stored, and sent, in the order they happened", async () => {
@@ -513,6 +529,7 @@ describe("persist, then advertise", () => {
     await vi.waitFor(() => expect(ws.sent.map((m) => m.type)).toContain("text"));
     await vi.waitFor(() => expect(ws.sent).toContainEqual(expect.objectContaining({ type: "status", status: "waiting" })));
 
+    expect(await manager.flushPersistence(sessionId)).toBe(true);
     expect(persistCompletions.slice(-2)).toEqual(["tool_start", "text"]);
     const stored = rows.filter((r) => r.sessionId === sessionId).map((r) => [r.type, r.sequence]);
     expect(stored).toEqual([["text", 0], ["tool_start", 1], ["text", 2]]);
@@ -657,4 +674,24 @@ describe("TUIs attached to a hosted session", () => {
     await manager.detachRenderer("attach-tools", attachmentId);
     expect(sessions[0].closeCalls).toBe(1);
   });
+});
+
+it("seeds the allocator before a concurrent POST can see the resident",async()=>{
+ const {lastMessageSequence}=await import("./db.js");let finish!:(value:number)=>void;
+ vi.mocked(lastMessageSequence).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+ const manager=new SessionRuntime({createSession:async()=>new FakeSession()});const id="seed-before-resident";
+ const starting=manager.startSession(baseConfig({sessionId:id,prompt:"",prepareOnly:true}));
+ await vi.waitFor(()=>expect(finish).toBeTypeOf("function"));expect(manager.getActiveSession(id)).toBeUndefined();
+ finish(41);const active=await starting;expect(active.lastSequence).toBe(41);
+ manager.broadcastToSession(id,{type:"text",sessionId:id,content:"first live",role:"assistant"});
+ expect(active.lastSequence).toBe(42);expect(await manager.flushPersistence(id)).toBe(true);await manager.removeSession(id);
+});
+
+it("keeps a pre-recorded cold user row's sequence on its live echo",async()=>{
+ const harness=new FakeSession();const manager=new SessionRuntime({createSession:async()=>harness});
+ const broadcast=vi.spyOn(manager,"broadcastToSession");const id="reused-user-sequence";sequences.set(id,41);
+ const active=await manager.startSession(baseConfig({sessionId:id,prompt:"new prompt",reuseClientMessageRow:true,userMessageSequence:41,initialHistoryContext:"prior history"}));
+ expect(broadcast).toHaveBeenCalledWith(id,expect.objectContaining({type:"text",role:"user",sequence:41,reuseClientMessageRow:true}));
+ await vi.waitFor(()=>expect(harness.delivered).toHaveLength(1));expect(harness.delivered[0]).toContain("prior history");
+ harness.end();await vi.waitFor(()=>expect(active.status).toBe("waiting"));await manager.removeSession(id);
 });

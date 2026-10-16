@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { isScriptAction, validateActionInputs, type RunnableAction } from "./action-catalog.js";
+import { isScriptAction, validateActionInputs, type RunnableAction } from "./action-registry.js";
 
 it("checks required, unknown and undeclared action inputs", () => {
   const action = { name: "test", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } };

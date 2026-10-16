@@ -114,4 +114,4 @@ export function defineVendor(vendor: Vendor): Vendor {
   return vendor;
 }
 
-export { SHIPPED_VENDORS, SHIPPED_VENDORS_YAML } from "./shipped-catalog.js";
+export { SHIPPED_MODELS, SHIPPED_VENDORS, SHIPPED_VENDORS_YAML } from "./shipped-models.js";

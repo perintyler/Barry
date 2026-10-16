@@ -27,7 +27,7 @@
 
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
-import { assertToolAllowed, boundHasContent, mergeBounds, type Bound } from "@barry-rocks/sdk/bounds";
+import { assertToolAllowed, boundHasContent, boundHasProcessRestrictions, mergeBounds, type Bound } from "@barry-rocks/sdk/bounds";
 import { boundToNodeFlags } from "@barry-rocks/sdk/internal/workflows";
 import { stableNodePath } from "@barry-rocks/sdk/internal/services";
 import { bounds } from "@barry-rocks/identities-bag";
@@ -39,20 +39,17 @@ import { findJob, type JobMeta } from "@barry-rocks/sdk/internal/jobs";
 import type { ActionRunSpec } from "@barry-rocks/sdk/internal/actions";
 import { runScriptAction, type RunScriptOptions } from "@barry-rocks/actions-bag";
 
-import type { ExecutionContext } from "@barry-rocks/sdk/bounds";
-import type { OneOff } from "@barry-rocks/schedules-bag";
-import type { OneOffResult } from "@barry-rocks/schedules-bag";
-import { oneOffContext } from "@barry-rocks/schedules-bag";
-import { recordAttempt } from "@barry-rocks/schedules-bag";
+import type { AtSchedule, AtScheduleResult, ScheduleAccess } from "@barry-rocks/schedules-bag";
+import { resolveAtScheduleAccess, recordAttempt } from "@barry-rocks/schedules-bag";
 
 export type CodeJob = JobMeta & { runs: Exclude<JobMeta["runs"], { using: "action" }> };
 
-/** The job a one-off names, or why it cannot run. Resolved at attempt start, so an upgraded bag runs its upgraded job. */
-export async function resolveOneOffJob(oneOff: OneOff): Promise<{ job: JobMeta } | { unavailable: string }> {
-  if (!oneOff.job) return { unavailable: "names no job" };
+/** The job an at-schedule names, or why it cannot run. Resolved at attempt start, so an upgraded bag runs its upgraded job. */
+export async function resolveAtScheduleJob(schedule: AtSchedule): Promise<{ job: JobMeta } | { unavailable: string }> {
+  if (!schedule.job) return { unavailable: "names no job" };
   const { bags } = await loadBagRegistrySnapshot();
-  const job = findJob(bags, oneOff.job, { fromBag: oneOff.bag });
-  return job ? { job } : { unavailable: `job "${oneOff.job}" does not exist` };
+  const job = findJob(bags, schedule.job, { fromBag: schedule.bag });
+  return job ? { job } : { unavailable: `job "${schedule.job}" does not exist` };
 }
 
 /** A `run:` spec for the job's process. `node` goes through `entry`, so it runs with Barry's pinned Node, never PATH's. */
@@ -96,12 +93,12 @@ export function jobScriptAction(job: CodeJob, run: ActionRunSpec, timeoutS: numb
   };
 }
 
-/** A job's own bounds, merged; null when it names none. Throws naming a bound that is not synced. */
+/** A job's own bounds, merged; null when it names none. Throws naming an unknown bound. */
 export async function jobBound(job: Pick<JobMeta, "bounds">): Promise<Bound | null> {
   let merged: Bound | null = null;
   for (const name of job.bounds ?? []) {
-    const record = await bounds.get({ name });
-    if (!record) throw new Error(`unknown bound ${name}; run \`barry bag sync-traits ${name.split(":")[0]}\``);
+    const record = await bounds.get(name);
+    if (!record) throw new Error(`unknown bound ${name}`);
     merged = mergeBounds(merged, record);
   }
   return merged;
@@ -146,18 +143,18 @@ export interface JobRunnerOptions {
   baseEnv: NodeJS.ProcessEnv;
 }
 
-export async function runJobOneOff(oneOff: OneOff, attemptId: string, attempt: number, options: JobRunnerOptions): Promise<OneOffResult> {
-  const unavailable = (why: string): OneOffResult => ({ outcome: "unavailable", exitCode: null, runId: null, reason: `unavailable: ${why}` });
-  const resolved = await resolveOneOffJob(oneOff);
+export async function runJobAtSchedule(schedule: AtSchedule, attemptId: string, attempt: number, options: JobRunnerOptions): Promise<AtScheduleResult> {
+  const unavailable = (why: string): AtScheduleResult => ({ outcome: "unavailable", exitCode: null, runId: null, reason: `unavailable: ${why}` });
+  const resolved = await resolveAtScheduleJob(schedule);
   if ("unavailable" in resolved) return unavailable(resolved.unavailable);
   const found = resolved.job;
   if (found.runs.using === "action") return unavailable(`${found.qualifiedName} runs an action, which the API runs`);
   const job: CodeJob = { ...found, runs: found.runs };
 
-  const inputErrors = validateActionInputs({ name: job.qualifiedName, ...(job.inputSchema ? { inputSchema: job.inputSchema } : {}) }, oneOff.inputs);
+  const inputErrors = validateActionInputs({ name: job.qualifiedName, ...(job.inputSchema ? { inputSchema: job.inputSchema } : {}) }, schedule.inputs);
   if (inputErrors.length) return unavailable(inputErrors.join(" "));
 
-  if (oneOff.callerSessionId && job.runs.secrets?.length) {
+  if (schedule.callerSessionId && job.runs.secrets?.length) {
     return unavailable(`${job.qualifiedName} declares secrets (${job.runs.secrets.join(", ")}), which a job a session started cannot have; start it from a schedule, the CLI, or with the installation credential`);
   }
 
@@ -167,45 +164,54 @@ export async function runJobOneOff(oneOff: OneOff, attemptId: string, attempt: n
     if (!preflight.passed) return unavailable(`preflight did not pass: ${preflight.warning}`);
   }
 
-  // A schedule's one-off carries the schedule's identity and traits; a job
+  // A schedule's run carries the schedule's identity and bags; a job
   // asked for directly carries none and runs with its bag's authority.
-  let context: ExecutionContext | undefined;
-  if (oneOff.permissions.identity || oneOff.permissions.traits?.length) {
-    context = await oneOffContext(oneOff);
-    assertToolAllowed(context, { namespace: "bash", toolName: "Bash" }, installationRegistry().id);
-    if (boundHasContent(context.bound ?? undefined)) return unavailable("raw scheduled processes cannot enforce selected bounds");
+  let access: ScheduleAccess | undefined;
+  if (schedule.permissions.identity || schedule.permissions.bags?.length || schedule.permissions.traits?.length) {
+    access = await resolveAtScheduleAccess(schedule);
+    assertToolAllowed(access, { namespace: "bash", toolName: "Bash" }, installationRegistry().id);
+    if (boundHasProcessRestrictions(access.bound ?? undefined)) return unavailable("raw scheduled processes cannot enforce selected bounds");
   }
 
-  const secretScope: RunScriptOptions["secretScope"] = oneOff.callerSessionId
+  const secretScope: RunScriptOptions["secretScope"] = schedule.callerSessionId
     ? { kind: "none" }
-    : context?.identity ? { kind: "identity", uuid: context.identity } : { kind: "installation" };
+    : access?.identity ? { kind: "identity", uuid: access.identity } : { kind: "installation" };
   const launch = await boundedLaunch(job);
   if ("unavailable" in launch) return unavailable(launch.unavailable);
-  const action = jobScriptAction(job, launch.run, oneOff.timeoutS);
+  const action = jobScriptAction(job, launch.run, schedule.timeoutS);
+  const metadataContext = access
+    ? {
+        identity: access.identity,
+        bags: access.bags,
+        traits: access.bags,
+        bound: access.bound,
+        allowedToolIds: access.allowedToolIds,
+      }
+    : undefined;
   const runOptions: RunScriptOptions = {
-    inputs: oneOff.inputs,
+    inputs: schedule.inputs,
     trigger: "job",
-    scheduleId: oneOff.id,
-    sessionId: oneOff.callerSessionId,
+    scheduleId: schedule.id,
+    sessionId: schedule.callerSessionId,
     secretScope,
     baseEnv: options.baseEnv,
     metadata: {
       runner_pid: process.pid,
       one_off_attempt: attemptId,
       job: job.qualifiedName,
-      ...(oneOff.callerSessionId ? { caller_session_id: oneOff.callerSessionId } : {}),
-      ...(context ? { execution_context: context } : {}),
+      ...(schedule.callerSessionId ? { caller_session_id: schedule.callerSessionId } : {}),
+      ...(metadataContext ? { execution_context: metadataContext, schedule_access: metadataContext } : {}),
     },
     extraEnv: {
-      BARRY_JOB_KEY: oneOff.idempotencyKey ?? oneOff.id,
+      BARRY_JOB_KEY: schedule.idempotencyKey ?? schedule.id,
       BARRY_JOB_ATTEMPT: String(attempt),
-      BARRY_SCHEDULE_ID: oneOff.id,
+      BARRY_SCHEDULE_ID: schedule.id,
       BARRY_ATTEMPT_ID: attemptId,
     },
     onStart: ({ runId, processGroup }) => recordAttempt(attemptId, { runId, processGroup }),
   };
-  const { run, timedOut } = context
-    ? await withStoreContext({ identity: context.identity, execution: context }, () => runScriptAction(action, runOptions))
+  const { run, timedOut } = access
+    ? await withStoreContext({ identity: access.identity, execution: access }, () => runScriptAction(action, runOptions))
     : await runScriptAction(action, runOptions);
 
   const exitCode = run.process?.exit_code ?? null;

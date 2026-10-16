@@ -13,6 +13,7 @@
  */
 import { resolve } from "node:path";
 import {
+  modeVersions,
   AdapterNotInstalled,
   AdapterRefused,
   type Adapter,
@@ -36,6 +37,10 @@ export function formatAdapter(record: InstalledAdapter, problems: readonly strin
     `  path     ${record.path}  ${record.version}`,
     `  modes    ${declared.join(", ")}  default: ${record.defaultMode}`,
     `  verified ${verified}`,
+    ...declared.map(id => {
+      const policy = modeVersions(record.modes[id]!);
+      return `  ${id}: recommended ${policy.recommendedVersion}; tested ${policy.testedVersions.join(", ")}; supported ${policy.supportedVersions.map(range => `${range.min ?? "*"}..${range.before ? `<${range.before}` : range.max ?? "*"}`).join(", ") || "not established"}`;
+    }),
     ...(record.experimental ? [`  experimental ${record.experimental}`] : []),
     ...(platforms.length ? [`  platforms ${platforms.join(", ")}`] : []),
     ...problems.map((problem) => `  PROBLEM  ${problem}`),
@@ -128,7 +133,7 @@ export function removeAdapter(deps: AdapterCommandDeps, id: string): number {
 
 
 export interface ModelAdapterCommandDeps {
-  providers: import("@barry-rocks/sdk/adapters/models").ModelProviders;
+  providers: import("@barry-rocks/sdk/adapters/models").ModelVendors;
   shipped: readonly { packageName: string }[];
   write(line: string): void;
   error?(line: string): void;

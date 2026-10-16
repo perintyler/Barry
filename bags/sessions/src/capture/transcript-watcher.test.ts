@@ -49,7 +49,7 @@ const guest = (id: string, provider = "claude"): WatchableSession => ({
   id,
   provider,
   host: "guest",
-  providerSessionId: `p-${id}`,
+  harnessSessionId: `p-${id}`,
 });
 
 describe("which sessions are swept", () => {

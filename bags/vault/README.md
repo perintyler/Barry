@@ -51,6 +51,70 @@ user. The resolution path only hands an agent its mapped values by convention.
 Key custody under the daemon UID would be needed to close that gap.
 See [the preserved design rationale](../../docs/decisions/0042-vault-key-custody-and-action-records.md).
 
+### Instance-owned named connections
+
+An installation can explicitly bind a named vault to a private bootstrap file
+instead of the login Keychain. Identity configuration still contains only
+`vault: account-a`; action inputs and identity metadata cannot choose an endpoint
+or connection credentials. The ordinary `openVault(name)` path reads the
+installation's `vault-accounts.yaml` in its canonical config directory. Under
+`BARRY_HOME`, that is `$BARRY_HOME/config/vault-accounts.yaml`:
+
+```yaml
+version: 1
+accounts:
+  account-a:
+    server_url: unix:///absolute/path/to/vault.sock
+    bootstrap:
+      client_id: {in: .env, key: VAULT_A_CLIENT_ID}
+      client_secret: {in: .env, key: VAULT_A_CLIENT_SECRET}
+      master_password: {in: .env, key: VAULT_A_MASTER_PASSWORD}
+      email: {in: .env, key: VAULT_A_EMAIL}
+```
+
+The four declared values come only from the canonical installation env file
+(`$BARRY_HOME/app-support/env` under `BARRY_HOME`). They do not come from process
+environment variables, identity `.env` files, another named vault, or Keychain
+fallback. Bootstrap references must use `.env` with an explicit key; recursive
+vault and Keychain references are refused. Both files must be regular,
+nonsymlink files owned by the current service user with mode `0600` (or stricter).
+Their immediate parents must be owned by that user or root and must not be
+writable by group or others. One verified file snapshot supplies all four
+credentials per opening; later openings reread configuration and values.
+
+An absent mapping retains the existing named Keychain behavior. An authored
+mapping that is invalid or whose credentials cannot be read refuses without
+fallback. The endpoint must satisfy the existing local-socket/loopback transport
+policy, and the existing production-vault guard still applies. In particular,
+setting `VAULT_URL` to a disposable endpoint also makes it the guarded default;
+an isolated installation selects its endpoint solely in this explicit mapping.
+Tests additionally require a temporary instance for automatic bootstrap and do
+not need the real-vault opt-out.
+
+Two identities selecting the same account deliberately share it. Different
+names do not establish isolation if an administrator maps them to the same
+underlying account; isolation comes from distinct authenticated vault accounts
+and encryption keys. Preserve named references through callers: converting a
+name to the legacy `vaultAccountFor` descriptor selects its legacy Keychain
+representation instead.
+
+The legacy sharing index cannot identify aliases of a configured account.
+Configured `vault add` therefore requires `--force` to replace an existing item,
+and configured `vault remove` requires `--force` to delete one. Identity secret
+set/import likewise require `--force` to replace an existing configured-vault
+item. Assignment reports this limit. `vault import --overwrite` also explicitly replaces existing values;
+these operations can affect every identity selecting the underlying account.
+
+This protects application secrets with the vault's normal encryption at rest;
+the private bootstrap file itself is **plaintext**, protected by filesystem
+permissions. It does not strengthen the same-user key-custody boundary above.
+Keychain provisioning and configured-account provisioning/restore are separate
+administration paths; unsupported configured bootstrap mutations refuse rather
+than write another provider. Include the connection map, private env file,
+vault database and daemon signing configuration in installation backup,
+restore and credential-rotation procedures. Operational restore, service-user
+deployment and remote credential distribution require their own qualification.
+
 ## Layout
 
 ```

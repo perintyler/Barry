@@ -3,6 +3,7 @@ import { sessionIdentity } from "@barry-rocks/sdk/stores";
 import { withStoreContext } from "@barry-rocks/sdk/internal/stores";
 
 import { getSessionsSqlite } from "./sessions-db.js";
+import { assertInteractiveSession } from "./workflow-ownership.js";
 
 function getProcessesSqlite() {
   return withStoreContext({}, () => getSessionsSqlite());
@@ -97,6 +98,7 @@ export function recordProcessStart(input: RecordProcessInput): ProcessRecord {
   // Hold the Session writer lock until control history commits. Ending or
   // deleting the Session must see this instance when capturing cleanup.
   return parent.transaction(() => {
+    assertInteractiveSession(parent, input.sessionId);
     const session = parent.prepare("SELECT state,ended_at FROM sessions WHERE id=?").get(input.sessionId) as { state: string; ended_at: string | null } | undefined;
     if (!session || session.state !== "open" || session.ended_at !== null) throw new ProcessSessionUnavailable();
     return sqlite.transaction(() => {

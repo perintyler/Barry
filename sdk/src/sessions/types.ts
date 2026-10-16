@@ -10,7 +10,7 @@
  */
 import { z } from "zod";
 import { HarnessIdSchema } from "../ids.js";
-import { ReviewPolicySchema } from "./continuations.js";
+import { ReviewRulesSchema } from "./continuations.js";
 
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 
@@ -33,8 +33,8 @@ export const SessionSchema = z.object({
   identityId: z.int().nullable(),
   identitySource: z.enum(["explicit", "repo", "default", "file"]).nullable(),
   status: z.enum(["pending", "planning", "running", "completed", "failed", "cancelled"]),
-  traits: z.array(z.string()),
-  bounds: z.array(z.string()).optional(),
+  bags: z.array(z.string()).optional(),
+  bounds: z.array(z.union([z.string(), z.record(z.string(), z.unknown())])).optional(),
   bound: z.record(z.string(), z.unknown()).nullable(),
   pinned: z.boolean(),
   useWorktree: z.boolean(),
@@ -66,6 +66,7 @@ export const SessionSchema = z.object({
     phase: z.string().nullable(),
     updatedAt: z.iso.datetime().nullable(),
   }).nullable().optional(),
+  lastEventAt: z.iso.datetime().nullable().optional(),
   createdAt: z.iso.datetime(),
   startedAt: z.iso.datetime().nullable(),
   endedAt: z.iso.datetime().nullable().optional(),
@@ -79,6 +80,7 @@ export const CreateSessionResponseSchema = z.union([
 export type CreateSessionResponse = z.infer<typeof CreateSessionResponseSchema>;
 
 export const MessageSchema = z.object({
+  dedupeKey:z.string().optional(),
   type: z.enum(["text", "tool_start", "error", "init", "result", "summary"]),
   sessionId: z.string(),
   sequence: z.int().nonnegative(),
@@ -101,6 +103,7 @@ export const MessageSchema = z.object({
    * nest delegated work instead of presenting it as the agent's own.
    */
   parentToolUseId: z.string().nullable().optional(),
+  lastEventAt: z.iso.datetime().nullable().optional(),
   createdAt: z.iso.datetime(),
 }).strict();
 
@@ -130,7 +133,7 @@ export const CreateSessionRequestSchema = z.object({
   prompt: z.string().min(1).max(200_000).optional(),
   repoPath: z.string().max(4096).optional(),
   name: z.string().max(100).optional(),
-  traits: z.array(z.string()).default([]),
+  bags: z.array(z.string()).optional(),
   identityId: z.int().nullable().optional(),
   useWorktree: z.boolean().optional(),
   provider: HarnessIdSchema.optional(),
@@ -141,17 +144,20 @@ export const CreateSessionRequestSchema = z.object({
    */
   modelProvider: z.string().min(1).optional(),
   /** Approval behavior for future turns in this session. Defaults to review-required. */
-  reviewPolicy: ReviewPolicySchema.optional(),
-  /** Named scope from the `scopes` table (see `barry scope list`). */
-  bounds: z.array(z.string().min(1)).optional(),
-  /** Inline scope, for restrictions that don't warrant a named scope. */
+  reviewPolicy: ReviewRulesSchema.optional(),
+  reviewRules: ReviewRulesSchema.optional(),
+  /** Named or inline bounds from `identity.yaml` or bag manifests. */
+  bounds: z.array(z.union([z.string().min(1), z.record(z.string(), z.unknown())])).optional(),
+  /** Inline bound, for restrictions that don't warrant a named bound. */
   bound: z.record(z.string(), z.unknown()).nullable().optional(),
 }).strict();
 
 // Starting a turn and choosing a worktree are not metadata updates.
 export const UpdateSessionRequestSchema = CreateSessionRequestSchema.omit({ prompt: true, useWorktree: true }).partial().extend({
-  // Defaults would clear existing grants on unrelated updates.
-  traits: z.array(z.string()).optional(),
+  prepare: z.boolean().optional(),
+  metadata: z.strictObject({ effort: z.enum(["low", "medium", "high", "xhigh", "max"]).nullable().optional() }).optional(),
+  // Defaults would clear existing selections on unrelated updates.
+  bags: z.array(z.string()).optional(),
   pinned: z.boolean().optional(),
   selectedNamespaces: z.array(z.string()).optional(),
   selectedTools: z.array(z.string()).optional(),
@@ -171,7 +177,7 @@ export const UpdateSessionRequestSchema = CreateSessionRequestSchema.omit({ prom
   processName: z.string().optional(),
   appName: z.string().optional(),
   parentPid: z.int().nullable().optional(),
-});
+}).strict();
 
 /**
  * POST /sessions/:id/messages/persist — used by agent hooks.
@@ -224,6 +230,8 @@ export const DetachRendererRequestSchema = z.object({
 }).strict();
 
 export const SendMessageResponseSchema = z.object({
+  turn: z.enum(["queued", "admitted"]).optional(),
+  warm: z.union([z.literal(0),z.literal(1)]).optional(),
   ok: z.boolean(),
   sessionId: z.string(),
   deliveryState: z.enum(["queued", "accepted", "failed", "uncertain"]),
@@ -237,12 +245,15 @@ export const SessionListResponseSchema = z.object({
 }).strict();
 
 export const MessageListResponseSchema = z.object({
+  /** False when the response includes rows still queued for recording. */
+  durable: z.boolean().optional(),
   messages: z.array(MessageSchema),
   nextSequence: z.int().nullable(),
   hasMore: z.boolean(),
 }).strict();
 
 export const ActionResponseSchema = z.object({
+  recordingPending:z.boolean().optional(),
   message: z.string().optional(),
   sessionId: z.string().nullable().optional(),
   status: z.string().optional(),
@@ -252,12 +263,6 @@ export const MessageDetailResponseSchema = z.object({
   result: z.unknown().nullable(),
 }).strict();
 
-const ResolvedTraitSchema = z.object({
-  name: z.string(),
-  description: z.string().nullable(),
-  access: z.string(),
-  namespaces: z.array(z.string()),
-}).strict();
 const ResolvedNamespaceSchema = z.object({
   name: z.string(),
   enabled: z.boolean(),
@@ -272,10 +277,13 @@ const ResolvedToolSchema = z.object({
   grantedBy: z.string().nullable(),
 }).strict();
 export const ResolvedToolsResponseSchema = z.object({
-  traits: z.object({
+  bags: z.object({
     active: z.array(z.string()),
-    available: z.array(ResolvedTraitSchema),
-  }).strict(),
+    available: z.array(z.string()).optional(),
+  }).strict().optional(),
+  bounds: z.array(z.union([z.string(), z.record(z.string(), z.unknown())])).optional(),
+  availableBounds: z.array(z.string()).optional(),
+  bound: z.record(z.string(), z.unknown()).nullable().optional(),
   selectedNamespaces: z.array(z.string()),
   selectedTools: z.array(z.string()),
   namespaces: z.array(ResolvedNamespaceSchema),

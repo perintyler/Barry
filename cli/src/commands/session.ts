@@ -1,4 +1,4 @@
-import { currentScope, assertOwnedSession } from "../scope.js";
+import { currentTarget, assertOwnedSession } from "../target.js";
 import { CliError } from "../lib/cli-error.js";
 import {
   Sessions,
@@ -21,7 +21,7 @@ export async function sessionListCommand(): Promise<void> {
   // small before the status check runs.
   const candidates = await listSessions({ limit: 200 });
   const rows = candidates
-    .filter((r) => (r.status === "running" || r.status === "pending") && (currentScope().kind !== "identity" || r.identity_id === Number(process.env.BARRY_IDENTITY_ID)))
+    .filter((r) => (r.active || r.started_at || r.last_message_at) && (r.status === "running" || r.status === "pending") && (currentTarget().kind !== "identity" || r.identity_id === Number(process.env.BARRY_IDENTITY_ID)))
     .slice(0, 50);
 
   if (rows.length === 0) {
@@ -78,9 +78,9 @@ interface SessionArchiveOptions {
 
 export async function sessionArchiveCommand(id: string | undefined, options: SessionArchiveOptions): Promise<void> {
   if (options.allClosed) {
-    const scope = currentScope();
-    const count = scope.kind === "identity" ? await (async () => {
-      const rows = (await Sessions.list({ limit: 10000 })).filter(row => row.identity_id === scope.binding.id && row.state === "closed");
+    const target = currentTarget();
+    const count = target.kind === "identity" ? await (async () => {
+      const rows = (await Sessions.list({ limit: 10000 })).filter(row => row.identity_id === target.binding.id && row.state === "closed");
       for (const row of rows) await Sessions.archive(row.id);
       return rows.length;
     })() : await Sessions.archiveAllClosed();
@@ -104,8 +104,8 @@ export async function sessionArchiveCommand(id: string | undefined, options: Ses
     sessionId = match.id;
   }
 
-  const scope = currentScope();
-  if (scope.kind === "identity") assertOwnedSession(await Sessions.get(sessionId), scope.binding.id);
+  const target = currentTarget();
+  if (target.kind === "identity") assertOwnedSession(await Sessions.get(sessionId), target.binding.id);
   await Sessions.archive(sessionId);
   console.log(`Archived session ${sessionId.slice(0, 8)}.`);
 }

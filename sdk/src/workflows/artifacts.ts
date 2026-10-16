@@ -5,7 +5,7 @@ import { identifier } from "./types.js";
 import { readBoundedFile } from "./read-bounded.js";
 
 export const artifactAbi = "barry-workflows-v2-node26";
-export interface WorkflowArtifact { path: string; digest: string; type: string; version: string; abi: typeof artifactAbi }
+export interface WorkflowArtifact { path: string; digest: string; type: string; version: string; abi: typeof artifactAbi; kind?: "program"; bytes?: number }
 const readArtifact = (path: string) => readBoundedFile(path, 2_097_152);
 /** Artifacts are pre-bundled ESM, without runtime imports. No application code is imported here. */
 export function inspectArtifact(path: string, type: string, version: string, workflow = true): WorkflowArtifact {
@@ -21,7 +21,8 @@ export function inspectArtifact(path: string, type: string, version: string, wor
 }
 export function verifyArtifact(artifact: WorkflowArtifact): Buffer {
   if (artifact.abi !== artifactAbi || process.versions.node.split(".")[0] !== "26") throw new Error("unsupported artifact runtime ABI");
-  const bytes = readArtifact(artifact.path);
-  if (bytes.length > 2_097_152 || createHash("sha256").update(bytes).digest("hex") !== artifact.digest) throw new Error("artifact digest mismatch");
+  if (artifact.kind === "program" && (!Number.isSafeInteger(artifact.bytes) || artifact.bytes! < 0 || artifact.bytes! > 536870912)) throw new Error("program artifact requires a bounded retained size");
+  const bytes = artifact.kind === "program" ? readBoundedFile(artifact.path, artifact.bytes!) : readArtifact(artifact.path);
+  if ((artifact.kind === "program" ? bytes.length !== artifact.bytes : bytes.length > 2_097_152) || createHash("sha256").update(bytes).digest("hex") !== artifact.digest) throw new Error("artifact digest mismatch");
   return bytes;
 }

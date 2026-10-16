@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { SessionReconciliationRequired, WorkflowSessionTurns, type TurnState, type WorkflowSessionBackend } from "./workflow-turns.js";
-import { approveExecutionScope } from "../bounds/execution-scope.js";
+import { approveWorkflowBounds } from "../bounds/workflow-bounds.js";
 import { MemoryWorkflowSessionJournal } from "./test-helpers/memory-workflow-journal.js";
 describe("durable workflow sessions", () => {
   it("reconciles lost turn responses and preserves one physical turn across journal reconstruction", async () => {
     const store = new MemoryWorkflowSessionJournal();
-    const sessions = new Map<string, { identity: string; scopeFingerprint: string }>(), turns = new Map<string, TurnState>();
+    const sessions = new Map<string, { identity: string; boundFingerprint: string }>(), turns = new Map<string, TurnState>();
     let creates = 0, deliveries = 0;
-    const scope = await approveExecutionScope({ identity: "reviewer", traitNames: [], traits: {}, tools: [], boundByName: async () => undefined });
-    const backend: WorkflowSessionBackend = { lookupSession: async id => sessions.get(id), createSession: async r => { creates++; sessions.set(r.id, { identity: r.identity, scopeFingerprint: r.scope.fingerprint }); }, lookupTurn: async (_id, key) => turns.get(key), runTurn: async r => { deliveries++; turns.set(r.turnId, { state: "complete", result: "review" }); throw new Error("lost acknowledgement"); }, interruptTurn: async () => false, enforceable: () => true };
+    const scope = await approveWorkflowBounds({ identity: "reviewer", bags: [], tools: [], boundByName: async () => undefined });
+    const backend: WorkflowSessionBackend = { lookupSession: async id => sessions.get(id), createSession: async r => { creates++; sessions.set(r.id, { identity: r.identity, boundFingerprint: r.scope.fingerprint }); }, lookupTurn: async (_id, key) => turns.get(key), runTurn: async r => { deliveries++; turns.set(r.turnId, { state: "complete", result: "review" }); throw new Error("lost acknowledgement"); }, interruptTurn: async () => false, enforceable: () => true };
     {
       const journal = new WorkflowSessionTurns(store, backend), id = await journal.ensure("binding", scope);
       expect(await journal.ensure("binding", scope)).toBe(id);
@@ -17,7 +17,7 @@ describe("durable workflow sessions", () => {
       expect(creates).toBe(1); expect(deliveries).toBe(1);
       await expect(journal.turn("turn", id, "changed", scope)).rejects.toThrow("conflict");
       await expect(journal.inspect("turn")).resolves.toMatchObject({ state: "complete", sessionId: id });
-      sessions.set(id, { identity: "different-identity", scopeFingerprint: scope.fingerprint });
+      sessions.set(id, { identity: "different-identity", boundFingerprint: scope.fingerprint });
       await expect(journal.turn("turn", id, "review", scope)).rejects.toThrow("identity or execution ceiling mismatch");
       expect(deliveries).toBe(1);
       sessions.delete(id);
@@ -26,9 +26,9 @@ describe("durable workflow sessions", () => {
   });
   it("retains unknown liveness and serializes turns without closing the continuing session", async () => {
     const store = new MemoryWorkflowSessionJournal();
-    const scope = await approveExecutionScope({ identity: "reviewer", traitNames: [], traits: {}, tools: [], boundByName: async () => undefined });
+    const scope = await approveWorkflowBounds({ identity: "reviewer", bags: [], tools: [], boundByName: async () => undefined });
     let deliveries = 0, interrupted = false, found = false;
-    const backend: WorkflowSessionBackend = { lookupSession: async () => found ? { identity: "reviewer", scopeFingerprint: scope.fingerprint } : undefined, createSession: async () => { found = true; }, lookupTurn: async () => interrupted ? { state: "interrupted" } : { state: "uncertain" }, runTurn: async () => { deliveries++; throw new Error("unknown liveness"); }, interruptTurn: async () => { interrupted = true; return true; }, enforceable: () => true };
+    const backend: WorkflowSessionBackend = { lookupSession: async () => found ? { identity: "reviewer", boundFingerprint: scope.fingerprint } : undefined, createSession: async () => { found = true; }, lookupTurn: async () => interrupted ? { state: "interrupted" } : { state: "uncertain" }, runTurn: async () => { deliveries++; throw new Error("unknown liveness"); }, interruptTurn: async () => { interrupted = true; return true; }, enforceable: () => true };
     {
       const journal = new WorkflowSessionTurns(store, backend), id = await journal.ensure("binding", scope);
       await expect(journal.turn("turn", id, null, scope)).rejects.toThrow("OutcomeUnknown");
@@ -42,14 +42,14 @@ describe("durable workflow sessions", () => {
 
   it("does not duplicate or recursively retry a session create racing another admission", async () => {
     const store = new MemoryWorkflowSessionJournal();
-    const sessions = new Map<string, { identity: string; scopeFingerprint: string }>();
-    const scope = await approveExecutionScope({ identity: "reviewer", traitNames: [], traits: {}, tools: [], boundByName: async () => undefined });
+    const sessions = new Map<string, { identity: string; boundFingerprint: string }>();
+    const scope = await approveWorkflowBounds({ identity: "reviewer", bags: [], tools: [], boundByName: async () => undefined });
     let creates = 0, releaseCreate!: () => void, markCreating!: () => void;
     const creating = new Promise<void>(resolve => { markCreating = resolve; });
     const createGate = new Promise<void>(resolve => { releaseCreate = resolve; });
     const backend: WorkflowSessionBackend = {
       lookupSession: async id => sessions.get(id),
-      createSession: async request => { creates++; markCreating(); await createGate; sessions.set(request.id, { identity: request.identity, scopeFingerprint: request.scope.fingerprint }); },
+      createSession: async request => { creates++; markCreating(); await createGate; sessions.set(request.id, { identity: request.identity, boundFingerprint: request.scope.fingerprint }); },
       lookupTurn: async () => undefined, runTurn: async () => undefined, interruptTurn: async () => false, enforceable: () => true,
     };
     {

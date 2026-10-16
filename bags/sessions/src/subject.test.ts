@@ -11,21 +11,21 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { Barry, BarryError, isBarryError, type Caller, type Identity } from "@barry-rocks/sdk";
+import { Barry, BarryError, isBarryError, type Bound, type Caller, type Identity } from "@barry-rocks/sdk";
 import type { DevicePrincipal } from "@barry-rocks/sdk/internal/auth";
-import { fakeIdentities } from "@barry-rocks/sdk/testing";
+import { fakeBags, fakeIdentities } from "@barry-rocks/sdk/testing";
 
 const scratch = mkdtempSync(join(tmpdir(), "barry-sessions-subject-"));
 process.env.BARRY_SESSIONS_DB = join(scratch, "sessions.db");
 
 const { getSessionsSqlite, closeSessionsDb } = await import("./store/sessions-db.js");
 const { appendMessage, getSession, hostDelivery } = await import("./client/index.js");
-const { sessions, selectionOf } = await import("./subject.js");
+const { sessions } = await import("./subject.js");
 const { sessionOf } = await import("./domain.js");
 
 function identity(id: number, name: string): Identity {
   return {
-    id, name, token: `token-${name}`, displayName: null, bags: [], traits: [], bounds: [],
+    id, name, token: `token-${name}`, displayName: null, bags: ["git"], bounds: [],
     adapters: {}, envKeys: [], vaultEmail: null,
     isDefault: false, createdAt: null, lastUsedAt: null,
   };
@@ -43,11 +43,41 @@ const identities = fakeIdentities({
     if (caller.kind === "session" && caller.identity !== found.name && caller.identity !== found.id) throw new BarryError("forbidden", "A session may read only its own identity");
     return found;
   },
-  bounds: async () => [{ name: "readonly" }],
-  grants: async (_ref, selection) => {
-    if (selection.bounds?.some(name => name !== "readonly")) throw new BarryError("invalid", "Unknown bound");
-    return { traits: [...selection.traits ?? []], bound: null, namespaces: [], tools: [], skills: [], instructions: [] };
+  bounds: async () => [{ name: "readonly", tools: { deny: ["*:write"] } }],
+  bound: async (_ref, requested) => {
+    const names = (requested ?? []).filter((entry): entry is string => typeof entry === "string");
+    if (names.some((name) => name !== "readonly")) throw new BarryError("invalid", "Unknown bound");
+    if (names.includes("readonly")) {
+      return { name: "readonly", tools: { deny: ["*:write"] } };
+    }
+    return {};
   },
+  tools: async (_ref, selection) => {
+    const bagNames = (selection.bags ?? []).map((b) => (typeof b === "string" ? b : b.name));
+    const allTools = [
+      { name: "status", namespace: "git", bag: "git", access: "read" as const },
+      { name: "commit", namespace: "git", bag: "git", access: "write" as const },
+    ].filter((tool) => bagNames.length === 0 || bagNames.includes(tool.bag));
+    const bound = selection.bounds && !Array.isArray(selection.bounds) ? (selection.bounds as Bound) : null;
+    if (bound?.tools?.deny?.includes("*:write")) {
+      return allTools.filter((tool) => tool.access !== "write");
+    }
+    return allTools;
+  },
+});
+
+const bagsSubject = fakeBags({
+  list: async () => [
+    { name: "git", type: "local" as const, description: "Git tools" },
+    { name: "linear", type: "local" as const, description: "Linear tools" },
+  ],
+  tools: async (bag) =>
+    bag === "git"
+      ? [
+          { name: "status", namespace: "git", bag: "git", access: "read" as const },
+          { name: "commit", namespace: "git", bag: "git", access: "write" as const },
+        ]
+      : [],
 });
 
 function device(scopes: DevicePrincipal["scopes"] = ["sessions:read", "identities:read"]): Caller {
@@ -157,7 +187,7 @@ afterAll(async () => {
 beforeEach(() => {
   getSessionsSqlite().prepare("DELETE FROM sessions").run();
   asked = [];
-  Barry.use(identities, sessions);
+  Barry.use(identities, sessions, bagsSubject);
 });
 
 afterEach(() => Barry.reset());
@@ -278,12 +308,14 @@ describe("changing a session", () => {
     const id = seed({ metadata: { name: "before", provider: "claude" } });
 
     const updated = await Barry.identity("bux").session(id).update({
-      name: "after", pinned: true, traits: ["git"], bounds: ["readonly"], harness: "codex", model: "m-2", modelProvider: "acme",
+      name: "after", pinned: true, bags: ["git"], bounds: ["readonly"], harness: "codex", model: "m-2", modelProvider: "acme",
     });
-    expect(updated).toMatchObject({ id, name: "after", pinned: true, traits: ["git"], provider: "codex", model: "m-2", modelRef: "acme/m-2" });
+    expect(updated).toMatchObject({ id, name: "after", pinned: true, bags: ["git"], bounds: ["readonly"], provider: "codex", model: "m-2", modelRef: "acme/m-2" });
 
     const row = await getSession(id);
+    expect(row?.bags).toEqual(["git"]);
     expect(row?.bounds).toEqual(["readonly"]);
+    expect(row?.bound).toMatchObject({ tools: { deny: ["*:write"] } });
     expect(row?.metadata.model_provider).toBe("acme");
   });
 
@@ -292,19 +324,19 @@ describe("changing a session", () => {
     expect(await refusal(Barry.identity("bux").session(id).update({ bounds: ["nonexistent"] }))).toBe("invalid");
     expect(await refusal(Barry.identity("bux").session(id).update({ harness: "Not A Harness" }))).toBe("invalid");
     expect(await refusal(Barry.as(device()).identity("bux").session(id).update({ name: "x" }))).toBe("forbidden");
-    expect((await getSession(id))?.bound_id).toBeNull();
+    expect((await getSession(id))?.bound).toBeNull();
   });
 });
 
 describe("starting, messaging and ending a session through the runtime", () => {
   it("starts one through the sessions API, as the identity named", async () => {
-    const started = await Barry.identity("bux").start({ systemPrompt: "keep the build green", prompt: "go", traits: ["git"], harness: "claude", bounds: ["readonly"] });
+    const started = await Barry.identity("bux").start({ systemPrompt: "keep the build green", prompt: "go", bags: ["git"], harness: "claude", bounds: ["readonly"] });
     expect(asked).toHaveLength(1);
     expect(asked[0]).toMatchObject({
       method: "POST",
       path: "/api/v1/sessions",
       authorization: "Bearer instance-secret",
-      body: { systemPrompt: "keep the build green", prompt: "go", identityId: BUX.id, traits: ["git"], provider: "claude", bounds: ["readonly"] },
+      body: { systemPrompt: "keep the build green", prompt: "go", identityId: BUX.id, bags: ["git"], provider: "claude", bounds: ["readonly"] },
     });
     expect((await started.get()).identityId).toBe(BUX.id);
   });
@@ -457,9 +489,32 @@ describe("session queries for external bags", () => {
   });
 });
 
-it("carries the recorded native mode into grants selection", async () => {
-  const id = seed({ metadata: { provider: "claude-code", mode: "instrumented" } });
-  const row = await getSession(id);
-  if (!row) throw new Error("seeded session missing");
-  expect(selectionOf(row)).toMatchObject({ harness: "claude-code", mode: "instrumented" });
+describe("session bags, bounds, pinned bound, and tools", () => {
+  it("resolves bags from the session row or falls back to identity bags", async () => {
+    const inherited = seed();
+    expect((await Barry.identity("bux").session(inherited).bags()).map((b) => b.name)).toEqual(["git"]);
+
+    await Barry.identity("bux").session(inherited).update({ bags: ["linear"] });
+    expect((await Barry.identity("bux").session(inherited).bags()).map((b) => b.name)).toEqual(["linear"]);
+  });
+
+  it("pins the resolved bound and filters tools without re-resolving live bounds until updated", async () => {
+    const id = seed();
+    const session = Barry.identity("bux").session(id);
+
+    // Unrestricted initially: both read and write tools from `git` are enabled
+    expect((await session.tools()).map((t) => t.name)).toEqual(["status", "commit"]);
+
+    // Update bounds to ["readonly"] — pins { tools: { deny: ["*:write"] } } on the row
+    await session.update({ bounds: ["readonly"] });
+    expect(await session.bounds()).toEqual(["readonly"]);
+    expect(await session.bound()).toMatchObject({ tools: { deny: ["*:write"] } });
+    expect((await session.tools()).map((t) => t.name)).toEqual(["status"]);
+
+    // Directly mutate the pinned bound column to verify session.bound() reads the pinned row.bound
+    getSessionsSqlite()
+      .prepare("UPDATE sessions SET bound = ? WHERE id = ?")
+      .run(JSON.stringify({ files: { deny: [".env"] } }), id);
+    expect(await session.bound()).toEqual({ files: { deny: [".env"] } });
+  });
 });

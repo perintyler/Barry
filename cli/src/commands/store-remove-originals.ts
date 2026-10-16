@@ -6,7 +6,7 @@ import { activeStoreRoot } from "@barry-rocks/sdk/internal/stores";
 import { identityStorePaths, storePath } from "@barry-rocks/sdk/stores";
 
 import { errorMessage } from "../lib/error-message.js";
-import { currentScope } from "../scope.js";
+import { currentTarget } from "../target.js";
 
 interface Original { path: string; archive: string; checksum: string }
 interface Report { id: string; state: string; originals: Original[] }
@@ -94,7 +94,7 @@ function removeOriginal(path: string, bytes: number): { freed: number; left: str
 }
 
 export function originalVerdicts(reportPath: string): { report: Report; root: string; originals: OriginalVerdict[] } {
-  if (currentScope().kind === "identity") throw new Error("Run barry store remove-originals from the instance, not through an identity command.");
+  if (currentTarget().kind === "identity") throw new Error("Run barry store remove-originals from the instance, not through an identity command.");
   const report = readReport(reportPath);
   if (report.state !== "active") throw new Error(`Store migration ${report.id} never activated (state: ${report.state}): its originals are still this home's only copy of those stores.`);
   if (!existsSync(join(barryStoresDir(), "active.json"))) throw new Error("This home has no active store generation, so its originals are its stores.");
@@ -144,7 +144,7 @@ function folderSize(path: string): number {
 export async function storeRemoveOriginalsCommand(options: {
   report?: string; dryRun?: boolean; yes?: boolean; confirm?(message: string): Promise<boolean>;
 } = {}): Promise<void> {
-  if (currentScope().kind === "identity") throw new Error("Run barry store remove-originals from the instance, not through an identity command.");
+  if (currentTarget().kind === "identity") throw new Error("Run barry store remove-originals from the instance, not through an identity command.");
   const directory = join(barryArchivesDir(), "store-migrations");
   let reportPath = options.report ? resolve(options.report) : undefined;
   if (!reportPath) {

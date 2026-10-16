@@ -1,22 +1,32 @@
-import { requiredNames, optionalNames } from "@barry-rocks/sdk/internal/identities";
+import {
+  requiredNames,
+  optionalNames,
+  requiredIdentityBags,
+  optionalIdentityBags,
+  parseBounds,
+  serializeEntries,
+  type BoundEntry,
+} from "@barry-rocks/sdk/internal/identities";
 import { CliError, isCliError } from "../lib/cli-error.js";
 import { reportBoundProblems } from "./doctor-bounds.js";
-import { Barry, isBarryError } from "@barry-rocks/sdk";
+import { Barry, isBarryError, type Bound } from "@barry-rocks/sdk";
 import {
+  bounds,
   identityRecords,
-  traits,
   type IdentityEntry,
   type IdentityRecord,
   type UserRecord,
 } from "@barry-rocks/identities-bag";
 import { homedir } from "node:os";
-// the catalog subpath is provider-free — see cli/src/index.ts's
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { parse as yamlParse, stringify as yamlStringify } from "yaml";
+// the models subpath is harness-free — see cli/src/index.ts's
 // import for the full rationale (this file's only agent-runtime dependency).
 import type { InstalledAdapter } from "@barry-rocks/sdk/adapters/harnesses";
 import { installedModels, isOfferedModel, offeredModels, routedVendorOf, suggestOfferedModels } from "@barry-rocks/sdk/adapters/models";
 import { modelRef, parseModelRef } from "@barry-rocks/sdk/ids";
 import type { Vendor } from "@barry-rocks/sdk/adapters/models";
-import { VaultClient, openVault, vaultAccountFor, type VaultSession } from "@barry-rocks/sdk/internal/vault";
+import { VaultClient, openVault, vaultAccountFor, configuredVaultEndpoint, type VaultSession } from "@barry-rocks/sdk/internal/vault";
 import { KeychainProvider, identityEnvironment } from "@barry-rocks/sdk/internal/env";
 
 import { loadBags, expandCompositionFromSnapshot, loadBagToolDefinitions, mergeBags } from "@barry-rocks/sdk/internal/bags";
@@ -24,7 +34,8 @@ import { loadBags, expandCompositionFromSnapshot, loadBagToolDefinitions, mergeB
 import { applyToolVisibility } from "@barry-rocks/sdk/internal/tools";
 
 import { installationSecrets } from "@barry-rocks/sdk/internal/services";
-import { defaultHarness, FALLBACK_HARNESS, mergeAdapters, type SecretBindings } from "@barry-rocks/sdk/internal/identities";
+import { defaultHarness, FALLBACK_HARNESS, AdapterSettingsSchema, mergeAdapters, type SecretBindings } from "@barry-rocks/sdk/internal/identities";
+import { summarizeBound } from "../lib/bound-summary.js";
 import { getShimDir, removeShim, shimNamesFor, type ShimSpec } from "../lib/identity-shims.js";
 import { collectIdentities, describeReconcile, findMissingCommands, reconcileCommands } from "../lib/identity-commands.js";
 import { getCurrentUser, getActiveIdentity } from "../lib/current-user.js";
@@ -39,6 +50,9 @@ const KEYCHAIN_SERVICE = "barry";
 /** Provision a named vault and keep its bootstrap credentials in Keychain. */
 export async function provisionVaultAccount(vaultName: string, email: string): Promise<string> {
   const account = vaultAccountFor(vaultName);
+  if (configuredVaultEndpoint(vaultName.trim()) !== undefined) {
+    throw new Error("Instance-configured vault accounts cannot be provisioned into the legacy Keychain; configure their declared bootstrap explicitly.");
+  }
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail) throw new Error("Vault account email must not be empty");
   const secrets = await installationSecrets(["VAULT_REGISTRATION_SECRET"]);
@@ -189,31 +203,22 @@ export async function showIdentityCommand(name?: string): Promise<void> {
 
     console.log("");
 
-    if (resolved.bags.length > 0) {
-      console.log(`  Bags: ${resolved.bags.join(", ")}`);
+    const requiredBags = requiredIdentityBags(resolved.bags, resolved.bag_configs);
+    const optionalBags = optionalIdentityBags(resolved.bags, resolved.bag_configs);
+    if (requiredBags.length > 0) {
+      console.log(`  Bags: ${requiredBags.join(", ")}`);
+    }
+    if (optionalBags.length > 0) {
+      console.log(`  Optional bags: ${optionalBags.join(", ")}`);
     }
 
-    if (resolved.traits.length > 0) {
-      console.log(`  Traits: ${requiredNames(resolved.traits).join(", ")}`);
-    }
-
-    if (optionalNames(resolved.traits).length) console.log(`  Optional traits: ${optionalNames(resolved.traits).join(", ")}`);
     if (resolved.bounds.length) {
       console.log(`  Bounds: ${requiredNames(resolved.bounds).join(", ")}`);
       if (optionalNames(resolved.bounds).length) console.log(`  Optional bounds: ${optionalNames(resolved.bounds).join(", ")}`);
     }
 
-    // A file-based Barry writes its rules inline instead of naming a scope, so
-    // summarize them rather than printing an id it doesn't have.
     if (resolved.bound) {
-      const s = resolved.bound;
-      const parts = [
-        s.deniedTools?.length ? `tools: ${s.deniedTools.join(", ")}` : null,
-        s.deniedAccess?.length ? `access: ${s.deniedAccess.join(", ")}` : null,
-        s.files?.deny?.length ? `files: ${s.files.deny.join(", ")}` : null,
-        s.bash?.deny?.length ? `bash: ${s.bash.deny.join(", ")}` : null,
-      ].filter(Boolean);
-      console.log(`  Bound (inline; run barry doctor --fix): ${parts.length > 0 ? parts.join(" | ") : "no denials"}`);
+      console.log(`  Bound (inline; run barry doctor --fix): ${summarizeBound(resolved.bound)}`);
     }
 
     const secretNames = Object.keys(resolved.secrets);
@@ -463,20 +468,20 @@ function removeIdentityCommands(names: string[]): void {
 }
 
 /**
- * Add default traits to a barry — merged into every session using this
- * barry. Additive: existing traits are preserved.
+ * List required and optional bags on an identity.
  */
-export async function addIdentityTraitsCommand(
-  traitNames: string[],
-  options: { name?: string } = {},
-): Promise<void> {
+export async function identityBagsCommand(options: { name?: string } = {}): Promise<void> {
   try {
     const { identity } = await requireIdentity(options.name);
-
-    const existing = (await Barry.identity(identity.name).get()).traits;
-    const merged = [...new Set([...existing, ...traitNames])];
-    printWarnings((await Barry.identity(identity.name).update({ traits: merged })).warnings);
-    console.log(`Traits on identity '${identity.name}': ${merged.join(", ")}`);
+    const resolved = identityRecords.config(identity);
+    const required = requiredIdentityBags(resolved.bags, resolved.bag_configs);
+    const optional = optionalIdentityBags(resolved.bags, resolved.bag_configs);
+    if (required.length === 0 && optional.length === 0) {
+      console.log(`Identity '${identity.name}' has no bags.`);
+      return;
+    }
+    if (required.length > 0) console.log(`Bags on identity '${identity.name}': ${required.join(", ")}`);
+    if (optional.length > 0) console.log(`Optional bags on identity '${identity.name}': ${optional.join(", ")}`);
   } catch (error: unknown) {
     if (isCliError(error)) throw error;
     throw new CliError(`Error: ${error instanceof Error ? error.message : String(error)}`, 1);
@@ -484,27 +489,57 @@ export async function addIdentityTraitsCommand(
 }
 
 /**
- * Remove default traits from a barry. Other traits are preserved.
+ * Add required or optional bags to an identity. Additive: existing bags are preserved.
  */
-export async function removeIdentityTraitsCommand(
-  traitNames: string[],
+export async function addIdentityBagsCommand(
+  bagNames: string[],
+  options: { name?: string; optional?: boolean } = {},
+): Promise<void> {
+  try {
+    const { identity } = await requireIdentity(options.name);
+    const resolved = identityRecords.config(identity);
+    const merged = [...new Set([...resolved.bags, ...bagNames])];
+    const bagConfigs = { ...resolved.bag_configs };
+    for (const bagName of bagNames) {
+      if (options.optional) {
+        bagConfigs[bagName] = { ...bagConfigs[bagName], optional: true };
+      } else if (bagConfigs[bagName]?.optional) {
+        const { optional: _optional, ...rest } = bagConfigs[bagName];
+        if (Object.keys(rest).length > 0) bagConfigs[bagName] = rest;
+        else delete bagConfigs[bagName];
+      }
+    }
+    printWarnings((await Barry.identity(identity.name).update({ bags: merged, bagConfigs })).warnings);
+    console.log(`Bags on identity '${identity.name}': ${merged.join(", ")}`);
+  } catch (error: unknown) {
+    if (isCliError(error)) throw error;
+    throw new CliError(`Error: ${error instanceof Error ? error.message : String(error)}`, 1);
+  }
+}
+
+/**
+ * Remove bags from an identity. Other bags are preserved.
+ */
+export async function removeIdentityBagsCommand(
+  bagNames: string[],
   options: { name?: string } = {},
 ): Promise<void> {
   try {
     const { identity } = await requireIdentity(options.name);
-
-    const existing = (await Barry.identity(identity.name).get()).traits;
-    const notPresent = traitNames.filter((t) => !existing.includes(t));
+    const resolved = identityRecords.config(identity);
+    const notPresent = bagNames.filter((bag) => !resolved.bags.includes(bag));
     if (notPresent.length > 0) {
-      console.warn(`Not on barry (skipped): ${notPresent.join(", ")}`);
+      console.warn(`Not on identity (skipped): ${notPresent.join(", ")}`);
     }
-
-    const remaining = existing.filter((t: string) => !traitNames.includes(t));
-    printWarnings((await Barry.identity(identity.name).update({ traits: remaining.length > 0 ? remaining : null })).warnings);
+    const remaining = resolved.bags.filter((bag) => !bagNames.includes(bag));
+    const bagConfigs = Object.fromEntries(
+      Object.entries(resolved.bag_configs).filter(([bag]) => remaining.includes(bag)),
+    );
+    printWarnings((await Barry.identity(identity.name).update({ bags: remaining, bagConfigs })).warnings);
     console.log(
       remaining.length > 0
-        ? `Traits on identity '${identity.name}': ${remaining.join(", ")}`
-        : `Barry '${identity.name}' has no default traits.`,
+        ? `Bags on identity '${identity.name}': ${remaining.join(", ")}`
+        : `Identity '${identity.name}' has no bags.`,
     );
   } catch (error: unknown) {
     if (isCliError(error)) throw error;
@@ -512,10 +547,177 @@ export async function removeIdentityTraitsCommand(
   }
 }
 
-export async function addIdentityBoundsCommand(names: string[], options: { name?: string } = {}): Promise<void> {
-  const { identity } = await requireIdentity(options.name);
-  const current = (await Barry.identity(identity.name).get()).bounds;
-  printWarnings((await Barry.identity(identity.name).update({ bounds: [...new Set([...current, ...names])] })).warnings);
+/**
+ * List required and optional bounds on an identity.
+ */
+export async function identityBoundsCommand(options: { name?: string } = {}): Promise<void> {
+  try {
+    const { identity } = await requireIdentity(options.name);
+    const resolved = identityRecords.config(identity);
+    const required = requiredNames(resolved.bounds);
+    const optional = optionalNames(resolved.bounds);
+    if (required.length === 0 && optional.length === 0) {
+      console.log(`Identity '${identity.name}' has no bounds.`);
+      return;
+    }
+    if (required.length > 0) console.log(`Bounds on identity '${identity.name}': ${required.join(", ")}`);
+    if (optional.length > 0) console.log(`Optional bounds on identity '${identity.name}': ${optional.join(", ")}`);
+  } catch (error: unknown) {
+    if (isCliError(error)) throw error;
+    throw new CliError(`Error: ${error instanceof Error ? error.message : String(error)}`, 1);
+  }
+}
+
+export async function addIdentityBoundsCommand(
+  names: string[],
+  options: { name?: string; optional?: boolean } = {},
+): Promise<void> {
+  try {
+    const { identity, dir, user } = await requireIdentity(options.name);
+    if (options.optional && dir) {
+      const available = await bounds.list(identity);
+      const known = new Set(available.map((entry) => entry.name));
+      const unknown = names.filter((name) => !known.has(name));
+      if (unknown.length > 0) {
+        throw new CliError(`Error: Unknown bounds: ${unknown.join(", ")}`, 1);
+      }
+      const yamlPath = `${dir}/identity.yaml`;
+      const raw = (yamlParse(readFileSync(yamlPath, "utf-8")) ?? {}) as Record<string, unknown>;
+      const entries = parseBounds(raw.bounds);
+      const map = new Map<string, BoundEntry>(entries.map((entry) => [entry.name, entry]));
+      for (const name of names) {
+        const existing = map.get(name);
+        map.set(name, existing ? { ...existing, optional: true } : { name, optional: true });
+      }
+      raw.bounds = serializeEntries([...map.values()]);
+      const tmpPath = `${yamlPath}.tmp`;
+      writeFileSync(tmpPath, yamlStringify(raw), "utf-8");
+      renameSync(tmpPath, yamlPath);
+      await identityRecords.sync(dir, { actorId: user.id });
+      return;
+    }
+    const current = (await Barry.identity(identity.name).get()).bounds;
+    printWarnings((await Barry.identity(identity.name).update({ bounds: [...new Set([...current, ...names])] })).warnings);
+  } catch (error: unknown) {
+    if (isCliError(error)) throw error;
+    throw new CliError(`Error: ${error instanceof Error ? error.message : String(error)}`, 1);
+  }
+}
+
+export interface IdentityBoundSetOptions {
+  name?: string;
+  description?: string;
+  optional?: boolean;
+  allowTools?: string;
+  denyTools?: string;
+  allowNative?: string;
+  denyNative?: string;
+  allowFiles?: string;
+  denyFiles?: string;
+  allowBash?: string;
+  denyBash?: string;
+  allowNetwork?: string;
+  denyNetwork?: string;
+  enforceNetwork?: "guard" | "sandbox" | "auto" | "required" | "off";
+  allowNodes?: string;
+  denyNodes?: string;
+}
+
+function splitCsv(value: string | undefined): string[] | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  return trimmed.split(",").map((part) => part.trim()).filter(Boolean);
+}
+
+/**
+ * Create or update an inline bound entry on an identity's `identity.yaml`.
+ */
+export async function setIdentityBoundCommand(
+  boundName: string,
+  options: IdentityBoundSetOptions = {},
+): Promise<void> {
+  try {
+    const { identity, dir, user } = await requireIdentity(options.name);
+    if (!dir) {
+      throw new CliError(`Error: Identity '${identity.name}' has no identity.yaml directory`, 1);
+    }
+    const yamlPath = `${dir}/identity.yaml`;
+    const raw = (yamlParse(readFileSync(yamlPath, "utf-8")) ?? {}) as Record<string, unknown>;
+    const entries = parseBounds(raw.bounds);
+    const existing = entries.find((entry) => entry.name === boundName);
+    const base: Bound & { description?: string } = { ...(existing?.bound ?? {}) };
+    base.description = options.description ?? base.description ?? `${boundName} restrictions`;
+
+    const allowTools = [
+      ...(splitCsv(options.allowTools) ?? []),
+      ...(splitCsv(options.allowNative) ?? []),
+    ];
+    const denyTools = [
+      ...(splitCsv(options.denyTools) ?? []),
+      ...(splitCsv(options.denyNative) ?? []),
+    ];
+    if (options.allowTools !== undefined || options.allowNative !== undefined || options.denyTools !== undefined || options.denyNative !== undefined) {
+      base.tools = {
+        ...(base.tools ?? {}),
+        ...(options.allowTools !== undefined || options.allowNative !== undefined ? { allow: allowTools } : {}),
+        ...(options.denyTools !== undefined || options.denyNative !== undefined ? { deny: denyTools } : {}),
+      };
+    }
+    if (options.allowFiles !== undefined || options.denyFiles !== undefined) {
+      base.files = {
+        ...(base.files ?? {}),
+        ...(options.allowFiles !== undefined ? { allow: splitCsv(options.allowFiles) } : {}),
+        ...(options.denyFiles !== undefined ? { deny: splitCsv(options.denyFiles) } : {}),
+      };
+    }
+    if (options.allowBash !== undefined || options.denyBash !== undefined) {
+      base.bash = {
+        ...(base.bash ?? {}),
+        ...(options.allowBash !== undefined ? { allow: splitCsv(options.allowBash) } : {}),
+        ...(options.denyBash !== undefined ? { deny: splitCsv(options.denyBash) } : {}),
+      };
+    }
+    if (options.allowNetwork !== undefined || options.denyNetwork !== undefined || options.enforceNetwork !== undefined) {
+      const normalizedEnforce: "guard" | "sandbox" | undefined =
+        options.enforceNetwork === "required" || options.enforceNetwork === "sandbox"
+          ? "sandbox"
+          : options.enforceNetwork === "auto" || options.enforceNetwork === "guard"
+            ? "guard"
+            : undefined;
+      base.network = {
+        ...(base.network ?? {}),
+        ...(options.allowNetwork !== undefined ? { allow: splitCsv(options.allowNetwork) } : {}),
+        ...(options.denyNetwork !== undefined ? { deny: splitCsv(options.denyNetwork) } : {}),
+        ...(options.enforceNetwork !== undefined ? { enforce: normalizedEnforce } : {}),
+      };
+    }
+    if (options.allowNodes !== undefined || options.denyNodes !== undefined) {
+      base.nodes = {
+        ...(base.nodes ?? {}),
+        ...(options.allowNodes !== undefined ? { allow: splitCsv(options.allowNodes) } : {}),
+        ...(options.denyNodes !== undefined ? { deny: splitCsv(options.denyNodes) } : {}),
+      };
+    }
+
+    const updatedEntry: BoundEntry = {
+      name: boundName,
+      optional: options.optional ?? existing?.optional ?? false,
+      bound: base,
+    };
+    const nextEntries = existing
+      ? entries.map((entry) => (entry.name === boundName ? updatedEntry : entry))
+      : [...entries, updatedEntry];
+    raw.bounds = serializeEntries(nextEntries);
+    const tmpPath = `${yamlPath}.tmp`;
+    writeFileSync(tmpPath, yamlStringify(raw), "utf-8");
+    renameSync(tmpPath, yamlPath);
+    await identityRecords.sync(dir, { actorId: user.id });
+    console.log(`Updated bound '${boundName}' on identity '${identity.name}'`);
+  } catch (error: unknown) {
+    if (isCliError(error)) throw error;
+    throw new CliError(`Error: ${error instanceof Error ? error.message : String(error)}`, 1);
+  }
 }
 
 export async function removeIdentityBoundsCommand(names: string[], options: { name?: string } = {}): Promise<void> {
@@ -525,27 +727,13 @@ export async function removeIdentityBoundsCommand(names: string[], options: { na
 }
 
 /**
- * Clear default traits from a barry.
- */
-export async function clearIdentityTraitsCommand(options: { name?: string } = {}): Promise<void> {
-  try {
-    const { identity } = await requireIdentity(options.name);
-    printWarnings((await Barry.identity(identity.name).update({ traits: null })).warnings);
-    console.log(`Cleared traits from identity '${identity.name}'`);
-  } catch (error: unknown) {
-    if (isCliError(error)) throw error;
-    throw new CliError(`Error: ${error instanceof Error ? error.message : String(error)}`, 1);
-  }
-}
-
-/**
- * Clear default scope from a barry.
+ * Clear default bounds from a barry.
  */
 export async function clearIdentityBoundsCommand(options: { name?: string } = {}): Promise<void> {
   try {
     const { identity } = await requireIdentity(options.name);
     printWarnings((await Barry.identity(identity.name).update({ bounds: null })).warnings);
-    console.log(`Cleared scope from identity '${identity.name}'`);
+    console.log(`Cleared bounds from identity '${identity.name}'`);
   } catch (error: unknown) {
     if (isCliError(error)) throw error;
     throw new CliError(`Error: ${error instanceof Error ? error.message : String(error)}`, 1);
@@ -564,6 +752,7 @@ export interface IdentityAdapterOptions {
   model?: string;
   provider?: string;
   mode?: string;
+  effort?: string;
   default?: boolean;
 }
 
@@ -572,14 +761,17 @@ export async function setIdentityAdapterCommand(harness: string, options: Identi
   try {
     const record = await harnessRecord(harness);
     if (!record) throw new Error(`'${harness}' is not an installed adapter. See barry adapter list.`);
+    const parsedEffort=AdapterSettingsSchema.shape.effort.safeParse(options.effort);
+    if(!parsedEffort.success)throw new Error("--effort must be low, medium, high, xhigh or max");
+    const effort=parsedEffort.data;
     const mode = options.mode ? resolveLaunchMode(record, options.mode) : undefined;
     if (mode && isRefusal(mode)) throw new Error(mode.message);
     if (options.provider && !options.model) throw new Error("--provider requires --model");
     const vendors = installedModels().vendors();
-    if (options.provider && !vendors.some(vendor => vendor.id === options.provider && (vendor.compatible?.length ?? 0) > 0)) throw new Error(`Unknown model provider '${options.provider}'`);
+    if (options.provider && !vendors.some(vendor => vendor.id === options.provider && (vendor.compatible?.length ?? 0) > 0)) throw new Error(`Unknown model vendor '${options.provider}'`);
     if (options.model && !isOfferedModel(record, vendors, options.model)) {
       const suggestions = suggestOfferedModels(record, vendors, options.model);
-      console.warn(`Warning: '${options.model}' is not in the curated catalog${suggestions.length ? ` — did you mean: ${suggestions.join(", ")}?` : ""}`);
+      console.warn(`Warning: '${options.model}' is not in the curated model list${suggestions.length ? ` — did you mean: ${suggestions.join(", ")}?` : ""}`);
       console.warn(`Known ${record.id} models: ${offeredModels(record, vendors).map(model => model.id).join(", ")}`);
     }
     const { identity } = await requireIdentity(options.name);
@@ -592,6 +784,7 @@ export async function setIdentityAdapterCommand(harness: string, options: Identi
     const previousDefault = options.default ? undefined : defaultHarness(adapters);
     adapters = mergeAdapters(adapters, { [record.id]: {
       ...(options.default ? { default: true } : {}),
+      ...(effort ? { effort } : {}),
       ...(options.model ? { model: modelRefToStore(options.model, options.provider, record, vendors) } : {}),
       ...(mode && !isRefusal(mode) ? { mode: mode.mode } : {}),
     } });
@@ -627,17 +820,17 @@ export async function removeIdentityAdapterCommand(harness: string, options: { n
 
 /**
  * The ref an identity stores for a model, so nothing has to pair it with a
- * separate provider key again. Undefined where no vendor can be named — a
+ * separate vendor key again. Undefined where no vendor can be named — a
  * harness that connects itself (opencode) takes the id as given.
  */
 function modelRefToStore(
   model: string,
-  provider: string | undefined,
+  vendorName: string | undefined,
   record: InstalledAdapter | undefined,
   vendors: readonly Vendor[],
 ): string {
   if (parseModelRef(model) && vendors.some((vendor) => vendor.id === parseModelRef(model)?.vendor)) return model;
-  const vendor = provider ?? (record ? routedVendorOf(record, model, vendors)?.id : undefined) ?? record?.vendor;
+  const vendor = vendorName ?? (record ? routedVendorOf(record, model, vendors)?.id : undefined) ?? record?.vendor;
   return vendor ? modelRef(vendor, model) : model;
 }
 
@@ -772,9 +965,18 @@ function describeValue(value: unknown): string {
  * a drifted row is invisible, and a missing command at least fails loudly.
  */
 export async function barryDoctorCommand(options: { fix?: boolean }): Promise<void> {
+  if (options.fix) {
+    try {
+      await (await import("../services/barry.js")).prepareBagRegistry();
+    } catch {
+      // Best-effort when config store is unavailable in unit tests.
+    }
+  }
   const user = await getCurrentUser();
   await reportIdentityProblems(Boolean(options.fix));
   await reportBoundProblems(Boolean(options.fix));
+  const { reportBagManifestProblems } = await import("./bag.js");
+  await reportBagManifestProblems(Boolean(options.fix));
   const rows = await identityRows();
 
   const drifted: Array<{
@@ -789,7 +991,7 @@ export async function barryDoctorCommand(options: { fix?: boolean }): Promise<vo
   }
 
   // Model ids are deliberately never rejected on write, so an id that has aged
-  // out of the catalog is only ever visible if something looks for it.
+  // out of the curated model list is only ever visible if something looks for it.
   // doctor runs at system scope, where the preAction hook does not install
   // models — install here, and only when there are rows to check.
   const staleModels: string[] = [];
@@ -804,25 +1006,37 @@ export async function barryDoctorCommand(options: { fix?: boolean }): Promise<vo
       const record = await harnessRecord(harness);
       if (!record || isOfferedModel(record, vendors, entry.model)) continue;
       const suggestions = suggestOfferedModels(record, vendors, entry.model);
-      staleModels.push(`${row.name}: "${entry.model}" is not in the ${harness} catalog` + (suggestions.length ? ` — did you mean ${suggestions.join(", ")}?` : ""));
+      staleModels.push(`${row.name}: "${entry.model}" is not in the ${harness} model list` + (suggestions.length ? ` — did you mean ${suggestions.join(", ")}?` : ""));
     }
   }
 
   if (staleModels.length > 0) {
-    console.log("\nOff-catalog models (accepted on write, never validated):");
+    console.log("\nUnlisted models (accepted on write, never validated):");
     for (const line of staleModels) console.log(`  ${line}`);
   }
 
-  const bounded = await Promise.all(rows.map(async row => {
-    const { bound } = await Barry.identity(row.id).grants({ defaults: false, identityTraits: false });
-    return { name: row.name, bound: bound ? { ...bound, name: requiredNames(identityRecords.config(row).bounds).join(", ") } : null };
-  }));
-  const shelless = traits.shelless(bounded);
+  const shelless: Array<{ identity: string; bound: string }> = [];
+  for (const row of rows) {
+    try {
+      const resolvedConfig = identityRecords.config(row);
+      const boundNames = requiredNames(resolvedConfig.bounds);
+      if (boundNames.length === 0 && !resolvedConfig.bound) continue;
+      const bound = await Barry.bound(row.id, []);
+      const deniesBash = (bound?.tools?.deny ?? []).some(
+        (tool) => /^(?:\*:)?bash(?:\.\*)?$/i.test(tool),
+      );
+      if (deniesBash) {
+        shelless.push({ identity: row.name, bound: boundNames.join(", ") });
+      }
+    } catch {
+      // Drifted rows with unmigrated bounds are reported and repaired below.
+    }
+  }
 
   if (shelless.length > 0) {
     console.log("\nIdentities whose default bound leaves every session with no shell:");
-    for (const { identity } of shelless) {
-      console.log(`  ${identity}: default bound "" denies Bash (native Bash is always denied)`);
+    for (const { identity, bound } of shelless) {
+      console.log(`  ${identity}: default bound "${bound}" denies Bash (native Bash is always denied)`);
     }
     console.log("  Intentional? Prefer `barry --bound <name>` per session.");
     console.log("  Otherwise clear it: barry identity bounds remove <name> --name <identity>");

@@ -19,7 +19,7 @@ new ADR rather than rewriting history.
 | 0009 | [Runtime and fixture invariants](0009-runtime-and-fixture-invariants.md) |
 | 0010 | [Adapter and session regression invariants](0010-adapter-and-session-regression-invariants.md) |
 | 0011 | [SDK runtime invariants](0011-sdk-runtime-invariants.md) |
-| 0012 | [explicit credentials, cross-store action evidence, and trait ownership](0012-credentials-action-runs-and-traits.md) |
+| 0012 | [explicit credentials, cross-store action evidence, and identity bag resolution](0012-credentials-action-runs-and-identity-bags.md) |
 | 0013 | [session-store boundaries and MCP admission evidence](0013-session-store-and-mcp-admission.md) |
 | 0014 | [discovery, vault access, and session budget invariants](0014-discovery-vault-and-session-budgets.md) |
 | 0015 | [verification and socket invariants](0015-verification-and-socket-invariants.md) |
@@ -27,7 +27,7 @@ new ADR rather than rewriting history.
 | 0017 | [SDK discovery and wire contracts](0017-sdk-discovery-and-wire-contracts.md) |
 | 0018 | [MCP transport and action metadata invariants](0018-mcp-transport-and-action-metadata.md) |
 | 0019 | [CLI checkouts and session selection](0019-cli-checkouts-and-session-selection.md) |
-| 0020 | [session route catalog and cache invariants](0020-session-route-catalog-and-cache-invariants.md) |
+| 0020 | [session route and cache invariants](0020-session-route-and-cache-invariants.md) |
 | 0021 | [telemetry polling and adapter regressions](0021-telemetry-polling-and-adapter-regressions.md) |
 | 0022 | [SDK authentication and logging invariants](0022-sdk-auth-and-logging-invariants.md) |
 | 0023 | [harness version compatibility](0023-harness-version-compatibility.md) |
@@ -51,6 +51,6 @@ new ADR rather than rewriting history.
 | 0041 | [Command classification and completion](0041-command-classification-and-completion.md) |
 | 0042 | [Vault key custody and action records](0042-vault-key-custody-and-action-records.md) |
 | 0043 | [telemetry classification, alerts and full tick cost](0043-telemetry-classification-and-alert-cost.md) |
-| 0044 | [trait validation diagnostics and mounted server labels](0044-trait-validation-diagnostics.md) |
-| 0045 | [auto-trait eligibility and packed bag names](0045-auto-trait-eligibility.md) |
 | 0046 | [instance, service and event comment audit](0046-instance-service-and-event-comments.md) |
+| 0047 | [prepare the requested hosted session eagerly](0047-hosted-warm-start.md) |
+| 0048 | [CLI bundles and lazy command actions](0048-cli-bundle-and-lazy-actions.md) |

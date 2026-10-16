@@ -14,19 +14,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { resolveNativePolicy } from "@barry-rocks/sdk/bounds";
+import { resolveNativeTools } from "@barry-rocks/sdk/bounds";
 import type { InstalledAdapter } from "@barry-rocks/sdk/adapters/harnesses";
-import { shippedVendors } from "../../test/helpers/shipped-vendors.js";
 import {
-  resolveGrants,
+  resolveSessionNativeTools,
   buildMcpConfig,
   preCreateSession,
   preCreateRequestBody,
   buildLaunchEnv,
   launchProvenanceEnv,
 } from "./launch-context.js";
-
-const VENDORS = await shippedVendors();
 
 // Load the shipped adapters the way `barry start` loads them — from a store in
 // a BARRY_HOME that is never the developer's own. (Same setup launch-parity
@@ -63,24 +60,26 @@ function goldenPlan(harness: string, variant: string): { env: Record<string, str
   return golden[variant].plan;
 }
 
-describe("resolveGrants", () => {
-  it("derives the native policy from real grants, matching resolveNativePolicy", async () => {
+describe("resolveSessionNativeTools", () => {
+  it("derives the native tool selection from resolved bounds and tools, matching resolveNativeTools", async () => {
     const { Barry } = await import("@barry-rocks/sdk");
-    const { identities } = await import("@barry-rocks/identities-bag");
+    const { identities, resolve } = await import("@barry-rocks/identities-bag");
     Barry.use(identities);
     try {
-      // The same oracle launch-parity's TUI-config test uses: these trait sets
-      // resolve to exactly these native tools on claude in guest mode.
-      for (const [traits, expectedAllowed] of [
-        [["native-file-reads"], ["Read", "Glob", "Grep"]],
-        [["native-shell"], ["Bash"]],
-        [[], []],
+      for (const [bounds, expectedAllowed] of [
+        [[{ tools: { deny: ["*:Bash", "*:Write", "*:Edit", "*:NotebookEdit", "*:WebFetch", "*:WebSearch"] } }], ["Read", "Glob", "Grep"]],
+        [[{ tools: { deny: ["*:Read", "*:Glob", "*:Grep", "*:Write", "*:Edit", "*:NotebookEdit", "*:WebFetch", "*:WebSearch"] } }], ["Bash"]],
+        [[], ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "NotebookEdit", "WebFetch", "WebSearch"]],
       ] as const) {
-        const granted = await Barry.grants({ harness: claude.id, mode: "guest", defaults: false, traits: [...traits] });
-        const result = resolveGrants(granted, claude, "guest");
-        const direct = resolveNativePolicy(granted, claude, "guest");
-        // The step is a thin, honest wrapper: identical policy, with its two
-        // derived lists named.
+        const bound = await resolve.bound(undefined, { bounds: [...bounds] });
+        const tools = await resolve.tools(undefined, {
+          harness: claude.id,
+          mode: "guest",
+          defaults: false,
+          bounds: [...bounds],
+        });
+        const result = resolveSessionNativeTools({ bound, tools }, claude, "guest");
+        const direct = resolveNativeTools(bound, tools, claude, "guest");
         expect(result.native).toEqual(direct);
         expect(result.allowedNativeTools).toEqual(direct.allowed);
         expect(result.deniedTools).toEqual(direct.denied);
@@ -117,8 +116,9 @@ describe("preCreateSession", () => {
     cwd: "/repo",
     source: "cli",
     identityId: 7,
+    bags: ["linear", "slack"],
     selectedBounds: ["readonly"],
-    provider: "claude-code",
+    harness: "claude-code",
     directive: null as string | null,
     name: "my session",
   };
@@ -131,6 +131,7 @@ describe("preCreateSession", () => {
       directive: null,
       name: "my session",
       identityId: 7,
+      bags: ["linear", "slack"],
       bounds: ["readonly"],
       provider: "claude-code",
     });
@@ -178,6 +179,18 @@ describe("preCreateSession", () => {
     expect(result.ok).toBe(false);
     expect(result.warning).toContain("offline");
   });
+});
+
+it("bounds a transport that ignores AbortSignal and names the API port", async () => {
+  const started = performance.now();
+  const result = await preCreateSession({ sessionId: "timeout", cwd: "/tmp", source: "cli", identityId: 1, selectedBounds: [], harness: "claude" }, {
+    fetch: (() => new Promise(() => {})) as typeof fetch,
+    endpoint: "http://localhost:4854/api/v1/sessions/start", headers: {}, timeoutMs: 20,
+  });
+  expect(result.ok).toBe(false);
+  expect(result.warning).toContain("within 0.02 s at http://localhost:4854");
+  expect(result.warning).toContain("barry status / barry up");
+  expect(performance.now() - started).toBeLessThan(500);
 });
 
 describe("buildLaunchEnv", () => {
@@ -235,12 +248,12 @@ describe("buildLaunchEnv", () => {
 });
 
 describe("launchProvenanceEnv", () => {
-  it("always pins provider and mode, and model only when set", () => {
-    expect(launchProvenanceEnv({ provider: "claude", mode: "guest" })).toEqual({
+  it("always pins harness and mode, and model only when set", () => {
+    expect(launchProvenanceEnv({ harness: "claude", mode: "guest" })).toEqual({
       BARRY_PROVIDER: "claude",
       BARRY_MODE: "guest",
     });
-    expect(launchProvenanceEnv({ provider: "claude", mode: "guest", model: "claude-opus-5", modelProvider: "zai" })).toEqual({
+    expect(launchProvenanceEnv({ harness: "claude", mode: "guest", model: "claude-opus-5", modelProvider: "zai" })).toEqual({
       BARRY_PROVIDER: "claude",
       BARRY_MODE: "guest",
       BARRY_MODEL: "claude-opus-5",

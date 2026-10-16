@@ -53,7 +53,6 @@ export function buildBagResourceServer(resources: LoadedBagResources, options?: 
 
   registerManifestResource(server, manifest, rawManifest, tools);
   registerSkillResources(server, bagDir);
-  registerTraitResources(server, manifest);
   registerMcpServersResource(server, manifest);
   registerToolsMetaResource(server, tools);
 
@@ -67,7 +66,7 @@ export async function createBagResourceServer(options: BagServerOptions): Promis
 
 /**
  * @deprecated Renamed to {@link createBagResourceServer}. This factory builds
- * the HTTP resource server (manifest/skills/traits as `barry://` resources),
+ * the HTTP resource server (manifest/skills as `barry://` resources),
  * not the stdio tool server `startBagServer` — the two "bag server" names were
  * a documented source of confusion. Kept as an alias for any external importer
  * of the old name; prefer `createBagResourceServer`.
@@ -136,12 +135,12 @@ function registerSkillResources(server: McpServer, bagDir: string): void {
       if (skills.has(entry)) continue;
 
       // Prefer the action: when both are present the action is what the
-      // catalog resolves locally, so the remote must agree.
+      // local registry resolves, so the remote must agree.
       const actionFile = join(entryPath, "action.yaml");
       if (existsSync(actionFile)) {
         try {
           // One broken action must not take down the whole listing — the same
-          // rule readActionDir follows in the catalog.
+          // rule readActionDir follows in the local registry.
           // A `run:` action has no prompt to serve as a skill body; skip it
           // rather than publishing an empty skill.
           const action = parseActionFile(entryPath);
@@ -165,29 +164,6 @@ function registerSkillResources(server: McpServer, bagDir: string): void {
           uri: uri.href,
           mimeType: "application/json",
           text: JSON.stringify({ name: skillName, prompt: content }),
-        },
-      ],
-    }));
-  }
-}
-
-function registerTraitResources(server: McpServer, manifest: BagManifest | null): void {
-  if (!manifest?.traits) return;
-
-  for (const [traitName, traitDef] of Object.entries(manifest.traits)) {
-    server.resource(`trait-${traitName}`, `barry://traits/${traitName}`, (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          mimeType: "application/json",
-          text: JSON.stringify({
-            name: traitName,
-            description: traitDef.description,
-            access: traitDef.access,
-            namespaces: traitDef.bags,
-            // Consumers filter this to skills the bag actually published.
-            skills: traitDef.skills ?? [],
-          }),
         },
       ],
     }));

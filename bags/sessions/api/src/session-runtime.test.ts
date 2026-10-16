@@ -18,13 +18,12 @@ vi.mock("./db.js", () => ({
       id: `session-db-id-${++sessionCounter}`,
       state: "open", ended_at: null, workflow_credential_id: null,
       system_prompt: input.system_prompt,
-      traits: input.traits ?? [],
+      bags: input.bags ?? [],
       metadata: input.metadata ?? {},
       identity_id: input.identity_id ?? null,
       user_id: input.user_id ?? null,
-      bound: input.bound,
+      bound: input.bound ?? null,
       bounds: input.bounds ?? [],
-      bound_id: null,
     };
     dbRows.set(row.id, row);
     return row;
@@ -53,33 +52,27 @@ vi.mock("@barry-rocks/sessions-bag/lifecycle", () => ({
   endSession: vi.fn(async () => undefined),
 }));
 
-// The identities bag, at its root: the identity a session resolves to, its
-// configuration, the trait catalog and bounds, and the user it acts for. The
-// policy a session's guards enforce is composed by the real shared resolver
-// over these, installed as the identities subject below (see
-// test-helpers/identity-policy).
 vi.mock("@barry-rocks/identities-bag", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@barry-rocks/identities-bag")>();
   const identityRecords = {
     ...actual.identityRecords,
     row: vi.fn(async (id: number): Promise<{ id: number; name: string } | undefined> => ({ id, name: "fixture" })),
-    config: vi.fn(() => ({ secrets: {}, vault: null, bags: [], traits: [], adapters: {} })),
+    config: vi.fn(() => ({ secrets: {}, vault: null, bags: [], bounds: [], adapters: {} })),
     resolve: vi.fn(async () => ({ barry: { id: "file-barry", name: "default" }, source: "default" })),
     rowId: vi.fn(async () => 1),
     directory: vi.fn(() => null),
   };
-  const bounds = { ...actual.bounds, get: vi.fn(async () => undefined), stored: vi.fn(async () => []) };
-  const traits = { ...actual.traits, list: vi.fn(async () => []) };
+  const bounds = { ...actual.bounds, get: vi.fn(async () => undefined), list: vi.fn(async () => []) };
   const owner = {
     ...actual.owner,
     current: vi.fn(async () => ({ id: 1, settings: {} })),
     users: { ...actual.owner.users, get: vi.fn(async (id: number) => ({ id, settings: {} })) },
   };
-  return { ...actual, identityRecords, bounds, owner, traits };
+  return { ...actual, identityRecords, bounds, owner };
 });
 
 vi.mock("@barry-rocks/sessions-bag/store/session-helpers", () => ({
-  parseSessionMetadata: vi.fn((m: unknown) => m ?? {}),
+  parseMetadata: vi.fn((m: unknown) => m ?? {}),
 }));
 
 // process-liveness lives in the sessions bag, so it is mocked there. Under any
@@ -87,9 +80,11 @@ vi.mock("@barry-rocks/sessions-bag/store/session-helpers", () => ({
 // call the real classifier against this machine's process table.
 vi.mock("@barry-rocks/sessions-bag/process-liveness", () => ({
   classify: vi.fn(() => ({ state: "unknown" })),
+  readProcessStartTime:vi.fn(()=>1700000000),
 }));
 
 vi.mock("@barry-rocks/sessions-bag/client", () => ({
+  getActiveSessions: vi.fn(async () => [...dbRows.values()]),
   getSession: vi.fn(async (id: string) => dbRows.get(id)),
   createProviderSession: vi.fn(async () => undefined),
   endProviderSessionByProviderId: vi.fn(async () => undefined),
@@ -178,17 +173,12 @@ vi.mock("./session-prose.js", () => ({
   })),
 }));
 
-vi.mock("@barry-rocks/sdk/bounds", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@barry-rocks/sdk/bounds")>(),
-  ...(await vi.importActual<Record<string, unknown>>("@barry-rocks/sdk/bounds")),
-}));
 
 
 import { SessionRuntime, type SessionConfig } from "./session-runtime.js";
-import { bounds, identityRecords, owner, traits } from "@barry-rocks/identities-bag";
-import { Barry, BarryError } from "@barry-rocks/sdk";
+import { bounds, identityRecords, owner } from "@barry-rocks/identities-bag";
+import { Barry, BarryError, type Bound } from "@barry-rocks/sdk";
 import { fakeIdentities } from "@barry-rocks/sdk/testing";
-import { grantsOver } from "./test-helpers/identity-policy.js";
 import { createNamedSession } from "./db.js";
 import { AdmissionError } from "./execution-admission.js";
 import { updateSessionRecord, updateSessionMetadata, getSessionRecord } from "./db.js";
@@ -205,18 +195,29 @@ import type { InstalledAdapter } from "@barry-rocks/sdk/adapters/harnesses";
 import { FakeSession } from "./test-helpers/fake-session.js";
 import { installedAdapter } from "./test-helpers/installed-adapter.js";
 import { describeShipped, wireShippedHarnesses } from "./test-helpers/shipped-harnesses.js";
-import { approveExecutionScope } from "@barry-rocks/sdk/bounds";
+import { approveWorkflowBounds, mergeBounds } from "@barry-rocks/sdk/bounds";
 import { verifyWorkflowSessionCredential } from "@barry-rocks/sdk/internal/auth";
 import { getServicePort } from "@barry-rocks/sdk/services";
 
-// Routing reads the harness's record and the vendor catalog; the sessions
-// here are created through the override each test passes, not the wired one.
-// The identities subject composes grants over the mocked store (with no bag
-// declaring a tool), and names user 1 as the installation's owner.
 beforeEach(() => {
   wireShippedHarnesses({ createSession: vi.fn(), runStructured: vi.fn() });
   Barry.use(fakeIdentities({
-    grants: grantsOver({ identityRecords, traits, bounds }, []),
+    bound: async (ref, selection) => {
+      const cfg = identityRecords.config(ref as never) as { bounds?: Array<{ name: string; optional?: boolean }> } | undefined;
+      const defaultBounds = (cfg?.bounds ?? []).filter((b) => !b.optional).map((b) => b.name);
+      const selected = selection ?? [];
+      const resolved: Bound[] = [];
+      for (const entry of [...defaultBounds, ...selected]) {
+        if (typeof entry === "string") {
+          const def = await bounds.get(entry, ref as never);
+          if (def) resolved.push(def);
+        } else if (entry && typeof entry === "object") {
+          resolved.push(entry);
+        }
+      }
+      return resolved.length > 0 ? mergeBounds(...resolved) : null;
+    },
+    tools: async () => [],
     owner: async () => ({ id: 1, name: "fixture", defaultIdentity: null }),
   }));
 });
@@ -262,6 +263,9 @@ describe("runtime user attribution", () => {
     const manager = new SessionRuntime({ createSession: vi.fn() });
     vi.mocked(owner.current).mockResolvedValueOnce({ id: 2, settings: {} } as never);
     const active = await manager.startSession(baseConfig({ prepareOnly: true }));
+    expect(active.timings.prepare_total_ms).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(active.timings.prepare_total_ms)).toBe(true);
+    expect(active.timings.warm_hit).toBe(0);
     expect(createNamedSession).toHaveBeenLastCalledWith(expect.objectContaining({ user_id: 2 }));
     const id = active.id;
     expect(dbRows.get(id)!.user_id).toBe(2);
@@ -286,43 +290,156 @@ describe("runtime user attribution", () => {
   });
 });
 
-describe("identity-selected bash policy reaches the hosted harness", () => {
-  it("hands native shell denial to createSession from the bag trait without compatibility defaults", async () => {
+describe("identity-selected bash bound reaches the hosted harness", () => {
+  it("hands native shell denial to createSession from the bag bound without compatibility defaults", async () => {
     const { parseManifest } = await import("@barry-rocks/sdk/bags");
     const bash = parseManifest(new URL("../../../bash", import.meta.url).pathname)!;
     const installed = describeShipped("claude")!;
     const manifest = installed.bag!.manifest;
     const manifestBounds = { ...bash.bounds, ...manifest.bounds };
-    const originalTraits = vi.mocked(traits.list).getMockImplementation();
     const originalConfig = vi.mocked(identityRecords.config).getMockImplementation();
     const session = new FakeSession();
     const createSession = vi.fn(async (_harness: string, _config: HarnessSessionConfig) => session);
     try {
-      vi.mocked(traits.list).mockResolvedValue([bash, manifest].flatMap((bag) => Object.entries(bag.traits).map(([name, trait]) => ({ name, ...trait, namespaces: trait.bags }))) as never);
-      vi.mocked(bounds.stored).mockResolvedValue(Object.entries(manifestBounds).map(([name, definition]) => ({ id: 1, token: "fixture", name, description: null, bound: definition.bound })));
-      vi.mocked(identityRecords.config).mockReturnValue({ secrets: {}, vault: undefined, bags: [], traits: [{ name: "bash:no-bash", optional: false }], bounds: [], adapters: {} } as never);
-      // Removing legacy defaults is the negative control: hosted defaults
-      // already deny Bash, so retaining them could hide a broken trait chain.
-      const record = { ...installed, bag: { ...installed.bag!, manifest: { ...manifest, nativePolicy: undefined } } };
+      vi.mocked(bounds.get).mockImplementation(async (nameOrRef) => {
+        const name = typeof nameOrRef === "string" ? nameOrRef : nameOrRef.name;
+        const def = manifestBounds[name];
+        return def ? { name, ...def.bound } : undefined;
+      });
+      vi.mocked(identityRecords.config).mockReturnValue({ secrets: {}, vault: undefined, bags: [], bounds: [{ name: "bash:no-bash", optional: false }], adapters: {} } as never);
+      const record = { ...installed, bag: { ...installed.bag!, manifest: { ...manifest } } };
       setAgentRuntime({ createSession, runStructured: vi.fn(), describeAdapter: () => record });
       const manager = new SessionRuntime({ createSession });
       await manager.startSession(baseConfig({ provider: "claude" }));
       await vi.waitFor(() => expect(createSession).toHaveBeenCalled());
-      expect(createSession.mock.calls[0][1].deniedTools).toEqual(expect.arrayContaining(["Bash", ...record.nativeTools]));
+      expect(createSession.mock.calls[0][1].deniedTools).toEqual(expect.arrayContaining(["Bash", ...(record.tools ?? [])]));
     } finally {
       session.end();
-      if (originalTraits) vi.mocked(traits.list).mockImplementation(originalTraits);
       if (originalConfig) vi.mocked(identityRecords.config).mockImplementation(originalConfig);
-      vi.mocked(bounds.stored).mockResolvedValue([]);
+      vi.mocked(bounds.get).mockResolvedValue(undefined);
       wireShippedHarnesses({ createSession: vi.fn(), runStructured: vi.fn() });
     }
   });
 });
 
+describe("prepared hosted sessions", () => {
+  it("protects an open WebSocket draft when the resident budget is full", async () => {
+    const manager = new SessionRuntime({ limits: { maxResidentSessions: 1 }, createSession: vi.fn(async () => Object.assign(new FakeSession(), { warm: async () => {} })) });
+    const draft = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+    await manager.warmHarness(draft.id);
+    const subscriber = { readyState: 1, send: vi.fn() };
+    manager.subscribe(draft.id, subscriber);
+    await expect(manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }))).rejects.toThrow();
+    expect(manager.getActiveSession(draft.id)).toBe(draft);
+    expect(dbRows.has(draft.id)).toBe(true);
+    const ended = vi.mocked(endSession).mock.calls.length;
+    manager.unsubscribe(draft.id, subscriber);
+    const next = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+    expect(manager.getActiveSession(draft.id)).toBeUndefined();
+    expect(dbRows.has(draft.id)).toBe(true);
+    expect(manager.getActiveSession(next.id)).toBe(next);
+    expect(vi.mocked(endSession)).toHaveBeenCalledTimes(ended);
+  });
+  it("preserves a prepared row during API shutdown eviction", async () => {
+    const manager = new SessionRuntime({ createSession: vi.fn(async () => Object.assign(new FakeSession(), { warm: async () => {} })) });
+    const draft = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+    await manager.warmHarness(draft.id);
+    const ended = vi.mocked(endSession).mock.calls.length;
+    manager.subscribe(draft.id, { readyState: 1, send: vi.fn() });
+    await manager.dropResident(draft.id, { force: true });
+    expect(manager.getActiveSession(draft.id)).toBeUndefined();
+    expect(dbRows.has(draft.id)).toBe(true);
+    expect(vi.mocked(endSession)).toHaveBeenCalledTimes(ended);
+  });
+  it("does not delete unstarted hosted drafts during restart reconciliation", async () => {
+    const manager = new SessionRuntime();
+    const { getActiveSessions } = await import("@barry-rocks/sessions-bag/client");
+    vi.mocked(getActiveSessions).mockResolvedValueOnce([{ id: "restart-draft", status: "pending", started_at: null, metadata: { mode: "hosted" } }] as Awaited<ReturnType<typeof getActiveSessions>>);
+    const ended = vi.mocked(endSession).mock.calls.length;
+    await manager.reconcileStaleSessions();
+    expect(vi.mocked(endSession)).toHaveBeenCalledTimes(ended);
+  });
+  it("warms exactly once and delivers the first message without harness startup timings", async () => {
+    const session = Object.assign(new FakeSession(), { isWarm:()=>true,warm: vi.fn(async () => {}) });
+    const create = vi.fn(async () => session);
+    const manager = new SessionRuntime({ createSession: create });
+    const active = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+    await Promise.all([manager.warmHarness(active.id), manager.warmHarness(active.id)]);
+    expect(create).toHaveBeenCalledOnce();
+    expect(session.warm).toHaveBeenCalledOnce();
+    expect(session.delivered).toEqual([]);
+    expect(active.status).toBe("waiting");
+    expect(dbRows.get(active.id)?.started_at).toBeUndefined();
+    await manager.sendMessage(active.id, "hello");
+    await vi.waitFor(() => expect(session.delivered).toHaveLength(1));
+    session.push({ type: "partial", text: "hi" }); session.end();
+    await vi.waitFor(() => expect(active.status).toBe("waiting"));
+    expect(active.timings.warm_hit).toBe(1);
+    expect(active.timings).not.toHaveProperty("harness_create_ms");
+    expect(active.timings).not.toHaveProperty("harness_ready_ms");
+    expect(dbRows.get(active.id)?.started_at).toBeInstanceOf(Date);
+    expect(create).toHaveBeenCalledOnce();
+    await manager.removeSession(active.id);
+  });
+  it("leaves a failed warm usable for a cold first delivery", async () => {
+    const session = Object.assign(new FakeSession(), { warm: vi.fn(async () => { throw new Error("initialize failed"); }) });
+    const manager = new SessionRuntime({ createSession: vi.fn(async () => session) });
+    const active = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+    await manager.warmHarness(active.id);
+    expect(active.warm?.error).toBe("initialize failed");
+    await manager.sendMessage(active.id, "hello");
+    await vi.waitFor(() => expect(session.delivered).toHaveLength(1));
+    session.end(); await active.lastTurn;
+    expect(active.timings.warm_hit).toBe(0);
+    await manager.removeSession(active.id);
+  });
+  it("evicts idle unused sessions, retains subscribers and messages, and starts the TTL on UI close", async () => {
+    vi.stubEnv("BARRY_WARM_IDLE_MS", "1000");
+    const manager = new SessionRuntime({ createSession: vi.fn(async () => Object.assign(new FakeSession(), { warm: async () => {} })) });
+    const idle = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+    const open = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+    const used = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+    for (const active of [idle, open, used]) {
+      await manager.warmHarness(active.id);
+      active.warm!.preparedAt = Date.now() - 2000; active.warm!.idleSince = Date.now() - 2000;
+    }
+    const subscriber = { readyState: 1, send: vi.fn() };
+    manager.subscribe(open.id, subscriber);
+    used.lastSequence = 1;
+    await manager.sweepWarmSessions();
+    expect(manager.getActiveSession(idle.id)).toBeUndefined();
+    expect(manager.getActiveSession(open.id)).toBe(open);
+    expect(manager.getActiveSession(used.id)).toBe(used);
+    manager.unsubscribe(open.id, subscriber);
+    await manager.sweepWarmSessions();
+    expect(manager.getActiveSession(open.id)).toBe(open);
+    open.warm!.idleSince = Date.now() - 2000;
+    await manager.sweepWarmSessions();
+    expect(manager.getActiveSession(open.id)).toBeUndefined();
+    await manager.removeSession(used.id);
+    vi.unstubAllEnvs();
+  });
+  it("drops an unused configuration without ending its row and refuses to drop a queued turn", async () => {
+    const session = Object.assign(new FakeSession(), { warm: async () => {} });
+    const manager = new SessionRuntime({ createSession: vi.fn(async () => session) });
+    const active = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+    await manager.warmHarness(active.id);
+    active.pendingTurns = 1;
+    expect(await manager.dropResident(active.id)).toBeNull();
+    active.pendingTurns = 0;
+    const ended = vi.mocked(endSession).mock.calls.length;
+    expect(await manager.dropResident(active.id)).toBe(active);
+    expect(manager.getActiveSession(active.id)).toBeUndefined();
+    expect(dbRows.has(active.id)).toBe(true);
+    expect(vi.mocked(endSession)).toHaveBeenCalledTimes(ended);
+    expect(session.closeCalls).toBeGreaterThan(0);
+  });
+});
+
 describe("workflow-scoped harness credentials", () => {
-  it("replaces the Barry instance bearer with a session and scope bound token", async () => {
+  it("replaces the Barry instance bearer with a session and bound token", async () => {
     vi.stubEnv("BARRY_SECRET", "barry_test_instance_secret_with_enough_entropy");
-    const scope = await approveExecutionScope({ identity: "stable-reviewer", traitNames: [], traits: {}, tools: [], boundByName: async () => undefined });
+    const approvedBound = await approveWorkflowBounds({ identity: "stable-reviewer", bags: [], bounds: [], tools: [], boundByName: async () => undefined });
     const session = new FakeSession();
     const createSession = vi.fn(async (_harness: string, _config: HarnessSessionConfig) => session);
     const adapter = describeShipped("claude")!;
@@ -332,7 +449,7 @@ describe("workflow-scoped harness credentials", () => {
       const active = await manager.startSession(baseConfig({
         provider: "claude",
         identityId: 1,
-        metadata: { workflow_scope: scope, workflow_identity_id: 1 },
+        metadata: { workflow_bound: approvedBound, workflow_identity_id: 1 },
         mcpServers: { barry: { type: "http", url: `http://127.0.0.1:${getServicePort("mcpBarry")}/mcp`, headers: { Authorization: "Bearer barry_test_instance_secret_with_enough_entropy" } } },
       }));
       await vi.waitFor(() => expect(createSession).toHaveBeenCalled());
@@ -344,9 +461,9 @@ describe("workflow-scoped harness credentials", () => {
         sessionId: active.id,
         credentialId: dbRows.get(active.id)?.workflow_credential_id,
         identity: "stable-reviewer",
-        scopeFingerprint: scope.fingerprint,
+        boundFingerprint: approvedBound.fingerprint,
       });
-      expect(createSession.mock.calls[0][1].deniedTools).toEqual(expect.arrayContaining(adapter.nativeTools));
+      expect(createSession.mock.calls[0][1].deniedTools).toEqual(expect.arrayContaining(adapter.tools ?? []));
     } finally {
       session.end();
       vi.unstubAllEnvs();
@@ -596,7 +713,7 @@ describe("SessionRuntime cancellation (astra-review F8)", () => {
     sessions[1]?.end();
   });
 
-  it("a stopped turn holds its slot until the harness has actually stopped", async () => {
+  it("a hard stop releases its slot even when the old harness reader stays silent", async () => {
     const manager = new SessionRuntime({ createSession, limits: { maxResidentSessions: 5, maxConcurrentTurns: 1 } });
     const a = await manager.startSession(baseConfig());
     await vi.waitFor(() => expect(sessions[0]?.delivered).toHaveLength(1));
@@ -608,7 +725,7 @@ describe("SessionRuntime cancellation (astra-review F8)", () => {
 
     await manager.startSession(baseConfig());
     await new Promise((r) => setTimeout(r, 20));
-    expect(sessions, "a turn started while the stopped harness was still running").toHaveLength(1);
+    expect(sessions, "the forced turn must release its lease").toHaveLength(2);
 
     sessions[0].end();
     await vi.waitFor(() => expect(sessions).toHaveLength(2));
@@ -658,12 +775,13 @@ describe("SessionRuntime cancellation (astra-review F8)", () => {
     await vi.waitFor(() => expect(sessions[0]?.delivered).toHaveLength(1));
     await vi.waitFor(() => expect(a.status).toBe("streaming"));
 
-    expect(await manager.interruptTurn(a.id)).toBe(true);
-    expect(sessions[0].interruptCalls).toBeGreaterThan(0);
+    const interrupting=manager.interruptTurn(a.id);
+    await vi.waitFor(()=>expect(sessions[0].interruptCalls).toBeGreaterThan(0));
     // How a harness reports the abort: drained after the interrupt, so the
     // turn rests rather than failing.
     sessions[0].push({ type: "error", error: "aborted" });
     sessions[0].end();
+    expect(await interrupting).toBe(true);
 
     await vi.waitFor(() => expect(a.status).toBe("waiting"));
     expect(sessions[0].closeCalls).toBe(0);
@@ -677,15 +795,15 @@ describe("SessionRuntime cancellation (astra-review F8)", () => {
 
   it("rules on what a hosted harness asks about: the session's denials refused, the rest run", async () => {
     const manager = new SessionRuntime({ createSession, limits: { maxResidentSessions: 5 } });
-    const bound = { nativeTools: { "claude-code": ["Bash", "Read"] } };
-    await manager.startSession(baseConfig({ scope: bound }));
-    await manager.startSession(baseConfig({ provider: "codex", scope: bound }));
+    const bound: Bound = { tools: { deny: ["claude-code:Bash", "claude-code:Read"] } };
+    await manager.startSession(baseConfig({ bounds: [bound] }));
+    await manager.startSession(baseConfig({ provider: "codex", bounds: [bound] }));
     await vi.waitFor(() => expect(createSession).toHaveBeenCalledTimes(2));
     const [claude, codex] = createSession.mock.calls.map((call) => call[1] as HarnessSessionConfig);
 
     // Every adapter receives the mandatory native ceiling.
     expect(claude?.deniedTools).toContain("Bash");
-    expect(codex?.deniedTools).toEqual(expect.arrayContaining(describeShipped("codex")!.nativeTools));
+    expect(codex?.deniedTools).toEqual(expect.arrayContaining(describeShipped("codex")!.tools ?? []));
     // A barry that does not allow native tools has them denied, Bash first;
     // Barry's own tools still run.
     await expect(claude?.decide?.({ id: "1", tool: "Bash", input: {} })).resolves.toMatchObject({ allow: false });
@@ -714,6 +832,27 @@ describe("SessionRuntime cancellation (astra-review F8)", () => {
     await vi.waitFor(() => expect(a.status).toBe("waiting"));
 
     expect(await manager.interruptTurn(a.id)).toBe(false);
+  });
+
+  it("broadcasts startup and first-token timings when a turn finishes", async () => {
+    const manager = new SessionRuntime({ createSession });
+    const active = await manager.startSession(baseConfig());
+    await vi.waitFor(() => expect(sessions[0]?.delivered).toHaveLength(1));
+    const sent: Array<{ type: string; status?: string; metadata?: { timing?: Record<string, number> } }> = [];
+    const subscriber = { readyState: 1, send: (data: unknown) => sent.push(JSON.parse(String(data))) };
+    manager.subscribe(active.id, subscriber);
+    sessions[0].push({ type: "partial", text: "hi" });
+    sessions[0].end();
+    await vi.waitFor(() => expect(sent.some(frame => frame.status === "waiting")).toBe(true));
+    const timing = sent.find(frame => frame.status === "waiting")?.metadata?.timing;
+    expect(timing).toMatchObject({ warm_hit: 0 });
+    for (const key of ["env_ms", "open_ms", "deliver_ms", "first_event_ms", "first_token_ms", "turn_done_ms"]) {
+      expect(Number.isFinite(timing?.[key])).toBe(true);
+      expect(timing?.[key]).toBeGreaterThanOrEqual(0);
+    }
+    expect(timing!.first_token_ms).toBeLessThanOrEqual(timing!.turn_done_ms);
+    manager.unsubscribe(active.id, subscriber);
+    await manager.removeSession(active.id);
   });
 
   it("tells its subscribers when a turn fails, as it does when one finishes", async () => {
@@ -752,9 +891,9 @@ describe("SessionRuntime cancellation (astra-review F8)", () => {
 // entries, skipping only a namespace the proxy already served -- and only
 // GRANTED namespaces get a proxy entry. So a bag packed on the identity but not
 // granted got a direct, unfiltered `npx mcp-remote` connection: a browser tab
-// when no token was cached, and that bag's tools with no trait filter when one
+// when no token was cached, and that bag's tools with no filter when one
 // was. The engine proxies every declared server, filtered by the session's
-// grant, so a bag's servers reach the agent through the proxy or not at all.
+// selection, so a bag's servers reach the agent through the proxy or not at all.
 describe("bag MCP servers reach the agent only through the proxy", () => {
   let sessions: FakeSession[];
   let createSession: CreateSessionFn & ReturnType<typeof vi.fn>;
@@ -778,23 +917,22 @@ describe("bag MCP servers reach the agent only through the proxy", () => {
   function packedBag(name: string, source: BagSource, mcpServers: Record<string, BagMcpServer>): Bag {
     return {
       name, description: name, builtin: false, source, manifest: null,
-      skillsDirs: [], actionsDirs: [], instructionsDirs: [], traits: [], mcpServers, tools: [],
+      skillsDirs: [], actionsDirs: [], instructionsDirs: [], mcpServers, tools: [],
       dependencies: [], slashCommands: [], hooks: [], requires: [], services: [], apps: [], schedules: [],
     };
   }
 
-  it("gives a packed but ungranted bag no direct server, and keeps the granted bag's proxy entry", async () => {
-    // `notion` is granted, so the route has already built its proxy entry.
-    // `vantage-docs` is packed on the identity and granted by nothing.
+  it("gives a packed but unselected bag no direct server, and keeps the selected bag's proxy entry", async () => {
+    // `notion` is selected, so the route has already built its proxy entry.
+    // `vantage-docs` is packed on the identity and not selected.
     const docsUrl = "https://docs.vantage.sh/mcp";
-    vi.mocked(traits.list).mockResolvedValue([{ description: "", tools: [], skills: [], instructions: [], includes: [], bag: "notion", bound: {}, name: "notion", namespaces: ["notion"], access: "read", boundNames: [] }]);
     vi.mocked(identityRecords.config).mockReturnValueOnce({
       bag_configs: {},
       secrets: {},
-      vault: undefined, traits: [{ name: "notion", optional: false }], bags: ["notion", "vantage-docs"],
-      bounds: [], bound: undefined, adapters: {},
-      status_notify: undefined, bag_grant: "session",
-    });
+      vault: undefined, bags: [{ name: "notion", optional: false }, { name: "vantage-docs", optional: true }],
+      bounds: [], adapters: {},
+      status_notify: undefined,
+    } as never);
     vi.mocked(expandCompositionFromSnapshot).mockResolvedValueOnce(["notion", "vantage-docs"]);
     vi.mocked(loadBags).mockResolvedValueOnce([
       packedBag("notion", { type: "local", path: "/bags/notion" }, { notion: { type: "http", url: "https://mcp.notion.com/mcp" } }),
@@ -821,7 +959,7 @@ describe("bag MCP servers reach the agent only through the proxy", () => {
     sessions[0].end();
   });
 
-  it("queries /bag-status?sessionId= and does not fallback to all packed bags for trait-less session", async () => {
+  it("queries /bag-status?sessionId= and does not fallback to all packed bags for session without optional bags", async () => {
     let queriedUrl = "";
     vi.stubGlobal("fetch", vi.fn(async (url: string | URL) => {
       queriedUrl = String(url);
@@ -831,10 +969,10 @@ describe("bag MCP servers reach the agent only through the proxy", () => {
     vi.mocked(identityRecords.config).mockReturnValueOnce({
       bag_configs: {},
       secrets: {},
-      vault: undefined, traits: [], bags: ["notion"],
-      bounds: [], bound: undefined, adapters: {},
-      status_notify: undefined, bag_grant: "session",
-    });
+      vault: undefined, bags: [{ name: "notion", optional: true }],
+      bounds: [], adapters: {},
+      status_notify: undefined,
+    } as never);
     vi.mocked(expandCompositionFromSnapshot).mockResolvedValueOnce(["notion"]);
     vi.mocked(loadBags).mockResolvedValueOnce([
       packedBag("notion", { type: "local", path: "/bags/notion" }, { notion: { type: "http", url: "https://mcp.notion.com/mcp" } }),
@@ -853,7 +991,7 @@ describe("bag MCP servers reach the agent only through the proxy", () => {
     sessions[0].end();
   });
 
-  it("adds guidance and notifies when scoped bag-status reports unauthorized granted bag", async () => {
+  it("adds guidance and notifies when scoped bag-status reports unauthorized selected bag", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => {
       return new Response(JSON.stringify({ scoped: true, needsAuth: ["notion"], authExpired: [] }));
     }));
@@ -861,17 +999,17 @@ describe("bag MCP servers reach the agent only through the proxy", () => {
     vi.mocked(identityRecords.config).mockReturnValueOnce({
       bag_configs: {},
       secrets: {},
-      vault: undefined, traits: [{ name: "notion", optional: false }], bags: ["notion"],
-      bounds: [], bound: undefined, adapters: {},
-      status_notify: undefined, bag_grant: "session",
-    });
+      vault: undefined, bags: [{ name: "notion", optional: false }],
+      bounds: [], adapters: {},
+      status_notify: undefined,
+    } as never);
     vi.mocked(expandCompositionFromSnapshot).mockResolvedValueOnce(["notion"]);
     vi.mocked(loadBags).mockResolvedValueOnce([
       packedBag("notion", { type: "local", path: "/bags/notion" }, { notion: { type: "http", url: "https://mcp.notion.com/mcp" } }),
     ]);
 
     const manager = new SessionRuntime({ createSession });
-    await manager.startSession(baseConfig({ traits: ["notion"], prompt: "hello" }));
+    await manager.startSession(baseConfig({ bags: ["notion"], prompt: "hello" }));
     await vi.waitFor(() => expect(sessions).toHaveLength(1));
 
     const handedToAgent: HarnessSessionConfig = createSession.mock.calls[0][1];
@@ -909,7 +1047,7 @@ describe("SessionRuntime model provider", () => {
     return ((call?.[1] as { metadata?: Record<string, unknown> })?.metadata) ?? {};
   }
 
-  const identityConfig = (adapters: import("@barry-rocks/sdk").IdentityAdapters) => ({ adapters, bag_configs: {}, secrets: {}, vault: undefined, traits: [], bags: [], bounds: [], bound: undefined, status_notify: undefined, bag_grant: "session" as const });
+  const identityConfig = (adapters: import("@barry-rocks/sdk").IdentityAdapters) => ({ adapters, bag_configs: {}, secrets: {}, vault: undefined, bags: [], bounds: [], status_notify: undefined }) as never;
 
   it("starts and records the identity's default harness and its model", async () => {
     vi.mocked(identityRecords.config).mockReturnValueOnce(identityConfig({ "claude-code": {}, codex: { default: true, model: "gpt-5" } }));
@@ -963,10 +1101,10 @@ describe("SessionRuntime model provider", () => {
     vi.mocked(identityRecords.config).mockReturnValueOnce({
       bag_configs: {},
       secrets: {},
-      vault: undefined, traits: [], bags: [], bounds: [], bound: undefined,
+      vault: undefined, bags: [], bounds: [],
       adapters: { "claude-code": { model: "ollama/my-custom:7b" } },
-      status_notify: undefined, bag_grant: "session",
-    });
+      status_notify: undefined,
+    } as never);
     const manager = new SessionRuntime({ createSession });
     await manager.startSession(baseConfig());
     await vi.waitFor(() => expect(sessions).toHaveLength(1));
@@ -1046,7 +1184,7 @@ describe("what an API session records about itself", () => {
     const session = new FakeSession();
     const recorded = await recordOf(session, (id) => (id === "claude" ? declared : undefined));
 
-    expect(recorded).toEqual({ mode: "hosted", guarantees: session.guarantees });
+    expect(recorded).toMatchObject({ mode: "hosted", guarantees: session.guarantees, guarantees_unverified: true, harness_version_assessment: { status: "unknown" } });
     expect(recorded?.guarantees).toMatchObject({ steer: false, gating: "static" });
   });
 
@@ -1060,7 +1198,7 @@ describe("what an API session records about itself", () => {
     const recorded = await recordOf(new FakeSession({ harnessVersion: "2.1.282" }), () => declared);
 
     expect(recorded).toMatchObject({ vendor_version: "2.1.282" });
-    expect(recorded).not.toHaveProperty("guarantees_unverified");
+    expect(recorded).toHaveProperty("guarantees_unverified", false);
   });
 
   it("records what the session reports even when the record declares no such mode", async () => {
@@ -1082,7 +1220,7 @@ describe("SessionRuntime taking over a conversation a TUI ran", () => {
 
   /** Start a stored session whose conversation is recorded, as a message to it does once its TUI has gone. */
   async function takeOver(storedMode: string) {
-    vi.mocked(getSessionRecord).mockResolvedValue({ id: "sess-tui", traits: [], metadata: { mode: storedMode }, identity_id: null } as never);
+    vi.mocked(getSessionRecord).mockResolvedValue({ id: "sess-tui", bags: [], bounds: [], bound: null, metadata: { mode: storedMode }, identity_id: null } as never);
     vi.mocked(getProviderSessionsBySession).mockResolvedValue([{ provider: "claude", provider_session_id: "conv-tui" }] as never);
     vi.mocked(updateSessionMetadata).mockClear();
     const session = new FakeSession();
@@ -1122,13 +1260,9 @@ describe("SessionRuntime taking over a conversation a TUI ran", () => {
   });
 });
 
-it("passes native read grants to the hosted harness and its decide function", async () => {
-  const { sessionPolicyOver } = await import("@barry-rocks/identities-bag/testing");
+it("passes native read tools to the hosted harness and its decide function", async () => {
   const installed = describeShipped("claude")!;
-  const record = { ...installed, modes: { ...installed.modes, hosted: { ...installed.modes.hosted!, native: { grantable: ["Read", "Glob", "Grep"] } } } };
-  const manifest = record.bag!.manifest;
-  const policy = sessionPolicyOver({ identity: async () => undefined, config: () => { throw Error("unused"); }, traits: async () => Object.entries(manifest.traits).map(([name, trait]) => ({ ...trait, name, namespaces: trait.bags, tools: [], bound: {}, description: trait.description ?? null, bag: manifest.name })), bounds: async () => [], harness: () => record, harnesses: () => [record] });
-  Barry.use(fakeIdentities({ grants: async (_ref, selection) => policy.grants(undefined, { ...selection, traits: ["native-file-reads"] }, []) }));
+  const record = { ...installed, modes: { ...installed.modes, hosted: { ...installed.modes.hosted!, native: { controllable: ["Read", "Glob", "Grep"] } } } };
   const session = new FakeSession();
   const createSession = vi.fn(async (_harness: string, _config: HarnessSessionConfig) => session);
   setAgentRuntime({ createSession, runStructured: vi.fn(), describeAdapter: () => record });
@@ -1146,22 +1280,15 @@ it("passes native read grants to the hosted harness and its decide function", as
 });
 
 it("refuses admission when a bound takes back an uncontrolled native tool", async () => {
-  const { sessionPolicyOver } = await import("@barry-rocks/identities-bag/testing");
   const installed = describeShipped("cursor")!;
   const record = { ...installed, modes: { ...installed.modes, hosted: { ...installed.modes.hosted!, native: {
-    grantable: [], uncontrolled: { Grep: "cursor runs Grep without a permission request" },
+    controllable: [], uncontrolled: { Grep: "cursor runs Grep without a permission request" },
   } } } };
-  const policy = sessionPolicyOver({ identity: async () => undefined, config: () => { throw Error("unused"); },
-    traits: async () => [], bounds: async () => [], harness: () => record, harnesses: () => [record],
-  });
-  Barry.use(fakeIdentities({ grants: async (_ref, selection) => policy.grants(undefined, {
-    ...selection, inlineBound: { files: { deny: [".env"] } }, defaults: false,
-  }, []) }));
   const createSession = vi.fn();
   setAgentRuntime({ createSession, runStructured: vi.fn(), describeAdapter: () => record });
   const manager = new SessionRuntime({ createSession });
   try {
-    await expect(manager.startSession(baseConfig({ provider: "cursor", prepareOnly: true }))).rejects.toThrow(/cannot take back Grep.*without a permission request/);
+    await expect(manager.startSession(baseConfig({ provider: "cursor", bounds: [{ files: { deny: [".env"] } }], prepareOnly: true }))).rejects.toThrow(/cannot take back Grep.*without a permission request/);
     expect(createSession).not.toHaveBeenCalled();
   } finally {
     wireShippedHarnesses({ createSession: vi.fn(), runStructured: vi.fn() });
@@ -1169,17 +1296,17 @@ it("refuses admission when a bound takes back an uncontrolled native tool", asyn
 });
 
 describe("sandbox requirements at session admission", () => {
-  const scope = { network: { enforce: "sandbox" as const, allowDomains: ["github.com"] } };
+  const sandboxBound: Bound = { network: { enforce: "sandbox" as const, allow: ["github.com"] } };
   it("refuses an unsupported harness before opening it, including prepare-only admission", async () => {
     const createSession = vi.fn();
     const manager = new SessionRuntime({ createSession });
-    await expect(manager.startSession(baseConfig({ provider: "codex", scope, prepareOnly: true }))).rejects.toThrow("cannot enforce");
+    await expect(manager.startSession(baseConfig({ provider: "codex", bounds: [sandboxBound], prepareOnly: true }))).rejects.toThrow("cannot enforce");
     expect(createSession).not.toHaveBeenCalled();
   });
   it("accepts a supported hosted provider without opening a prepare-only harness", async () => {
     const createSession = vi.fn();
     const manager = new SessionRuntime({ createSession });
-    const active = await manager.startSession(baseConfig({ provider: "claude", scope, prepareOnly: true }));
+    const active = await manager.startSession(baseConfig({ provider: "claude", bounds: [sandboxBound], prepareOnly: true }));
     expect(manager.getActiveSession(active.id)).toBe(active);
     expect(createSession).not.toHaveBeenCalled();
     await manager.removeSession(active.id);
@@ -1197,4 +1324,151 @@ describe("hosted approval capability reporting", () => {
       await vi.waitFor(() => expect(frames.find(frame => frame.type === "subscribed")?.capabilities?.gating).toBe(gating));
     } finally { manager.unsubscribe(active.id, socket); await manager.removeSession(active.id); }
   });
+});
+
+it("replays prior history into a prepared session without a resumable provider id", async () => {
+  const { buildSessionHistoryContext } = await import("./db.js");
+  vi.mocked(buildSessionHistoryContext).mockResolvedValueOnce("prior conversation");
+  const session = Object.assign(new FakeSession(), { warm: async () => {} });
+  const manager = new SessionRuntime({ createSession: vi.fn(async () => session) });
+  const active = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+  active.lastSequence = 2;
+  await manager.warmHarness(active.id);
+  await manager.sendMessage(active.id, "continue");
+  await vi.waitFor(() => expect(session.delivered).toHaveLength(1));
+  expect(session.delivered[0]).toContain("prior conversation");
+  session.end();
+  await vi.waitFor(() => expect(active.status).toBe("waiting"));
+  await manager.removeSession(active.id);
+});
+it("reports a warm hit when the first message waits for initialization", async () => {
+  let finish!: () => void;
+  const session = Object.assign(new FakeSession(), { isWarm:()=>true, warm: () => new Promise<void>(resolve => { finish = resolve; }) });
+  const manager = new SessionRuntime({ createSession: vi.fn(async () => session) });
+  const active = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+  const warming = manager.warmHarness(active.id);
+  await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+  await manager.sendMessage(active.id, "hello");
+  finish(); await warming;
+  await vi.waitFor(() => expect(session.delivered).toHaveLength(1));
+  expect(active.timings.warm_hit).toBe(1);
+  session.end(); await vi.waitFor(() => expect(active.status).toBe("waiting"));
+  await manager.removeSession(active.id);
+});
+it("keeps an accepted first message queued through a tools change during warm", async () => {
+  let finishWarm!: () => void;
+  let releaseSlot!: (lease: { release(): void }) => void;
+  const old = Object.assign(new FakeSession(), { warm: () => new Promise<void>(resolve => { finishWarm = resolve; }) });
+  const fresh = new FakeSession();
+  const create = vi.fn().mockResolvedValueOnce(old).mockResolvedValue(fresh);
+  const manager = new SessionRuntime({ createSession: create });
+  const active = await manager.startSession(baseConfig({ prepareOnly: true, prompt: "" }));
+  vi.spyOn(manager, "acquireTurnSlot").mockImplementationOnce(() => new Promise(resolve => { releaseSlot = resolve; }));
+  const warming = manager.warmHarness(active.id);
+  await vi.waitFor(() => expect(finishWarm).toBeTypeOf("function"));
+  await manager.sendMessage(active.id, "deliver this");
+  await vi.waitFor(() => expect(releaseSlot).toBeTypeOf("function"));
+  const generation = active.generation;
+  manager.invalidateSessionTools(active.id);
+  expect(active.generation).toBe(generation);
+  finishWarm(); await warming;
+  releaseSlot({ release() {} });
+  await vi.waitFor(() => expect(fresh.delivered).toHaveLength(1));
+  expect(fresh.delivered[0]).toContain("deliver this");
+  expect(old.delivered).toEqual([]);
+  fresh.end(); await vi.waitFor(() => expect(active.status).toBe("waiting"));
+  await manager.removeSession(active.id);
+});
+
+it("broadcasts and replays thinking before text without recording it", async () => {
+  const manager=new SessionRuntime();
+  const active=await manager.startSession(baseConfig({prepareOnly:true,prompt:""}));
+  const first={readyState:1,send:vi.fn()};manager.subscribe(active.id,first);
+  const {appendMessage}=await import("./db.js");const before=vi.mocked(appendMessage).mock.calls.length;
+  await manager.handleRunnerEvent(active,{type:"thinking",content:"summary"});
+  await vi.waitFor(()=>expect(first.send.mock.calls.map(([s])=>JSON.parse(s))).toContainEqual(expect.objectContaining({type:"thinking",content:"summary"})));
+  expect(vi.mocked(appendMessage).mock.calls.length).toBe(before);
+  const second={readyState:1,send:vi.fn()};manager.subscribe(active.id,second);
+  expect(second.send.mock.calls.map(([s])=>JSON.parse(s).type)).toEqual(["subscribed","thinking"]);
+  await manager.handleRunnerEvent(active,{type:"partial",content:"answer"});
+  expect(active.thinkingBuffer).toBe("");
+  await manager.removeSession(active.id);
+});
+
+it("closes a failed warm handle and delivers the first turn on a fresh harness",async()=>{
+ const failed=Object.assign(new FakeSession(),{warm:async()=>{throw Error("initialization timed out");}});
+ const closed=vi.spyOn(failed,"close");const fresh=new FakeSession();
+ const manager=new SessionRuntime({createSession:vi.fn().mockResolvedValueOnce(failed).mockResolvedValue(fresh)});
+ const active=await manager.startSession(baseConfig({prepareOnly:true,prompt:""}));
+ await manager.warmHarness(active.id);expect(closed).toHaveBeenCalled();expect(active.session).toBeNull();
+ await manager.sendMessage(active.id,"first turn");await vi.waitFor(()=>expect(fresh.delivered).toContain("first turn"));
+ fresh.end();await vi.waitFor(()=>expect(active.status).toBe("waiting"));await manager.removeSession(active.id);
+});
+it("keeps the conversation on grant changes and reports an idle released process as cold",async()=>{
+ const session=Object.assign(new FakeSession(),{warm:async()=>{},isWarm:()=>false});const closed=vi.spyOn(session,"close");
+ const manager=new SessionRuntime({createSession:vi.fn(async()=>session)});
+ const active=await manager.startSession(baseConfig({prepareOnly:true,prompt:""}));await manager.warmHarness(active.id);
+ manager.invalidateSessionTools(active.id,{reason:"grants"});expect(active.session).toBe(session);expect(closed).not.toHaveBeenCalled();
+ await manager.sendMessage(active.id,"resume");await vi.waitFor(()=>expect(session.delivered).toContain("resume"));expect(active.timings.warm_hit).toBe(0);
+ session.end();await vi.waitFor(()=>expect(active.status).toBe("waiting"));await manager.removeSession(active.id);
+});
+
+it("re-prepares a released process even when an old prepare stamp remains",async()=>{
+ let linked=false;const warm=vi.fn(async()=>{linked=true;});const session=Object.assign(new FakeSession(),{warm,isWarm:()=>linked});
+ const manager=new SessionRuntime({createSession:vi.fn(async()=>session)});const active=await manager.startSession(baseConfig({prepareOnly:true,prompt:""}));
+ await manager.warmHarness(active.id);expect(warm).toHaveBeenCalledTimes(1);linked=false;
+ await manager.warmHarness(active.id);expect(warm).toHaveBeenCalledTimes(2);expect(active.warm?.preparedAt).toBeTypeOf("number");await manager.removeSession(active.id);
+});
+
+it.each(["acknowledges", "hangs"])("forces an interrupt when the adapter %s but never ends its reader",async(kind)=>{
+ vi.stubEnv("BARRY_INTERRUPT_DEADLINE_MS","50");
+ const first=new FakeSession();first.interrupt=kind==="hangs"?()=>new Promise(()=>{}):async()=>{};
+ const second=new FakeSession();const create=vi.fn().mockResolvedValueOnce(first).mockResolvedValue(second);
+ const manager=new SessionRuntime({createSession:create,limits:{maxConcurrentTurns:1,maxResidentSessions:5}});
+ try {
+  const active=await manager.startSession(baseConfig());
+  await vi.waitFor(()=>expect(first.delivered).toHaveLength(1));
+  const frames:Array<{ metadata?: { code?: string }; content?: string }>=[];manager.subscribe(active.id,{readyState:1,send:data=>frames.push(JSON.parse(String(data)))});
+  const start=performance.now();expect(await manager.interruptTurn(active.id)).toBe(true);
+  expect(performance.now()-start).toBeLessThan(1000);
+  expect(active.session).toBeNull();expect(first.closeCalls).toBe(1);
+  expect(frames.filter(frame=>frame.metadata?.code==="turn_forced")).toHaveLength(1);
+  const next=manager.sendMessage(active.id,"after force");
+  await vi.waitFor(()=>expect(second.delivered).toHaveLength(1));
+  first.push({type:"text",role:"assistant",text:"late"});first.end();
+  expect(frames.some(frame=>frame.content==="late")).toBe(false);
+  second.end();await next;await active.lastTurn;await manager.removeSession(active.id);
+ }finally{vi.unstubAllEnvs();first.end();second.end();}
+});
+
+it("releases a stopped resident while recording drains and refuses reopen without ending its queued transcript",async()=>{
+ const {PersistQueue}=await import("./runtime/persist-queue.js");
+ const manager=new SessionRuntime();const active=await manager.startSession(baseConfig({prepareOnly:true,prompt:""}));
+ let release!:()=>void;const blocked=new Promise<void>(resolve=>release=resolve);
+ active.persistence=new PersistQueue(()=>{});active.persistence.enqueue({type:"text",sessionId:active.id,sequence:0,content:"accepted"},8,()=>blocked);
+ const ended=vi.mocked(endSession).mock.calls.length;
+ const frames:Array<{ metadata?: { code?: string }; content?: string }>=[];manager.subscribe(active.id,{readyState:1,send:data=>frames.push(JSON.parse(String(data)))});
+ try{
+  await manager.stopSession(active.id);
+  expect(manager.getActiveSession(active.id)).toBeUndefined();
+  expect(manager.pendingPersistence(active.id)).toHaveLength(1);
+  expect(await manager.flushPersistence(active.id,5)).toBe(false);
+  await expect(manager.startSession(baseConfig({sessionId:active.id,prepareOnly:true}))).rejects.toThrow("Recording delayed");
+  expect(vi.mocked(endSession).mock.calls).toHaveLength(ended);
+ }finally{release();}
+ await vi.waitFor(()=>expect(manager.drainingSessions.has(active.id)).toBe(false));
+ expect(vi.mocked(endSession).mock.calls).toHaveLength(ended+1);
+ expect(frames.some(frame=>frame.metadata?.code==="persistence_recovered")).toBe(true);
+});
+it("force during a silent warm detaches its promise so the next message opens fresh",async()=>{
+ vi.stubEnv("BARRY_INTERRUPT_DEADLINE_MS","50");
+ const first=Object.assign(new FakeSession(),{warm:()=>new Promise<void>(()=>{})});const second=new FakeSession();
+ const create=vi.fn().mockResolvedValueOnce(first).mockResolvedValue(second);const manager=new SessionRuntime({createSession:create});
+ const active=await manager.startSession(baseConfig({prepareOnly:true,prompt:""}));void manager.warmHarness(active.id);
+ await vi.waitFor(()=>expect(active.session).toBe(first));await manager.sendMessage(active.id,"queued during warm");
+ await vi.waitFor(()=>expect(active.abortController).not.toBeNull());
+ try{
+  await manager.interruptTurn(active.id);expect(active.warming).toBeNull();
+  const next=manager.sendMessage(active.id,"fresh after warm stop");await vi.waitFor(()=>expect(second.delivered).toHaveLength(1));second.end();await next;await active.lastTurn;await manager.removeSession(active.id);
+ }finally{vi.unstubAllEnvs();second.end();}
 });

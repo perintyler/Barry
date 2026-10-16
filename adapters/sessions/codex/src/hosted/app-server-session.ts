@@ -31,8 +31,8 @@ import type {
   SessionEvent,
 } from "@barry-rocks/sdk/sessions";
 import type { TokenUsage } from "@barry-rocks/sdk/adapters/models";
-import { restoreBarryToolGate, trustBarryToolGate } from "../app-server/tool-policy.js";
-import { toolPolicyConfig } from "../tool-policy.js";
+import { restoreBarryToolGate, trustBarryToolGate } from "../app-server/tool-gate.js";
+import { toolGateConfig } from "../tool-gate.js";
 import { codexModelId } from "../model-id.js";
 import { requireIdentityKey } from "../credential.js";
 import { ephemeralCodexHome, prepareCodexRuntime, userCodexConfigPath } from "../runtime.js";
@@ -56,7 +56,7 @@ const CLIENT_INFO = { name: "barry", title: null, version: "0" };
  * (full access), except that each call is put to Barry rather than run
  * unasked — which is the per-call gating this mode declares.
  */
-const THREAD_POLICY = { approvalPolicy: "never", sandbox: "danger-full-access" } as const;
+const THREAD_DEFAULTS = { approvalPolicy: "never", sandbox: "danger-full-access" } as const;
 
 export interface CodexHostedOptions {
   guarantees: Guarantees;
@@ -91,7 +91,7 @@ export async function startCodexHosted(
     if (throwawayHome) rmSync(throwawayHome, { recursive: true, force: true });
     throw error;
   }
-  const spec = codexEngineSpec(config.sessionId, runtime.codexHome, config.cwd, config);
+  const spec = codexEngineSpec(config.sessionId, runtime.codexHome, config.cwd, config, config.env);
   const connect = async (): Promise<CodexConnection> => {
     // The engine runs with the identity's env (its keys), as the per-turn
     // process did, on top of this service's own.
@@ -419,10 +419,10 @@ export class CodexAppServerSession implements Session {
   /** Start the thread, or pick it up again on a new engine. */
   private async openThread(client: AppServerClient): Promise<string> {
     const known = this.threadId ?? this.options.resumeThreadId;
-    const policy = { cwd: this.options.cwd, ...THREAD_POLICY, config: toolPolicyConfig(this.options), ...(this.options.instructions ? { developerInstructions: this.options.instructions } : {}), ...(this.options.model ? { model: this.options.model } : {}) };
+    const threadOptions = { cwd: this.options.cwd, ...THREAD_DEFAULTS, config: toolGateConfig(this.options), ...(this.options.instructions ? { developerInstructions: this.options.instructions } : {}), ...(this.options.model ? { model: this.options.model } : {}) };
     const reply = known
-      ? await client.call("thread/resume", { threadId: known, ...policy })
-      : await client.call("thread/start", policy);
+      ? await client.call("thread/resume", { threadId: known, ...threadOptions })
+      : await client.call("thread/start", threadOptions);
     const id = idOf(recordOf(reply).thread) ?? known;
     if (!id) throw new Error("codex app-server returned no thread id");
     if (known) this.resumable = true;
@@ -561,7 +561,7 @@ export class CodexAppServerSession implements Session {
     }
     for (const event of itemEvents(note)) {
       if (event.type === "text") this.lastAnswer = event.text;
-      if (event.type === "status") this.state = event.status;
+      if (event.type === "status" && event.status !== "retrying") this.state = event.status;
       this.emit(event);
     }
   }

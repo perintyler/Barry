@@ -1,3 +1,4 @@
+import { buildInfo } from "./build-info.js";
 import { createLogger } from "@barry-rocks/sdk/logging";
 import { sessionIdentity } from "@barry-rocks/sdk/stores";
 import { withStoreContext } from "@barry-rocks/sdk/internal/stores";
@@ -76,6 +77,8 @@ export function sessionsApi(delivery: DeliveryHost = createDelivery()) {
     res.json({
       ok: true,
       service: "barry-server",
+      pid: process.pid,
+      build: buildInfo,
       uptime: Math.floor((Date.now() - serverStartTime) / 1000),
       activeSessions: sessionRuntime.getActiveSessionCount(),
       memoryUsage: { rss: mem.rss },
@@ -133,6 +136,8 @@ export function sessionsApi(delivery: DeliveryHost = createDelivery()) {
     res.status(dbConnected ? 200 : 503).json({
       ok: dbConnected,
       service: "barry-server",
+      pid: process.pid,
+      build: buildInfo,
       uptime: Math.floor((Date.now() - serverStartTime) / 1000),
       activeSessions: sessionRuntime.getActiveSessionCount(),
       dbConnected,

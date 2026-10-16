@@ -2,7 +2,7 @@ import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, re
 import { homedir } from "os";
 import { basename, dirname, join } from "path";
 import { createHash, randomUUID } from "crypto";
-import { writeCodexToolGate, toolPolicyConfig } from "./tool-policy.js";
+import { writeCodexToolGate, toolGateConfig } from "./tool-gate.js";
 import { barryCacheDir, instanceId, writePrivateFile } from "@barry-rocks/sdk/services";
 import { parseModelRef } from "@barry-rocks/sdk/ids";
 import { codexModelId } from "./model-id.js";
@@ -439,7 +439,7 @@ function renderCodexConfigToml(
   }
   lines.push("");
 
-  for (const [key, value] of Object.entries(toolPolicyConfig({ allowedNativeTools: [...options.allowedNativeTools ?? []], deniedTools: [...options.deniedTools ?? []] }))) {
+  for (const [key, value] of Object.entries(toolGateConfig({ allowedNativeTools: [...options.allowedNativeTools ?? []], deniedTools: [...options.deniedTools ?? []] }))) {
     lines.push(`${key} = ${JSON.stringify(value)}`);
   }
   lines.push("");

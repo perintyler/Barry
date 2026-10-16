@@ -16,7 +16,7 @@ import { parseBounds } from "../../identities/entries.js";
 import { describe, it, expect } from "vitest";
 import { isBuiltinBag, loadBuiltinRegistry } from "../registry.js";
 import { baseIdentitySelection, builtinBagsDir, discoverBuiltinBags } from "../builtin.js";
-import { parseManifest, registeredName } from "../manifest.js";
+import { parseManifest } from "../manifest.js";
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { dirname, join, resolve } from "path";
 import { parse as parseYaml } from "yaml";
@@ -53,26 +53,26 @@ describe("the builtin directory", () => {
     // Discovery must find them without one.
     expect(local.locks).toBe(join("filesystem", "locks"));
     expect(local.logs).toBe(join("telemetry", "logs"));
-    expect(local["sessions/search"]).toBe(join("sessions", "extensions", "search"));
+    expect(local["session-vector-search"]).toBe("session-vector-search");
   });
 
   it("every explicit registration has its declared manifest", () => {
     const registrations = shipped().local;
     expect(Object.keys(registrations).length).toBeGreaterThan(0);
     for (const [name, path] of Object.entries(registrations)) {
-      expect(registeredName(parseManifest(join(BAGS_DIR, path))!)).toBe(name);
+      expect(parseManifest(join(BAGS_DIR, path))!.name).toBe(name);
     }
   });
 
-  it("packs search as an extension instead of composing it", () => {
+  it("packs session-vector-search as a standalone bag instead of composing it inside sessions", () => {
     expect(parseManifest(join(BAGS_DIR, "sessions"))?.bags).not.toContain("sessions-search");
-    expect(parseManifest(join(BAGS_DIR, "sessions"))?.bags).not.toContain("sessions/search");
-    expect(baseIdentitySelection(BAGS_DIR).bags).toContain("sessions/search");
+    expect(parseManifest(join(BAGS_DIR, "sessions"))?.bags).not.toContain("session-vector-search");
+    expect(baseIdentitySelection(BAGS_DIR).bags).toContain("session-vector-search");
   });
 
   it("every shipped bag's manifest parses", () => {
     // An invalid bag.yaml does not fail loudly: the loader warns and the bag
-    // loads as a husk with no tools, traits or schedules — indistinguishable
+    // loads as a husk with no tools, bounds or schedules — indistinguishable
     // from one that declares none. A merge once left a job-shaped entry under
     // services' `schedules:`, and nothing noticed.
     const invalid: string[] = [];
@@ -98,21 +98,11 @@ describe("the base identity", () => {
     expect(missing, `the base identity packs bags that do not ship: ${missing.join(", ")}`).toEqual([]);
   });
 
-  it("grants only the traits of bags that ship", () => {
-    // Every default is a builtin bag's own trait, named after the bag. A
-    // default naming anything else grants nothing and says nothing.
-    const { local } = shipped();
-    const dangling = base().traits.filter((name) => !(name in local));
-    expect(base().traits.length).toBeGreaterThan(0);
-    expect(dangling, `default traits no shipped bag defines: ${dangling.join(", ")}`).toEqual([]);
-  });
-
   it("defines the bounds Barry ships, and readonly denies writes", () => {
     // `barry start --read` prints "read-only". This is what makes that true.
     const bounds = Object.fromEntries(parseBounds(parseYaml(readFileSync(join(dirname(shipped().dir!), "identity.yaml"), "utf8")).bounds).map(entry => [entry.name, entry]));
     expect(Object.keys(bounds).sort()).toEqual(["no-network", "no-network-write", "no-secrets", "readonly", "sandboxed-offline"]);
-    expect(bounds.readonly?.bound.deniedTools).toEqual(expect.arrayContaining(["Bash", "Write", "Edit"]));
-    expect(bounds.readonly?.bound.deniedAccess).toContain("write");
+    expect(bounds.readonly?.bound.tools?.deny).toEqual(expect.arrayContaining(["*:write", "*:Bash", "*:Write", "*:Edit"]));
   });
 });
 

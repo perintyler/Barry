@@ -64,3 +64,43 @@ it("reports numeric row names without renaming them", async () => {
   log.mockRestore();
   process.exitCode = 0;
 });
+
+it("migrates legacy trait/grant keys and nested extensions: in bags: to bags: and bounds: idempotently", async () => {
+  const legacyGrantKey = ["bag", "grant"].join("_");
+  const path = await seed("migrator", {
+    bags: ["artifacts", "unused", { sessions: { extensions: ["search"] } }],
+    traits: ["artifacts", "read", { unused: { optional: true } }, "coding:IC"],
+    [legacyGrantKey]: "session",
+  });
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+  await reportIdentityProblems(false);
+  expect(log).toHaveBeenCalledWith(
+    expect.stringContaining(`uses legacy trait/grant keys (traits, ${legacyGrantKey}, bags.*.extensions)`),
+  );
+  expect(parse(readFileSync(path, "utf8"))).toHaveProperty("traits");
+  expect(parse(readFileSync(path, "utf8"))).toHaveProperty(legacyGrantKey);
+
+  await reportIdentityProblems(true);
+  const migrated = parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  expect(migrated).not.toHaveProperty("traits");
+  expect(migrated).not.toHaveProperty(legacyGrantKey);
+  expect(migrated.bags).toEqual([
+    "artifacts",
+    { unused: { optional: true } },
+    "sessions",
+    { "session-vector-search": { optional: true } },
+    "coding",
+  ]);
+  expect(migrated.bounds).toEqual(["readonly", "coding:ic"]);
+
+  const before = readFileSync(path, "utf8");
+  await reportIdentityProblems(true);
+  expect(readFileSync(path, "utf8")).toBe(before);
+
+  warning.mockRestore();
+  log.mockRestore();
+  process.exitCode = 0;
+});
+

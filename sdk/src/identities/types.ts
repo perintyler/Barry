@@ -1,6 +1,6 @@
 /**
  * Identities as the API serves them: the identity record, the requests that
- * create and update one, the traits it can carry and the bags it can pack.
+ * create and update one, the bounds it can carry and the bags it can pack.
  * The identities bag validates every write against these, whichever door the
  * write came through.
  */
@@ -15,8 +15,9 @@ export const IdentitySchema = z.object({
   /** Human-readable label. `name` remains the identifier commands address. */
   displayName: z.string().nullable(),
   bags: z.array(z.string()),
-  traits: z.array(z.string()),
+  optionalBags: z.array(z.string()).optional(),
   bounds: z.array(z.string()),
+  optionalBounds: z.array(z.string()).optional(),
   adapters: IdentityAdaptersSchema,
   envKeys: z.array(z.string()),
   /**
@@ -62,7 +63,7 @@ export const UpdateIdentityRequestSchema = z.object({
   name: z.string().min(1).optional(),
   displayName: z.string().nullable().optional(),
   bags: z.array(z.string()).optional(),
-  traits: z.array(z.string()).optional(),
+  optionalBags: z.array(z.string()).optional(),
   bounds: z.array(z.string().min(1)).nullable().optional(),
   /** Status-update notifier; null clears it. */
   statusNotify: z.object({ tool: z.string(), target: z.string().optional() }).nullable().optional(),
@@ -73,7 +74,7 @@ export const CreateIdentityRequestSchema = z.object({
   adapters: IdentityAdaptersSchema.optional(),
   name: z.string().min(1).max(100),
   bags: z.array(z.string()).optional(),
-  traits: z.array(z.string()).optional(),
+  optionalBags: z.array(z.string()).optional(),
   bounds: z.array(z.string().min(1)).optional(),
   /** Human-readable label. */
   displayName: z.string().optional(),
@@ -83,47 +84,6 @@ export const CreateIdentityRequestSchema = z.object({
    * existing clients keep their behaviour.
    */
   source: z.enum(["db", "file"]).optional(),
-}).strict();
-
-export const TraitSchema = z.object({
-  optional: z.boolean().optional(),
-  nativeTools: z.record(z.string(), z.array(z.string())).optional(),
-  name: z.string(),
-  description: z.string().nullable(),
-  access: z.enum(["read", "readwrite"]),
-  namespaces: z.array(z.string()),
-  /** Skill names granted to sessions carrying this trait (mounted at spawn) */
-  skills: z.array(z.string()).optional(),
-  /** Individual tool names, where a trait grants tools rather than namespaces. */
-  tools: z.array(z.string()).optional(),
-  /** Instruction documents a session carrying this trait is given. */
-  instructions: z.array(z.string()).optional(),
-  /** Inline deny rules contributed to the session's effective bound. */
-  bound: z.record(z.string(), z.unknown()).optional(),
-  /** Named bounds this trait pulls in. */
-  boundNames: z.array(z.string()).optional(),
-  /** The bag that declares this trait, for auto-generated ones. */
-  bag: z.string().nullable().optional(),
-  /** Other traits this one grants too. */
-  includes: z.array(z.string()).optional(),
-  /** The trait to use instead under a given harness, by harness id. */
-  harnessTraits: z.record(z.string(), z.string()).optional(),
-}).strict();
-export const TraitListResponseSchema = z.object({ traits: z.array(TraitSchema) }).strict();
-export const TraitResponseSchema = z.object({ trait: TraitSchema.nullable() }).strict();
-/**
- * A hand-authored trait. Deliberately has no `bag` field: staying bag-less is
- * what keeps it safe from `ensureTraits`, which reconciles bag-owned rows on
- * every bag sync.
- */
-export const CreateTraitRequestSchema = z.object({
-  name: z.string().min(1).max(64),
-  description: z.string().nullable().optional(),
-  namespaces: z.array(z.string()).min(1),
-  access: z.enum(["read", "readwrite"]),
-  skills: z.array(z.string()).optional(),
-  instructions: z.array(z.string()).optional(),
-  boundNames: z.array(z.string()).optional(),
 }).strict();
 
 export const BagInfoSchema = z.object({

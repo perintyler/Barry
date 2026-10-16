@@ -151,7 +151,7 @@ it.skipIf(process.env.BARRY_ANTIGRAVITY_LIVE !== "1")("native grants allow file 
   const { NATIVE } = await import("../native-tools.js");
   const read = join(root, "fixture.txt"), sentinel = join(root, "sentinel");
   writeFileSync(read, "GRANTED_NATIVE_READ");
-  const session = await adapter.modes.hosted!.start({ sessionId: "native-grants", cwd: root, env: { GEMINI_API_KEY: "local-probe", GOOGLE_GEMINI_BASE_URL: probe.url, PATH: `${homedir()}/.local/bin:${process.env.PATH}` }, model: "google/gemini-3.8-flash-high", mcpServers: {}, allowedNativeTools: NATIVE.grantable.filter(name => ["view_file", "grep_search", "find_by_name", "list_dir"].includes(name)) }, async () => { throw Error("no engine"); });
+  const session = await adapter.modes.hosted!.start({ sessionId: "native-grants", cwd: root, env: { GEMINI_API_KEY: "local-probe", GOOGLE_GEMINI_BASE_URL: probe.url, PATH: `${homedir()}/.local/bin:${process.env.PATH}` }, model: "google/gemini-3.8-flash-high", mcpServers: {}, allowedNativeTools: NATIVE.controllable.filter(name => ["view_file", "grep_search", "find_by_name", "list_dir"].includes(name)) }, async () => { throw Error("no engine"); });
   sessions.push(session);
   const call = { name: "view_file", args: { AbsolutePath: read, StartLine: 1, EndLine: 10, toolSummary: "Read fixture", toolAction: "Reading fixture" } };
   await session.deliver(`FORCE_NATIVE:${Buffer.from(JSON.stringify(call)).toString("base64")}`);

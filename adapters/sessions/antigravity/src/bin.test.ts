@@ -20,12 +20,12 @@ describe("Antigravity bin resolution and requirements", () => {
   it("satisfies requirement invariants", () => {
     expect(ANTIGRAVITY_REQUIREMENTS.binary.command).toBe("agy");
     expect(ANTIGRAVITY_REQUIREMENTS.binary.versionArgs).toContain("--version");
-    expect(ANTIGRAVITY_REQUIREMENTS.binary.pin.version).toBe("1.3.1");
+    expect(ANTIGRAVITY_REQUIREMENTS.binary.recommendedVersion!).toBe("1.3.6");
     expect(ANTIGRAVITY_REQUIREMENTS.binary.install.darwin).toBeTruthy();
     expect((ANTIGRAVITY_REQUIREMENTS as { login?: unknown }).login).toBeUndefined();
   });
 
-  it("declares the pin by the setting every launch carries", () => {
-    expect(ANTIGRAVITY_REQUIREMENTS.binary.pin.enforcedBy).toContain(`AGY_CLI_DISABLE_AUTO_UPDATE=${PIN_ENV.AGY_CLI_DISABLE_AUTO_UPDATE}`);
+  it("prevents the running process from updating itself", () => {
+    expect(PIN_ENV.AGY_CLI_DISABLE_AUTO_UPDATE).toBe("true");
   });
 });

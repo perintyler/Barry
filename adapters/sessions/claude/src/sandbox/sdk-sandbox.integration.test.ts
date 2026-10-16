@@ -17,8 +17,8 @@ import { buildSandboxSettings } from "./sdk-sandbox.js";
 const enabled = process.env.BARRY_TEST_SANDBOX_E2E === "1";
 const maybe = enabled ? describe : describe.skip;
 
-async function runProbe(prompt: string, allowDomains: string[]) {
-  const sandbox = buildSandboxSettings({ enforce: "sandbox", allowDomains });
+async function runProbe(prompt: string, allow: string[]) {
+  const sandbox = buildSandboxSettings({ enforce: "sandbox", allow });
   const results: string[] = [];
   const response = query({
     prompt,

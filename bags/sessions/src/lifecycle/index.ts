@@ -1,6 +1,5 @@
-import { sessionGrants } from "../subject.js";
 import { hostname, userInfo } from "os";
-import { Barry, isBarryError } from "@barry-rocks/sdk";
+import { Barry, isBarryError, type Bound } from "@barry-rocks/sdk";
 import {
   getSession as _getSession,
   createSession as _createSession,
@@ -47,11 +46,12 @@ export interface StartSessionInput {
   name?: string | null;
   web_enabled?: boolean;
   /**
-   * Named bound from the `bounds` table, applied on session creation.
-   * Only honored on the insert path — an existing session keeps its bound,
-   * matching how identity_id behaves here.
+   * Named bounds applied on session creation or resume.
+   * Resolved and pinned into `sessions.bound` at session start.
    */
   bounds?: string[];
+  bags?: string[];
+  status?: "pending" | "running";
 }
 
 export interface EndSessionInput {
@@ -86,6 +86,11 @@ async function validateBarryId(identityId: number | null | undefined): Promise<n
   }
 }
 
+function plainBound(bound: Bound | null | undefined): Record<string, unknown> | null {
+  if (!bound || Object.keys(bound).length === 0) return null;
+  return Object.fromEntries(Object.entries(bound));
+}
+
 /**
  * Start (or resume) a session. Upserts the Barry session row and optionally
  * creates a provider_sessions row linking the SDK runtime ID.
@@ -97,12 +102,13 @@ async function validateBarryId(identityId: number | null | undefined): Promise<n
  */
 export async function startSession(input: StartSessionInput): Promise<void> {
   const existing = await _getSession(input.session_id);
+  const inputBags = input.bags;
   if (existing) {
-    // Session already exists — update to active/running. identity_id is not
-    // touched here, so it needs no validation (the FK guard below is only for
-    // the insert path).
     const bounds = [...new Set([...(existing.bounds ?? []), ...(input.bounds ?? [])])];
-    await sessionGrants({ ...existing, bounds });
+    const shouldResolveBound = input.bounds !== undefined || existing.bound === null;
+    const resolvedBound = shouldResolveBound
+      ? await Barry.bound(existing.identity_id ?? input.identity_id ?? null, bounds)
+      : (existing.bound as Bound | null);
     const metadataUpdates: Partial<SessionMetadata> = {};
     if (input.cwd) metadataUpdates.working_directory = input.cwd;
     if (input.directive) metadataUpdates.directive = input.directive;
@@ -113,17 +119,16 @@ export async function startSession(input: StartSessionInput): Promise<void> {
     if (input.model_provider) metadataUpdates.model_provider = input.model_provider;
     if (input.mode) metadataUpdates.mode = input.mode;
     if (input.guarantees) metadataUpdates.guarantees = input.guarantees;
-    // Without this, naming an already-existing session through /sessions/start
-    // silently no-ops — the insert branch below honored `name` but this one
-    // dropped it, so `barry resume --session-name ...` never took effect.
     if (input.name) metadataUpdates.name = input.name;
 
     await _updateSession(input.session_id, {
       bounds,
+      ...(shouldResolveBound ? { bound: plainBound(resolvedBound) } : {}),
+      ...(inputBags !== undefined ? { bags: inputBags } : {}),
       active: true,
       state: "open",
       ended_at: null,
-      status: "running",
+      status: input.status ?? "running",
       ...(Object.keys(metadataUpdates).length > 0
         ? { metadata: { ...existing.metadata, ...metadataUpdates } }
         : {}),
@@ -131,17 +136,19 @@ export async function startSession(input: StartSessionInput): Promise<void> {
   } else {
     const requestedBarryId = input.identity_id !== undefined ? input.identity_id : resolveEnvBarryId();
     const identityId = await validateBarryId(requestedBarryId);
-    const selection = { bounds: input.bounds ?? [], ...(input.provider ? { harness: input.provider } : {}) };
-    if (identityId != null) await Barry.identity(identityId).grants(selection);
-    else await Barry.grants(selection);
+    const bounds = input.bounds ?? [];
+    const bags = inputBags ?? [];
+    const resolvedBound = await Barry.bound(identityId ?? null, bounds);
     await _createSession({
       id: input.session_id,
       active: true,
       state: "open",
       agent_token: null,
-      status: "running",
+      status: input.status ?? "running",
       identity_id: identityId ?? undefined,
-      bounds: input.bounds ?? [],
+      bounds,
+      bound: plainBound(resolvedBound),
+      bags,
       metadata: {
         working_directory: input.cwd ?? null,
         git_branch: null,
@@ -154,15 +161,9 @@ export async function startSession(input: StartSessionInput): Promise<void> {
         user: userInfo().username,
         name: input.name ?? null,
         web_enabled: input.web_enabled ?? true,
-        // Recorded even when null: "no model flag was passed, the provider CLI
-        // chose" is a real answer and distinguishable from "we never recorded
-        // it", which matters now that every provider defaults to null.
         provider: input.provider ?? null,
         model: input.model ?? null,
         model_provider: input.model_provider ?? null,
-        // Same reasoning one line further: null means "Barry did not launch
-        // this session, so it chose no mode" — a real answer, and different
-        // from a session whose mode went unrecorded.
         mode: input.mode ?? null,
         ...(input.guarantees ? { guarantees: input.guarantees } : {}),
       } satisfies SessionMetadata,
@@ -180,15 +181,6 @@ export async function startSession(input: StartSessionInput): Promise<void> {
 
 /**
  * End a session. Ends the Barry session and any active provider sessions.
- *
- * A session that produced no messages is deleted rather than closed, to keep
- * abandoned shells out of the session list. Two exceptions are kept:
- * - one carrying a directive: that records what the user asked for, so
- *   deleting it destroys the only evidence a session was attempted — exactly
- *   the case worth keeping when a session dies before its first message;
- * - one with a harness conversation linked: a guest TUI's conversation is the
- *   harness's own and Barry records none of its messages, so "no messages"
- *   says nothing about it — and `barry resume` finds it through this row.
  */
 export async function endSession(input: EndSessionInput): Promise<void> {
   const messageCount = await _getSessionMessageCount(input.session_id);
@@ -202,7 +194,4 @@ export async function endSession(input: EndSessionInput): Promise<void> {
     }
   }
   await _endSession(input.session_id, input.reason ?? null);
-  // Action runs this session left open are closed by the actions bag where
-  // open runs are read (`abandonOrphanedActionRuns`): this bag does not
-  // depend on that one.
 }

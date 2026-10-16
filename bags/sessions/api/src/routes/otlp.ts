@@ -66,14 +66,14 @@ async function persistTelemetry(
 
   // Resolving the session once per provider id keeps a 200-record batch to
   // one lookup per session rather than 200.
-  const bySession = new Map<string, { providerSessionId: string; items: CapturedTelemetry[] }>();
+  const bySession = new Map<string, { harnessSessionId: string; items: CapturedTelemetry[] }>();
   const sessionOf = new Map<string, string | null>();
 
   for (const item of captured) {
-    let sessionId = sessionOf.get(item.providerSessionId);
+    let sessionId = sessionOf.get(item.harnessSessionId);
     if (sessionId === undefined) {
-      sessionId = (await getSessionByProviderSessionId(item.providerSessionId))?.id ?? null;
-      sessionOf.set(item.providerSessionId, sessionId);
+      sessionId = (await getSessionByProviderSessionId(item.harnessSessionId))?.id ?? null;
+      sessionOf.set(item.harnessSessionId, sessionId);
     }
     if (!sessionId) {
       // Count capture traffic that cannot be linked to a known session.
@@ -82,7 +82,7 @@ async function persistTelemetry(
       continue;
     }
     matched += 1;
-    const group = bySession.get(sessionId) ?? { providerSessionId: item.providerSessionId, items: [] };
+    const group = bySession.get(sessionId) ?? { harnessSessionId: item.harnessSessionId, items: [] };
     group.items.push(item);
     bySession.set(sessionId, group);
   }
@@ -101,7 +101,7 @@ async function persistTelemetry(
           const sequence = await appendMessage(
             sessionId,
             { ...message, channel: "telemetry", dedupeKey: item.dedupeKey },
-            group.providerSessionId,
+            group.harnessSessionId,
           );
           if (sequence !== null) stored += 1;
         }

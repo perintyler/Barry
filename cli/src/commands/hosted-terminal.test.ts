@@ -138,3 +138,37 @@ describe("the hosted terminal", () => {
     expect(out).toEqual(["Barry did not take that message: Session has no working directory\n"]);
   });
 });
+
+it("streams thinking and answer deltas, and does not repeat the final answer",async()=>{
+ const {updates,push}=stream();const out:string[]=[];const {impl}=api();
+ const terminal=runHostedTerminal({read:async()=>null,write:text=>out.push(text)},impl,updates,{prompt:"hello",once:true});
+ await tick();push({type:"status",status:"starting"},{type:"thinking",content:"checking"},{type:"partial",content:"Hello"});
+ await tick();expect(out.join("")).toContain("Hello");
+ push({type:"partial",content:" world"},{type:"text",content:"Hello world",role:"assistant"},{type:"result",result:"Hello world"},{type:"status",status:"waiting"});
+ expect(await terminal.done).toBe(0);expect(out.join("").match(/Hello world/g)).toHaveLength(1);expect(out.join("")).toContain("∴ checking");
+});
+
+it("rewrites one dim thinking line and separates the first partial exactly",async()=>{
+ const {updates,push}=stream();const output:string[]=[];
+ const terminal=runHostedTerminal({read:async()=>null,write:text=>output.push(text)},api().impl,updates,{prompt:"hi",once:true});
+ push({type:"thinking",content:"The"},{type:"thinking",content:" user"},{type:"partial",content:"Answer"},{type:"text",content:"Answer"},{type:"status",status:"waiting"});
+ expect(await terminal.done).toBe(0);
+ expect(output.join("")).toBe("\r\x1b[2K\x1b[2m∴ The\x1b[0m\r\x1b[2K\x1b[2m∴ The user\x1b[0m\nAnswer\n");
+});
+it("a second Ctrl-C stops immediately while interrupt HTTP is still pending",async()=>{
+ const {updates}=stream();let finish!:()=>void;let stops=0;
+ const terminal=runHostedTerminal({read:async()=>null,write:()=>{}},api({interrupt:()=>new Promise<void>(resolve=>finish=resolve),stop:async()=>{stops++;}}).impl,updates,{prompt:"hi",once:true});
+ const first=terminal.interrupt();expect(await terminal.interrupt()).toBe(true);expect(stops).toBe(1);expect(await terminal.done).toBe(130);finish();await first;
+});
+
+it("keeps exit 130 when waiting arrives before the stop HTTP response",async()=>{
+ const {updates,push}=stream();let finishInterrupt!:()=>void;let finishStop!:()=>void;
+ const terminal=runHostedTerminal({read:async()=>null,write:()=>{}},api({
+  interrupt:()=>new Promise<void>(resolve=>finishInterrupt=resolve),
+  stop:()=>new Promise<void>(resolve=>finishStop=resolve),
+ }).impl,updates,{prompt:"hi",once:true});
+ const first=terminal.interrupt();const second=terminal.interrupt();await tick();
+ let exited=false;void terminal.done.then(()=>{exited=true;});
+ push({type:"status",status:"waiting"});await tick();expect(exited).toBe(false);
+ finishStop();await second;expect(await terminal.done).toBe(130);finishInterrupt();await first;
+});

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, statSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { mergeBounds, resolveNativePolicy } from "@barry-rocks/sdk/bounds";
+import { mergeBounds, resolveNativeTools } from "@barry-rocks/sdk/bounds";
 
 import { parseManifest } from "@barry-rocks/sdk/bags";
 import { NATIVE_TOOLS } from "./native-tools.js";
@@ -9,8 +9,8 @@ import { writeCursorSessionWorkspace } from "./workspace.js";
 
 const cursorManifest = parseManifest(new URL("../", import.meta.url).pathname)!;
 const cursorBounds = cursorManifest.bounds!;
-const scopedBound = mergeBounds({ network: { actions: ["all"] } }, cursorBounds["cursor:no-file-writes"]?.bound);
-const nativeToolDenials = () => resolveNativePolicy({ bound: scopedBound, tools: [] }, { id: "cursor", nativeTools: NATIVE_TOOLS, bag: { manifest: cursorManifest } }, "guest").denied;
+const bound = mergeBounds({ network: { deny: ["*"] } }, cursorBounds["cursor:no-file-writes"]?.bound);
+const nativeToolDenials = () => resolveNativeTools(bound, [], { id: "cursor", tools: NATIVE_TOOLS, bag: { manifest: cursorManifest } }, "guest").denied;
 
 describe("writeCursorSessionWorkspace", () => {
   it("writes project .cursor/mcp.json, hooks.json, and returns server names", () => {

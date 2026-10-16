@@ -34,7 +34,7 @@ describe.runIf(LIVE)("claude TUI modes, live", { timeout: 180_000 }, () => {
 
   beforeAll(async () => {
     const version = execFileSync("claude", ["--version"], { encoding: "utf8" });
-    expect(version, "the claude on PATH is not the build the guarantees were verified on").toContain(CLAUDE_REQUIREMENTS.binary.pin.version);
+    expect(version, "the claude on PATH is not the build the guarantees were verified on").toContain(CLAUDE_REQUIREMENTS.binary.recommendedVersion!);
     probe = await startProbe(IDENTITY_KEY);
   });
 

@@ -2,10 +2,10 @@
  * The single definition of "this workspace has a unit-test script".
  *
  * Shared deliberately. `run-unit-tests.mjs` uses it to decide what to run, and
- * `check/monorepo-policy.mjs` uses it to fail a workspace that ships test files
+ * `checks/monorepo-rules.mjs` uses it to fail a workspace that ships test files
  * without such a script. If the two disagreed, a package could satisfy the
- * policy check and still be skipped silently by the runner — which is the exact
- * bug the policy check exists to catch.
+ * rules check and still be skipped silently by the runner — which is the exact
+ * bug the rules check exists to catch.
  */
 
 /** Test commands that run a unit-tier suite in-process. */

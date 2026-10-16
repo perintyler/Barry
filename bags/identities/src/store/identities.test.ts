@@ -35,7 +35,6 @@ describe("resolveIdentityConfig", () => {
   it("defaults every field for a barry with no metadata", () => {
     const result = resolveIdentityConfig(makeBarry({ id: 1, name: "bare" }));
 
-    expect(result.traits).toEqual([]);
     expect(result.bags).toEqual([]);
     expect(result.secrets).toEqual({});
     expect(result.vault).toBeUndefined();
@@ -50,7 +49,6 @@ describe("resolveIdentityConfig", () => {
       id: 1,
       name: "full",
       metadata: {
-        traits: ["coding", "git"],
         bags: ["git", "filesystem"],
         secrets: { API_KEY: { reference: { in: "keychain", item: "barry", account: "api-key" } } },
         adapters: { "claude-code": { default: true, model: "claude-opus-4-6" } },
@@ -58,7 +56,6 @@ describe("resolveIdentityConfig", () => {
       },
     }));
 
-    expect(result.traits.map(entry => entry.name)).toEqual(["coding", "git"]);
     expect(result.bags).toEqual(["git", "filesystem"]);
     expect(result.secrets).toEqual({ API_KEY: { reference: { in: "keychain", item: "barry", account: "api-key" } } });
     expect(result.bounds).toEqual([{ name: "readonly", optional: false }]);
@@ -68,14 +65,14 @@ describe("resolveIdentityConfig", () => {
   // Callers treat the returned arrays as their own; handing back the metadata
   // array itself would let one caller's mutation leak into every other reader.
   it("copies list fields rather than aliasing metadata", () => {
-    const barry = makeBarry({ id: 1, name: "copy", metadata: { traits: ["a"], bags: ["b"] } });
+    const barry = makeBarry({ id: 1, name: "copy", metadata: { bags: ["b"], bounds: ["readonly"] } });
     const result = resolveIdentityConfig(barry);
 
-    result.traits.push({ name: "mutated", optional: false });
     result.bags.push("mutated");
+    result.bounds.push({ name: "mutated", optional: false });
 
-    expect(barry.metadata.traits).toEqual(["a"]);
     expect(barry.metadata.bags).toEqual(["b"]);
+    expect(barry.metadata.bounds).toEqual(["readonly"]);
   });
 
   describe("inline scope", () => {
@@ -96,9 +93,9 @@ describe("resolveIdentityConfig", () => {
       const barry = makeBarry({
         id: 1,
         name: "scoped",
-        metadata: { scope: { deniedTools: ["Bash"] } },
+        metadata: { scope: { tools: { deny: ["*:Bash"] } } },
       });
-      expect(resolveIdentityConfig(barry).bound).toEqual({ deniedTools: ["Bash"] });
+      expect(resolveIdentityConfig(barry).bound).toEqual({ tools: { deny: ["*:Bash"] } });
     });
   });
 

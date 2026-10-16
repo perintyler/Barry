@@ -9,15 +9,12 @@
 import { join, resolve } from "node:path";
 import { CliError } from "../lib/cli-error.js";
 import { Barry, isBarryError, type Identity, type Updated } from "@barry-rocks/sdk";
-import { identityRecords, traits, isNumericIdentityName } from "@barry-rocks/identities-bag";
+import { identityRecords, isNumericIdentityName } from "@barry-rocks/identities-bag";
 import { getCurrentUser, setActiveIdentity, getPersistedActiveIdentity } from "../lib/current-user.js";
 import { describeConflict, findInstalledBarry, getShimDir, installShim } from "../lib/identity-shims.js";
 import { printWarnings } from "../lib/warnings.js";
-import type { IdentityBinding } from "../scope.js";
+import type { IdentityBinding } from "../target.js";
 import { provisionVaultAccount } from "./identity.js";
-
-/** The traits a new identity starts with, where this installation has them. */
-const DEFAULT_TRAITS = ["coding", "sessions"];
 
 export interface CreateIdentityOptions {
   email?: string;
@@ -108,10 +105,6 @@ export async function createIdentity(
     vault = await provisionVaultAccount(slug, options.email);
   }
 
-  // The operation refuses a trait this installation has never registered, so a
-  // default trait from a bag that is not installed here is left out, and said.
-  const known = new Set((await traits.list()).map((trait) => trait.name));
-  const skipped = DEFAULT_TRAITS.filter((trait) => !known.has(trait));
   let created: Updated<Identity>;
   try {
     created = await Barry.createIdentity({
@@ -119,9 +112,8 @@ export async function createIdentity(
       directory: identityDir,
       displayName,
       bags: [],
-      traits: DEFAULT_TRAITS.filter((trait) => known.has(trait)),
       // No adapter model: leaving it out lets each session fall through to the
-      // provider CLI's own current default. Writing one freezes the new Barry
+      // harness CLI's own current default. Writing one freezes the new Barry
       // to whatever was current at scaffold time.
       ...(vault ? { vault } : {}),
     });
@@ -140,7 +132,6 @@ export async function createIdentity(
   console.log(`  Created ${createdDir}/.env`);
   console.log(`  Created ${createdDir}/.gitignore`);
   if (vault) console.log(`  Vault: ${vault}`);
-  if (skipped.length > 0) console.warn(`  Skipped default trait${skipped.length === 1 ? "" : "s"} not registered here: ${skipped.join(", ")}`);
   console.log(`\n  Synced to DB (barry id: ${created.id})`);
 
   if (firstBarry) {

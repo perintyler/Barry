@@ -15,7 +15,7 @@ import { writeServiceRegistry } from "@barry-rocks/sdk/services";
 
 let base: string;
 let upstream: Server;
-let upstreamCalls: Array<{ path: string; method: string; auth: string | undefined; body: string }>;
+let upstreamCalls: Array<{ path: string; method: string; auth: string | undefined; accept: string | undefined; body: string }>;
 /** Flipped per test to drive the upstream's behaviour. */
 let upstreamMode: "ok" | "forbidden" = "ok";
 
@@ -36,6 +36,7 @@ beforeAll(async () => {
         path: req.url ?? "",
         method: req.method ?? "",
         auth: req.headers.authorization,
+        accept: req.headers.accept,
         body: Buffer.concat(chunks).toString("utf8"),
       });
       const send = (status: number, body: unknown) => {
@@ -144,6 +145,14 @@ describe("actions web service", () => {
     expect(upstreamCalls[before].auth).toBe("Bearer test-secret");
     // The token must not ride back out to the browser in any form.
     expect(JSON.stringify(body)).not.toContain("test-secret");
+  });
+
+  it("requests workflow references for history while keeping catalog requests compatible", async () => {
+    const before = upstreamCalls.length;
+    await call("/api/runs"); await call("/api/runs/arn_1"); await call("/api/catalog");
+    expect(upstreamCalls.slice(before).map(request => request.accept)).toEqual([
+      "application/json;profile=barry-action-work-v1", "application/json;profile=barry-action-work-v1", "*/*",
+    ]);
   });
 
   it("passes an upstream 404 through as a 404", async () => {

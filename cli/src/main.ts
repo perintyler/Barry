@@ -1,143 +1,130 @@
-#!/usr/bin/env tsx
+import { ensureBarry, ensureBarryCore } from "./lib/barry-init.js";
+export { ensureBarry } from "./lib/barry-init.js";
+import { setKnownCommands, checkKnownCommand } from "./commands/known-commands.js";
+import { lazy } from "./lib/lazy.js";
+import { mark, span } from "./lib/timing.js";
 import { isCliError } from "./lib/cli-error.js";
+import { registerWork } from "./commands/work.js";
 import { registerWorkers } from "./commands/workers.js";
 import { registerDevices } from "./commands/device.js";
 import { registerOwner } from "./commands/owner.js";
 import { useInstanceSecret } from "./config.js";
-import { ensureModelsInstalled } from "./lib/models-install.js";
+const ensureModelsInstalled = lazy(() => import("./lib/models-install.js"), module => module.ensureModelsInstalled);
 import { program } from "commander";
-import { applyCommandScope, currentScope } from "./scope.js";
+import { applyCommandTarget, currentTarget } from "./target.js";
 import { addHarnessFlags, flaggedHarness, installedHarnesses } from "./lib/harness-flags.js";
-import { startCommand, setKnownCommands, checkKnownCommand } from "./commands/start.js";
+const startCommand = lazy(() => import("./commands/start.js"), module => module.startCommand);
 import { makeGroupedHelpFormatter } from "./help-format.js";
 import { registerReservedName } from "./reserved-names.js";
 import { RESERVED_NAMES } from "./command-registry.js";
-import { resumeCommand } from "./commands/resume.js";
-import { listCommand } from "./commands/list.js";
+const resumeCommand = lazy(() => import("./commands/resume.js"), module => module.resumeCommand);
+const listCommand = lazy(() => import("./commands/list.js"), module => module.listCommand);
 import type { PromptCommandOptions } from "./commands/prompt.js";
-import { traitListCommand } from "./commands/trait.js";
-import { boundListCommand } from "./commands/bound.js";
-import {
-  listIdentitiesCommand,
-  showIdentityCommand,
-  testIdentityCommand,
-  checkIdentityCommand,
-  deleteIdentityCommand,
-  barryDoctorCommand,
-  setIdentityAdapterCommand,
-  removeIdentityAdapterCommand,
-  type IdentityAdapterOptions,
-  addIdentityTraitsCommand,
-  removeIdentityTraitsCommand,
-  addIdentityBoundsCommand,
-  removeIdentityBoundsCommand,
-  clearIdentityTraitsCommand,
-  clearIdentityBoundsCommand,
-  setIdentityNotifierCommand,
-  clearIdentityNotifierCommand,
-  setIdentityGitHubInstallationCommand,
-  clearIdentityGitHubInstallationCommand,
-} from "./commands/identity.js";
-import {
-  identitySecretSetCommand,
-  identitySecretGetCommand,
-  identitySecretListCommand,
-  identitySecretImportCommand,
-  identitySecretRemoveCommand,
-} from "./commands/identity-secrets.js";
-import { iosBuildCommand } from "./commands/ios.js";
-import { sessionListCommand, sessionArchiveCommand } from "./commands/session.js";
-import { configCommand } from "./commands/config.js";
-import { configExportCommand, configImportCommand, configInitCommand } from "./commands/config-export.js";
-import { trashCommand, trashListCommand, trashRestoreCommand, trashEmptyCommand } from "./commands/trash.js";
-import { archiveCommand, archiveListCommand } from "./commands/archive.js";
-import { cursorSetupCommand } from "./commands/cursor.js";
-import { mcpEnableCommand, mcpDisableCommand } from "./commands/mcp-agent.js";
-import { completionCommand, completeCommand } from "./commands/completion.js";
-import { registerBagGroups } from "./bag-cli.js";
+const boundListCommand = lazy(() => import("./commands/bound.js"), module => module.boundListCommand);
+import type { IdentityAdapterOptions, IdentityBoundSetOptions } from "./commands/identity.js";
+const listIdentitiesCommand = lazy(() => import("./commands/identity.js"), module => module.listIdentitiesCommand);
+const showIdentityCommand = lazy(() => import("./commands/identity.js"), module => module.showIdentityCommand);
+const testIdentityCommand = lazy(() => import("./commands/identity.js"), module => module.testIdentityCommand);
+const checkIdentityCommand = lazy(() => import("./commands/identity.js"), module => module.checkIdentityCommand);
+const deleteIdentityCommand = lazy(() => import("./commands/identity.js"), module => module.deleteIdentityCommand);
+const barryDoctorCommand = lazy(() => import("./commands/identity.js"), module => module.barryDoctorCommand);
+const setIdentityAdapterCommand = lazy(() => import("./commands/identity.js"), module => module.setIdentityAdapterCommand);
+const removeIdentityAdapterCommand = lazy(() => import("./commands/identity.js"), module => module.removeIdentityAdapterCommand);
+const identityBagsCommand = lazy(() => import("./commands/identity.js"), module => module.identityBagsCommand);
+const addIdentityBagsCommand = lazy(() => import("./commands/identity.js"), module => module.addIdentityBagsCommand);
+const removeIdentityBagsCommand = lazy(() => import("./commands/identity.js"), module => module.removeIdentityBagsCommand);
+const identityBoundsCommand = lazy(() => import("./commands/identity.js"), module => module.identityBoundsCommand);
+const addIdentityBoundsCommand = lazy(() => import("./commands/identity.js"), module => module.addIdentityBoundsCommand);
+const setIdentityBoundCommand = lazy(() => import("./commands/identity.js"), module => module.setIdentityBoundCommand);
+const removeIdentityBoundsCommand = lazy(() => import("./commands/identity.js"), module => module.removeIdentityBoundsCommand);
+const clearIdentityBoundsCommand = lazy(() => import("./commands/identity.js"), module => module.clearIdentityBoundsCommand);
+const setIdentityNotifierCommand = lazy(() => import("./commands/identity.js"), module => module.setIdentityNotifierCommand);
+const clearIdentityNotifierCommand = lazy(() => import("./commands/identity.js"), module => module.clearIdentityNotifierCommand);
+const setIdentityGitHubInstallationCommand = lazy(() => import("./commands/identity.js"), module => module.setIdentityGitHubInstallationCommand);
+const clearIdentityGitHubInstallationCommand = lazy(() => import("./commands/identity.js"), module => module.clearIdentityGitHubInstallationCommand);
+const identitySecretSetCommand = lazy(() => import("./commands/identity-secrets.js"), module => module.identitySecretSetCommand);
+const identitySecretGetCommand = lazy(() => import("./commands/identity-secrets.js"), module => module.identitySecretGetCommand);
+const identitySecretListCommand = lazy(() => import("./commands/identity-secrets.js"), module => module.identitySecretListCommand);
+const identitySecretImportCommand = lazy(() => import("./commands/identity-secrets.js"), module => module.identitySecretImportCommand);
+const identitySecretRemoveCommand = lazy(() => import("./commands/identity-secrets.js"), module => module.identitySecretRemoveCommand);
+const iosBuildCommand = lazy(() => import("./commands/ios.js"), module => module.iosBuildCommand);
+const sessionListCommand = lazy(() => import("./commands/session.js"), module => module.sessionListCommand);
+const sessionArchiveCommand = lazy(() => import("./commands/session.js"), module => module.sessionArchiveCommand);
+const configCommand = lazy(() => import("./commands/config.js"), module => module.configCommand);
+const configExportCommand = lazy(() => import("./commands/config-export.js"), module => module.configExportCommand);
+const configImportCommand = lazy(() => import("./commands/config-export.js"), module => module.configImportCommand);
+const configInitCommand = lazy(() => import("./commands/config-export.js"), module => module.configInitCommand);
+const trashCommand = lazy(() => import("./commands/trash.js"), module => module.trashCommand);
+const trashListCommand = lazy(() => import("./commands/trash.js"), module => module.trashListCommand);
+const trashRestoreCommand = lazy(() => import("./commands/trash.js"), module => module.trashRestoreCommand);
+const trashEmptyCommand = lazy(() => import("./commands/trash.js"), module => module.trashEmptyCommand);
+const archiveCommand = lazy(() => import("./commands/archive.js"), module => module.archiveCommand);
+const archiveListCommand = lazy(() => import("./commands/archive.js"), module => module.archiveListCommand);
+const cursorSetupCommand = lazy(() => import("./commands/cursor.js"), module => module.cursorSetupCommand);
+const mcpEnableCommand = lazy(() => import("./commands/mcp-agent.js"), module => module.mcpEnableCommand);
+const mcpDisableCommand = lazy(() => import("./commands/mcp-agent.js"), module => module.mcpDisableCommand);
+const completionCommand = lazy(() => import("./commands/completion.js"), module => module.completionCommand);
+const completeCommand = lazy(() => import("./commands/completion.js"), module => module.completeCommand);
+import { registerBagGroups } from "./bag-registration.js";
 import { getRegistrySnapshotPath } from "@barry-rocks/sdk/internal/bags";
 import { existsSync } from "node:fs";
-import {
-  bagListCommand,
-  bagShowCommand,
-  bagAccessCommand,
-  bagSyncTraitsCommand,
-  bagDoctorCommand,
-  bagCreateCommand,
-  newCommand,
-  bagBuildCommand,
-  bagInfraCommand,
-  bagServeCommand,
-  bagAuthCommand,
-  bagPublishSdkCommand,
-  bagInstallCommand,
-  identityInstallCommand,
-  bagPackCommand,
-  bagUnpackCommand,
-} from "./commands/bag.js";
-import { bagCheckCommand } from "./commands/bag-check.js";
-import {
-  vaultAddCommand,
-  vaultAssignCommand,
-  vaultListCommand,
-  vaultGetCommand,
-  vaultStatusCommand,
-  vaultRemoveCommand,
-  vaultProvisionCommand,
-  vaultExportCommand,
-  vaultImportCommand,
-} from "./commands/vault.js";
-import { vaultRestoreCommand } from "./commands/vault-restore.js";
-import { notifyCommand } from "./commands/notify.js";
+const bagListCommand = lazy(() => import("./commands/bag.js"), module => module.bagListCommand);
+const bagShowCommand = lazy(() => import("./commands/bag.js"), module => module.bagShowCommand);
+const bagAccessCommand = lazy(() => import("./commands/bag.js"), module => module.bagAccessCommand);
+const bagDoctorCommand = lazy(() => import("./commands/bag.js"), module => module.bagDoctorCommand);
+const bagCreateCommand = lazy(() => import("./commands/bag.js"), module => module.bagCreateCommand);
+const newCommand = lazy(() => import("./commands/bag.js"), module => module.newCommand);
+const bagBuildCommand = lazy(() => import("./commands/bag.js"), module => module.bagBuildCommand);
+const bagInfraCommand = lazy(() => import("./commands/bag.js"), module => module.bagInfraCommand);
+const bagServeCommand = lazy(() => import("./commands/bag.js"), module => module.bagServeCommand);
+const bagAuthCommand = lazy(() => import("./commands/bag.js"), module => module.bagAuthCommand);
+const bagPublishSdkCommand = lazy(() => import("./commands/bag.js"), module => module.bagPublishSdkCommand);
+const bagInstallCommand = lazy(() => import("./commands/bag.js"), module => module.bagInstallCommand);
+const identityInstallCommand = lazy(() => import("./commands/bag.js"), module => module.identityInstallCommand);
+const bagPackCommand = lazy(() => import("./commands/bag.js"), module => module.bagPackCommand);
+const bagUnpackCommand = lazy(() => import("./commands/bag.js"), module => module.bagUnpackCommand);
+const bagCheckCommand = lazy(() => import("./commands/bag-check.js"), module => module.bagCheckCommand);
+const vaultAddCommand = lazy(() => import("./commands/vault.js"), module => module.vaultAddCommand);
+const vaultAssignCommand = lazy(() => import("./commands/vault.js"), module => module.vaultAssignCommand);
+const vaultListCommand = lazy(() => import("./commands/vault.js"), module => module.vaultListCommand);
+const vaultGetCommand = lazy(() => import("./commands/vault.js"), module => module.vaultGetCommand);
+const vaultStatusCommand = lazy(() => import("./commands/vault.js"), module => module.vaultStatusCommand);
+const vaultRemoveCommand = lazy(() => import("./commands/vault.js"), module => module.vaultRemoveCommand);
+const vaultProvisionCommand = lazy(() => import("./commands/vault.js"), module => module.vaultProvisionCommand);
+const vaultExportCommand = lazy(() => import("./commands/vault.js"), module => module.vaultExportCommand);
+const vaultImportCommand = lazy(() => import("./commands/vault.js"), module => module.vaultImportCommand);
+const vaultRestoreCommand = lazy(() => import("./commands/vault-restore.js"), module => module.vaultRestoreCommand);
+const notifyCommand = lazy(() => import("./commands/notify.js"), module => module.notifyCommand);
 import { errorMessage } from "./lib/error-message.js";
 import { registerInstanceCommands } from "./instance-commands.js";
-import { eventsListCommand, eventsReadCommand, eventsCountCommand, eventsEmitCommand } from "@barry-rocks/events-bag";
-import { actionShowCommand, actionRunsCommand, actionRunCommand } from "./commands/action.js";
-import {
-  scheduleListCommand,
-  scheduleShowCommand,
-  scheduleRunCommand,
-  schedulePauseCommand,
-  scheduleLogsCommand,
-  scheduleCancelCommand,
-} from "./commands/schedule.js";
-import { heirCommand } from "./commands/heir.js";
-import { identityCreateCommand } from "./commands/identity-create.js";
-import { useCommand } from "./commands/use.js";
-import { aliasCommand } from "./commands/alias.js";
+const eventsListCommand = lazy(() => import("@barry-rocks/events-bag"), module => module.eventsListCommand);
+const eventsReadCommand = lazy(() => import("@barry-rocks/events-bag"), module => module.eventsReadCommand);
+const eventsCountCommand = lazy(() => import("@barry-rocks/events-bag"), module => module.eventsCountCommand);
+const eventsEmitCommand = lazy(() => import("@barry-rocks/events-bag"), module => module.eventsEmitCommand);
+const actionStopCommand = lazy(() => import("./commands/action-stop.js"), module => module.actionStopCommand);
+const actionWorkStartCommand = lazy(() => import("./commands/action-work.js"), module => module.actionWorkStartCommand);
+const actionWorkLookupCommand = lazy(() => import("./commands/action-work.js"), module => module.actionWorkLookupCommand);
+const actionShowCommand = lazy(() => import("./commands/action.js"), module => module.actionShowCommand);
+const actionRunsCommand = lazy(() => import("./commands/action.js"), module => module.actionRunsCommand);
+const actionRunCommand = lazy(() => import("./commands/action.js"), module => module.actionRunCommand);
+const scheduleListCommand = lazy(() => import("./commands/schedule.js"), module => module.scheduleListCommand);
+const scheduleShowCommand = lazy(() => import("./commands/schedule.js"), module => module.scheduleShowCommand);
+const scheduleRunCommand = lazy(() => import("./commands/schedule.js"), module => module.scheduleRunCommand);
+const schedulePauseCommand = lazy(() => import("./commands/schedule.js"), module => module.schedulePauseCommand);
+const scheduleLogsCommand = lazy(() => import("./commands/schedule.js"), module => module.scheduleLogsCommand);
+const scheduleCancelCommand = lazy(() => import("./commands/schedule.js"), module => module.scheduleCancelCommand);
+const heirCommand = lazy(() => import("./commands/heir.js"), module => module.heirCommand);
+const identityCreateCommand = lazy(() => import("./commands/identity-create.js"), module => module.identityCreateCommand);
+const useCommand = lazy(() => import("./commands/use.js"), module => module.useCommand);
+const aliasCommand = lazy(() => import("./commands/alias.js"), module => module.aliasCommand);
 import { barryVersion } from "./releases/release.js";
-import { dispatchBagTool } from "./bag-cli.js";
-import { redmarkCommand } from "./commands/redmark.js";
+const dispatchBagTool = lazy(() => import("./bag-cli.js"), module => module.dispatchBagTool);
+const redmarkCommand = lazy(() => import("./commands/redmark.js"), module => module.redmarkCommand);
 
 // This process hosts the identities, sessions, actions, events, schedules, tracker and mcp bags: `Barry`'s questions
 // about them run in-process here, for every command and both entries (`barry`
 // and an identity's own command) that come through this module.
-let barryInitialized = false;
-export async function ensureBarry(): Promise<void> {
-  if (barryInitialized) return;
-  const [
-    { Barry },
-    { identities, bags },
-    { sessions },
-    { actions },
-    { events: eventSubject },
-    { schedules },
-    { tracker },
-    { services },
-  ] = await Promise.all([
-    import("@barry-rocks/sdk"),
-    import("@barry-rocks/identities-bag"),
-    import("@barry-rocks/sessions-bag"),
-    import("@barry-rocks/actions-bag"),
-    import("@barry-rocks/events-bag"),
-    import("@barry-rocks/schedules-bag"),
-    import("@barry-rocks/tracker-bag"),
-    import("@barry-rocks/mcp-bag"),
-  ]);
-  Barry.use(identities, bags, sessions, actions, eventSubject, schedules, tracker, services);
-  barryInitialized = true;
-}
-
+mark("main:imports-done");
 
 
 
@@ -147,8 +134,8 @@ export async function ensureBarry(): Promise<void> {
 
 // This process runs bag tools in-process and probes local models before a
 // launch; both reach models through this one install. What it installs is
-// named here because naming it is this root's job: the shipped catalog is
-// registered bags' catalogs and this tree's call code, and installed adapters'
+// named here because naming it is this root's job: the shipped model list is
+// registered bags' models and this tree's call code, and installed adapters'
 // vendor code rides on top, loaded from their records.
 
 async function initializeModels(): Promise<void> {
@@ -157,9 +144,9 @@ async function initializeModels(): Promise<void> {
 
 
 
-const scope = currentScope();
+const target = currentTarget();
 
-const harnessRecords = scope.kind === "identity" ? await installedHarnesses() : [];
+const harnessRecords = target.kind === "identity" ? await span("main:harnesses", () => installedHarnesses()) : [];
 
 
 
@@ -214,7 +201,7 @@ program
 {
   const { Option } = await import("commander");
   const identityOption = new Option("-i, --identity <identity>", "The identity to act as");
-  if (scope.kind === "identity") identityOption.hideHelp();
+  if (target.kind === "identity") identityOption.hideHelp();
   program.addOption(identityOption);
 }
 
@@ -222,6 +209,7 @@ program
 program.on("option:version", () => { console.log(barryVersion()); process.exit(0); });
 
 registerWorkers(program);
+registerWork(program);
 registerDevices(program);
 registerOwner(program);
 
@@ -236,14 +224,14 @@ program.configureHelp({ formatHelp: makeGroupedHelpFormatter(program) });
 
 // Bare `barry` runs `session start` (both are `isDefault`), but Commander only
 // lists the ROOT command's own options here — so every flag that shapes a
-// session (--traits, --all, --show-builtin, --read, --none …) is invisible at
+// session (--bag, --bound, --all, --show-builtin, --read, --none …) is invisible at
 // the top level, and the options block reads as if `barry` takes none.
 // Duplicating them onto the root would drift; pointing at the real command
 // does not, and covers flags added later without touching this line.
-if (scope.kind === "identity") {
+if (target.kind === "identity") {
   program.addHelpText(
     "after",
-    "\nStarting a session:\n  `barry` runs `barry session start`. See `barry session start --help`\n  for its options (--traits, --all, --show-builtin, --read, --none, ...).\n",
+    "\nStarting a session:\n  `barry` runs `barry session start`. See `barry session start --help`\n  for its options (--bag, --bound, --all, --show-builtin, --read, --none, ...).\n",
   );
 } else {
   program.addHelpText(
@@ -265,25 +253,30 @@ const start = session
   .command("start", { isDefault: true })
   .description("Start a session with Barry configuration. Harness flags come from installed adapters (`barry adapter list`)")
   .allowUnknownOption()
-  .option("--traits <traits>", "Comma-separated trait names to enable (e.g. web,communication)")
+  .option("-b, --bag <bags>", "Comma-separated bag names to enable (supports <bag>:read)")
+  .option("--bags <bags>", "Comma-separated bag names to enable (supports <bag>:read)")
+  .option("--last", "Use remembered bags and bounds for this identity and harness, skipping the picker")
   .option("--bound <bounds>", "Named bound restricting the session (see `barry bound list`)")
-  .option("--all", "Grant every packed bag's tools (skips trait selection)")
+  .option("--bounds <bounds>", "Comma-separated named bounds restricting the session (see `barry bound list`)")
+  .option("--all", "Grant every packed bag's tools (skips capability selection)")
   .option("--show-builtin", "Show builtin bags in the overview and capability picker (hidden by default — they are always granted)")
   .option("-r, --read", "Read-only: --all under the readonly bound")
   .option("--relax", "Allow user-level MCP servers to merge in (default: strict, only Barry-configured MCPs)")
   .option("-d, --directive [directive]", "Set or prompt for a session directive")
-  .option("-n, --none", "Skip trait/directive selection (identity bags still grant their tools)")
+  .option("-n, --none", "Skip capability/directive selection (identity bags still grant their tools)")
   .option("-t, --transport <mode>", "Transport mode: http (default, instant) or stdio (debugging)", "http")
   .option("--health-check", "Check MCP server health during startup (adds delay)")
-  .option("--zai", "Use z.ai (GLM) as the model provider")
-  .option("--ollama", "Use a local Ollama model as the model provider")
-  .option("--llamacpp", "Use a local llama.cpp model as the model provider")
+  .option("--no-api-restart", "Do not restart an older sessions API during launch")
+  .option("--rebuild-bags", "Check and rebuild stale bag bundles during this launch")
+  .option("--zai", "Use z.ai (GLM) as the model vendor")
+  .option("--ollama", "Use a local Ollama model as the model vendor")
+  .option("--llamacpp", "Use a local llama.cpp model as the model vendor")
   .option("--model-provider <key>", "Select a model endpoint explicitly (for example, ollama)")
   .option(
     "--mode <mode>",
     "How Barry attaches: hosted, instrumented (was guest-plus), or guest. Defaults to the identity's adapters.<harness>.mode, then the adapter's own default",
   )
-  .option("--prompt <prompt>", "Initial prompt to send when the session starts")
+  .option("-p, --prompt <prompt>", "Initial prompt to send when the session starts")
   .option("-m, --model <model>", "Model to use (overrides the identity's adapters.<harness>.model)")
   .option("-N, --session-name <name>", "Name the session (skips the name prompt at exit)")
   .option("--ui <renderer>", "UI renderer to launch for the session (btui, web, app, raw, none)")
@@ -300,22 +293,38 @@ const resume = session
   .option("-N, --session-name <name>", "Rename the resumed session")
   .option("--ui <renderer>", "UI renderer to launch for the session (btui, web, app, raw, none)")
   .option("--no-ui", "Start session in background without launching a UI")
-  .option("--zai", "Use z.ai (GLM) as the model provider")
-  .option("--ollama", "Use a local Ollama model as the model provider")
-  .option("--llamacpp", "Use a local llama.cpp model as the model provider")
+  .option("--zai", "Use z.ai (GLM) as the model vendor")
+  .option("--ollama", "Use a local Ollama model as the model vendor")
+  .option("--llamacpp", "Use a local llama.cpp model as the model vendor")
   .option("--model-provider <key>", "Select a model endpoint explicitly (for example, ollama)")
-  // Resume shows the trait picker with the previous session's traits checked.
+  // Resume shows the capability picker with the previous session's bags checked.
   // These are the same escape hatches `start` offers, so a resume can skip the
   // picker (scripts, non-interactive shells) or change capabilities outright
   // without having to abandon the conversation and start a fresh session.
-  .option("--traits <traits>", "Comma-separated trait names to enable (skips the picker)")
+  .option("-b, --bag <bags>", "Comma-separated bag names to enable (skips the picker)")
+  .option("--bags <bags>", "Comma-separated bag names to enable (skips the picker)")
+  .option("--bound <bounds>", "Comma-separated bound names restricting the session")
+  .option("--bounds <bounds>", "Comma-separated bound names restricting the session")
+  .option("--last-bags", "Use remembered bags and bounds instead of the resumed session’s selection")
   .option("--all", "Grant every packed bag's tools (skips the picker)")
   .option("--show-builtin", "Show builtin bags in the overview and capability picker (hidden by default — they are always granted)")
   .option("-r, --read", "Read-only: --all under the readonly bound (skips the picker)")
-  .option("--none", "Clear selected traits (skips the picker; identity bags still grant their tools)")
+  .option("--none", "Clear selected optional bags (skips the picker; identity bags still grant their tools)")
   .option("-p, --prompt <prompt>", "Send an initial prompt instead of starting interactively")
   .action((sessionId, options) => resumeCommand(sessionId, { ...options, barry: program.opts().identity, harness: flaggedHarness(options, harnessRecords)?.id }));
 addHarnessFlags(resume, harnessRecords);
+
+for (const operation of ["interrupt","stop"] as const) session.command(`${operation} <id>`)
+  .description(operation === "stop" ? "Stop a hosted session immediately" : "Interrupt the current turn, keeping the session open")
+  .action(async(id:string)=>(await import("./commands/session-control.js")).sessionControlCommand(operation,id));
+
+session.command("bench <id>")
+  .description("Measure hosted turn admission, thinking and streaming cadence")
+  .requiredOption("--prompts <prompts...>", "Prompts to run sequentially")
+  .option("--repeat <count>", "Repeat each prompt", "1")
+  .option("--json", "Print one JSON result per turn")
+  .option("--ps", "Include Claude process counts")
+  .action(async (id, options) => (await import("./commands/session-bench.js")).sessionBenchCommand(id, options));
 
 session
   .command("prompt")
@@ -323,7 +332,10 @@ session
   .requiredOption("-p, --prompt <prompt>", "The prompt to send to Claude")
   .option("--max-turns <turns>", "Maximum number of turns", "15")
   .option("-c, --cwd <directory>", "Working directory for the query")
-  .option("--traits <traits>", "Comma-separated trait names granting tools and skills")
+  .option("-b, --bag <bags>", "Comma-separated bag names granting tools and skills")
+  .option("--bags <bags>", "Comma-separated bag names granting tools and skills")
+  .option("--bound <bounds>", "Comma-separated bound names restricting the session")
+  .option("--bounds <bounds>", "Comma-separated bound names restricting the session")
   .option("-m, --model <model>", "Model to use (overrides the identity's default)")
   .action(async (options: PromptCommandOptions) => {
     const { promptCommand } = await import("./commands/prompt.js");
@@ -364,13 +376,13 @@ session
 
           // From the `provider_sessions` TABLE, not from session metadata.
           // An earlier version read `metadata.provider_session_id`, which is
-          // never written — so every adopt refused with "no recorded provider
+          // never written — so every adopt refused with "no recorded harness
           // session id" while the id sat in the table the whole time.
           //
           // Newest first: a session resumed several times has a row per
           // conversation, and the live one is the last to be recorded.
-          const providerSessions = await getProviderSessionsBySession(sessionId);
-          const latest = providerSessions
+          const harnessSessions = await getProviderSessionsBySession(sessionId);
+          const latest = harnessSessions
             .filter((ps) => typeof ps.provider_session_id === "string" && ps.provider_session_id)
             .at(-1);
 
@@ -378,15 +390,15 @@ session
             id: row.id,
             provider: latest?.provider ?? (typeof metadata.provider === "string" ? metadata.provider : ""),
             mode: typeof metadata.mode === "string" ? metadata.mode : null,
-            providerSessionId: latest?.provider_session_id ?? null,
+            harnessSessionId: latest?.provider_session_id ?? null,
             // The recorded pid, checked against its start time: a TUI still
             // running is the one verdict that refuses.
             driverAlive: classify(metadata).state === "alive",
           };
         },
-        adapter: async (provider) => {
+        adapter: async (harness) => {
           try {
-            return await harnessAdapter(provider);
+            return await harnessAdapter(harness);
           } catch {
             return undefined;
           }
@@ -430,7 +442,7 @@ session
 // stays at root (it reports on all identities, not the active one, and
 // never fit the per-identity pattern); `ls` stays at root as a permanent,
 // visible alias for `identity list`. The 20 old flat top-level spellings
-// this group replaced (add-traits, set-model,...) no longer exist as
+// this group replaced (add-bags, set-model,...) no longer exist as
 // commands at all — see reserved-names.ts for the two (list, delete) that
 // still occupy their old name as a permanent blocker, and command-registry.ts's
 // RESERVED_NAMES for why those two specifically.
@@ -501,7 +513,7 @@ program
     const { runDoctor } = await import("./commands/doctor.js");
     const { adapters } = await adapterStore();
     const failingAdapters = runDoctor(adapters.installed());
-    const refused = await modelProviderCommand("check");
+    const refused = await modelAdapterGroupCommand("check");
     await barryDoctorCommand(options);
     const { reportReleaseProblems } = await import("./releases/state.js");
     reportReleaseProblems();
@@ -525,37 +537,60 @@ program
     await program.parseAsync(["identity", "list", ...args], { from: "user" });
   });
 
-const traits = identity
-  .command("traits")
-  .description("Change the traits merged into every session");
+const identityBags = identity
+  .command("bags")
+  .description("Manage the bags configured on an identity")
+  .action(() => identityBagsCommand({ name: program.opts().identity }));
 
-traits
-  .command("add <traits...>")
-  .description("Add default traits to a barry (additive)")
-  .action((traitNames: string[]) => addIdentityTraitsCommand(traitNames, { name: program.opts().identity }));
+identityBags
+  .command("add <bags...>")
+  .description("Add bags to an identity (additive)")
+  .option("--optional", "Offer in the session picker rather than requiring on every session")
+  .action((bagNames: string[], opts: { optional?: boolean }) =>
+    addIdentityBagsCommand(bagNames, { name: program.opts().identity, optional: opts.optional }));
 
-traits
-  .command("remove <traits...>")
-  .description("Remove default traits from a barry (others preserved)")
-  .action((traitNames: string[]) => removeIdentityTraitsCommand(traitNames, { name: program.opts().identity }));
+identityBags
+  .command("remove <bags...>")
+  .description("Remove bags from an identity (others preserved)")
+  .action((bagNames: string[]) => removeIdentityBagsCommand(bagNames, { name: program.opts().identity }));
 
-traits
-  .command("clear")
-  .description("Clear default traits from a barry")
-  .action(() => clearIdentityTraitsCommand({ name: program.opts().identity }));
-
-const identityBounds = identity.command("bounds").description("Manage the identity's required bounds");
+const identityBounds = identity
+  .command("bounds")
+  .description("Manage the identity's bounds")
+  .action(() => identityBoundsCommand({ name: program.opts().identity }));
 identityBounds
   .command("add <names...>")
-  .description("Add required bounds to the identity (every session runs under them)")
-  .action((names: string[]) => addIdentityBoundsCommand(names, { name: program.opts().identity }));
+  .description("Add bounds to the identity")
+  .option("--optional", "Offer in the session picker rather than requiring on every session")
+  .action((names: string[], opts: { optional?: boolean }) =>
+    addIdentityBoundsCommand(names, { name: program.opts().identity, optional: opts.optional }));
+identityBounds
+  .command("set <name>")
+  .description("Create or update an inline bound on the identity's identity.yaml")
+  .option("--description <text>", "Description for the bound")
+  .option("--optional", "Offer in the session picker rather than requiring on every session")
+  .option("--allow-tools <patterns>", "Comma-separated allowed tool patterns")
+  .option("--deny-tools <patterns>", "Comma-separated denied tool patterns")
+  .option("--allow-native <patterns>", "Comma-separated allowed native tool patterns (e.g. *:Read)")
+  .option("--deny-native <patterns>", "Comma-separated denied native tool patterns (e.g. *:Bash)")
+  .option("--allow-files <globs>", "Comma-separated allowed file path globs")
+  .option("--deny-files <globs>", "Comma-separated denied file path globs")
+  .option("--allow-bash <patterns>", "Comma-separated allowed bash command patterns")
+  .option("--deny-bash <patterns>", "Comma-separated denied bash command patterns")
+  .option("--allow-network <patterns>", "Comma-separated allowed network URL globs or classes")
+  .option("--deny-network <patterns>", "Comma-separated denied network URL globs or classes")
+  .option("--enforce-network <mode>", "Network enforcement mode: auto, required, or off")
+  .option("--allow-nodes <nodes>", "Comma-separated allowed node names")
+  .option("--deny-nodes <nodes>", "Comma-separated denied node names")
+  .action((boundName: string, opts: IdentityBoundSetOptions) =>
+    setIdentityBoundCommand(boundName, { ...opts, name: program.opts().identity }));
 identityBounds
   .command("remove <names...>")
-  .description("Remove required bounds from the identity (others preserved)")
+  .description("Remove bounds from the identity (others preserved)")
   .action((names: string[]) => removeIdentityBoundsCommand(names, { name: program.opts().identity }));
 identityBounds
   .command("clear")
-  .description("Clear every required bound from the identity")
+  .description("Clear every bound from the identity")
   .action(() => clearIdentityBoundsCommand({ name: program.opts().identity }));
 
 const identityAdapters = identity.command("adapters").description("Configure each harness's model, mode and default");
@@ -564,6 +599,7 @@ identityAdapters.command("set <harness>")
   .option("--model <model>", "Model id or vendor/model ref")
   .option("--provider <vendor>", "Vendor serving a bare model id")
   .option("--mode <mode>", "Launch mode declared by this adapter")
+  .option("--effort <level>", "Thinking effort: low, medium, high, xhigh, max")
   .option("--default", "Make this the identity's default harness")
   .action((harness: string, options: IdentityAdapterOptions) => setIdentityAdapterCommand(harness, { ...options, name: program.opts().identity }));
 identityAdapters.command("remove <harness>")
@@ -630,16 +666,6 @@ mcp
   .description("Disable an MCP server in Cursor for this project")
   .action(mcpDisableCommand);
 
-const trait = program
-  .command("trait")
-  .description("Manage traits");
-
-trait
-  .command("list")
-  .alias("ls")
-  .description("List all traits")
-  .action(traitListCommand);
-
 const bound = program
   .command("bound")
   .description("Manage bounds");
@@ -648,7 +674,8 @@ bound
   .command("list")
   .alias("ls")
   .description("List all bounds and what each restricts")
-  .action(boundListCommand);
+  .option("--json", "Output as JSON")
+  .action((opts: { json?: boolean }) => boundListCommand(opts));
 
 const configGroup = program
   .command("config")
@@ -856,14 +883,9 @@ bag
 
 bag
   .command("doctor")
-  .description("Audit every barry for stale bag references, missing traits, un-enabled sub-bags and missing launchd plists")
+  .description("Audit every barry for stale bag references, retired manifest keys, un-enabled sub-bags and missing launchd plists")
   .option("--fix", "Repair the problems found")
   .action(bagDoctorCommand);
-
-bag
-  .command("sync-traits [name]")
-  .description("Sync bag traits (incl. trait-granted skills) into the DB without touching identities")
-  .action(bagSyncTraitsCommand);
 
 // Kept as `bag create` for muscle memory; `barry new` is the documented spelling.
 bag
@@ -879,10 +901,11 @@ bag
   .description("Build local bags to plain JS (all bags if no name given)")
   .option("-f, --force", "Rebuild even when output is up to date")
   .option("-w, --watch", "Rebuild on source changes")
+  .option("--if-stale", "Build only stale bags, retaining failures until inputs change")
   // bagBuildCommand returns a boolean so programmatic callers can see whether
   // the build succeeded. Commander ignores a handler's return value, so it is
   // discarded here rather than widening the command's own signature.
-  .action(async (name: string | undefined, options: { force?: boolean; watch?: boolean }) => {
+  .action(async (name: string | undefined, options: { force?: boolean; watch?: boolean; ifStale?: boolean }) => {
     await bagBuildCommand(name, options);
   });
 
@@ -925,8 +948,35 @@ action
   .description("Run an action now: a script action here, an agent action via the API")
   .option("--input <key=value>", "An input value (JSON if it parses, else a string); repeatable", (v: string, prev: string[] = []) => [...prev, v])
   .option("--inputs-json <json>", "All inputs as one JSON object")
+  .option("-b, --bag <bags>", "Comma-separated bag names to enable for this action run")
+  .option("--bags <bags>", "Comma-separated bag names to enable for this action run")
+  .option("--bound <bounds>", "Comma-separated bound names restricting this action run")
+  .option("--bounds <bounds>", "Comma-separated bound names restricting this action run")
   .option("--json", "Print the whole run record as JSON")
   .action(actionRunCommand);
+
+action
+  .command("stop <run_id>")
+  .description("Request workflow Stop for an inspected action; acknowledgement does not prove cessation")
+  .requiredOption("--session <id>", "Open caller session belonging to this identity")
+  .requiredOption("--revision <revision>", "Inspected canonical work revision")
+  .requiredOption("--reason <reason>", "Reason for requesting Stop")
+  .option("--request-id <id>", "Reuse this UUID after an unconfirmed Stop reply")
+  .action(actionStopCommand);
+
+action.command("work-start <name>")
+  .description("Admit an installed script to durable work using this identity's selected session")
+  .requiredOption("--session <id>", "Open caller session belonging to this identity")
+  .requiredOption("--input-json <json>", "Original action inputs as a JSON object")
+  .option("--key <key>", "Reuse the original key and inputs after an unconfirmed reply")
+  .option("--request-id <uuid>", "Transport request UUID")
+  .option("--recovery-epoch <uuid>", "Inspected active restore epoch for a new invocation")
+  .action(actionWorkStartCommand);
+
+action.command("work-lookup <key>")
+  .description("Recover accepted work by original key without submitting another invocation")
+  .requiredOption("--session <id>", "Original caller session belonging to this identity")
+  .action(actionWorkLookupCommand);
 
 action
   .command("show <run_id>")
@@ -966,6 +1016,10 @@ schedule
 schedule
   .command("run <id>")
   .description("Run a schedule's action now, outside its trigger")
+  .option("-b, --bag <bags>", "Comma-separated bag names to enable for this schedule run")
+  .option("--bags <bags>", "Comma-separated bag names to enable for this schedule run")
+  .option("--bound <bounds>", "Comma-separated bound names restricting this schedule run")
+  .option("--bounds <bounds>", "Comma-separated bound names restricting this schedule run")
   .action(scheduleRunCommand);
 
 schedule
@@ -1068,16 +1122,13 @@ program
 // ── Bag lifecycle: new → install → pack → unpack ─────────────────────────────
 program
   .command("new <kindOrName> [name]")
-  .description("Scaffold a bag, action, instruction, or trait (bare name = bag)")
+  .description("Scaffold a bag, action, instruction, or bound (bare name = bag)")
   .option("--path <path>", "Where to create it (default: ./<name>) — bags only")
   .option("--server", "Include an MCP server entry point — bags only")
   .option("--template <template>", "local | npm", "local")
   .option("--bag <bag>", "Bag to scaffold into (default: the bag in cwd)")
   .option("--description <text>", "Description for the generated item")
   .option("--mode <mode>", "always | on-demand — instructions only")
-  .option("--namespace <ns...>", "Tool namespaces — traits only")
-  .option("--access <access>", "read | readwrite — traits only")
-  .option("--bounds <bounds...>", "Named bounds restricting the trait, e.g. readonly — traits only")
   .action(newCommand);
 
 // Installing is system-level; packing is per identity. `barry install` only
@@ -1086,8 +1137,8 @@ program
 const installCommand = program
   .command("install <target>")
   .description(
-    scope.kind === "identity"
-      ? `Install a bag on this machine, then offer to pack it onto ${scope.name}. Repos are cloned to ~/repos/bags.`
+    target.kind === "identity"
+      ? `Install a bag on this machine, then offer to pack it onto ${target.name}. Repos are cloned to ~/repos/bags.`
       : "Install a bag on this machine and register it (local dir, npm package, git repo, or MCP URL). Repos are cloned to ~/repos/bags. Pack it onto an identity with `<identity> pack <bag>`.",
   )
   // NOT --name: everywhere else in this CLI --name is the IDENTITY, so reusing
@@ -1095,18 +1146,20 @@ const installCommand = program
   // bag called "bux" instead of installing for barry "bux".
   .option("--as <name>", "Register under a different bag name")
   .option("--force", "Rebuild even when output is up to date");
-if (scope.kind === "identity") {
+if (target.kind === "identity") {
   installCommand
-    .option("-y, --yes", `Pack it onto ${scope.name} without asking`)
-    .action(async (target: string, opts: { as?: string; force?: boolean; yes?: boolean }) => identityInstallCommand(target, opts));
+    .option("-y, --yes", `Pack it onto ${target.name} without asking`)
+    .action(async (targetArg: string, opts: { as?: string; force?: boolean; yes?: boolean }) => identityInstallCommand(targetArg, opts));
 } else {
-  installCommand.action(async (target: string, opts: { as?: string; force?: boolean }) => { await bagInstallCommand(target, opts); });
+  installCommand.action(async (targetArg: string, opts: { as?: string; force?: boolean }) => { await bagInstallCommand(targetArg, opts); });
 }
 
 program
   .command("pack <bag>")
-  .description("Add an installed bag to this identity's identity.yaml and create its stores (syncs its traits so sessions get its tools)")
-  .action((bag: string) => bagPackCommand(bag, { name: program.opts().identity }));
+  .description("Add an installed bag to this identity's identity.yaml and create its stores")
+  .option("--optional", "Offer in the session picker rather than requiring on every session")
+  .action((bag: string, opts: { optional?: boolean }) =>
+    bagPackCommand(bag, { name: program.opts().identity, optional: opts.optional }));
 
 program
   .command("unpack <bag>")
@@ -1128,7 +1181,7 @@ const adapterGroup = program
 // tell "one vendor missing" from "nothing works" without parsing the output.
 adapterGroup
   .command("doctor [adapter]")
-  .description("Check each agent adapter against its declared requirements (binary, version, pin, login)")
+  .description("Check adapter runtime availability, recommended versions and compatibility")
   .action(async (adapter: string | undefined) => {
     const { runDoctor } = await import("./commands/doctor.js");
     const { adapterStore } = await import("./adapters/installed.js");
@@ -1181,15 +1234,15 @@ adapterGroup
   });
 
 // Setup records shipped call code; this group also accepts third-party packages.
-const providerGroup = adapterGroup.command("model").description("Select completion, decision and embedding adapters");
-async function modelProviderCommand(action: "list" | "add" | "remove" | "check", argument?: string) {
+const modelAdapterGroup = adapterGroup.command("model").description("Select completion, decision and embedding adapters");
+async function modelAdapterGroupCommand(action: "list" | "add" | "remove" | "check", argument?: string) {
   try {
-    const { loadModelProviders, shippedModelProviders } = await import("@barry-rocks/sdk/adapters/models");
-    const { barryModelProvidersPath, installationRoot } = await import("@barry-rocks/sdk/services");
+    const { loadModelVendors, shippedModelVendors } = await import("@barry-rocks/sdk/adapters/models");
+    const { barryModelVendorsPath, installationRoot } = await import("@barry-rocks/sdk/services");
     const { modelAdapterCommand } = await import("./commands/adapter.js");
     return await modelAdapterCommand({
-      providers: loadModelProviders({ file: barryModelProvidersPath() }),
-      shipped: action === "list" || action === "check" ? shippedModelProviders(installationRoot()) : [],
+      providers: loadModelVendors({ file: barryModelVendorsPath() }),
+      shipped: action === "list" || action === "check" ? shippedModelVendors(installationRoot()) : [],
       write: line => console.log(line),
       error: line => console.error(line),
     }, action, argument);
@@ -1199,17 +1252,17 @@ async function modelProviderCommand(action: "list" | "add" | "remove" | "check",
     return 1;
   }
 }
-providerGroup.command("list").description("List selected model adapters and refusals").action(async () => {
-  process.exitCode = await modelProviderCommand("list");
+modelAdapterGroup.command("list").description("List selected model adapters and refusals").action(async () => {
+  process.exitCode = await modelAdapterGroupCommand("list");
 });
-providerGroup.command("add <path>").description("Check and select a compiled model adapter package").action(async (path: string) => {
-  process.exitCode = await modelProviderCommand("add", path);
+modelAdapterGroup.command("add <path>").description("Check and select a compiled model adapter package").action(async (path: string) => {
+  process.exitCode = await modelAdapterGroupCommand("add", path);
 });
-providerGroup.command("remove <package>").description("Remove a selection while preserving the installed package").action(async (name: string) => {
-  process.exitCode = await modelProviderCommand("remove", name);
+modelAdapterGroup.command("remove <package>").description("Remove a selection while preserving the installed package").action(async (name: string) => {
+  process.exitCode = await modelAdapterGroupCommand("remove", name);
 });
-providerGroup.command("check [package]").description("Load selected model adapters and check their contracts and factory ownership").action(async (name: string | undefined) => {
-  process.exitCode = await modelProviderCommand("check", name);
+modelAdapterGroup.command("check [package]").description("Load selected model adapters and check their contracts and factory ownership").action(async (name: string | undefined) => {
+  process.exitCode = await modelAdapterGroupCommand("check", name);
 });
 
 // ── Track: sessions barry did not launch ───────────────────────────────────────
@@ -1299,7 +1352,7 @@ program
         // Delivery, at turn-end only. This is what makes the hook the RELAY
         // WP-B4 asks for rather than a pure recorder.
         waitForMessage: launched
-          ? (_providerSessionId, payload) => holdForLaunchedSession(launched, typeof payload.generation_id === "string" ? { generationId: payload.generation_id } : {})
+          ? (_harnessSessionId, payload) => holdForLaunchedSession(launched, typeof payload.generation_id === "string" ? { generationId: payload.generation_id } : {})
           : waitForQueuedMessage,
         vendorOf: vendorFromPayload,
         providerSessionIdOf: providerSessionIdFromPayload,
@@ -1427,17 +1480,19 @@ const requestedCommand = process.argv[2];
 const staticCommand = !requestedCommand || requestedCommand.startsWith("-") || requestedCommand === "help" || program.commands.some(command => command.name() === requestedCommand || command.aliases().includes(requestedCommand));
 const bagGroupNames = registerBagGroups(program, { quietWhenMissing: !registry.expected || createsRegistry || staticCommand });
 
+mark("main:bag-groups");
+
 // ── Boundary check ───────────────────────────────────────────────────────────
-// Command scope is the registration boundary; package boundaries no longer split the CLI.
+// Command target is the registration boundary; package boundaries no longer split the CLI.
 
-applyCommandScope(program, scope, bagGroupNames);
+applyCommandTarget(program, target, bagGroupNames);
 
-// `barry __describe` / `<identity> __describe`: this scope's command surface as
+// `barry __describe` / `<identity> __describe`: this target's command surface as
 // JSON, for generated reference docs (see describe.ts). Answered before parse()
 // and the preAction hook, so it starts nothing and opens no store.
 if (process.argv[2] === "__describe") {
   const { describeProgram } = await import("./describe.js");
-  const json = `${JSON.stringify(describeProgram(program, scope.kind, bagGroupNames), null, 2)}\n`;
+  const json = `${JSON.stringify(describeProgram(program, target.kind, bagGroupNames), null, 2)}\n`;
   // Wait for the write: on a pipe stdout is asynchronous, and exiting first
   // truncates the output.
   await new Promise<void>((resolve) => process.stdout.write(json, () => resolve()));
@@ -1446,31 +1501,35 @@ if (process.argv[2] === "__describe") {
 
 program.hook("preAction", async (_root, command) => {
   if (command.name() !== "__complete" && command.name() !== "completion") {
-    await ensureBarry();
+    await span("preaction:ensure-barry", () => command.parent?.name() === "session" && command.name() === "start" ? ensureBarryCore() : ensureBarry());
   }
-  await useInstanceSecret();
-  if (scope.kind === "identity") {
-    // `-i/--identity` is the one selector now (hidden in identity scope). An
+  await span("preaction:instance-secret", () => useInstanceSecret());
+  if (target.kind === "identity") {
+    // `-i/--identity` is the one selector now (hidden in identity target). An
     // identity's own CLI is bound to that identity; naming another is a job
     // for that identity's generated CLI.
     const selected = command.optsWithGlobals().identity;
-    if (selected !== undefined && selected !== scope.name) throw new Error(`this CLI is bound to ${scope.name}; use the other identity's generated CLI`);
-    if (command.parent?.name() === "identity" && ["show", "test", "check", "delete"].includes(command.name()) && command.args[0] && command.args[0] !== scope.name) throw new Error("cannot act on another identity");
+    if (selected !== undefined && selected !== target.name) throw new Error(`this CLI is bound to ${target.name}; use the other identity's generated CLI`);
+    if (command.parent?.name() === "identity" && ["show", "test", "check", "delete"].includes(command.name()) && command.args[0] && command.args[0] !== target.name) throw new Error("cannot act on another identity");
     if (command.parent?.name() === "session" && command.name() !== "start") {
       const id = command.args[0];
-      if (typeof id === "string" && id && !["list", "run", "prompt"].includes(command.name())) {
+      // Control commands resolve prefixes and check the resolved row's owner
+      // themselves; looking up the raw prefix here rejects valid sessions.
+      if (typeof id === "string" && id && !["list", "run", "prompt", "stop", "interrupt"].includes(command.name())) {
         const { getSession } = await import("@barry-rocks/sessions-bag/client");
-        const { assertOwnedSession } = await import("./scope.js");
-        assertOwnedSession(await getSession(id), scope.binding.id);
+        const { assertOwnedSession } = await import("./target.js");
+        assertOwnedSession(await getSession(id), target.binding.id);
       }
     }
-    await initializeModels();
+    // Cancellation must remain available even when model setup is broken or slow.
+    const controlsSession = command.parent?.name() === "session" && ["stop", "interrupt"].includes(command.name());
+    if (command !== start && !controlsSession) await span("preaction:models", () => initializeModels());
   }
 });
 setKnownCommands(program.commands.map((c) => c.name()));
 
-// Bare `barry` with no arguments in system scope shows the dashboard/help cleanly with exit 0.
-if (scope.kind === "system" && process.argv.length <= 2) {
+// Bare `barry` with no arguments in system target shows the dashboard/help cleanly with exit 0.
+if (target.kind === "system" && process.argv.length <= 2) {
   program.outputHelp();
   process.exit(0);
 }
@@ -1519,6 +1578,7 @@ process.on("unhandledRejection", (reason) => {
   process.exit(1);
 });
 
+mark("main:parse-start");
 try { await program.parseAsync(); }
 catch (error) {
   if (isCliError(error)) {

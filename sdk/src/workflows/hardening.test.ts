@@ -74,7 +74,7 @@ it.each([false, true])("reopens after an ambiguous commit and resolves the origi
   expect(owner.history("job").filter(event => event.type === "WorkflowClosed")).toHaveLength(1);
 });
 
-it("blocking fences active attempts and frees reservations without erasing attempt accounting", () => {
+it("blocking fences authority while retaining physical occupancy until settlement", () => {
   let clock = 1000, changed = false;
   const definition: WorkflowDefinition = { ...echo, *run(input) { return yield changed ? sleep(10) : activity("echo", input, { heartbeatTimeoutMs: 10, retry: { initialDelayMs: 1 } }); } };
   const { owner } = fixture([definition], () => clock);
@@ -82,12 +82,13 @@ it("blocking fences active attempts and frees reservations without erasing attem
   const first = owner.claim("worker")!;
   changed = true; owner.tick();
   expect(owner.get("job").status).toBe("blocked");
-  expect(owner.overview().workers[0].active).toBe(0);
+  expect(owner.overview().workers[0].active).toBe(1);
   clock += 100; changed = false;
   start(owner, "unrelated");
+  expect(owner.claim("worker")).toBeNull();
+  expect(owner.complete("worker", first.token, { ok: true, value: "stale" })).toBe(false);
   const next = owner.claim("worker")!;
   expect(next.runId).toBe("unrelated");
-  expect(owner.complete("worker", first.token, { ok: true, value: "stale" })).toBe(false);
   owner.complete("worker", next.token, { ok: true, value: "ok" });
   owner.resume("job");
   expect(owner.claim("worker")?.attempt).toBe(2);
@@ -183,7 +184,7 @@ it("releases a dead owner's evaluator reservation without waiting for its deadli
   expect(recovered.get("job").status).toBe("completed");
   expect(recovered.get("job").outcome).toEqual({ ok: true, value: "hello" });
 });
-it("preserves an old activity lease at startup and retries it through ordinary expiry", () => {
+it("preserves old physical occupancy across startup and lease expiry until settlement", () => {
   let clock = 1000;
   const { owner, path } = fixture([echo], () => clock);
   start(owner); owner.advertise("worker", { types: ["echo"], capacity: 1 });
@@ -194,6 +195,8 @@ it("preserves an old activity lease at startup and retries it through ordinary e
   recovered.tick();
   expect(recovered.inspect("job").commands[0].attempts).toMatchObject([{ attempt: 1, state: "expired" }]);
   clock++; recovered.advertise("worker", { types: ["echo"], capacity: 1 });
+  expect(recovered.claim("worker")).toBeNull();
+  expect(recovered.settlePhysical("worker", original.token)).toBe(true);
   const retried = recovered.claim("worker")!;
   expect(retried.token).not.toBe(original.token);
   expect(retried.attempt).toBe(2);

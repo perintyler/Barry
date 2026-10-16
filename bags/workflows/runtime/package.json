@@ -11,7 +11,8 @@
     "@barry-rocks/sdk": "workspace:*",
     "@barry-rocks/workflows-bag": "workspace:*",
     "@barry-rocks/identities-bag": "workspace:*",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "@barry-rocks/actions-bag": "workspace:*"
   },
   "devDependencies": {
     "tsx": "4.23.12",

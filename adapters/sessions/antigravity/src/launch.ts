@@ -6,7 +6,7 @@ import { parseModelRef } from "@barry-rocks/sdk/ids";
 import { NotSupportedInMode, type SessionConfig } from "@barry-rocks/sdk/sessions";
 import { EXPERIMENTAL } from "./modes.js";
 import { PIN_ENV, resolveAntigravityBin } from "./bin.js";
-import { requireIdentityKey } from "./credential.js";
+import { antigravityAuth, requireIdentityKey } from "./credential.js";
 import { setupTrackingHooks } from "./hooks.js";
 import { writeAntigravityWorkspace } from "./workspace.js";
 
@@ -28,20 +28,26 @@ export function discoverAntigravityConversationId(workspaceDir: string, before: 
   return created.length === 1 ? created[0] : undefined;
 }
 
+export interface LaunchOptions {
+  /** Where agy's cached sign-in lives on this Mac; tests point it at a file of their own. */
+  signInPath?: string;
+}
+
 export function planAntigravityLaunch(
   config: SessionConfig,
   guarantees: Guarantees,
+  options: LaunchOptions = {},
 ): LaunchPlan {
   if (oneShotPrompt(config)) throw new NotSupportedInMode("prompt", "guest");
-  requireIdentityKey(config.env);
+  requireIdentityKey(config.env, options.signInPath);
 
   if (config.resume && !config.resume.harnessSessionId && (config.resume.last || config.resume.picker)) {
     throw new Error("Antigravity resume requires an exact harness session ID");
   }
 
   const warnings: string[] = [`Antigravity is experimental: ${EXPERIMENTAL}`];
-  const bin = resolveAntigravityBin();
-  const { workspaceDir } = writeAntigravityWorkspace(config);
+  const bin = resolveAntigravityBin(config.env);
+  const { workspaceDir } = writeAntigravityWorkspace(config, false, options.signInPath);
   const before = antigravityConversationIds(workspaceDir);
 
   const relayCommand = (config.options as { relayCommand?: string } | undefined)?.relayCommand;
@@ -82,6 +88,9 @@ export function planAntigravityLaunch(
     }
   }
   env.HOME = workspaceDir;
+  // On the account path the key must not reach agy: a key in the env wins
+  // over the sign-in, and the key's project quota is what the opt-in avoids.
+  if (antigravityAuth(config.env) === "google-account") delete env.GEMINI_API_KEY;
   Object.assign(env, PIN_ENV);
   if (config.endpoint?.baseUrl) {
     env.GOOGLE_GEMINI_BASE_URL = config.endpoint.baseUrl;

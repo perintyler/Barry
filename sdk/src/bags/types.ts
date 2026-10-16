@@ -1,7 +1,7 @@
 /**
  * Bag types for Barry's composable capability system.
  *
- * A bag provides tools, skills, traits, and MCP server config.
+ * A bag provides tools, skills, bounds, and MCP server config.
  * Bags can be local directories with a manifest or remote MCP servers.
  */
 
@@ -54,40 +54,6 @@ export interface BagMcpServer {
    * genuinely stateful.
    */
   sessionScoped?: boolean;
-}
-
-/** Trait declared in a bag manifest */
-export interface BagTrait {
-  nativeTools?: Record<string, string[]>;
-  includes?: string[];
-  /** Select one included trait by the running harness. */
-  harnessTraits?: Record<string, string>;
-  name: string;
-  description: string;
-  access: BagAccess;
-  /** Bag/namespace names this trait grants. Resolved to namespaces at the session-scope boundary. */
-  bags: string[];
-  /** Skill names (directory basenames under the bag's skills/ dirs) granted by this trait */
-  skills: string[];
-  /**
-   * Instruction names this trait points at. Resolved through the instruction
-   * catalog at session start; the prose itself lives in an instructions/ file.
-   */
-  instructions: string[];
-  /**
-   * Named bounds whose restrictions this trait carries, resolved against the
-   * bounds table when the session's effective bound is built. Empty for
-   * auto-traits: a generated trait grants everything its bag provides, and
-   * narrowing it is an authoring decision, never a derived one.
-   */
-  boundNames: string[];
-  /**
-   * Restriction declared inline on the trait rather than referenced by name.
-   * Lets a bag outside this repo ship its own bound without a row in the
-   * framework's bounds table. Merged with any named bounds when the session's
-   * effective bound is built.
-   */
-  bound?: Bound;
 }
 
 /** Conventional local tool module discovered from the bag directory. */
@@ -455,7 +421,6 @@ export interface BagManifest {
    */
   default_notifier?: BagDefaultNotifier;
   mcpServers: Record<string, BagMcpServer>;
-  traits: Record<string, Omit<BagTrait, "name">>;
   /**
    * Credentials a HARNESS bag's sessions authenticate with, as a resolution
    * plan: env var name -> where the value comes from when the identity does
@@ -500,29 +465,21 @@ export interface BagManifest {
   infra?: BagInfra;
   /** Hosting this bag can provide (`provides:`), if it is a hosting provider */
   provides?: BagHostingCapability;
-  /** The plain name of the bag this extension adds to. */
-  extends?: string;
+  /** Pluggable tool implementations (`implements:` in bag.yaml) that replace tools on required bags. */
+  implements?: {
+    tools: string[];
+  };
   /** Sub-bags this bag includes — auto-enabled when this bag is enabled */
   bags?: string[];
+  /** Sub-bags marked `optional: true` — installed/registered with this bag, but not auto-enabled unless explicitly selected */
+  optionalBags?: string[];
   /**
    * Where sub-bags named in `bags` come from, for those that say.
-   *
-   * Keyed by the same name that appears in `bags`, so composition stays a
-   * single list and this only answers "where do I fetch it from". A name in
-   * `bags` with no entry here resolves from the registry as it always has.
-   *
-   * The distinction is load-bearing at install time: a name alone is
-   * best-effort widening (the bag may not exist yet, so it is skipped with a
-   * warning), while an entry here is an unambiguous claim that the child
-   * exists at that source — so failing to fetch it fails the install.
    */
   bagSources?: Record<string, BagChildSource>;
   /**
    * Named bounds this bag defines, keyed by name (`bounds:` at the manifest's
-   * top level). A trait refers to one by name in its own `bounds:` list.
-   *
-   * Distinct from a trait's inline `bound:`, which restricts that one trait
-   * and has no name for anything else to reuse.
+   * top level).
    */
   bounds?: Record<string, BagBoundDefinition>;
   constants?: Record<string, unknown>;
@@ -530,17 +487,13 @@ export interface BagManifest {
 }
 
 /** A named bound as a manifest defines it. */
-export interface BagBoundDefinition {
-  description: string;
+export interface BagBoundDefinition extends Bound {
+  description?: string;
   bound: Bound;
 }
 
 /**
  * Where a composed sub-bag's code comes from.
- *
- * Exactly one of `repo` or `path` — enforced by the schema, because an entry
- * with neither is a declaration that names no source and would otherwise parse
- * into "resolve from the registry", silently behaving like a bare name.
  */
 export interface BagChildSource {
   /** Git remote: `owner/name` shorthand, or any URL git can clone. */
@@ -553,15 +506,11 @@ export interface BagChildSource {
   path?: string;
   /**
    * Directory inside the repo that holds the bag, when the clone root is not
-   * the bag itself — one bag in a monorepo of them. Omitted, the clone root is
-   * the bag, which is the common case.
-   *
-   * Deliberately not `path`: that already means "a sibling bag on local disk",
-   * an alternative to cloning rather than a refinement of it. One key meaning
-   * two unrelated things depending on whether `repo` sits beside it would make
-   * `{repo, path}` and `{path}` behave nothing alike.
+   * the bag itself — one bag in a monorepo of them.
    */
   subdir?: string;
+  /** When true, the child bag is registered/installed with the parent but not auto-packed when the parent is packed. */
+  optional?: boolean;
 }
 
 /** Registry entry for a local bag */
@@ -578,7 +527,7 @@ export interface LocalBagSource {
    * Git remote that `path` was cloned from, when Barry fetched it.
    *
    * Provenance, exactly like `npm` above: the bag is still an ordinary local
-   * checkout — same loading, building and traits — and this records where it
+   * checkout — same loading and building — and this records where it
    * came from so a vanished path can be re-cloned and `bag doctor` can check
    * the checkout still matches what the manifest declared.
    *
@@ -612,7 +561,7 @@ export interface RemoteBagSource {
   access?: BagAccessLevel;
   /** When true, connect to MCP server and discover barry:// resources */
   resources?: boolean;
-  /** Inline tool metadata for trait-based access control */
+  /** Inline tool metadata for bound-based access control */
   tools?: BagToolMeta[];
 }
 
@@ -642,7 +591,7 @@ export interface Bag {
   actionsDirs: string[];
   /** Dirs holding this bag's instructions (`<bagDir>/instructions`). */
   instructionsDirs: string[];
-  traits: BagTrait[];
+  bounds?: Record<string, BagBoundDefinition>;
   mcpServers: Record<string, BagMcpServer>;
   tools: BagToolMeta[];
   dependencies: BagDependency[];
@@ -667,8 +616,6 @@ export interface Bag {
    * Set instead of throwing, so one broken bag degrades itself rather than
    * every load it is part of. Everything the manifest declares (services,
    * schedules, skills, composition) is still present; only `tools` is unknown.
-   * Unknown, not empty: trait derivation must not guess namespaces for this
-   * bag, and nothing may prune grants on the strength of its absence.
    */
   toolsError?: string;
 }

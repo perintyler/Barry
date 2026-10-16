@@ -47,7 +47,7 @@ import { createLocalArtifactMaintenance } from '@barry-rocks/artifacts-bag/local
 import { activateLocalArtifactRestore, prepareLocalArtifactRestore } from '@barry-rocks/artifacts-bag/local/restore';
 import { ArtifactRecordSchema, type ArtifactRecord } from '@barry-rocks/artifacts-bag/types';
 import { createArtifactCore } from '@barry-rocks/artifacts-bag/core';
-import { createSqliteArtifactRepository, sealArtifactGeneration } from '@barry-rocks/artifacts-bag/local/catalog';
+import { createSqliteArtifactRepository, sealArtifactGeneration } from '@barry-rocks/artifacts-bag/local/index-store';
 const directory = mkdtempSync(join(tmpdir(),'artifact-installed-'));
 const filepath = join(directory,'catalog.db');
 const db = new Database(filepath);

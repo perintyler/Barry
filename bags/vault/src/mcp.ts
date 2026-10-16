@@ -25,7 +25,7 @@ let itemEncKey: Buffer | null = null;
 let itemMacKey: Buffer | null = null;
 let vaultAccountId: string | null = null;
 
-function initCrypto(configuration: Readonly<Record<string, string | undefined>>): void {
+async function initCrypto(configuration: Readonly<Record<string, string | undefined>>): Promise<void> {
   const masterPassword = configuration.VAULT_MASTER_PASSWORD;
   const email = configuration.VAULT_EMAIL;
   const clientId = configuration.VAULT_CLIENT_ID;
@@ -70,7 +70,7 @@ function initCrypto(configuration: Readonly<Record<string, string | undefined>>)
     return;
   }
 
-  const { encKey, macKey } = deriveKeys(masterPassword, email, kdfSalt);
+  const { encKey, macKey } = await deriveKeys(masterPassword, email, kdfSalt);
   const itemKeys = decryptSymmetricKey(encryptedKey, encKey, macKey);
 
   itemEncKey = itemKeys.encKey;
@@ -276,10 +276,10 @@ function timingSafeMatch(provided: string, expected: string): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
-export function setupMcp(app: Express, signingKey: string, configuration: Readonly<Record<string, string | undefined>>): void {
+export async function setupMcp(app: Express, signingKey: string, configuration: Readonly<Record<string, string | undefined>>): Promise<void> {
   const mcpToken = resolveMcpToken(configuration, signingKey);
   try {
-    initCrypto(configuration);
+    await initCrypto(configuration);
   } catch (err) {
     diagnostics.warn("vault.crypto_init_failed", { detail: "MCP crypto init failed:", error: err instanceof Error ? err.message : String(err) });
   }

@@ -22,6 +22,7 @@ export interface CommandSpec {
 /** Classify static root commands; root-surface tests compare actual Commander registrations. See docs/decisions/0041-command-classification-and-completion.md. */
 export const COMMAND_REGISTRY: readonly CommandSpec[] = [
   { name: "workers", group: "machine", ship: "publishable" },
+  { name: "work", group: "machine", ship: "publishable" },
   { name: "device", group: "machine", ship: "publishable" },
   { name: "session", group: "working", ship: "publishable" },
   { name: "tool", group: "working", ship: "publishable" },
@@ -63,7 +64,6 @@ export const COMMAND_REGISTRY: readonly CommandSpec[] = [
   { name: "pack", group: "capabilities", ship: "publishable" },
   { name: "unpack", group: "capabilities", ship: "publishable" },
   { name: "new", group: "capabilities", ship: "publishable" },
-  { name: "trait", group: "capabilities", ship: "publishable" },
   { name: "bound", group: "capabilities", ship: "publishable" },
   { name: "mcp", group: "capabilities", ship: "publishable" },
   { name: "action", group: "capabilities", ship: "publishable" },

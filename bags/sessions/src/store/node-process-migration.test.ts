@@ -36,7 +36,12 @@ it("repairs preexisting local terminal process rows without changing Sessions or
     const sessions = database.prepare("SELECT * FROM sessions ORDER BY id").all();
     const open = database.prepare("SELECT * FROM processes WHERE id=15").get();
     migrateStore(database, MIGRATIONS, "terminal-process-upgrade");
-    expect(database.prepare("SELECT * FROM sessions ORDER BY id").all()).toEqual(sessions.map(row => ({ ...row as object, bounds: "[]" })));
+    expect(database.prepare("SELECT * FROM sessions ORDER BY id").all()).toEqual(
+      sessions.map(row => {
+        const { traits: _traits, bound_id: _boundId, ...rest } = row as Record<string, unknown>;
+        return { ...rest, bounds: "[]", bags: "[]", bound: null };
+      }),
+    );
     expect(database.prepare("SELECT * FROM processes WHERE id=15").get()).toEqual(open);
     expect(database.prepare("SELECT id,pid,pid_started_at,hostname,command,ended_at FROM processes WHERE id=14").get()).toEqual({ id: 14, pid: 1234, pid_started_at: 5678, hostname: "host", command: "original command", ended_at: "2026-10-01T00:00:00Z" });
   } finally { database.close(); }

@@ -1,4 +1,5 @@
 import { currentStoreContext, withStoreContext } from "@barry-rocks/sdk/internal/stores";
+import { assertInteractiveDestination } from "./workflow-session-ownership.js";
 import { hostname } from "node:os";
 import { randomUUID } from "node:crypto";
 import { classify, readProcessStartTime } from "@barry-rocks/sessions-bag/process-liveness";
@@ -12,19 +13,19 @@ import { sessionRuntime, type ActiveSession } from "./session-runtime.js";
 import { projectTurnHistory } from "./turn-history.js";
 import type { AuthPrincipal } from "@barry-rocks/sdk/internal/auth";
 import { authorizeSessionExecution } from "@barry-rocks/sessions-bag/execution-authorization";
-import { sessionGrants } from "@barry-rocks/sessions-bag";
-import { requestCaller } from "@barry-rocks/sdk";
+import { Barry, requestCaller } from "@barry-rocks/sdk";
 import { sessionMcpServers } from "./mcp-config.js";
 import { createLogger as createDiagnosticLogger } from "@barry-rocks/sdk/logging";
 const diagnostics = createDiagnosticLogger("sessions.turns", { transport: "stderr" });
 
 import { getDescribeAdapter } from "./agent-runtime.js";
-import { sessionReviewPolicy } from "./review-policy.js";
+import { sessionReviewRules } from "./review-rules.js";
 
 interface Service { store: TurnContinuations; execution: TurnExecution; maintain(): void; close(): Promise<void> }
 const services = new Map<string, Service>();
 
 export async function prepareTurnSession(sessionId: string, principal?: AuthPrincipal): Promise<ActiveSession> {
+  assertInteractiveDestination(sessionId);
   if (principal) principal = await authorizeSessionExecution(principal, { sessionId });
   const active = sessionRuntime.getActiveSession(sessionId);
   if (active?.pendingTurns || active?.session?.status() === "active") throw new ExecutionConflict("A legacy turn is still executing");
@@ -36,6 +37,7 @@ export async function prepareTurnSession(sessionId: string, principal?: AuthPrin
  * not held yet: no turn, no harness. Refused while another process drives it.
  */
 export async function residentSession(sessionId: string, principal?: AuthPrincipal): Promise<ActiveSession> {
+  assertInteractiveDestination(sessionId);
   const active = sessionRuntime.getActiveSession(sessionId);
   if (active) return active;
   const row = await getSessionRecord(sessionId);
@@ -48,11 +50,12 @@ export async function residentSession(sessionId: string, principal?: AuthPrincip
   const metadata = row.metadata ?? {};
   const cwd = metadata.working_directory;
   if (typeof cwd !== "string" || !cwd) throw new ExecutionConflict("Session has no working directory");
-  const traitNames = row.traits ?? [];
-  const mcpServers = await sessionMcpServers(sessionId, await sessionGrants(sessionId, requestCaller(principal)));
+  const bagNames = row.bags ?? [];
+  const tools = await Barry.as(requestCaller(principal)).tools(row.identity_id ?? null, bagNames, row.bound ?? row.bounds ?? []);
+  const mcpServers = await sessionMcpServers(sessionId, tools);
   return sessionRuntime.startSession({
     sessionId, prompt: "", repoPath: cwd, prepareOnly: true,
-    identityId: row.identity_id, traits: traitNames, mcpServers,
+    identityId: row.identity_id, bags: bagNames, bounds: row.bounds ?? [], bound: row.bound ?? null, mcpServers,
     ...(typeof metadata.provider === "string" ? { provider: metadata.provider } : {}),
     ...(typeof metadata.model === "string" ? { model: metadata.model } : {}),
     ...(typeof metadata.model_provider === "string" ? { modelProvider: metadata.model_provider } : {}),
@@ -116,7 +119,7 @@ export async function admitCompatibilityTurn(sessionId: string, text: string, at
   const requestId = randomUUID();
   turnExecutionService().execution.admit({ sessionId, requestId, runId: requestId, actor: `${principal.kind}:${principal.actorId}:${principal.credentialId}`,
     content: { text: prefix ? `${prefix}\n\n${text}` : text, message: { content: text }, attachmentIds: attachmentIds ?? [] },
-    policy: sessionReviewPolicy(row?.metadata?.review_policy ?? { mode: "automatic" }), ifActive: "queue" });
+    policy: sessionReviewRules(row?.metadata?.review_policy ?? { mode: "automatic" }), ifActive: "queue" });
 }
 
 export function pendingTurnRulings(sessionId: string): Array<{ requestId: string; tool: string; input: unknown; description?: string }> {

@@ -1,0 +1,46 @@
+{
+  "step": 6,
+  "date": "2026-10-14",
+  "entry": "bundle",
+  "before": {
+    "guest_launch_plan_ms": 1455.1,
+    "guest_identity_env_ms": 476.6,
+    "preflight_ms": 119.5,
+    "catalog_ms": 201.4,
+    "inline_record_ms": 73.5,
+    "older_step_2_guest_launch_plan_ms": 4653.3
+  },
+  "after": {
+    "guest_launch_plan_ms": 1269.6,
+    "guest_plan_duration_ms": 3.3,
+    "guest_identity_env_ms": 365.4,
+    "preflight_first_cached_run_ms": 105.6,
+    "catalog_ms": 216.0,
+    "settings_ms": 0.5,
+    "record_awaited_on_close": true,
+    "second_guest_launch_plan_ms": 1971.1,
+    "second_preflight_ms": 50.6,
+    "resolved_variables": 29,
+    "resolved_sources": {
+      "vault": 19,
+      "file": 4,
+      "keychain": 6
+    }
+  },
+  "gates": {
+    "guest_plan_under_2000_ms_with_vault": true,
+    "both_native_guest_runs_replied_hi": true,
+    "async_kdf_compatible_with_legacy_and_salted_accounts": true,
+    "event_loop_repaint_before_kdf_resolves": true,
+    "version_probe_cache_invalidates_on_binary_change": true,
+    "authentication_probes_always_live": true,
+    "goldens_byte_identical": true
+  },
+  "verification": {
+    "SDK": "52 vault crypto/client tests plus 20 action-catalog tests passed; SDK typecheck/build passed",
+    "CLI": "51 launch-parity, selection, bag auth, credential, restore, doctor and skew tests passed; CLI typecheck passed",
+    "vault_bag": "54 tests, typecheck and daemon build passed",
+    "secret_evidence": "Actual bux environment resolves 19 vault variables, 4 file variables and 6 keychain variables; only counts were printed. Real Claude guest processes received credentials and replied hi.",
+    "notes": "Guest grants and namespace resolution are shared; settings and credential inventory computed once. Catalogs run concurrently with ordered concatenation and action-owner filtering. The second timing sample saw more host contention (catalog 647.8 ms), but still reached plan under two seconds. Cached failure/adapters/list-once work landed earlier in steps 2 and 3f. One-temp-root cleanup consolidation was explicitly low priority and not needed to meet the gate."
+  }
+}

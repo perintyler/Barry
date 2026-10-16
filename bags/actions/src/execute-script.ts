@@ -23,7 +23,7 @@ import { resolveActionRun, runActionValidation, validateActionInputs, type Scrip
 import { bagLogsDir, bagDataDir, bagSegment, hostEnvironment } from "@barry-rocks/sdk/services";
 import { installationSecrets } from "@barry-rocks/sdk/internal/services";
 import { identityEnvironmentForId } from "@barry-rocks/sdk/internal/env";
-import { boundHasContent } from "@barry-rocks/sdk/bounds";
+import { boundHasProcessRestrictions } from "@barry-rocks/sdk/bounds";
 import { currentStoreContext } from "@barry-rocks/sdk/internal/stores";
 import { installationRegistry } from "@barry-rocks/sdk/internal/nodes";
 
@@ -157,7 +157,7 @@ export async function runScriptAction(action: ScriptAction, options: RunScriptOp
 
   const execution = currentStoreContext()?.execution;
   if ((options.trigger === "session" && !execution)
-    || (execution && (boundHasContent(execution.bound ?? undefined) || !execution.allowedToolIds.includes("bash:Bash")))) {
+    || (execution && (boundHasProcessRestrictions(execution.bound ?? undefined) || !execution.allowedToolIds.includes("bash:Bash")))) {
     return fail("Did not start: raw script execution requires an unbounded Bash grant from the caller's execution policy");
   }
 

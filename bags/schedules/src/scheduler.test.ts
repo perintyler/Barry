@@ -4,9 +4,9 @@ import type { ActionMeta } from "@barry-rocks/sdk/internal/actions";
 import type { BagSchedule } from "@barry-rocks/sdk/internal/schedules";
 import { setDb, closeDb } from "./db.js";
 import { getState, readHeartbeat, updateState } from "./store.js";
-import { Scheduler, MAX_ONE_OFFS_RUNNING, MAX_JOB_RUNS_RUNNING, type FireOutcome, type SchedulerDeps, type Transition, type OneOffResult } from "./scheduler.js";
-import { createOneOff, getOneOff } from "./one-offs.js";
-import type { ScheduleEntry } from "./catalog.js";
+import { Scheduler, MAX_AT_SCHEDULES_RUNNING, MAX_JOB_RUNS_RUNNING, type FireOutcome, type SchedulerDeps, type Transition, type AtScheduleResult } from "./scheduler.js";
+import { createAtSchedule, getAtSchedule } from "./at-schedules.js";
+import type { ScheduleEntry } from "./registry.js";
 
 afterAll(() => closeDb());
 
@@ -84,8 +84,8 @@ function harness(entries: ScheduleEntry[], opts: { announceWorks?: boolean; erro
       announced.push({ id: e.id, transition });
       return true;
     },
-    runOneOff: async () => ({ outcome: "succeeded", exitCode: 0, runId: null }),
-    recoverOneOffs: () => {},
+    runAtSchedule: async () => ({ outcome: "succeeded", exitCode: 0, runId: null }),
+    recoverAtSchedules: () => {},
     runner: { pid: process.pid, startedAt: null },
     loginEventId: () => login,
     now: () => clock,
@@ -312,7 +312,7 @@ describe("Scheduler", () => {
 describe("Scheduler — one-offs", () => {
   const T0 = new Date("2026-09-24T10:00:00Z");
 
-  function oneOffHarness(run: (id: string) => Promise<OneOffResult>) {
+  function atScheduleHarness(run: (id: string) => Promise<AtScheduleResult>) {
     const calls: Array<{ id: string; attemptId: string; attempt: number }> = [];
     let recoveries = 0;
     let clock = T0;
@@ -323,11 +323,11 @@ describe("Scheduler — one-offs", () => {
       runAgent: async () => ({ status: "complete", runId: null, summary: "" }),
       runJob: async () => ({ status: "complete", runId: null, summary: "" }),
       announce: async () => true,
-      runOneOff: (o, attemptId, attempt) => {
+      runAtSchedule: (o, attemptId, attempt) => {
         calls.push({ id: o.id, attemptId, attempt });
         return run(o.id);
       },
-      recoverOneOffs: () => {
+      recoverAtSchedules: () => {
         recoveries++;
       },
       runner: { pid: 4321, startedAt: 7 },
@@ -343,11 +343,11 @@ describe("Scheduler — one-offs", () => {
     };
   }
 
-  const make = (dueIn = 0, extra: Partial<Parameters<typeof createOneOff>[0]> = {}) =>
-    createOneOff({ bag: "b", action: "b:x", dueAt: new Date(T0.getTime() + dueIn * 1000), ...extra }, T0).oneOff;
+  const make = (dueIn = 0, extra: Partial<Parameters<typeof createAtSchedule>[0]> = {}) =>
+    createAtSchedule({ bag: "b", action: "b:x", dueAt: new Date(T0.getTime() + dueIn * 1000), ...extra }, T0).schedule;
 
   it("runs a due one-off once, recording the attempt and its run", async () => {
-    const h = oneOffHarness(async () => ({ outcome: "succeeded", exitCode: 0, runId: "arn_7" }));
+    const h = atScheduleHarness(async () => ({ outcome: "succeeded", exitCode: 0, runId: "arn_7" }));
     const o = make(30);
     await h.tick();
     expect(h.calls).toEqual([]);
@@ -355,56 +355,56 @@ describe("Scheduler — one-offs", () => {
     await h.tick();
     await h.tick();
     expect(h.calls).toHaveLength(1);
-    expect(getOneOff(o.id)).toMatchObject({ status: "succeeded", attempts: [{ outcome: "succeeded", runId: "arn_7" }] });
+    expect(getAtSchedule(o.id)).toMatchObject({ status: "succeeded", attempts: [{ outcome: "succeeded", runId: "arn_7" }] });
   });
 
   it("recovers orphans on every tick, before claiming", async () => {
-    const h = oneOffHarness(async () => ({ outcome: "succeeded", exitCode: 0, runId: null }));
+    const h = atScheduleHarness(async () => ({ outcome: "succeeded", exitCode: 0, runId: null }));
     await h.tick();
     await h.tick();
     expect(h.recoveries()).toBe(2);
   });
 
   it("closes an attempt whose runner threw, as failed with the reason", async () => {
-    const h = oneOffHarness(async () => { throw new Error("boom"); });
+    const h = atScheduleHarness(async () => { throw new Error("boom"); });
     const o = make();
     await h.tick();
-    expect(getOneOff(o.id)).toMatchObject({ status: "failed", reason: "runner error: boom" });
+    expect(getAtSchedule(o.id)).toMatchObject({ status: "failed", reason: "runner error: boom" });
   });
 
-  it("runs at most MAX_ONE_OFFS_RUNNING at once; the rest stay pending", async () => {
+  it("runs at most MAX_AT_SCHEDULES_RUNNING at once; the rest stay pending", async () => {
     const release: Array<() => void> = [];
-    const h = oneOffHarness(() => new Promise((resolve) => release.push(() => resolve({ outcome: "succeeded", exitCode: 0, runId: null }))));
-    for (let i = 0; i < MAX_ONE_OFFS_RUNNING + 2; i++) make(0, { idempotencyKey: `k${i}` });
+    const h = atScheduleHarness(() => new Promise((resolve) => release.push(() => resolve({ outcome: "succeeded", exitCode: 0, runId: null }))));
+    for (let i = 0; i < MAX_AT_SCHEDULES_RUNNING + 2; i++) make(0, { idempotencyKey: `k${i}` });
     await h.scheduler.tick();
     await h.scheduler.tick();
-    expect(h.calls).toHaveLength(MAX_ONE_OFFS_RUNNING);
+    expect(h.calls).toHaveLength(MAX_AT_SCHEDULES_RUNNING);
     release.splice(0).forEach((r) => r());
     await Promise.all(h.scheduler.running);
     await h.scheduler.tick();
-    expect(h.calls).toHaveLength(MAX_ONE_OFFS_RUNNING + 2);
+    expect(h.calls).toHaveLength(MAX_AT_SCHEDULES_RUNNING + 2);
     release.splice(0).forEach((r) => r());
     await Promise.all(h.scheduler.running);
   });
 
   it("gives job runs a budget of their own, so neither kind starves the other", async () => {
     const release: Array<() => void> = [];
-    const h = oneOffHarness(() => new Promise((resolve) => release.push(() => resolve({ outcome: "succeeded", exitCode: 0, runId: null }))));
+    const h = atScheduleHarness(() => new Promise((resolve) => release.push(() => resolve({ outcome: "succeeded", exitCode: 0, runId: null }))));
     for (let i = 0; i < MAX_JOB_RUNS_RUNNING + 1; i++) make(0, { action: null, job: "b:sweep", idempotencyKey: `j${i}` });
-    for (let i = 0; i < MAX_ONE_OFFS_RUNNING + 1; i++) make(0, { idempotencyKey: `a${i}` });
+    for (let i = 0; i < MAX_AT_SCHEDULES_RUNNING + 1; i++) make(0, { idempotencyKey: `a${i}` });
     await h.scheduler.tick();
     // A full job budget left every action slot free, and the other way round.
-    expect(h.calls).toHaveLength(MAX_JOB_RUNS_RUNNING + MAX_ONE_OFFS_RUNNING);
+    expect(h.calls).toHaveLength(MAX_JOB_RUNS_RUNNING + MAX_AT_SCHEDULES_RUNNING);
     release.splice(0).forEach((r) => r());
     await Promise.all(h.scheduler.running);
     await h.scheduler.tick();
-    expect(h.calls).toHaveLength(MAX_JOB_RUNS_RUNNING + MAX_ONE_OFFS_RUNNING + 2);
+    expect(h.calls).toHaveLength(MAX_JOB_RUNS_RUNNING + MAX_AT_SCHEDULES_RUNNING + 2);
     release.splice(0).forEach((r) => r());
     await Promise.all(h.scheduler.running);
   });
 
   it("hands the runner the attempt number", async () => {
-    const h = oneOffHarness(async () => ({ outcome: "succeeded", exitCode: 0, runId: null }));
+    const h = atScheduleHarness(async () => ({ outcome: "succeeded", exitCode: 0, runId: null }));
     make();
     await h.tick();
     expect(h.calls.map((c) => c.attempt)).toEqual([1]);

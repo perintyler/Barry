@@ -1,4 +1,5 @@
 import { CliError } from "../lib/cli-error.js";
+import { parseBagFlagTokens } from "../sessions/prepare.js";
 import { runQuery } from "../sdk.js";
 
 export interface PromptCommandOptions {
@@ -7,17 +8,24 @@ export interface PromptCommandOptions {
   cwd?: string;
   /**
    * The identity, from `--name`. Commander keys options by the flag's long
-   * name, so this field MUST be called `name`: it used to be `barry`, which
-   * nothing ever set, and every `barry session run --name X` ran as no
-   * identity at all (no bags, no secrets) with no warning.
+   * name, so this field MUST be called `name`.
    */
   name?: string;
-  traits?: string;
+  bag?: string;
+  bags?: string;
+  bound?: string;
+  bounds?: string;
   model?: string;
 }
 
 export async function promptCommand(options: PromptCommandOptions): Promise<void> {
   const maxTurns = options.maxTurns ? parseInt(options.maxTurns, 10) : undefined;
+  const parsedBags = parseBagFlagTokens(options.bag ?? options.bags);
+  const rawBounds = (options.bound ?? options.bounds)
+    ?.split(",")
+    .map((b) => b.trim())
+    .filter(Boolean) ?? [];
+  const bounds = [...new Set([...rawBounds, ...parsedBags.readBounds])];
 
   try {
     const { result } = await runQuery({
@@ -25,16 +33,11 @@ export async function promptCommand(options: PromptCommandOptions): Promise<void
       maxTurns,
       cwd: options.cwd,
       barry: options.name,
-      traits: options.traits?.split(",").map((t) => t.trim()).filter(Boolean),
+      ...(parsedBags.bags.length > 0 ? { bags: parsedBags.bags } : {}),
+      ...(bounds.length > 0 ? { bounds } : {}),
       model: options.model,
     });
 
-    // A run that produced no result is a FAILURE, not an empty success.
-    // `runQuery` starts `result` as "" and only fills it from a result event,
-    // so a run that is refused, or ends without producing one, returned "" —
-    // and printing that with status 0 is indistinguishable from a run that
-    // genuinely had nothing to say. Three delegated investigations were lost
-    // to exactly this: exit 0, no output, no session row, reported as success.
     if (!result.trim()) {
       console.error(
         "Query produced no result. The run may have been refused, or ended " +
@@ -43,7 +46,6 @@ export async function promptCommand(options: PromptCommandOptions): Promise<void
       throw new CliError("", 1);
     }
 
-    // Output just the result - perfect for piping to other commands
     console.log(result);
   } catch (error) {
     if (process.env.BARRY_DEBUG === "1" && error instanceof Error) console.error(error.stack);

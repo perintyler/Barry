@@ -1,8 +1,6 @@
 import { BarryError, isBarryError, type Bags, type Caller } from "@barry-rocks/sdk";
 import { BarryApiError, BarryClient } from "@barry-rocks/sdk/internal/client";
 import { loadRegistry, loadBagRegistrySnapshot } from "@barry-rocks/sdk/internal/bags";
-
-import { parentOf } from "@barry-rocks/sdk/bags";
 import { instanceEnvValue, getServiceUrl } from "@barry-rocks/sdk/services";
 
 
@@ -43,12 +41,6 @@ export const bags: Bags = {
       access: tool.access === "readwrite" ? "write" : tool.access,
       ...(tool.description !== undefined ? { description: tool.description } : {}),
     }));
-  },
-  async extensions(name, caller) {
-    allowed(caller);
-    const registry = loadRegistry();
-    if (!Object.hasOwn(registry, name)) throw new BarryError("not_found", `Bag "${name}" not found`);
-    return Object.keys(registry).filter((extension) => parentOf(extension) === name).sort();
   },
   async runJob(bag, job, inputs, options, caller) {
     allowed(caller);

@@ -26,10 +26,10 @@ describe("identityUpdateOf, then changesOf", () => {
   const changesFromRequest = (body: Parameters<typeof identityUpdateOf>[0]) => changesOf(identityUpdateOf(body));
   it("maps the API's fields onto identity.yaml's vocabulary", () => {
     expect(changesFromRequest({
-      displayName: "Ops", bags: ["linear"], traits: ["reviewer"], bounds: ["readonly"],
+      displayName: "Ops", bags: ["linear"], bounds: ["readonly"],
       adapters: { codex: { default: true, model: "gpt", mode: "hosted" } }, statusNotify: { tool: "notify" }, githubInstallationId: 9,
     })).toEqual({
-      display_name: "Ops", bags: ["linear"], traits: ["reviewer"], bounds: ["readonly"],
+      display_name: "Ops", bags: ["linear"], bounds: ["readonly"],
       adapters: { codex: { default: true, model: "gpt", mode: "hosted" } }, status_notify: { tool: "notify" }, github: { installationId: 9 },
     });
   });

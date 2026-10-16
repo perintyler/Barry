@@ -1,26 +1,27 @@
 # bags
 
-Barry's own bags. Every folder here that holds a `bag.yaml` is registered when `barry setup` runs; nothing lists them. A bag inside a bag (filesystem's `locks` and `tracker`, sessions' `extensions/search`) is found the same way.
+Barry's own bags. Every folder here that holds a `bag.yaml` is registered when `barry setup` runs; nothing lists them. A bag inside a bag (filesystem's `locks` and `tracker`, telemetry's `logs`) is found the same way.
 
-The base identity is `identity.yaml` at the repository root, named `base`. It grants artifacts, bash, filesystem, instructions and sessions to every session, and declares the bounds Barry ships without applying them. The packed list below follows that file.
+The base identity is `identity.yaml` at the repository root, named `base`. It packs the foundational bags for every identity that inherits `base`, and declares the bounds Barry ships as `optional: true`. The packed list below follows that file.
 
 ## Packed bags
 
 <!-- packed-bags:start -->
-- [actions](../bags/actions)
 - [artifacts](../bags/artifacts)
 - [bash](../bags/bash)
+- [filesystem](../bags/filesystem)
+- [instructions](../bags/instructions)
+- [sessions](../bags/sessions)
+- [actions](../bags/actions)
 - [decisions](../bags/decisions)
 - [embeddings](../bags/embeddings)
 - [events](../bags/events)
-- [filesystem](../bags/filesystem)
 - [identities](../bags/identities)
-- [instructions](../bags/instructions)
 - [mcp](../bags/mcp)
 - [memory](../bags/memory)
 - [nodes](../bags/nodes)
 - [schedules](../bags/schedules)
-- [sessions](../bags/sessions)
+- [session-vector-search](../bags/session-vector-search)
 - [telemetry](../bags/telemetry)
 <!-- packed-bags:end -->
 

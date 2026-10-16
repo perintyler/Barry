@@ -7,16 +7,18 @@
  * `createSessionToolsResolver`, which returns the same `resolveSessionTools`
  * entry point plus an `invalidate` hook for the refresh path.
  */
-import type { Logger } from "@barry-rocks/sdk/logging";
-import type { ExecutionContext } from "@barry-rocks/sdk/bounds";
-import type { StoreContext } from "@barry-rocks/sdk/stores";
-import { withStoreContext } from "@barry-rocks/sdk/internal/stores";
-import { collectToolMeta } from "@barry-rocks/sdk/internal/tools";
-import { installationRegistry } from "@barry-rocks/sdk/internal/nodes";
-import { expandCompositionFromSnapshot } from "@barry-rocks/sdk/internal/bags";
+import { Barry } from "@barry-rocks/sdk";
+import type { BagLike } from "@barry-rocks/sdk";
+import { expandCompositionFromSnapshot } from "@barry-rocks/sdk/bags";
+import { qualifyToolId, type Bound } from "@barry-rocks/sdk/bounds";
+import type { WorkflowActorContext } from "@barry-rocks/sdk/internal/auth";
+import { loadBagRegistrySnapshot } from "@barry-rocks/sdk/internal/bags";
 import { checkBagCredentials, type MissingCredential } from "@barry-rocks/sdk/internal/env";
-import { assertToolAllowed, qualifyToolId } from "@barry-rocks/sdk/bounds";
-import { traits, identityRecords, type IdentityRecord } from "@barry-rocks/identities-bag";
+import { installationRegistry } from "@barry-rocks/sdk/internal/nodes";
+import { collectToolDefinitions } from "@barry-rocks/sdk/internal/tools";
+import type { Logger } from "@barry-rocks/sdk/logging";
+import type { StoreContext } from "@barry-rocks/sdk/stores";
+import { identityRecords, type IdentityRecord } from "@barry-rocks/identities-bag";
 import { getSession } from "@barry-rocks/sessions-bag/client";
 import {
   proxiedToolsToMeta,
@@ -27,18 +29,17 @@ import {
   type BagServerConfig,
 } from "./bag-proxy.js";
 import {
-  applyBoundGuards,
   toToolMeta,
   type RuntimeTool,
 } from "./tool-runtime.js";
-import { resolveSessionBound, ANONYMOUS_SESSION_ID } from "./session-bound.js";
+import { sessionBound, ANONYMOUS_SESSION_ID } from "./session-bound.js";
 import {
   isCacheEntryUsable,
-  traitKeyOf,
+  selectionKeyOf,
   type CacheEntryStamp,
 } from "./session-resolve-cache.js";
 
-/** Result of resolving session tools (scope filtering, credential bags, lazy-connect). */
+/** Result of resolving session tools (bound filtering, credential bags, lazy-connect). */
 export interface ResolvedSessionTools {
   sessionTools: RuntimeTool[];
   sessionProxiedTools: FilterableProxiedTool[];
@@ -46,8 +47,9 @@ export interface ResolvedSessionTools {
   resolvedEnv: Record<string, string>;
   missingCredentials: MissingCredential[];
   toolDiscovery?: "provider" | "barry";
+  bound?: Bound | null;
   /**
-   * Namespaces the session's traits ask for, computed BEFORE any bag connects.
+   * Namespaces the session's bags ask for, computed BEFORE any bag connects.
    *
    * Distinct from the namespaces present on the resolved tools: a bag that is
    * unauthorized or failed contributes no tools at all, so it vanishes from the
@@ -59,7 +61,7 @@ export interface ResolvedSessionTools {
   /**
    * The identity's bags, composition expanded — bag REGISTRY names, unlike
    * `requestedNamespaces` above. Undefined for an anonymous session, which
-   * catalog tools read as "scope unknown" rather than "scope is empty".
+   * discovery tools read as "scope unknown" rather than "scope is empty".
    *
    * This is the bag set the session's prompt was built from, so a tool that
    * lists instructions or actions agrees with the pointers already in context.
@@ -80,7 +82,7 @@ export interface SessionToolsResolverDeps {
   ) => Promise<RuntimeTool[]>;
   /** Build the per-invocation store context the bounded handlers run inside. */
   invocationStores: (
-    execution: ExecutionContext,
+    execution: WorkflowActorContext,
     node: string,
   ) => Promise<StoreContext>;
 }
@@ -107,8 +109,8 @@ export function createSessionToolsResolver(
 
   /**
    * Resolve the full set of tools available to a Barry session.
-   * Handles trait filtering, credential bag connection, lazy-connect retries,
-   * and scope guards. Shared by both `/mcp` and `/mcp/ns/:namespace` handlers.
+   * Handles bag & bound filtering, credential bag connection, lazy-connect retries,
+   * and bound guards. Shared by both `/mcp` and `/mcp/ns/:namespace` handlers.
    */
   async function resolveSessionToolsUncached(
     barrySessionId: string,
@@ -125,27 +127,10 @@ export function createSessionToolsResolver(
       barrySessionId === ANONYMOUS_SESSION_ID
         ? undefined
         : await getSession(barrySessionId);
-    const dbTraits = session ? await traits.list() : [];
-
-    const traitNames = session
-      ? ["core", ...session.traits.filter((t: string) => t !== "core")]
-      : [];
-    const neededNamespaces = new Set<string>();
-    for (const t of dbTraits) {
-      if (traitNames.includes(t.name)) {
-        for (const ns of t.namespaces) neededNamespaces.add(ns);
-      }
-    }
-
-    if (session) {
-      const directNs = Array.isArray(session.metadata?.selected_namespaces)
-        ? session.metadata.selected_namespaces
-        : [];
-      for (const ns of directNs) neededNamespaces.add(ns);
-    }
+    const snapshot = await loadBagRegistrySnapshot().catch(() => null);
 
     let toolDiscovery: "provider" | "barry" | undefined;
-    // Stays undefined without an identity. Catalog tools read its ABSENCE as
+    // Stays undefined without an identity. Discovery tools read its ABSENCE as
     // "scope unknown" and list everything; an empty array would mean "this
     // session has no bags" and hide all prose, which is why this is never
     // defaulted to [].
@@ -164,24 +149,12 @@ export function createSessionToolsResolver(
       ) {
         toolDiscovery = barry.metadata.tool_discovery;
       }
-      // The identity's bags, composition expanded — the same set and the same
-      // expansion the prompt index was built from (bags/sessions/api session-runtime,
-      // cli/src/sdk.ts), so a catalog tool and the pointers already in context
-      // agree about what this session has.
-      //
-      // NOT the trait namespaces resolved above: those are a tool grant, and the
-      // two are far apart in practice. Measured against a live identity, trait
-      // namespaces scoped its instruction listing to 1 of the 16 its bags ship —
-      // it would have hidden svg-craft from a session that enabled the svg bag.
-      // Registry names, which is what the catalogs match on.
       if (barry?.metadata.bags?.length) {
         try {
           identityBagNames = await expandCompositionFromSnapshot(
             barry.metadata.bags,
           );
         } catch (error) {
-          // Best-effort: a catalog listing everything is a worse prompt, not a
-          // broken session. Left undefined so the tools fall back to global.
           log.warn("session.bag_scope_failed", {
             barrySessionId,
             error: error instanceof Error ? error.message : String(error),
@@ -195,6 +168,41 @@ export function createSessionToolsResolver(
         toolDiscovery,
         scopedBags: identityBagNames?.length,
       });
+    }
+
+    const neededNamespaces = new Set<string>();
+    let expandedSessionBags: string[] = [];
+    if (session) {
+      const selectedBags =
+        session.bags && session.bags.length > 0
+          ? session.bags
+          : [];
+      const rootBags = [
+        "core",
+        ...(identityBagNames ?? []),
+        ...selectedBags.filter((b: string) => b !== "core"),
+      ];
+      try {
+        expandedSessionBags = await expandCompositionFromSnapshot(rootBags);
+      } catch {
+        expandedSessionBags = [...new Set(rootBags)];
+      }
+      for (const bagName of expandedSessionBags) {
+        const cleanName = bagName.endsWith(":read")
+          ? bagName.slice(0, -":read".length)
+          : bagName;
+        neededNamespaces.add(cleanName);
+        const bag = snapshot?.byName.get(cleanName);
+        if (bag?.mcpServers) {
+          for (const serverKey of Object.keys(bag.mcpServers)) {
+            neededNamespaces.add(serverKey);
+          }
+        }
+      }
+      const directNs = Array.isArray(session.metadata?.selected_namespaces)
+        ? session.metadata.selected_namespaces
+        : [];
+      for (const ns of directNs) neededNamespaces.add(ns);
     }
 
     const neededDeferred: Record<string, BagServerConfig> = {};
@@ -279,57 +287,95 @@ export function createSessionToolsResolver(
       ...toToolMeta(allTools),
       ...proxiedToolsToMeta(sessionProxiedTools),
     ];
-    const runtimeNames = new Set(runtimeMeta.map((t) => qualifyToolId(t.namespace, t.toolName)));
-    const registryMeta = (await collectToolMeta()).filter(
+    const runtimeNames = new Set(
+      runtimeMeta.map((t) => qualifyToolId(t.namespace, t.toolName)),
+    );
+    const registryMeta = (await collectToolDefinitions()).filter(
       (t) => !runtimeNames.has(qualifyToolId(t.namespace, t.toolName)),
     );
     const allMeta = [...runtimeMeta, ...registryMeta];
-    const resolved = await resolveSessionBound(
+    const installation = installationRegistry();
+    const identityName = session?.identity_id
+      ? installation.identityId(session.identity_id)
+      : undefined;
+    const resolved = await sessionBound(
       barrySessionId,
       allMeta,
-      session ? { session, identity: session.identity_id ? installationRegistry().identityId(session.identity_id) : undefined } : undefined,
+      session ? { session, identity: identityName } : undefined,
     );
-    // Filter on the QUALIFIED id. Testing `allowedTools.has(t.name)` here was
-    // the namespace bypass: authorization decides per (namespace, name), the
-    // bare-name set collapses the pair, and every tool sharing an allowed name
-    // survived. Granting `system` therefore kept `git`'s `status` — reachable
-    // through both the aggregate and namespace-scoped endpoints.
-    sessionTools = allTools.filter((t) =>
-      resolved.allowedToolIds.has(qualifyToolId(t.namespace, t.name)),
-    );
-    sessionProxiedTools = sessionProxiedTools.filter((t) =>
-      resolved.allowedToolIds.has(qualifyToolId(t.namespace, t.name)),
-    );
-    if (resolved.bound) {
-      sessionTools = applyBoundGuards(sessionTools, resolved.bound);
-    }
-    const installation = installationRegistry();
-    const execution = {
-      identity: session?.identity_id
-        ? installation.identityId(session.identity_id)
-        : undefined,
-      traits: resolved.traits ?? session?.traits ?? [],
+
+    const execution: WorkflowActorContext = {
+      identity: identityName,
+      bags: resolved.bags,
+      bounds: resolved.bounds,
       harness: resolved.harness,
       bound: resolved.bound,
       allowedToolIds: [...resolved.allowedToolIds],
     };
-    sessionTools = sessionTools.map((tool) => {
-      const original = tool.handler;
-      return {
-        ...tool,
-        handler: async (params, context) => {
-          assertToolAllowed(
-            execution,
-            { namespace: tool.namespace, toolName: tool.name },
-            installation.id,
-          );
-          return withStoreContext(
-            await invocationStores(execution, installation.id),
-            () => original(params, context),
-          );
-        },
-      };
+
+    // Collect active bags that declare `implements: { tools: [...] }` so
+    // `Barry.tools` can replace target tools in-place and omit replaced
+    // proxied tools.
+    const activeBagSet = new Set([
+      ...expandedSessionBags.map((b) =>
+        b.endsWith(":read") ? b.slice(0, -":read".length) : b,
+      ),
+      ...resolved.bags.map((b) =>
+        b.endsWith(":read") ? b.slice(0, -":read".length) : b,
+      ),
+    ]);
+    const implementedToolIds = new Set<string>();
+    const implementingBags: BagLike[] = [];
+    const consumedByImplementingBag = new Set<RuntimeTool>();
+
+    if (snapshot) {
+      for (const bagName of activeBagSet) {
+        const bag = snapshot.byName.get(bagName);
+        const implTools = bag?.manifest?.implements?.tools;
+        if (!implTools?.length) continue;
+        for (const targetId of implTools) {
+          if (resolved.allowedToolIds.has(targetId)) {
+            implementedToolIds.add(targetId);
+          }
+        }
+        const ownTools = allTools.filter((t) => t.namespace === bagName);
+        for (const t of ownTools) consumedByImplementingBag.add(t);
+        implementingBags.push({
+          name: bagName,
+          implements: { tools: implTools },
+          tools: ownTools,
+        });
+      }
+    }
+
+    const candidateNativeTools = allTools.filter(
+      (t) =>
+        !consumedByImplementingBag.has(t) &&
+        resolved.allowedToolIds.has(qualifyToolId(t.namespace, t.name)),
+    );
+
+    sessionTools = Barry.tools<RuntimeTool>(
+      {
+        name: identityName,
+        node: installation.id,
+        storeContext: () => invocationStores(execution, installation.id),
+      },
+      [...implementingBags, ...candidateNativeTools],
+      resolved.bound ?? {},
+    );
+
+    const nativeQualifiedIds = new Set(
+      sessionTools.map((t) => qualifyToolId(t.namespace, t.name)),
+    );
+    sessionProxiedTools = sessionProxiedTools.filter((t) => {
+      const qualified = qualifyToolId(t.namespace, t.name);
+      if (!resolved.allowedToolIds.has(qualified)) return false;
+      if (implementedToolIds.has(qualified) && nativeQualifiedIds.has(qualified)) {
+        return false;
+      }
+      return true;
     });
+
     log.info("session.bounded", {
       barrySessionId,
       totalTools: allTools.length + sessionProxiedTools.length,
@@ -344,6 +390,7 @@ export function createSessionToolsResolver(
       resolvedEnv,
       missingCredentials,
       toolDiscovery,
+      bound: resolved.bound,
       requestedNamespaces: [...neededNamespaces],
       identityBagNames,
     };
@@ -353,7 +400,7 @@ export function createSessionToolsResolver(
    * Short-lived cache of in-flight/recent session resolutions.
    *
    * A session opens one transport per namespace, and every one of them would
-   * otherwise repeat the same session + traits + barry + credential resolution
+   * otherwise repeat the same session + bags + bounds + credential resolution
    * (including bag connects) within milliseconds of each other. Caching the
    * *promise* collapses that burst into a single pass.
    *
@@ -361,9 +408,8 @@ export function createSessionToolsResolver(
    * credential expiry) must be picked up on the next initialize.
    *
    * Freshness is not only about time — see `session-resolve-cache.ts`. An entry
-   * also carries the traits it was computed from, because `barry start` resolves
-   * namespaces BEFORE it writes the session's traits, and the trait-less answer
-   * that produced was still young when the agent asked for the real one.
+   * also carries the `(bags, bounds, bound)` selection it was computed from so
+   * `barry start` or `session.update({ bounds })` invalidates a young entry.
    */
   const sessionResolveCache = new Map<
     string,
@@ -378,22 +424,22 @@ export function createSessionToolsResolver(
     const now = Date.now();
 
     // One cheap row read before the cache check. It costs a query per initialize
-    // but skips the expensive part (trait resolution, barry lookup, credential
+    // but skips the expensive part (bag resolution, barry lookup, credential
     // resolution, bag connects) on a hit — and it is the only way to notice that
-    // the traits changed under a still-young entry.
+    // the selection changed under a still-young entry.
     const current =
       barrySessionId === ANONYMOUS_SESSION_ID
         ? null
         : await getSession(barrySessionId).catch(() => null);
-    const traitKey = traitKeyOf(current?.traits);
+    const selectionKey = selectionKeyOf(current);
 
     const hit = sessionResolveCache.get(barrySessionId);
-    if (isCacheEntryUsable(hit, now, traitKey)) return hit!.promise;
-    if (hit && hit.traitKey !== traitKey) {
-      log.info("session_resolve.traits_changed", {
+    if (isCacheEntryUsable(hit, now, selectionKey)) return hit!.promise;
+    if (hit && hit.selectionKey !== selectionKey) {
+      log.info("session_resolve.selection_changed", {
         barrySessionId,
-        from: hit.traitKey || "(none)",
-        to: traitKey || "(none)",
+        from: hit.selectionKey || "(none)",
+        to: selectionKey || "(none)",
       });
     }
 
@@ -402,7 +448,7 @@ export function createSessionToolsResolver(
       {
         at: now,
         settledAt: null,
-        traitKey,
+        selectionKey,
         promise,
       };
     sessionResolveCache.set(barrySessionId, entry);
@@ -411,9 +457,7 @@ export function createSessionToolsResolver(
     // TTL starts counting from when there IS an answer, not from creation — a
     // resolution that takes longer than SESSION_RESOLVE_TTL_MS to settle (DB
     // lookups, credential resolution, bag connects) must not have its entry
-    // expire while still pending. Only stamps if this is
-    // still the live entry for the session — a trait change or a newer
-    // resolution may have already replaced it in the map.
+    // expire while still pending.
     promise
       .then(() => {
         if (sessionResolveCache.get(barrySessionId) === entry)
@@ -427,7 +471,7 @@ export function createSessionToolsResolver(
       });
 
     for (const [key, e] of sessionResolveCache) {
-      if (!isCacheEntryUsable(e, now, e.traitKey))
+      if (!isCacheEntryUsable(e, now, e.selectionKey))
         sessionResolveCache.delete(key);
     }
 

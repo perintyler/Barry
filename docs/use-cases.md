@@ -32,47 +32,54 @@ bounds:
   - no-secrets
 ```
 
-### A way of working, as a trait
+### A way of working, as a bound
 
-The coding bag's `IC` trait grants bash, filesystem, the git bag's tools and
-GitHub reads, and carries a bound that denies raw git and publishing `gh`
-commands. A commit goes through a tool that decides which files are this
+The coding bag's `ic` bound denies raw `git` and publishing `gh`
+commands (`gh:pr:create`, `gh:pr:merge`, `gh:release`, `gh:repo`). A commit goes through a tool that decides which files are this
 session's rather than through `git commit -am`. It is applied per session, not
 per identity, because it is an opinion about how to work, not a property of
 who you are.
 
 ```sh
-barry start --traits IC
+barry start --bag coding --bound coding:ic
 ```
 
-The slack bag's `slack-me` trait is the same idea in a different domain: read
-Slack, and DM only yourself.
+The slack bag's `self-dm-only` bound is the same idea in a different domain: read
+Slack, and DM or upload files only to `@me` (your own Slack user ID).
 
 ```yaml
 bounds:
-  slack-self-dm-only:
-    bound:
-      deniedTools: [send_slack_message, send_message_as_user]
-traits:
-  slack-me:
-    bags: [slack]
-    bounds: [slack-self-dm-only]
+  self-dm-only:
+    description: Restrict Slack messages and uploads to @me
+    tools:
+      deny:
+        - "slack:write"
+      allow:
+        - "slack:send_slack_message"
+        - "slack:upload_file"
+    inputs:
+      slack:send_slack_message:
+        channel:
+          allow: ["@me"]
+      slack:upload_file:
+        channel:
+          allow: ["@me"]
 ```
 
 ### A sandboxed, offline session
 
-The `sandboxed-offline` bound sets `network.enforce: sandbox` with an empty
-domain allowlist. On a supported harness, outbound traffic goes through a
+The `sandboxed` bound sets `network.enforce: sandbox` with an empty
+URL allowlist (`network.allow: []`). On a supported harness, outbound traffic goes through a
 hostname-filtering proxy the agent cannot lift. On an unsupported harness it
 degrades to app-level guards with a diagnostic.
 
 ```sh
-barry start --bound sandboxed-offline
+barry start --bound sandboxed
 ```
 
 ### Work Barry, home Barry
 
-Each identity has its own bags, its own default traits, its own command and its
+Each identity has its own packed bags, its own default bounds, its own command and its
 own secrets. Both inherit the base identity, so shared bags and bounds are
 defined once. A child can narrow a parent's bounds but cannot widen them.
 
@@ -135,7 +142,7 @@ instead of after the fact. A burst of comments becomes one nudge.
 barry remind "stand up" "in 20 minutes"
 ```
 
-A reminder is a one-off schedule. Delivery goes through `barry notify`, retries
+A reminder is a scheduled run (`scheduleAt`). Delivery goes through `barry notify`, retries
 on failure, and runs when the machine wakes if it was asleep at the due time.
 
 ## Keep working without you
@@ -145,7 +152,7 @@ on failure, and runs when the machine wakes if it was asleep at the due time.
 A bag declares a schedule: cron in a timezone, every five minutes, once at a
 time, or at login. The scheduler runs the action as a script or as a detached
 hosted agent session under the identity you name. Runs are durable rows with
-inputs, outputs, timeouts and an overlap policy. Results land as events, which
+inputs, outputs, timeouts and an overlap mode. Results land as events, which
 the menu bar shows in the morning.
 
 ```yaml
@@ -168,8 +175,8 @@ to it: the recipient wakes now, reads it at the end of its turn, reads it on its
 next tool call, or gets it when it next resumes. A wake budget stops two agents
 told to reply to each other from looping.
 
-"Check back on this in 20 minutes" is one tool call. It books a one-off
-schedule that resumes the session at the due time, even if it has stopped.
+"Check back on this in 20 minutes" is one tool call. It books a scheduled run
+that resumes the session at the due time, even if it has stopped.
 
 ```
 send_message(session: "yZ4Zz9…", text: "migration landed, rerun your tests")
@@ -193,7 +200,7 @@ conflict is surfaced instead of guessed at.
 Link another Mac as a worker. The owner keeps workflow history and decides
 which worker takes each step; the worker claims steps over HTTPS, heartbeats,
 and reports outcomes. The credential opens one route and nothing else, and an
-invite can be scoped to named jobs. A crashed worker's step is retried. See
+invite can be restricted to named jobs. A crashed worker's step is retried. See
 [distributed work](../sdk/docs/distributed-work.md).
 
 ```sh
@@ -207,7 +214,7 @@ barry service restart workflows.runtime
 ### Memory that follows you between harnesses
 
 Lessons an agent learns in Codex on Tuesday are injected into Claude Code on
-Wednesday. Memories are scoped by the git remote, not the working directory, so
+Wednesday. Memories are keyed by the git remote, not the working directory, so
 every worktree of a project shares them. Always-on memories join every prompt
 under a budget; on-demand ones cost one index line until fetched. A web UI
 keeps the collection curatable, and an importer brings in Claude Code's
@@ -221,7 +228,7 @@ barry memory search "node version"
 ### Find out what happened
 
 Every session's messages, tool calls and file changes are recorded, whichever
-harness ran it. The search extension adds semantic search over transcripts with
+harness ran it. The `session-vector-search` bag adds semantic search over transcripts with
 local embeddings. The telemetry UI shows usage, cost, reliability and the
 resource slopes that have actually broken this machine. Stores are SQLite files
 you can back up, snapshot before an upgrade, and roll back.
@@ -284,25 +291,25 @@ apps:
     build: { project: lists-ios/Lists.xcodeproj, scheme: Lists }
 ```
 
-### One grant, three ways to reach the web
+### One composite bag, three ways to reach the web
 
 The browser bag composes playwright (a clean profile), chrome (your real
 logged-in Chrome) and web-fetching (markdown without a browser). Each stands
-alone. The manifest documents why chrome is a real exposure and how to drop it
-from the grant.
+alone. The manifest documents why chrome is a real exposure and how to pack only
+the sub-bags you want.
 
 ```sh
-acme pack browser                    # all three
-barry start --traits web-fetching    # reads only
+acme pack browser                 # all three
+barry start --bag web-fetching    # reads only
 ```
 
 ### The vendor's MCP server, as a bag
 
 Notion, Figma, Linear, Datadog and PagerDuty each have an `-official` bag
 wrapping the vendor's hosted MCP server, and a parent bag composing it with
-Barry's own tools under one namespace. Consumers grant `linear` and get both. A
+Barry's own tools under one namespace. Consumers pack `linear` and get both. A
 bag's namespace is independent of its name, so the vendor can change without
-touching a single trait.
+touching consumer configs.
 
 ### Infrastructure in a bag too
 
@@ -316,8 +323,8 @@ barry tool barry.rocks deploy --preview redesign
 
 ### Readable names for every service
 
-A local hosting provider bag gives every local service a readable HTTPS name
-with a local CA, rendered from the instance's hosting policy.
+A local hosting bag gives every local service a readable HTTPS name
+with a local CA, rendered from the instance's hosting configuration.
 
 ```sh
 barry hosting status

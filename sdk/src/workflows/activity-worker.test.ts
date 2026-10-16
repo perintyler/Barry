@@ -27,3 +27,28 @@ it("aborts a running activity and drops it once the owner rejects this worker's 
   expect(errors.some(error => error instanceof WorkerCredentialRejected)).toBe(true);
   expect(await worker.drain(500)).toBe(true);
 });
+
+it("refreshes shared capacity on occupancy changes without waiting for the advertisement timer", async () => {
+  let claimedA = false, claimedB = false, runningA = false, advertisedB = -1, physical = 0, peak = 0;
+  let releaseA: () => void = () => {}, releaseB: () => void = () => {};
+  const base = { heartbeat: async () => true, decline: async () => true, complete: async () => true };
+  const a: OwnerConnection = { ...base, advertise: async () => {}, claim: async () => {
+    if (claimedA) return null; claimedA = true; return { ...task, owner: "A", token: "A", type: "hold", input: "A" };
+  } };
+  const b: OwnerConnection = { ...base, advertise: async value => { advertisedB = value.capacity; }, claim: async () => {
+    if (claimedB || advertisedB <= 0) return null; claimedB = true; return { ...task, owner: "B", token: "B", type: "hold", input: "B" };
+  } };
+  const worker = new ActivityWorker({ connections: [a, b], capacity: 1, activities: { hold: async input => {
+    physical++; peak = Math.max(peak, physical);
+    if (input === "A") runningA = true;
+    await new Promise<void>(resolve => { if (input === "A") releaseA = resolve; else releaseB = resolve; });
+    physical--; return null;
+  } } });
+  try {
+    await expect.poll(async () => { await worker.tick(); return runningA; }).toBe(true);
+    await worker.tick(); expect(advertisedB).toBe(0); expect(claimedB).toBe(false);
+    releaseA();
+    await expect.poll(async () => { await worker.tick(); return claimedB; }, { timeout: 1000 }).toBe(true);
+    expect(advertisedB).toBe(1); expect(peak).toBe(1);
+  } finally { releaseA(); releaseB(); expect(await worker.drain(1000)).toBe(true); }
+});

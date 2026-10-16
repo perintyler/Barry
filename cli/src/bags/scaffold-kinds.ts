@@ -1,5 +1,5 @@
 /**
- * Scaffolders for the things a bag contains: actions, instructions, traits.
+ * Scaffolders for the things a bag contains: actions, instructions, bounds.
  *
  * Bags get their own module (scaffold.ts) because a bag is a directory tree with
  * a package.json and a build; these three are a file or two inside an existing
@@ -30,7 +30,7 @@ function refuseExisting(path: string, what: string): void {
  *
  * The generated prompt is deliberately a filled-in skeleton rather than a
  * `TODO`: an action whose prompt still says TODO reads as finished to the
- * catalog and gets offered to agents, so the placeholder must be obviously
+ * registry and gets offered to agents, so the placeholder must be obviously
  * unfinished when an agent reads it, not just when a human does.
  */
 export function scaffoldActionDir(options: {
@@ -118,7 +118,7 @@ export function scaffoldInstruction(options: {
 }
 
 /**
- * Add a trait to an existing bag.yaml.
+ * Add a bound to an existing bag.yaml.
  *
  * Unlike the other two this EDITS a file rather than writing a new one, so it
  * goes through the YAML *document* tree rather than parse-then-stringify.
@@ -127,48 +127,36 @@ export function scaffoldInstruction(options: {
  * naive version destroyed documentation on the very files it was most likely
  * to be run against.
  */
-export function scaffoldTrait(options: {
+export function scaffoldBound(options: {
   bagDir: string;
   name: string;
   description?: string;
-  namespaces?: string[];
-  access?: "read" | "readwrite";
-  /** Named bounds restricting the trait, e.g. ["readonly"]. */
-  bounds?: string[];
 }): ScaffoldResult {
-  const { bagDir, name, description, namespaces = [], bounds = [] } = options;
-  // Read-only is composed as a full grant narrowed by a bound, so a scaffold
-  // given `--bounds` must not also default to `access: read`: that restricts
-  // through the weaker mechanism as well, and the generated trait then behaves
-  // unlike the builtins it is modeled on. Without bounds the old default holds.
-  const access = options.access ?? (bounds.length > 0 ? "readwrite" : "read");
+  const { bagDir, name, description } = options;
 
   const file = join(bagDir, "bag.yaml");
   if (!existsSync(file)) throw new Error(`No bag.yaml in ${bagDir}`);
 
   const doc = parseDocument(readFileSync(file, "utf-8"));
 
-  if (doc.hasIn(["traits", name])) {
-    throw new Error(`Trait "${name}" already exists in ${file}`);
+  if (doc.hasIn(["bounds", name])) {
+    throw new Error(`Bound "${name}" already exists in ${file}`);
   }
 
-  // `bags:` and `bounds:` are the canonical keys; `namespaces:` and `scopes:`
-  // are the pre-rename spellings. A scaffolder emitting a deprecated form
-  // teaches it to everyone who reads the generated file — and `scopes:` is now
-  // rejected outright, so emitting it would write a manifest that cannot load.
-  doc.setIn(["traits", name], doc.createNode({
-    description: description || `TODO: describe the ${name} trait`,
-    ...(namespaces.length ? { bags: namespaces } : {}),
-    access,
-    ...(bounds.length ? { bounds } : {}),
+  const rawBagName = doc.get("name");
+  const bagName = typeof rawBagName === "string" && rawBagName.length > 0 ? rawBagName : "bag";
+
+  doc.setIn(["bounds", name], doc.createNode({
+    description: description || `TODO: describe the ${name} bound`,
+    tools: {
+      deny: [`${bagName}:write`],
+    },
   }));
 
   writeFileSync(file, doc.toString({ lineWidth: 120 }), "utf-8");
 
-  const bagName = doc.get("name");
-
   return {
     files: [file],
-    hint: `Trait "${name}" added. Sync it to the DB with: barry bag sync-traits ${String(bagName ?? "")}`,
+    hint: `Bound "${name}" added to ${file}. Reference it as "${bagName}:${name}".`,
   };
 }

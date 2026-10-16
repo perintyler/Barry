@@ -8,9 +8,9 @@ import { existsSync, readdirSync, readFileSync } from "fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
 import { parse as parseYaml } from "yaml";
-import { parseManifest, registeredName } from "./manifest.js";
+import { parseManifest } from "./manifest.js";
 import { parseIdentityBags } from "../identities/bags.js";
-import { parseTraits, requiredNames } from "../identities/entries.js";
+import { parseBounds, requiredNames } from "../identities/entries.js";
 
 /** The builtin bags' directory name, beside the base identity at the repo root. */
 export const BUILTIN_DIRNAME = "bags";
@@ -88,19 +88,13 @@ export function findBags(root: string): Record<string, string> {
   const found: Record<string, string> = {};
   const visit = (dir: string): void => {
     if (existsSync(join(dir, MANIFEST)) && dir !== root) {
+      const rel = relative(root, dir);
+      if (basename(dirname(dir)) === "extensions") {
+        throw new Error(`${rel}: folders under extensions/ are retired; declare standalone bags with requires and implements`);
+      }
       const manifest = parseManifest(dir);
       if (!manifest) throw new Error(`${join(dir, MANIFEST)} does not parse as a bag manifest`);
-      const rel = relative(root, dir);
-      const parentDir = dirname(dirname(dir));
-      const inExtensions = basename(dirname(dir)) === "extensions";
-      const parent = inExtensions ? parseManifest(parentDir) : null;
-      if (manifest.extends && (!inExtensions || parent?.name !== manifest.extends || dir !== join(parentDir, "extensions", manifest.name))) {
-        throw new Error(`${rel}: extension must live at its parent ${manifest.extends}'s extensions/${manifest.name}/`);
-      }
-      if (inExtensions && (!manifest.extends || parent?.name !== manifest.extends)) {
-        throw new Error(`${rel}: a folder under extensions/ must declare extends: ${parent?.name ?? "<parent>"}`);
-      }
-      const name = registeredName(manifest);
+      const name = manifest.name;
       if (name in found) throw new Error(`bag ${name} is declared twice: ${found[name]} and ${rel}`);
       found[name] = rel;
     }
@@ -112,31 +106,34 @@ export function findBags(root: string): Record<string, string> {
   return found;
 }
 
-/** What the base identity selects: the bags it packs and the traits it grants. */
+/** What the base identity selects: the bags it packs and the bounds it applies. */
 export interface BaseIdentitySelection {
   bags: string[];
-  traits: string[];
+  bounds: string[];
 }
 
 const selections = new Map<string, BaseIdentitySelection>();
 
-/** Derive default bag and trait grants from the root identity rather than duplicating them in code, with empty grants when no builtin directory exists; see docs/decisions/0014-discovery-vault-and-session-budgets.md. */
+/** Derive default bags and bounds from the root identity rather than duplicating them in code, with empty defaults when no builtin directory exists; see docs/decisions/0014-discovery-vault-and-session-budgets.md. */
 export function baseIdentitySelection(dir: string | null = builtinBagsDir()): BaseIdentitySelection {
-  if (!dir) return { bags: [], traits: [] };
+  if (!dir) return { bags: [], bounds: [] };
   const cached = selections.get(dir);
   if (cached) return cached;
   const file = join(dirname(dir), IDENTITY);
   const raw: unknown = existsSync(file) ? parseYaml(readFileSync(file, "utf8")) : null;
   const doc = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const selection = { bags: parseIdentityBags(doc.bags).bags, traits: requiredNames(parseTraits(doc.traits, file)) };
+  const selection = { bags: parseIdentityBags(doc.bags).bags, bounds: requiredNames(parseBounds(doc.bounds, file)) };
   selections.set(dir, selection);
   return selection;
 }
 
-/** The traits every session is granted unless it selects otherwise: the base identity's. */
-export function defaultTraits(): string[] {
-  return baseIdentitySelection().traits;
+/** The bags every session starts with unless it selects otherwise: the base identity's. */
+export function defaultBags(): string[] {
+  return baseIdentitySelection().bags;
 }
+
+/** MCP servers every session connects to regardless of bag selection. */
+export const ALWAYS_ON_MCP_SERVERS: readonly string[] = ["barry", "session", "media-viewer"];
 
 /** Barry's own bags. */
 export function discoverBuiltinBags(dir: string | null = builtinBagsDir()): BuiltinBags {

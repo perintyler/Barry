@@ -79,7 +79,7 @@ export const schedulePrompt = Barry.Tool({
       }
     }
     if (!(await getSessionRecord(target))) throw new Error(`Session not found: ${target}`);
-    const scheduled = await Barry.scheduleOnce({
+    const scheduled = await Barry.scheduleAt({
       dueAt: due,
       action: DELIVER_PROMPT_ACTION,
       inputs: { sessionId: target, prompt, scheduledAt: new Date().toISOString() },
@@ -113,7 +113,7 @@ export const listScheduledPrompts = Barry.Tool({
     } catch {
       // No current session: list every scheduled prompt.
     }
-    const schedules = await Barry.oneOffs({ bag: "sessions", ...(all ? { limit: 200 } : { status: "pending" }) });
+    const schedules = await Barry.atSchedules({ bag: "sessions", ...(all ? { limit: 200 } : { status: "pending" }) });
     return schedules
       .filter((s) => s.action === DELIVER_PROMPT_ACTION && (!target || s.inputs.sessionId === target))
       .map((s) => ({ id: s.id, dueAt: s.dueAt, status: s.status, sessionId: s.inputs.sessionId, prompt: s.inputs.prompt, ...(s.reason ? { reason: s.reason } : {}) }));

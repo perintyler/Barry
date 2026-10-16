@@ -1,5 +1,5 @@
 import { listStores, verifyStore, type StoreInfo } from "@barry-rocks/sdk/internal/stores";
-import { currentScope } from "../scope.js";
+import { currentTarget } from "../target.js";
 import { bold, dim, green, red } from "../lib/ansi.js";
 
 function formatBytes(bytes: number): string {
@@ -15,22 +15,22 @@ function storeLabel(s: StoreInfo): string {
 }
 
 export async function storeListCommand(options: { json?: boolean } = {}): Promise<void> {
-  const scope = currentScope();
-  const identityFilter = scope.kind === "identity" ? scope.name : undefined;
+  const target = currentTarget();
+  const identityFilter = target.kind === "identity" ? target.name : undefined;
   const stores = await listStores(identityFilter ? { identity: identityFilter } : undefined);
 
-  // If in identity scope, only show stores belonging to that identity or shared node stores
-  const filtered = scope.kind === "identity"
-    ? stores.filter(s => s.scope === "node" || s.identityName === scope.name)
+  // If in identity target, only show stores belonging to that identity or shared node stores
+  const filtered = target.kind === "identity"
+    ? stores.filter(s => s.scope === "node" || s.identityName === target.name)
     : stores;
 
   if (options.json) {
-    console.log(JSON.stringify({ scope: scope.kind, count: filtered.length, stores: filtered }, null, 2));
+    console.log(JSON.stringify({ scope: target.kind, count: filtered.length, stores: filtered }, null, 2));
     return;
   }
 
-  const title = scope.kind === "identity"
-    ? `Stores for identity ${bold(scope.name)}`
+  const title = target.kind === "identity"
+    ? `Stores for identity ${bold(target.name)}`
     : `Barry Stores · system wide (${filtered.length} stores)`;
 
   console.log();
@@ -53,12 +53,12 @@ export async function storeListCommand(options: { json?: boolean } = {}): Promis
 }
 
 export async function storeVerifyCommand(options: { deep?: boolean; json?: boolean } = {}): Promise<void> {
-  const scope = currentScope();
-  const identityFilter = scope.kind === "identity" ? scope.name : undefined;
+  const target = currentTarget();
+  const identityFilter = target.kind === "identity" ? target.name : undefined;
   const stores = await listStores(identityFilter ? { identity: identityFilter } : undefined);
 
-  const filtered = scope.kind === "identity"
-    ? stores.filter(s => s.scope === "node" || s.identityName === scope.name)
+  const filtered = target.kind === "identity"
+    ? stores.filter(s => s.scope === "node" || s.identityName === target.name)
     : stores;
 
   const results = filtered.map(s => verifyStore(s, { deep: options.deep }));
@@ -70,8 +70,8 @@ export async function storeVerifyCommand(options: { deep?: boolean; json?: boole
     return;
   }
 
-  const title = scope.kind === "identity"
-    ? `Verifying stores for identity ${bold(scope.name)}`
+  const title = target.kind === "identity"
+    ? `Verifying stores for identity ${bold(target.name)}`
     : `Verifying Barry Stores (${filtered.length} stores)`;
 
   console.log();

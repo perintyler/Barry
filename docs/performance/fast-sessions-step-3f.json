@@ -1,0 +1,15 @@
+{
+  "step": "3f",
+  "cold_env_ms": 162.286542,
+  "cache_hit_env_ms": 0.331917,
+  "second_preparation_env_ms": 0.214916,
+  "API_ttl_ms": 300000,
+  "MCP_ttl_ms": 90000,
+  "bag_connect_concurrency": 4,
+  "tests": {
+    "MCP_pool": 112,
+    "vault_and_identity_cache": 41,
+    "API_identity_env": 4
+  },
+  "note": "Live measurements from the private-port API probe using the real identity, vault, MCP service and Claude adapter. Warm-start lifecycle lands separately next."
+}

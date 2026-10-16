@@ -3,7 +3,7 @@
 export interface SweepSession {
   id: string;
   provider: string;
-  providerSessionId?: string;
+  harnessSessionId?: string;
   cwd?: string;
   metadata: Record<string, unknown>;
   host: "hosted" | "guest";
@@ -31,14 +31,14 @@ export async function toSweepSession(
 ): Promise<SweepSession> {
   const provider = session.provider ?? "";
 
-  const providerSessionId = (await providerSessionsFor(session.id)).find(
+  const harnessSessionId = (await providerSessionsFor(session.id)).find(
     (ps) => ps.provider === provider && ps.provider_session_id,
   )?.provider_session_id;
 
   return {
     id: session.id,
     provider,
-    ...(providerSessionId ? { providerSessionId } : {}),
+    ...(harnessSessionId ? { harnessSessionId } : {}),
     ...(session.working_directory ? { cwd: session.working_directory } : {}),
     metadata: {},
     // See the note on SessionRow: `mode` is not carried on the flat session, and

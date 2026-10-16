@@ -6,25 +6,25 @@ import { normalizeAccess } from "../../tools/tool-meta.js";
  * `"read"`.
  *
  * Three places author an access level and they do not share a vocabulary:
- * `ToolMetaSchema` accepts `read | readwrite | write`, a tool module exports a
- * bare string, and `ToolMeta.access` is `"read" | "write"`. Downstream,
- * `filterTools` withholds a tool from a read-only trait on exactly one test —
+ * the manifest schema accepts `read | readwrite | write`, a tool module exports a
+ * bare string, and `ToolDescriptor.access` is `"read" | "write"`. Downstream,
+ * `filterTools` withholds a tool from a read-only bound on exactly one test —
  * `tool.access === "write"` — so any spelling that is neither `"read"` nor
  * `"write"` is treated as READABLE.
  *
  * That is why this normalizes fail-closed rather than fail-open. A tool stamped
  * `"readwrite"` — the spelling the manifest schema explicitly allows — would
- * otherwise be handed to an `access: read` trait. The concrete stake is
+ * otherwise be handed to a `*:read` bound. The concrete stake is
  * `blender_run_script`, declared `access: readwrite` in the blender manifest,
  * which executes arbitrary Python via `blender -b -P`.
  *
  * `filterTools` itself is not exercised here: @barry-rocks/sdk/bounds is not a
  * dependency of this package, and adding one for a test would invert the
  * intended direction. Its half of the contract — that `"write"` is withheld
- * from a read trait — is covered in agent-bound/src/filter-tools.test.ts.
+ * from a read bound — is covered in bounds/filter-tools.test.ts.
  */
 describe("normalizeAccess", () => {
-  it("passes through the two levels ToolMeta declares", () => {
+  it("passes through the two levels ToolDescriptor declares", () => {
     expect(normalizeAccess("read")).toBe("read");
     expect(normalizeAccess("write")).toBe("write");
   });

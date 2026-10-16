@@ -6,12 +6,12 @@ import type { ScheduleEntry } from "@barry-rocks/schedules-bag";
 
 vi.mock("@barry-rocks/schedules-bag", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@barry-rocks/schedules-bag")>()),
-  scheduleContext: vi.fn(async () => ({})),
-  oneOffContext: vi.fn(async () => ({})),
+  resolveScheduleAccess: vi.fn(async () => ({})),
+  resolveAtScheduleAccess: vi.fn(async () => ({})),
   listSchedules: vi.fn(),
   findSchedule: vi.fn(),
   resolveScheduleAction: vi.fn(),
-  resolveOneOffAction: vi.fn(),
+  resolveAtScheduleAction: vi.fn(),
 }));
 vi.mock("./actions.js", () => ({ executeDetached: vi.fn() }));
 vi.mock("@barry-rocks/sdk/internal/bags", async (importOriginal) => ({
@@ -21,9 +21,9 @@ vi.mock("@barry-rocks/sdk/internal/bags", async (importOriginal) => ({
 
 import { schedulesRouter } from "./schedules.js";
 import { executeDetached } from "./actions.js";
-import { findSchedule, listSchedules, resolveOneOffAction, resolveScheduleAction } from "@barry-rocks/schedules-bag";
-import { claimOne, createOneOff } from "@barry-rocks/schedules-bag";
-import { oneOffContext } from "@barry-rocks/schedules-bag";
+import { findSchedule, listSchedules, resolveAtScheduleAction, resolveScheduleAction } from "@barry-rocks/schedules-bag";
+import { claimOne, createAtSchedule } from "@barry-rocks/schedules-bag";
+import { resolveAtScheduleAccess } from "@barry-rocks/schedules-bag";
 import { setDb, closeDb } from "@barry-rocks/schedules-bag";
 import { getState } from "@barry-rocks/schedules-bag";
 
@@ -92,19 +92,19 @@ describe("/schedules", () => {
     });
   });
 
-  it("decodes an extension bag in the run URL and keeps its complete schedule id", async () => {
-    const extension: ScheduleEntry = { ...entry, id: "sessions/search/embed", bag: "sessions/search", name: "embed" };
-    vi.mocked(findSchedule).mockImplementation(async (id) => id === extension.id ? extension : null);
-    vi.mocked(resolveScheduleAction).mockResolvedValue({ qualifiedName: "sessions/search:embed" } as never);
+  it("runs a standalone search bag schedule in the run URL and keeps its complete schedule id", async () => {
+    const searchSchedule: ScheduleEntry = { ...entry, id: "session-vector-search/embed", bag: "session-vector-search", name: "embed" };
+    vi.mocked(findSchedule).mockImplementation(async (id) => id === searchSchedule.id ? searchSchedule : null);
+    vi.mocked(resolveScheduleAction).mockResolvedValue({ qualifiedName: "session-vector-search:embed" } as never);
     vi.mocked(executeDetached).mockResolvedValue({ status: 200, body: { run_id: "arn_extension", status: "complete" } });
 
-    const res = await post("/sessions%2Fsearch/embed/run", { trigger: "schedule" });
+    const res = await post("/session-vector-search/embed/run", { trigger: "schedule" });
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ run_id: "arn_extension", status: "complete" });
-    expect(findSchedule).toHaveBeenCalledWith("sessions/search/embed");
-    expect(resolveScheduleAction).toHaveBeenCalledWith(extension);
-    expect(vi.mocked(executeDetached).mock.calls[0][1]).toMatchObject({ schedule_id: "sessions/search/embed" });
+    expect(findSchedule).toHaveBeenCalledWith("session-vector-search/embed");
+    expect(resolveScheduleAction).toHaveBeenCalledWith(searchSchedule);
+    expect(vi.mocked(executeDetached).mock.calls[0][1]).toMatchObject({ schedule_id: "session-vector-search/embed" });
   });
 
   it("404s an unknown schedule instead of running anything", async () => {
@@ -127,16 +127,16 @@ describe("/schedules", () => {
   });
 
   it("runs an action job a session started as that session, recorded as a job", async () => {
-    vi.mocked(resolveOneOffAction).mockResolvedValue({ action: { qualifiedName: "ops:triage", context: "none", prompt: "p" } as never });
+    vi.mocked(resolveAtScheduleAction).mockResolvedValue({ action: { qualifiedName: "ops:triage", context: "none", prompt: "p" } as never });
     vi.mocked(executeDetached).mockResolvedValue({ status: 200, body: { run_id: "arn_2", status: "complete" } });
-    const { oneOff } = createOneOff({ bag: "ops", action: null, job: "ops:triage", dueAt: new Date(), callerSessionId: "sess-1" });
-    claimOne(oneOff.id, { now: new Date(), runnerPid: 1, runnerStartedAt: null });
+    const { schedule } = createAtSchedule({ bag: "ops", action: null, job: "ops:triage", dueAt: new Date(), callerSessionId: "sess-1" });
+    claimOne(schedule.id, { now: new Date(), runnerPid: 1, runnerStartedAt: null });
 
-    expect((await post(`/once/${oneOff.id}/run`, { attempt_id: "att_1" })).status).toBe(200);
+    expect((await post(`/once/${schedule.id}/run`, { attempt_id: "att_1" })).status).toBe(200);
     const [, body] = vi.mocked(executeDetached).mock.calls[0];
-    expect(body).toMatchObject({ caller_session_id: "sess-1", schedule_id: oneOff.id, trigger: "job" });
+    expect(body).toMatchObject({ caller_session_id: "sess-1", schedule_id: schedule.id, trigger: "job" });
     expect(body).not.toHaveProperty("executionContext");
-    expect(oneOffContext).not.toHaveBeenCalled();
+    expect(resolveAtScheduleAccess).not.toHaveBeenCalled();
   });
 
   it("reports a scheduler with no heartbeat as down in the listing", async () => {

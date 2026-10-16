@@ -16,8 +16,8 @@ CREATE TABLE actors (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 3. traits
-CREATE TABLE traits (
+-- 3. bounds
+CREATE TABLE bounds (
   id SERIAL PRIMARY KEY,
   token TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL UNIQUE,

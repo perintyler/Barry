@@ -15,7 +15,7 @@ import type { Guarantees, LaunchPlan } from "@barry-rocks/sdk/adapters/harnesses
 
 import { parseModelRef } from "@barry-rocks/sdk/ids";
 import { NotSupportedInMode, type SessionConfig } from "@barry-rocks/sdk/sessions";
-import { cursorEnv, keepUserHome, PINNED_LAUNCH, prepareCursorHome, requireCursorKey, resolveCursorAgent, unpinnedWarning } from "./runtime.js";
+import { cursorEnv, keepUserHome, PINNED_LAUNCH, prepareCursorHome, requireCursorKey, resolveCursorAgent } from "./runtime.js";
 import { agentsMdFor, writeCursorSessionWorkspace, type CursorHooksJson } from "./workspace.js";
 
 const CHAT_ID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
@@ -34,8 +34,7 @@ export async function planCursorLaunch(config: SessionConfig, guarantees: Guaran
   const warnings: string[] = [];
   const home = prepareCursorHome(config.sessionId);
   const env = cursorEnv(config, home);
-  const agent = resolveCursorAgent();
-  if (!agent.pinned) warnings.push(unpinnedWarning());
+  const agent = resolveCursorAgent(undefined, config.env);
 
   const { workspaceDir, unenforceableDenials } = writeCursorSessionWorkspace(
     { mcpServers: keepUserHome(config.mcpServers) },

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type {
   ApprovalDecision, ContinuationDescriptor, ContinuationHarness,
-  RecordedCallResult, ReviewPolicy, TurnSnapshot,
+  RecordedCallResult, ReviewRules, TurnSnapshot,
 } from "./continuations.js";
 import type { PermissionDecision, PermissionRequest, SessionEvent } from "./index.js";
 
 export interface TurnExecutionStore {
-  admit(input: { sessionId: string; requestId: string; runId: string; actor: string; content: unknown; policy: ReviewPolicy; ifActive?: "error" | "queue" }): TurnSnapshot;
+  admit(input: { sessionId: string; requestId: string; runId: string; actor: string; content: unknown; policy: ReviewRules; ifActive?: "error" | "queue" }): TurnSnapshot;
   promoteQueued?(sessionId: string): { turn: TurnSnapshot; input: unknown } | undefined;
   snapshot(sessionId: string, turnId: string): TurnSnapshot;
   claim(sessionId: string, turnId: string, owner: string): boolean;

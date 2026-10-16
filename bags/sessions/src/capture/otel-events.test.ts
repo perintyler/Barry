@@ -22,7 +22,7 @@ const traces = RECORDED.filter((entry) => entry.path === "/v1/traces").flatMap((
 
 describe("claude 2.1.282 telemetry", () => {
   it("reads the turn from the logs: the prompt, the tool call, its usage and the answer", () => {
-    expect(logs.every((captured) => captured.providerSessionId === SESSION)).toBe(true);
+    expect(logs.every((captured) => captured.harnessSessionId === SESSION)).toBe(true);
     expect(logs.map((captured) => captured.event.type)).toEqual(["text", "done", "tool_use", "done", "text"]);
     expect(logs[0]?.event).toEqual({ type: "text", role: "user", text: "Run the shell command: echo probe-out — then reply DONE." });
     // Parsed, not the JSON text it arrives as.
@@ -39,7 +39,7 @@ describe("claude 2.1.282 telemetry", () => {
   it("reads the tool's output from the traces, under the call's id", () => {
     expect(traces).toEqual([
       expect.objectContaining({
-        providerSessionId: SESSION,
+        harnessSessionId: SESSION,
         event: { type: "tool_result", result: "probe-out", id: "toolu_018z927FwoZPyrJrbzN7zZfU" },
       }),
     ]);

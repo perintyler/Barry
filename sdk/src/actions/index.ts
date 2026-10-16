@@ -12,7 +12,9 @@ export {
 } from "./action-index.js";
 
 
-export * from "./action-catalog.js";
+export * from "./action-entry.js";
+export * from "./action-registry.js";
+export * from "./skill-registry.js";
 export * from "./action-commands.js";
 export * from "./resolve-agent.js";
 export * from "./action-yaml.js";

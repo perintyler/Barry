@@ -43,14 +43,14 @@ afterAll(async () => {
   closeSessionsDb();
 });
 
-function seedSession(id: string, providerSessionId: string): void {
+function seedSession(id: string, harnessSessionId: string): void {
   const db = getSessionsSqlite();
   db.prepare(
     "INSERT OR IGNORE INTO sessions (id, active, state, status, metadata) VALUES (?,1,'open','running','{}')",
   ).run(id);
   db.prepare(
     "INSERT INTO provider_sessions (session_id, provider, provider_session_id) VALUES (?,?,?)",
-  ).run(id, "claude", providerSessionId);
+  ).run(id, "claude", harnessSessionId);
 }
 
 /** One OTLP log record, in the shape claude's exporter sends. */

@@ -11,7 +11,7 @@ afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await c
 const jobArtifact = fileURLToPath(new URL("./job-artifact.mjs", import.meta.url));
 const digest = createHash("sha256").update("notes summarize bundle").digest("hex");
 const summarize: JobContract = {
-  type: "notes:summarize@1", digest, timeoutMs: 5000,
+  type: "notes:summarize@1", digest, timeoutMs: 5000, nodes: {},
   inputSchema: { type: "object", required: ["text"], properties: { text: { type: "string" } } },
   outputSchema: { type: "object", required: ["summary"], properties: { summary: { type: "string" } } },
 };

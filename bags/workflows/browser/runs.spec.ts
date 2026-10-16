@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WorkflowOwner, ProcessExecutor, inspectArtifact, ActivityWorker, connectOwnerV2, dispatchWorkerRequest, authorizeRun } from "@barry-rocks/sdk/internal/workflows";
 import { createWorkflowServer } from "../src/server.js";
-import { approveExecutionScope } from "@barry-rocks/sdk/bounds";
+import { approveWorkflowBounds } from "@barry-rocks/sdk/bounds";
 
 
 let url: string, owner: WorkflowOwner, worker: ActivityWorker, activityDigests: Record<string, string>, close: () => Promise<void>;
@@ -16,7 +16,7 @@ test.beforeAll(async () => {
   activityDigests = { "echo@1": inspectArtifact(artifact, "echo@1", "1", false).digest };
   owner = new WorkflowOwner({ id: "browser-test", path: join(root, "jobs.db"), artifacts: [inspectArtifact(artifact, "echo", "1")], activityArtifacts: activityDigests, executor });
   worker = new ActivityWorker({ connections: [connectOwnerV2(owner.id, async request => dispatchWorkerRequest(owner, "worker", request))], artifacts: activityDigests, activities: { "echo@1": executor.activity(inspectArtifact(artifact, "echo@1", "1", false)) } });
-  const server = createWorkflowServer({ owner, secret: "browser-test-secret", authenticateWorker: () => null, runAuthorization: async job => approveExecutionScope({ identity: job.identity, harness: job.harness, traitNames: job.traits, traits: {}, tools: [], boundByName: async () => undefined }) });
+  const server = createWorkflowServer({ owner, secret: "browser-test-secret", authenticateWorker: () => null, runAuthorization: async job => approveWorkflowBounds({ identity: job.identity, harness: job.harness, bags: job.bags ?? [], bounds: job.bounds, tools: [], boundByName: async () => undefined }) });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   const timer = setInterval(() => { void owner.pump().catch(() => {}); void worker.tick().catch(() => {}); }, 50);
@@ -49,8 +49,8 @@ test("starts, signals and inspects a real isolated run with keyboard tabs and in
 });
 
 test("inspects grants and resources and recovers a lost reauthorization acknowledgement", async ({ page }) => {
-  const job = { traits: [], identity: "browser-identity" };
-  const grant = await authorizeRun(job, "local-operator", async () => approveExecutionScope({ identity: job.identity, traitNames: [], traits: {}, tools: [], boundByName: async () => undefined }));
+  const job = { bags: [], identity: "browser-identity" };
+  const grant = await authorizeRun(job, "local-operator", async () => approveWorkflowBounds({ identity: job.identity, bags: [], tools: [], boundByName: async () => undefined }));
   owner.start({ id: "grant-browser", type: "echo", version: "1", input: { message: "wait", waitForSignal: true }, job }, "local-operator", undefined, grant);
   await expect.poll(() => owner.inspect("grant-browser").commands.length).toBeGreaterThan(0);
   await page.goto(`${url}/#runs/grant-browser?tab=permissions`);
@@ -79,7 +79,7 @@ test("inspects grants and resources and recovers a lost reauthorization acknowle
 
 test("explains permission loss and ambiguous outcomes with distinct recovery guidance", async ({ page }) => {
   const cases = [
-    ["blocked-policy", "PolicyRevoked: selected trait was removed", "Permissions changed after this run was approved."],
+    ["blocked-policy", "PolicyRevoked: selected bag was removed", "Permissions changed after this run was approved."],
     ["blocked-unknown", "OutcomeUnknown: session turn acknowledgement was lost", "An effect or session turn may have completed without an acknowledgement."],
   ];
   for (const [id, error, guidance] of cases) {

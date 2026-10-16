@@ -1,3 +1,10 @@
+import {
+  readRecoveryAdmission,
+  readRecoveryActivation,
+  assertRecoveryAdmission,
+  activateRecoveryAdmission,
+  type RecoveryActivation,
+} from "./recovery-admission.js";
 import { createHash, randomInt, randomUUID } from "node:crypto";
 import {
   ActivityFailure,
@@ -33,8 +40,53 @@ import { limits, encode as boundedEncode } from "./types.js";
 import type { SQLInputValue } from "node:sqlite";
 import { validateAgainstSchema } from "../tools/validate.js";
 import { WorkflowError } from "./errors.js";
-import { runGrantSchema, grantRequestHash, type RunGrant } from "./grants.js";
-import { scopeFingerprint } from "../bounds/execution-scope.js";
+import { runApprovalSchema, approvalRequestHash, type RunApproval } from "./approvals.js";
+import { boundFingerprint } from "../bounds/workflow-bounds.js";
+
+import { OwnerWorkAdmission, type WorkResolution } from "./work-admission.js";
+import { assertScopeWithinCeiling, type WorkAuthority } from "./work-authority.js";
+import type { WorkArtifactStore } from "./work-artifacts.js";
+import type { WorkNamespace, WorkSubmission, WorkAdmission } from "./work-contracts.js";
+import {
+  publishWorkProjections as publishProjections,
+  readCanonicalWork,
+  type WorkProjectionTarget,
+} from "./work-projection.js";
+import {
+  OwnerWorkExecution,
+  type WorkExecutionObservation,
+  type WorkExecutionReceipt,
+  type WorkExecutionStart,
+} from "./work-execution.js";
+import { projectWorkState, executorFeaturesSchema, workGrantSchema } from "./work-contracts.js";
+import type { ApprovedBounds } from "../bounds/workflow-bounds.js";
+import type { z } from "zod";
+import {
+  listCanonicalWork,
+  scopedCanonicalWork,
+  findCanonicalOperation,
+  backfillWorkIndex,
+  type WorkReadScope,
+  type WorkListQuery,
+  type WorkResult,
+} from "./work-read.js";
+import type { WorkControl } from "./work-contracts.js";
+import {
+  workStopSchema,
+  type WorkStop,
+  type WorkStopAck,
+  workReconciliationSchema,
+  type WorkReconciliation,
+  type WorkReconciliationAck,
+} from "./work-control.js";
+import {
+  OwnerWorkResources,
+  type WorkResourceExecutionOptions,
+} from "./work-resource-execution.js";
+import {
+  workExecutionDelegationSchema,
+  type WorkExecutionDelegation,
+} from "./work-execution-delegation.js";
 
 interface RunRow {
   id: string;
@@ -69,6 +121,9 @@ interface CommandRow {
   token: string | null;
   lease_until: number | null;
   attempt_deadline: number | null;
+  work_eligible_at: number | null;
+  work_dispatch_deadline: number | null;
+  work_retry_deadline: number | null;
 }
 interface AttemptRow {
   token: string;
@@ -95,6 +150,10 @@ const errorMessage = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).slice(0, 4096);
 
 export class WorkflowOwner {
+  private readonly admissionOwner: OwnerWorkAdmission;
+  private readonly executionOwner: OwnerWorkExecution;
+  private readonly resourceOwner: OwnerWorkResources;
+  private readonly workExecutors = new Map<string, z.infer<typeof executorFeaturesSchema>>();
   readonly id: string;
   private readonly store: WorkflowStore;
   private readonly definitions = new Map<string, WorkflowDefinition>();
@@ -107,12 +166,19 @@ export class WorkflowOwner {
   private readonly permitsWorkerJob: (worker: string, type: string) => boolean;
   private readonly onWorkerSession?: (worker: string, takeover: boolean) => void;
   private readonly resolveNode: (reference: string) => string;
+  private readonly workerNode: (worker: string) => string;
   private readonly executor?: ReplayExecutor;
   private readonly authorize?: (
     run: { principal: string; type: string; authorizer?: string },
     activityType: string,
   ) => boolean;
   private readonly workerProfiles: Record<string, string[]>;
+  private readonly authorizeWork?: (
+    work: WorkAdmission,
+    worker: string,
+    activity: string,
+    operation: "dispatch" | "effect",
+  ) => ApprovedBounds | null;
   private pumping: Promise<void> | null = null;
   private closed = false;
 
@@ -130,7 +196,17 @@ export class WorkflowOwner {
     ) => boolean;
     workerProfiles?: Record<string, string[]>;
     resolveNode?: (reference: string) => string;
+    /** Trusted placement mapping for multiple workers sharing one physical node. */
+    workerNode?: (worker: string) => string;
     jobs?: JobContract[];
+    workArtifacts?: WorkArtifactStore;
+    workResources?: WorkResourceExecutionOptions;
+    authorizeWork?: (
+      work: WorkAdmission,
+      worker: string,
+      activity: string,
+      operation: "dispatch" | "effect",
+    ) => ApprovedBounds | null;
     permitsWorkerJob?: (worker: string, type: string) => boolean;
     onWorkerSession?: (worker: string, takeover: boolean) => void;
   }) {
@@ -138,8 +214,10 @@ export class WorkflowOwner {
     this.permitsWorkerJob = options.permitsWorkerJob ?? (() => true);
     this.onWorkerSession = options.onWorkerSession;
     this.resolveNode = options.resolveNode ?? ((reference) => reference);
+    this.workerNode = options.workerNode ?? ((worker) => worker);
     this.clock = options.now ?? Date.now;
     this.executor = options.executor;
+    this.authorizeWork = options.authorizeWork;
     this.authorize = options.authorize;
     this.workerProfiles = structuredClone(options.workerProfiles ?? {});
     this.activityArtifacts = { ...options.activityArtifacts };
@@ -220,6 +298,308 @@ export class WorkflowOwner {
       this.store.close();
       throw error;
     }
+    try {
+      options.workArtifacts?.claimOwner(this.id);
+    } catch (error) {
+      this.store.close();
+      throw error;
+    }
+    this.admissionOwner = new OwnerWorkAdmission({
+      id: this.id,
+      store: this.store,
+      artifacts: options.workArtifacts,
+      verifiedEvaluator: () => Boolean(this.executor),
+      now: this.clock,
+      artifact: (type, version) => this.artifacts.get(encode([type, version])),
+      job: (type) => this.jobContract(type),
+      retainWorkflow: (artifact) =>
+        this.artifacts.set(encode([artifact.type, artifact.version]), artifact),
+      prepareStart: (request, principal, grant) =>
+        this.prepareStart(request, principal, undefined, grant),
+      reserve: (run, bytes) => this.reserve(run, bytes),
+    });
+    this.executionOwner = new OwnerWorkExecution({
+      store: this.store,
+      artifacts: options.workArtifacts,
+      epoch: () => this.epoch,
+      now: this.clock,
+      reserve: (run, bytes) => this.reserve(run, bytes),
+    });
+    this.resourceOwner = new OwnerWorkResources(this.store, options.workResources, (run, bytes) =>
+      this.reserve(run, bytes),
+    );
+    try {
+      this.refreshRestoredWorkViews();
+      backfillWorkIndex(this.store);
+    } catch (error) {
+      this.store.close();
+      throw error;
+    }
+  }
+
+  /** Finish restore metadata repair before exposing canonical reads or accepting work.
+   * Each bounded batch commits its cursor with the normal accounted publication.
+   * A failed batch prevents startup and resumes at the same cursor next time.
+   */
+  private refreshRestoredWorkViews(): void {
+    if (!this.store.one("SELECT value FROM workflow_meta WHERE key='recovery-admission'")) return;
+    const saved = this.store.one<{ value: string }>(
+      "SELECT value FROM workflow_meta WHERE key='recovery-work-views'",
+    );
+    let progress: { epoch: string; after: string; complete: boolean } = saved
+      ? JSON.parse(saved.value)
+      : { epoch: this.epoch, after: "", complete: false };
+    if (
+      progress.epoch !== this.epoch ||
+      typeof progress.after !== "string" ||
+      typeof progress.complete !== "boolean"
+    )
+      throw new Error("invalid restored work view checkpoint");
+    while (!progress.complete) {
+      progress = this.store.transaction(() => {
+        const rows = this.store.rows<{ run_id: string }>(
+          "SELECT run_id FROM workflow_work_admissions WHERE run_id>? ORDER BY run_id LIMIT 64",
+          progress.after,
+        );
+        for (const row of rows) this.executionOwner.publish(row.run_id);
+        const next = {
+          epoch: this.epoch,
+          after: rows.at(-1)?.run_id ?? progress.after,
+          complete: rows.length < 64,
+        };
+        this.store.run(
+          "INSERT INTO workflow_meta(key,value) VALUES('recovery-work-views',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+          JSON.stringify(next),
+        );
+        return next;
+      });
+    }
+  }
+
+  /** Internal admission boundary: callers authenticate through WorkAdmissionService first. */
+  workByKey(namespace: WorkNamespace, key: string): WorkAdmission | null {
+    return this.admissionOwner.lookup(namespace, key);
+  }
+  /** Trusted read boundary: authenticate namespace before calling. */
+  workById(namespace: WorkNamespace, workId: string): WorkAdmission | null {
+    return readCanonicalWork(this.store, namespace, workId);
+  }
+  listWork(scope: WorkReadScope, query: WorkListQuery, controls?: readonly WorkControl[]) {
+    return listCanonicalWork(this.store, scope, query, controls);
+  }
+  scopedWork(scope: WorkReadScope, workId: string): WorkAdmission | null {
+    return scopedCanonicalWork(this.store, scope, workId);
+  }
+  workOperation(scope: WorkReadScope, key: string, session?: string): WorkAdmission | null {
+    return findCanonicalOperation(this.store, scope, key, session);
+  }
+  /** Trusted read boundary: outcome and retained stage output remain distinct. */
+  workResult(scope: WorkReadScope, workId: string): WorkResult {
+    return this.store.read(() => {
+      const work = scopedCanonicalWork(this.store, scope, workId);
+      if (!work)
+        throw new WorkflowError("WorkNotFound", "Work is unavailable to this caller.", 404);
+      const run = this.required(work.workflow_id);
+      const selected = work.receipt_ref
+        ? this.store.one<{ token: string }>(
+            "SELECT token FROM workflow_work_executions WHERE run_id=? AND json_extract(receipt,'$.receipt_ref')=? LIMIT 1",
+            work.workflow_id,
+            work.receipt_ref,
+          )
+        : undefined;
+      if (work.receipt_ref && !selected)
+        throw new WorkflowError(
+          "WorkReceiptMissing",
+          "Selected result evidence is unavailable.",
+          503,
+        );
+      const evidence = selected ? this.executionOwner.retainedReceipt(selected.token) : null;
+      return {
+        version: 2,
+        work_id: work.work_id,
+        revision: work.revision,
+        closed_at: run.closed_at,
+        status: work.facts.has_result ? "available" : "pending",
+        receipt_ref: work.receipt_ref,
+        outcome: run.outcome ? (JSON.parse(run.outcome) as Outcome) : null,
+        ...(evidence?.receipt.action_checks
+          ? { action_checks: evidence.receipt.action_checks }
+          : {}),
+        ...(evidence?.receipt.stages.some((stage) => stage.logs)
+          ? { logs: this.executionOwner.logs(evidence.receipt) }
+          : {}),
+        retained_output: evidence?.receipt.output
+          ? {
+              reference: evidence.receipt.output,
+              value: evidence.value,
+              invalid_reason: evidence.invalid_output ?? null,
+              validation: evidence.receipt.validation,
+              validation_failures: evidence.receipt.validation_failures,
+            }
+          : null,
+      };
+    });
+  }
+  /** Persist stop intent and its acknowledgement atomically; physical settlement is separate. */
+  stopWork(workId: string, input: WorkStop, actor: string): WorkStopAck {
+    identifier.parse(workId);
+    identifier.parse(actor);
+    const request = workStopSchema.parse(input),
+      binding = encode({ operation: "stop", actor, ...request });
+    return this.store.transaction(() => {
+      const row = this.store.one<{ run_id: string }>(
+        "SELECT run_id FROM workflow_work_admissions WHERE work_id=?",
+        workId,
+      );
+      if (!row) throw new WorkflowError("WorkNotFound", "Work is unavailable.", 404);
+      const old = this.store.one<{ request: string; response: string }>(
+        "SELECT request,response FROM workflow_work_stop_receipts WHERE run_id=? AND request_id=?",
+        row.run_id,
+        request.request_id,
+      );
+      if (old) {
+        if (old.request !== binding)
+          throw new WorkflowError(
+            "WorkControlConflict",
+            "Stop request ID already identifies different intent or actor.",
+            409,
+          );
+        return JSON.parse(old.response) as WorkStopAck;
+      }
+      const work = this.executionOwner.work(row.run_id)!;
+      if (work.revision !== request.expected_revision)
+        throw new WorkflowError(
+          "WorkRevisionConflict",
+          "Work changed; inspect before requesting stop.",
+          409,
+        );
+      if (!projectWorkState(work.facts).allowed_actions.includes("stop"))
+        throw new WorkflowError(
+          "WorkStopUnavailable",
+          "Work cannot accept another stop request in its current state.",
+          409,
+        );
+      if (
+        this.store.one<{ n: number }>(
+          "SELECT count(*) n FROM workflow_work_stop_receipts WHERE run_id=?",
+          row.run_id,
+        )!.n >= 64
+      )
+        throw new WorkflowError(
+          "WorkControlQuota",
+          "Stop acknowledgement quota requires archival.",
+          429,
+        );
+      const at = this.clock();
+      const run = this.required(row.run_id);
+      if (["running", "blocked"].includes(run.status))
+        this.finish(run, "cancelled", failed("Cancelled", "Stop requested."), at);
+      else this.executionOwner.requestStop(row.run_id);
+      const audit = {
+        actor,
+        request_id: request.request_id,
+        expected_revision: request.expected_revision,
+        ...(request.reason ? { reason: request.reason } : {}),
+      };
+      this.store.event(row.run_id, at, "WorkStopRequested", audit);
+      const response: WorkStopAck = {
+        version: 2,
+        work_id: workId,
+        request_id: request.request_id,
+        applied_at: at,
+        applied_revision: this.executionOwner.work(row.run_id)!.revision,
+        stop_requested: true,
+      };
+      const encoded = encode(response);
+      this.reserve(
+        row.run_id,
+        Buffer.byteLength(binding) +
+          Buffer.byteLength(encoded) +
+          Buffer.byteLength(encode(audit)) +
+          768,
+      );
+      this.store.run(
+        "INSERT INTO workflow_work_stop_receipts VALUES(?,?,?,?)",
+        row.run_id,
+        request.request_id,
+        binding,
+        encoded,
+      );
+      this.settleBudget(row.run_id);
+      return response;
+    });
+  }
+  /** Trusted metadata rebuild: bounded traversal, no workflow or effect replay. */
+  requeueWorkProjections(
+    expectedEpoch: string,
+    after = "",
+    limit = 64,
+  ): { after: string; complete: boolean } {
+    if (
+      expectedEpoch !== this.epoch ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 64 ||
+      after.length > 200
+    )
+      throw new WorkflowError(
+        "ProjectionRebuildConflict",
+        "Projection rebuild epoch or batch is invalid.",
+        409,
+      );
+    return this.store.transaction(() => {
+      const rows = this.store.rows<{ run_id: string }>(
+        "SELECT run_id FROM workflow_work_admissions WHERE run_id>? ORDER BY run_id LIMIT ?",
+        after,
+        limit,
+      );
+      for (const row of rows)
+        this.store.run(
+          "UPDATE workflow_work_outbox SET applied_revision=0 WHERE run_id=? AND kind='projection'",
+          row.run_id,
+        );
+      return { after: rows.at(-1)?.run_id ?? after, complete: rows.length < limit };
+    });
+  }
+  publishWorkProjections(target: WorkProjectionTarget, limit?: number): Promise<number> {
+    return publishProjections(this.store, target, limit);
+  }
+  admitWork(
+    request: WorkSubmission,
+    authority: WorkAuthority,
+    resolution: WorkResolution,
+  ): WorkAdmission {
+    return this.admissionOwner.commit(request, authority, resolution);
+  }
+
+  admitWorkWithReceipt(
+    request: WorkSubmission,
+    authority: WorkAuthority,
+    resolution: WorkResolution,
+  ): { work: WorkAdmission; created: boolean } {
+    const creation = { created: false };
+    const work = this.admissionOwner.commit(request, authority, resolution, creation);
+    return { work, created: creation.created };
+  }
+  acknowledgeWork(request: WorkSubmission, authority: WorkAuthority): WorkAdmission {
+    return this.admissionOwner.acknowledge(request, authority);
+  }
+
+  collectWorkStaging(before?: number): number {
+    return this.admissionOwner.collectStaging(before);
+  }
+
+  get recoveryAdmission() {
+    return readRecoveryAdmission(this.store);
+  }
+  get recoveryActivation() {
+    return readRecoveryActivation(this.store);
+  }
+  assertWorkAdmission(request: WorkSubmission) {
+    assertRecoveryAdmission(this.store, request.idempotency_key, request.recovery_epoch);
+  }
+  activateAdmission(input: RecoveryActivation, actor: string) {
+    return activateRecoveryAdmission(this.store, input, actor, this.clock());
   }
 
   get asynchronous(): boolean {
@@ -242,8 +622,20 @@ export class WorkflowOwner {
     request: StartWorkflow,
     principal = "local-operator",
     policyRef?: string,
-    approvedGrant?: RunGrant,
+    approvedGrant?: RunApproval,
   ): WorkflowRun {
+    return this.store.transaction(
+      this.prepareStart(request, principal, policyRef, approvedGrant).accept,
+    );
+  }
+
+  /** Preparation validates only; the returned coordination transaction never launches an executor. */
+  private prepareStart(
+    request: StartWorkflow,
+    principal: string,
+    policyRef?: string,
+    approvedGrant?: RunApproval,
+  ): { input: Json; accept: () => WorkflowRun } {
     identifier.parse(principal);
     encode(request);
     const input = startSchema.parse(request);
@@ -257,12 +649,12 @@ export class WorkflowOwner {
           "Run traits require an approved execution grant.",
           403,
         );
-      approvedGrant = runGrantSchema.parse(approvedGrant);
+      approvedGrant = runApprovalSchema.parse(approvedGrant);
       if (
         approvedGrant.revision !== 1 ||
         approvedGrant.authorizer !== principal ||
         approvedGrant.createdBy !== principal ||
-        scopeFingerprint(input.job) !== scopeFingerprint(approvedGrant.job)
+        boundFingerprint(input.job) !== boundFingerprint(approvedGrant.job)
       )
         throw new WorkflowError(
           "InvalidGrant",
@@ -272,89 +664,97 @@ export class WorkflowOwner {
       encodePayload(approvedGrant);
     } else if (approvedGrant)
       throw new WorkflowError("InvalidGrant", "A grant requires an explicit run request.", 400);
-    return this.store.transaction(() => {
-      const archived = this.store.one<{ request_hash: string; summary: string }>(
-        "SELECT request_hash,summary FROM workflow_tombstones WHERE id=?",
-        input.id,
-      );
-      if (archived) {
-        const summary = JSON.parse(archived.summary) as WorkflowRun;
-        if (summary.principal !== principal) throw new Error("unknown workflow");
-        if (archived.request_hash !== createHash("sha256").update(serialized).digest("hex"))
-          throw new Error("workflow ID already has a different start request");
-        return JSON.parse(archived.summary) as WorkflowRun;
-      }
-      const previous = this.row(input.id);
-      if (previous) {
-        if (previous.principal !== principal) throw new Error("unknown workflow");
-        if (previous.request !== serialized)
-          throw new Error("workflow ID already has a different start request");
-        return this.describe(previous);
-      }
-      const key = encode([input.type, input.version]),
-        artifact = this.artifacts.get(key);
-      if (!this.definitions.has(key) && !artifact) throw new Error("unknown workflow definition");
-      if (
-        this.store.one<{ count: number }>(
-          "SELECT count(*) count FROM workflow_runs WHERE status IN ('running','blocked')",
-        )!.count >= 1000
-      )
-        throw new Error("open workflow admission limit reached");
-      if (
-        this.store.one<{ count: number }>("SELECT count(*) count FROM workflow_tombstones")!
-          .count >= 1_000_000
-      )
-        throw new Error("run tombstone admission limit reached");
-      const at = this.clock();
-      this.store.admit(
-        Number(
-          this.store.one<{ value: string }>(
-            "SELECT value FROM workflow_meta WHERE key='reserved-bytes'",
-          )!.value,
-        ) +
-          Buffer.byteLength(serialized) * 3 +
-          1_048_576,
-      );
-      this.store.run(
-        "INSERT INTO workflow_runs(id,owner,type,version,input,request,status,started_at,deadline) VALUES(?,?,?,?,?,?,'running',?,?)",
-        input.id,
-        this.id,
-        input.type,
-        input.version,
-        encode(input.input),
-        serialized,
-        at,
-        at + input.timeoutMs,
-      );
-      this.store.run("UPDATE workflow_runs SET principal=? WHERE id=?", principal, input.id);
-      if (approvedGrant) {
-        this.store.run(
-          "INSERT INTO workflow_grants VALUES(?,1,?)",
-          input.id,
-          encode(approvedGrant),
-        );
-        this.store.run("UPDATE workflow_runs SET grant_revision=1 WHERE id=?", input.id);
-        this.reserve(input.id, Buffer.byteLength(encode(approvedGrant)) + 512);
-      }
-      if (policyRef)
-        this.store.run(
-          "UPDATE workflow_runs SET policy_ref=? WHERE id=?",
-          identifier.parse(policyRef),
+    return {
+      input: input.input,
+      accept: () => {
+        const archived = this.store.one<{ request_hash: string; summary: string }>(
+          "SELECT request_hash,summary FROM workflow_tombstones WHERE id=?",
           input.id,
         );
-      // Pre-reserve bounded operator receipts so cancellation remains possible at high water.
-      this.reserve(input.id, Buffer.byteLength(serialized) * 3 + 1_048_576);
-      if (artifact)
-        this.store.run("UPDATE workflow_runs SET artifact=? WHERE id=?", artifact.digest, input.id);
-      this.store.event(input.id, at, "WorkflowStarted", {
-        type: input.type,
-        version: input.version,
-        actor: principal,
-        requestId: input.id,
-      });
-      this.advance(this.required(input.id), at);
-      return this.describe(this.required(input.id));
-    });
+        if (archived) {
+          const summary = JSON.parse(archived.summary) as WorkflowRun;
+          if (summary.principal !== principal) throw new Error("unknown workflow");
+          if (archived.request_hash !== createHash("sha256").update(serialized).digest("hex"))
+            throw new Error("workflow ID already has a different start request");
+          return JSON.parse(archived.summary) as WorkflowRun;
+        }
+        const previous = this.row(input.id);
+        if (previous) {
+          if (previous.principal !== principal) throw new Error("unknown workflow");
+          if (previous.request !== serialized)
+            throw new Error("workflow ID already has a different start request");
+          return this.describe(previous);
+        }
+        assertRecoveryAdmission(this.store, input.id, input.recoveryEpoch);
+        const key = encode([input.type, input.version]),
+          artifact = this.artifacts.get(key);
+        if (!this.definitions.has(key) && !artifact) throw new Error("unknown workflow definition");
+        if (
+          this.store.one<{ count: number }>(
+            "SELECT count(*) count FROM workflow_runs WHERE status IN ('running','blocked')",
+          )!.count >= 1000
+        )
+          throw new Error("open workflow admission limit reached");
+        if (
+          this.store.one<{ count: number }>("SELECT count(*) count FROM workflow_tombstones")!
+            .count >= 1_000_000
+        )
+          throw new Error("run tombstone admission limit reached");
+        const at = this.clock();
+        this.store.admit(
+          Number(
+            this.store.one<{ value: string }>(
+              "SELECT value FROM workflow_meta WHERE key='reserved-bytes'",
+            )!.value,
+          ) +
+            Buffer.byteLength(serialized) * 3 +
+            1_048_576,
+        );
+        this.store.run(
+          "INSERT INTO workflow_runs(id,owner,type,version,input,request,status,started_at,deadline) VALUES(?,?,?,?,?,?,'running',?,?)",
+          input.id,
+          this.id,
+          input.type,
+          input.version,
+          encode(input.input),
+          serialized,
+          at,
+          at + input.timeoutMs,
+        );
+        this.store.run("UPDATE workflow_runs SET principal=? WHERE id=?", principal, input.id);
+        if (approvedGrant) {
+          this.store.run(
+            "INSERT INTO workflow_grants VALUES(?,1,?)",
+            input.id,
+            encode(approvedGrant),
+          );
+          this.store.run("UPDATE workflow_runs SET grant_revision=1 WHERE id=?", input.id);
+          this.reserve(input.id, Buffer.byteLength(encode(approvedGrant)) + 512);
+        }
+        if (policyRef)
+          this.store.run(
+            "UPDATE workflow_runs SET policy_ref=? WHERE id=?",
+            identifier.parse(policyRef),
+            input.id,
+          );
+        // Pre-reserve bounded operator receipts so cancellation remains possible at high water.
+        this.reserve(input.id, Buffer.byteLength(serialized) * 3 + 1_048_576);
+        if (artifact)
+          this.store.run(
+            "UPDATE workflow_runs SET artifact=? WHERE id=?",
+            artifact.digest,
+            input.id,
+          );
+        this.store.event(input.id, at, "WorkflowStarted", {
+          type: input.type,
+          version: input.version,
+          actor: principal,
+          requestId: input.id,
+        });
+        this.advance(this.required(input.id), at);
+        return this.describe(this.required(input.id));
+      },
+    };
   }
 
   get(id: string): WorkflowRun {
@@ -366,19 +766,19 @@ export class WorkflowOwner {
       ? (JSON.parse(archived.summary) as WorkflowRun)
       : this.describe(this.required(id));
   }
-  grant(id: string): RunGrant | undefined {
+  grant(id: string): RunApproval | undefined {
     const row = this.store.one<{ evidence: string }>(
       "SELECT g.evidence FROM workflow_grants g JOIN workflow_runs r ON r.id=g.run_id AND r.grant_revision=g.revision WHERE g.run_id=?",
       id,
     );
-    return row ? runGrantSchema.parse(JSON.parse(row.evidence)) : undefined;
+    return row ? runApprovalSchema.parse(JSON.parse(row.evidence)) : undefined;
   }
   /** Online effect authority check. Never accepts an expired/replaced attempt. */
   effectAuthority(
     worker: string,
     token: string,
     revision: number,
-  ): { task: { runId: string; stepId: string; epoch: string }; grant: RunGrant } {
+  ): { task: { runId: string; stepId: string; epoch: string }; grant: RunApproval } {
     return this.store.transaction(() => {
       const command = this.activeAttempt(worker, token, this.clock());
       if (!command)
@@ -411,7 +811,7 @@ export class WorkflowOwner {
     identifier.parse(sessionId);
     if (!turnId || turnId.length > 500 || !["active", "complete"].includes(state))
       throw new Error("invalid session turn binding");
-    const hash = scopeFingerprint({ id, stepId, sessionId, turnId });
+    const hash = boundFingerprint({ id, stepId, sessionId, turnId });
     this.store.transaction(() => {
       this.required(id);
       if (
@@ -443,14 +843,14 @@ export class WorkflowOwner {
   }
   reauthorize(
     id: string,
-    approved: RunGrant,
+    approved: RunApproval,
     requestId: string,
     expectedRevision: number,
     actor: string,
   ): WorkflowRun {
     identifier.parse(requestId);
     identifier.parse(actor);
-    approved = runGrantSchema.parse(approved);
+    approved = runApprovalSchema.parse(approved);
     encodePayload(approved);
     const request = encode({
       operation: "reauthorize",
@@ -471,6 +871,15 @@ export class WorkflowOwner {
       }
       const run = this.required(id),
         previous = this.grant(id);
+      const workCeiling = this.store.one<{ evidence: string }>(
+        "SELECT evidence FROM workflow_work_grants WHERE run_id=? AND revision=1",
+        id,
+      );
+      if (workCeiling)
+        assertScopeWithinCeiling(
+          JSON.parse(workCeiling.evidence).original_caller_ceiling,
+          approved.scope,
+        );
       if (
         !previous ||
         !["running", "blocked"].includes(run.status) ||
@@ -486,11 +895,16 @@ export class WorkflowOwner {
       )
         throw new Error("invalid grant revision or identity change");
       if (
-        grantRequestHash({
+        approvalRequestHash({
           ...approved,
-          job: { ...approved.job, traits: previous.job.traits },
+          job: {
+            ...approved.job,
+            bags: previous.job.bags,
+            bounds: previous.job.bounds,
+            traits: previous.job.traits,
+          },
           authorizer: previous.authorizer,
-        }) !== grantRequestHash(previous)
+        }) !== approvalRequestHash(previous)
       )
         throw new Error("reauthorization cannot change action or execution profile");
       if (
@@ -537,7 +951,7 @@ export class WorkflowOwner {
         requestId,
         grantRevision: approved.revision,
         reason: approved.reason,
-        scopeFingerprint: approved.scope.fingerprint,
+        boundFingerprint: approved.scope.fingerprint,
       });
       const result = { ...this.describe(this.required(id)), input: null, outcome: null };
       this.store.run(
@@ -653,6 +1067,7 @@ export class WorkflowOwner {
         request,
         encode(result),
       );
+      if (!["running", "blocked"].includes(this.required(id).status)) this.settleBudget(id);
       return result;
     });
   }
@@ -664,8 +1079,39 @@ export class WorkflowOwner {
     if (!Number.isSafeInteger(before)) throw new Error("invalid retention cutoff");
     if (!this.store.accounted) return false;
     return this.store.transaction(() => {
+      const archivedError = "RunArchived: details expired under retention policy";
       const run = this.store.one<RunRow>(
-        "SELECT r.* FROM workflow_runs r WHERE closed_at<? AND retention_hold=0 AND NOT EXISTS(SELECT 1 FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id WHERE c.run_id=r.id AND a.physical_state!='settled') AND NOT EXISTS(SELECT 1 FROM workflow_session_bindings b WHERE b.run_id=r.id AND b.state!='complete') ORDER BY closed_at,id LIMIT 1",
+        `SELECT r.* FROM workflow_runs r
+        WHERE r.closed_at IS NOT NULL
+          AND r.retention_hold=0
+          AND r.status NOT IN ('running','blocked')
+          AND NOT (EXISTS(SELECT 1 FROM workflow_tombstones t WHERE t.id=r.id) AND r.error=?)
+          AND NOT EXISTS(SELECT 1 FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id WHERE c.run_id=r.id AND a.physical_state!='settled')
+          AND NOT EXISTS(SELECT 1 FROM workflow_session_bindings b WHERE b.run_id=r.id AND b.state!='complete')
+          AND (
+            (NOT EXISTS(SELECT 1 FROM workflow_work_admissions w WHERE w.run_id=r.id) AND r.closed_at<?)
+            OR EXISTS(
+              SELECT 1 FROM workflow_work_admissions w
+              WHERE w.run_id=r.id
+                AND (CASE WHEN r.status='completed' THEN r.closed_at + 30 * 86400000 ELSE r.closed_at + 90 * 86400000 END) < ?
+                AND json_extract(w.record,'$.facts.physical') IN ('ceased','not-started')
+                AND json_extract(w.record,'$.facts.effect') IN ('known','not-started')
+                AND NOT EXISTS(SELECT 1 FROM workflow_work_outbox o WHERE o.run_id=r.id AND o.applied_revision < o.desired_revision)
+                AND NOT EXISTS(SELECT 1 FROM workflow_work_reservations v WHERE v.run_id=r.id AND v.state!='released')
+                AND NOT EXISTS(SELECT 1 FROM workflow_work_resource_intents i WHERE i.run_id=r.id AND i.reservation IS NOT NULL AND (i.settlement IS NULL OR i.reconciled=0))
+                AND NOT EXISTS(
+                  SELECT 1 FROM workflow_work_executions e
+                  WHERE e.run_id=r.id
+                    AND (
+                      (e.receipt IS NULL AND coalesce(json_extract(e.request,'$.launch_authorized'),1)!=0)
+                      OR (e.receipt IS NOT NULL AND (json_extract(e.receipt,'$.physical_state') NOT IN ('ceased','not-started') OR json_extract(e.receipt,'$.effect_certainty') NOT IN ('known','not-started')))
+                    )
+                )
+            )
+          )
+        ORDER BY r.closed_at,r.id LIMIT 1`,
+        archivedError,
+        before,
         before,
       );
       if (!run) return false;
@@ -674,7 +1120,7 @@ export class WorkflowOwner {
         ...this.describe(run),
         input: null,
         outcome: null,
-        error: "RunArchived: details expired under retention policy",
+        error: archivedError,
       };
       this.store.run(
         "INSERT OR IGNORE INTO workflow_tombstones VALUES(?,?,?,?,?)",
@@ -685,7 +1131,15 @@ export class WorkflowOwner {
         run.closed_at,
       );
       this.store.run(
-        "DELETE FROM workflow_attempts WHERE token IN (SELECT a.token FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id WHERE c.run_id=? LIMIT 64)",
+        "DELETE FROM workflow_work_resource_intents WHERE rowid IN (SELECT rowid FROM workflow_work_resource_intents WHERE run_id=? LIMIT 64)",
+        run.id,
+      );
+      this.store.run(
+        "DELETE FROM workflow_work_executions WHERE token IN (SELECT e.token FROM workflow_work_executions e WHERE e.run_id=? AND NOT EXISTS(SELECT 1 FROM workflow_work_resource_intents i WHERE i.token=e.token) LIMIT 64)",
+        run.id,
+      );
+      this.store.run(
+        "DELETE FROM workflow_attempts WHERE token IN (SELECT a.token FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id WHERE c.run_id=? AND NOT EXISTS(SELECT 1 FROM workflow_work_executions e WHERE e.token=a.token) LIMIT 64)",
         run.id,
       );
       this.store.run(
@@ -700,6 +1154,8 @@ export class WorkflowOwner {
         "workflow_payloads",
         "workflow_candidate_cursor",
         "workflow_session_bindings",
+        "workflow_work_sources",
+        "workflow_work_outbox",
       ])
         this.store.run(
           `DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE run_id=? LIMIT 64)`,
@@ -707,6 +1163,8 @@ export class WorkflowOwner {
         );
       this.store.run("DELETE FROM workflow_due WHERE run_id=?", run.id);
       const remaining = [
+        "workflow_work_resource_intents",
+        "workflow_work_executions",
         "workflow_commands",
         "workflow_events",
         "workflow_signals",
@@ -715,13 +1173,24 @@ export class WorkflowOwner {
         "workflow_payloads",
         "workflow_candidate_cursor",
         "workflow_session_bindings",
+        "workflow_work_sources",
+        "workflow_work_outbox",
       ].some((table) => this.store.one(`SELECT 1 FROM ${table} WHERE run_id=? LIMIT 1`, run.id));
       if (!remaining) {
-        this.store.run(
-          "UPDATE workflow_meta SET value=CAST(max(0,CAST(value AS INTEGER)-?) AS TEXT) WHERE key='reserved-bytes'",
-          run.budget_bytes,
-        );
-        this.store.run("DELETE FROM workflow_runs WHERE id=?", run.id);
+        if (this.store.one("SELECT 1 FROM workflow_work_admissions WHERE run_id=?", run.id)) {
+          this.store.run(
+            "UPDATE workflow_runs SET input='null',outcome=NULL,error=? WHERE id=?",
+            archivedError,
+            run.id,
+          );
+          this.settleBudget(run.id);
+        } else {
+          this.store.run(
+            "UPDATE workflow_meta SET value=CAST(max(0,CAST(value AS INTEGER)-?) AS TEXT) WHERE key='reserved-bytes'",
+            run.budget_bytes,
+          );
+          this.store.run("DELETE FROM workflow_runs WHERE id=?", run.id);
+        }
       }
       return true;
     });
@@ -926,7 +1395,7 @@ export class WorkflowOwner {
               artifacts: {},
               id,
               active: this.store.one<{ count: number }>(
-                "SELECT count(*) AS count FROM workflow_attempts WHERE worker=? AND state='active'",
+                "SELECT count(*) AS count FROM workflow_attempts WHERE worker=? AND physical_state!='settled'",
                 id,
               )!.count,
             })),
@@ -1092,7 +1561,7 @@ export class WorkflowOwner {
     const occupancy = new Map(
       this.store
         .rows<{ worker: string; active: number }>(
-          "SELECT worker,count(*) active FROM workflow_attempts WHERE state='active' GROUP BY worker",
+          "SELECT worker,count(*) active FROM workflow_attempts WHERE physical_state!='settled' GROUP BY worker",
         )
         .map((row) => [row.worker, row.active]),
     );
@@ -1300,6 +1769,9 @@ export class WorkflowOwner {
 
   tick(): void {
     this.store.backfillTurn();
+    backfillWorkIndex(this.store);
+    this.admissionOwner.releaseSettled();
+    this.store.transaction(() => this.executionOwner.expireStopObservations());
     const stopAt = performance.now() + 10;
     this.store.run(
       "DELETE FROM workflow_claims WHERE rowid IN (SELECT rowid FROM workflow_claims WHERE expires_at<=? LIMIT 64)",
@@ -1319,6 +1791,7 @@ export class WorkflowOwner {
           at = this.clock();
         this.reconcile(run, at);
         if (this.required(id).status === "running") this.advance(this.required(id), at);
+        this.executionOwner.publish(id);
         if (this.executor) this.refreshDue(id);
       });
       if (this.executor && performance.now() >= stopAt) break;
@@ -1336,6 +1809,35 @@ export class WorkflowOwner {
       ...advertisementSchema.parse(advertisement),
       expiresAt: at + 15_000,
     });
+  }
+  advertiseWork(
+    worker: string,
+    advertisement: WorkerAdvertisement,
+    input: z.infer<typeof executorFeaturesSchema>,
+  ): void {
+    const features = executorFeaturesSchema.parse(input),
+      at = this.clock();
+    if (
+      features.observed_at > at ||
+      features.expires_at <= at ||
+      features.expires_at > at + 30000 ||
+      ![
+        "journal-inspect",
+        "cancel-tombstone",
+        "stop-ack",
+        "immutable-source",
+        "scoped-effects",
+      ].every((feature) =>
+        features.features.includes(feature as (typeof features.features)[number]),
+      )
+    )
+      throw new WorkflowError(
+        "WorkExecutorUnsupported",
+        "Common work requires fresh durable executor capabilities.",
+        409,
+      );
+    this.advertise(worker, advertisement);
+    this.workExecutors.set(worker, features);
   }
 
   openSession(worker: string, session: string): void {
@@ -1423,7 +1925,70 @@ export class WorkflowOwner {
       return true;
     });
   }
+  private claimCandidates(worker: string, at: number): CommandRow[] {
+    const cursor = this.executor
+      ? (this.store.one<{ last_run: string }>(
+          "SELECT last_run FROM workflow_dispatch_cursor WHERE worker=?",
+          worker,
+        )?.last_run ?? "")
+      : "";
+    // At most one candidate per run in a round. The durable cursor also moves
+    // past incompatible runs, so restarting does not starve the queue tail.
+    return this.store.rows<CommandRow>(
+      "SELECT c.* FROM workflow_commands c JOIN workflow_runs r ON r.id=c.run_id WHERE r.status='running' AND r.deadline>? AND c.state='pending' AND c.ready_at<=? AND c.deadline>? AND r.id>? AND json_extract(c.definition,'$.kind')='activity' AND c.id=(SELECT x.id FROM workflow_commands x LEFT JOIN workflow_candidate_cursor f ON f.run_id=x.run_id AND f.worker=? WHERE x.run_id=r.id AND x.state='pending' AND x.ready_at<=? AND x.deadline>? AND json_extract(x.definition,'$.kind')='activity' ORDER BY CASE WHEN x.position*100+x.slot>coalesce(f.position,-1) THEN 0 ELSE 1 END,x.position,x.slot LIMIT 1) ORDER BY r.id LIMIT 64",
+      at,
+      at,
+      at,
+      cursor,
+      worker,
+      at,
+      at,
+    );
+  }
+  /** Trusted transport preparation only: bounded candidates, immutable grant, no launch. */
+  workPolicyInputs(
+    worker: string,
+    token?: string,
+  ): { work: WorkAdmission; grant: z.infer<typeof workGrantSchema>; activity: string }[] {
+    const commands = token
+      ? this.store.rows<CommandRow>(
+          "SELECT c.* FROM workflow_commands c JOIN workflow_work_executions e ON e.run_id=c.run_id AND json_extract(e.request,'$.activity_id')=c.id WHERE e.worker=? AND e.token=?",
+          worker,
+          token,
+        )
+      : this.claimCandidates(worker, this.clock());
+    return commands.flatMap((command) => {
+      const work = this.executionOwner.work(command.run_id);
+      if (!work) return [];
+      const row = this.store.one<{ evidence: string }>(
+        "SELECT evidence FROM workflow_work_grants WHERE run_id=? AND revision=?",
+        command.run_id,
+        work.grant_revision,
+      );
+      if (!row)
+        throw new WorkflowError("WorkGrantInvalid", "Retained policy evidence is missing.", 409);
+      const grant = workGrantSchema.parse(JSON.parse(row.evidence));
+      if (boundFingerprint(grant) !== work.plan.grant_digest)
+        throw new WorkflowError(
+          "WorkGrantInvalid",
+          "Retained policy evidence differs from the plan.",
+          409,
+        );
+      const definition = JSON.parse(command.definition) as LeafCommand;
+      return [{ work, grant, activity: definition.kind === "activity" ? definition.type : "" }];
+    });
+  }
   claim(worker: string, requestId?: string): ActivityTask | null {
+    return this.claimActivity(worker, requestId, false);
+  }
+  claimWork(worker: string, requestId: string): ActivityTask | null {
+    return this.claimActivity(worker, requestId, true);
+  }
+  private claimActivity(
+    worker: string,
+    requestId: string | undefined,
+    common: boolean,
+  ): ActivityTask | null {
     if (!this.executor) this.tick();
     return this.store.transaction(() => {
       const at = this.clock();
@@ -1436,6 +2001,12 @@ export class WorkflowOwner {
         );
         if (receipt) {
           const task = receipt.task ? (JSON.parse(receipt.task) as ActivityTask) : null;
+          if (task && Boolean(task.work) !== common)
+            throw new WorkflowError(
+              "ClaimProtocolConflict",
+              "Claim request ID belongs to another protocol.",
+              409,
+            );
           return task && this.permitsWorkerJob(worker, task.type)
             ? { ...task, timeoutMs: Math.max(1, task.deadline - at) }
             : null;
@@ -1450,24 +2021,8 @@ export class WorkflowOwner {
       )
         throw new Error("claim receipt capacity reached");
       if (!this.workers.has(worker)) return null;
-      const cursor = this.executor
-        ? (this.store.one<{ last_run: string }>(
-            "SELECT last_run FROM workflow_dispatch_cursor WHERE worker=?",
-            worker,
-          )?.last_run ?? "")
-        : "";
-      // At most one candidate per run in a round. The durable cursor also moves
-      // past incompatible runs, so restarting does not starve the queue tail.
-      const candidates = this.store.rows<CommandRow>(
-        "SELECT c.* FROM workflow_commands c JOIN workflow_runs r ON r.id=c.run_id WHERE r.status='running' AND r.deadline>? AND c.state='pending' AND c.ready_at<=? AND c.deadline>? AND r.id>? AND json_extract(c.definition,'$.kind')='activity' AND c.id=(SELECT x.id FROM workflow_commands x LEFT JOIN workflow_candidate_cursor f ON f.run_id=x.run_id AND f.worker=? WHERE x.run_id=r.id AND x.state='pending' AND x.ready_at<=? AND x.deadline>? AND json_extract(x.definition,'$.kind')='activity' ORDER BY CASE WHEN x.position*100+x.slot>coalesce(f.position,-1) THEN 0 ELSE 1 END,x.position,x.slot LIMIT 1) ORDER BY r.id LIMIT 64",
-        at,
-        at,
-        at,
-        cursor,
-        worker,
-        at,
-        at,
-      );
+      const candidates =
+        this.recoveryAdmission?.active === false ? [] : this.claimCandidates(worker, at);
       const progress = (run: string) => {
         if (this.executor)
           this.store.run(
@@ -1479,7 +2034,7 @@ export class WorkflowOwner {
       const occupancy = new Map(
         this.store
           .rows<{ worker: string; active: number }>(
-            "SELECT worker,count(*) active FROM workflow_attempts WHERE state='active' GROUP BY worker",
+            "SELECT worker,count(*) active FROM workflow_attempts WHERE physical_state!='settled' GROUP BY worker",
           )
           .map((row) => [row.worker, row.active]),
       );
@@ -1493,6 +2048,89 @@ export class WorkflowOwner {
         );
         const definition = JSON.parse(command.definition) as LeafCommand;
         const run = this.required(command.run_id);
+        const work = this.executionOwner.work(run.id);
+        if (Boolean(work) !== common) continue;
+        if (work) {
+          const capabilities = this.workExecutors.get(worker);
+          const kind =
+            work.plan.resources.executor === "agent"
+              ? "structured-agent"
+              : work.plan.resources.executor === "tool"
+                ? "scoped-tool"
+                : work.plan.resources.executor;
+          if (
+            !capabilities ||
+            capabilities.expires_at <= at ||
+            !capabilities.executors.includes(kind) ||
+            (work.plan.execution_profile === "resource-contained" &&
+              capabilities.containment !== "resource-contained")
+          )
+            continue;
+          if (
+            this.store.one(
+              "SELECT 1 FROM workflow_attempts WHERE command_id=? AND physical_state!='settled'",
+              command.id,
+            )
+          )
+            continue;
+          if (command.attempts > 0 && !capabilities.features.includes("bounded-retries")) continue;
+          if (capabilities.requires_validation_declaration && !work.plan.validation) continue;
+          if (work.plan.validation && !capabilities.features.includes("declared-validation"))
+            continue;
+          if (work.plan.node_job && !capabilities.features.includes("node-job")) continue;
+          if (
+            work.plan.agent_program &&
+            (capabilities.installation !== work.plan.agent_program.installation ||
+              this.workerNode(worker) !== work.plan.agent_program.installation ||
+              !capabilities.features.includes("endpoint-arbiter"))
+          )
+            continue;
+          if (
+            work.plan.process_program &&
+            (!capabilities.features.includes("process-program") ||
+              this.workerNode(worker) !== work.plan.process_program.installation)
+          )
+            continue;
+          if (
+            work.plan.process_program?.input_digest &&
+            !capabilities.features.includes("process-program-envelope")
+          )
+            continue;
+          if (
+            work.plan.process_program?.bundle &&
+            !capabilities.features.includes("process-program-bundle")
+          )
+            continue;
+          if (
+            work.plan.process_program?.commands &&
+            !capabilities.features.includes("action-command-stages")
+          )
+            continue;
+          if (this.jobContract((definition as ActivityCommand).type) && !work.plan.node_job)
+            continue;
+          if (
+            command.attempts === 0 &&
+            at >=
+              (command.work_dispatch_deadline ??
+                (work.first_started_at === null ? work.dispatch_deadline : Number.MAX_SAFE_INTEGER))
+          )
+            continue;
+          try {
+            this.assertWorkPolicy(
+              work,
+              worker,
+              definition.kind === "activity" ? definition.type : "",
+              "dispatch",
+            );
+          } catch (error) {
+            if (
+              error instanceof WorkflowError &&
+              ["WorkAuthorityUnavailable", "WorkPolicyChanged"].includes(error.code)
+            )
+              continue;
+            throw error;
+          }
+        }
         if (
           definition.kind === "activity" &&
           this.authorize &&
@@ -1531,7 +2169,20 @@ export class WorkflowOwner {
           continue;
         const token = randomUUID(),
           attempt = command.attempts + 1;
-        const deadline = Math.min(command.deadline, at + definition.attemptTimeoutMs);
+        const workDeadline = work
+          ? command.attempts > 0
+            ? Math.min(command.deadline, command.work_retry_deadline ?? Number.MAX_SAFE_INTEGER)
+            : command.work_dispatch_deadline === null
+              ? (work.execution_deadline ?? work.dispatch_deadline)
+              : Math.min(
+                  work.execution_deadline ?? Number.MAX_SAFE_INTEGER,
+                  command.work_dispatch_deadline,
+                )
+          : Number.MAX_SAFE_INTEGER;
+        const deadline = work
+          ? Math.min(run.deadline, workDeadline)
+          : Math.min(command.deadline, at + definition.attemptTimeoutMs);
+        if (deadline <= at) continue;
         this.store.run(
           "INSERT INTO workflow_attempts(token,command_id,worker,attempt,state,physical_state) VALUES(?,?,?,?,'active','running')",
           token,
@@ -1574,6 +2225,15 @@ export class WorkflowOwner {
             Math.floor(Math.min(definition.heartbeatTimeoutMs, definition.attemptTimeoutMs) / 3),
           ),
         };
+        if (work) {
+          task.work = this.executionOwner.bind(
+            worker,
+            task,
+            this.workExecutors.get(worker)?.features.includes("stage-logs") === true,
+          );
+          this.resourceOwner.bind(work, worker, task.work);
+          this.executionOwner.publish(run.id);
+        }
         if (requestId)
           this.store.run(
             "INSERT INTO workflow_claims VALUES(?,?,?,?)",
@@ -1601,6 +2261,16 @@ export class WorkflowOwner {
       const command = this.activeAttempt(worker, token, this.clock());
       if (!command) return false;
       const definition = JSON.parse(command.definition) as ActivityCommand;
+      const work = this.executionOwner.work(command.run_id);
+      if (work) {
+        try {
+          this.assertWorkPolicy(work, worker, definition.type, "effect");
+          if (this.executionOwner.startPermit(worker, token)) this.resourceOwner.assertHeld(token);
+        } catch (error) {
+          if (error instanceof WorkflowError) return false;
+          throw error;
+        }
+      }
       this.store.run(
         "UPDATE workflow_commands SET lease_until=? WHERE id=?",
         Math.min(command.attempt_deadline!, this.clock() + definition.heartbeatTimeoutMs),
@@ -1609,7 +2279,609 @@ export class WorkflowOwner {
       return true;
     });
   }
+  private assertWorkPolicy(
+    work: WorkAdmission,
+    worker: string,
+    activity: string,
+    operation: "dispatch" | "effect",
+  ): void {
+    const current = this.authorizeWork?.(work, worker, activity, operation);
+    if (!current)
+      throw new WorkflowError(
+        "WorkAuthorityUnavailable",
+        "Current full execution policy must authorize common work before dispatch or effects.",
+        409,
+      );
+    const row = this.store.one<{ evidence: string }>(
+      "SELECT evidence FROM workflow_work_grants WHERE run_id=? AND revision=?",
+      work.workflow_id,
+      work.grant_revision,
+    )!;
+    const grant = workGrantSchema.parse(JSON.parse(row.evidence));
+    if (boundFingerprint(grant) !== work.plan.grant_digest)
+      throw new WorkflowError(
+        "WorkGrantInvalid",
+        "Retained grant differs from the accepted plan.",
+        409,
+      );
+    if ((current.identity ?? null) !== (grant.effective_scope.identity ?? null))
+      throw new WorkflowError(
+        "WorkPolicyChanged",
+        "Current policy identifies another execution identity.",
+        409,
+      );
+    try {
+      assertScopeWithinCeiling(current, grant.effective_scope);
+    } catch (error) {
+      if (error instanceof WorkflowError)
+        throw new WorkflowError(
+          "WorkPolicyChanged",
+          "Current policy no longer permits the accepted execution scope.",
+          409,
+        );
+      throw error;
+    }
+  }
+  beginWork(worker: string, token: string): WorkExecutionStart {
+    return this.store.transaction(() => {
+      const existing = this.executionOwner.startPermit(worker, token);
+      if (existing) return existing;
+      const at = this.clock(),
+        command = this.activeAttempt(worker, token, at);
+      if (!command)
+        throw new WorkflowError(
+          "WorkLaunchFenced",
+          "Reservation is expired, stopped or no longer owned by this worker.",
+          409,
+        );
+      const work = this.executionOwner.work(command.run_id)!;
+      const dispatchDeadline =
+        command.attempts > 1
+          ? Number.MAX_SAFE_INTEGER
+          : (command.work_dispatch_deadline ??
+            (work.first_started_at === null ? work.dispatch_deadline : Number.MAX_SAFE_INTEGER));
+      if (dispatchDeadline <= at)
+        throw new WorkflowError(
+          "WorkDispatchExpired",
+          "Dispatch deadline expired before launch authorization.",
+          409,
+        );
+      const definition = JSON.parse(command.definition) as ActivityCommand;
+      this.assertWorkPolicy(work, worker, definition.type, "effect");
+      const reserved = this.store.one<{ request: string }>(
+        "SELECT request FROM workflow_work_executions WHERE token=?",
+        token,
+      )!;
+      const resources = this.resourceOwner.acquire(
+        JSON.parse(reserved.request) as WorkExecutionStart,
+      );
+      const launchAt = this.clock();
+      if (!this.activeAttempt(worker, token, launchAt))
+        throw new WorkflowError(
+          "WorkLaunchFenced",
+          "Reservation expired during resource acquisition.",
+          409,
+        );
+      if (dispatchDeadline <= launchAt)
+        throw new WorkflowError(
+          "WorkDispatchExpired",
+          "Dispatch deadline expired during resource acquisition.",
+          409,
+        );
+      this.assertWorkPolicy(work, worker, definition.type, "effect");
+      const executionDeadline = work.execution_deadline ?? launchAt + work.plan.execution_budget_ms;
+      const commandDeadline =
+        command.attempts > 1
+          ? command.deadline
+          : Math.min(executionDeadline, launchAt + definition.timeoutMs);
+      const deadline = Math.min(
+        this.required(command.run_id).deadline,
+        executionDeadline,
+        commandDeadline,
+        command.work_retry_deadline ?? Number.MAX_SAFE_INTEGER,
+        launchAt + definition.attemptTimeoutMs,
+      );
+      if (deadline <= launchAt)
+        throw new WorkflowError(
+          "ExecutionDeadlineExpired",
+          "Original execution deadline has expired.",
+          409,
+        );
+      const start = this.executionOwner.activate(
+        worker,
+        token,
+        deadline,
+        resources,
+        executionDeadline,
+      );
+      if (work.first_started_at === null)
+        this.store.run(
+          "UPDATE workflow_work_admissions SET record=? WHERE run_id=?",
+          encode({ ...work, first_started_at: launchAt, execution_deadline: executionDeadline }),
+          work.workflow_id,
+        );
+      this.store.run(
+        "UPDATE workflow_commands SET deadline=?,attempt_deadline=?,lease_until=? WHERE id=?",
+        commandDeadline,
+        deadline,
+        Math.min(deadline, launchAt + definition.heartbeatTimeoutMs),
+        command.id,
+      );
+      this.store.event(command.run_id, launchAt, "WorkLaunchAuthorized", {
+        token,
+        deadline,
+        executionDeadline,
+      });
+      this.executionOwner.publish(command.run_id);
+      return start;
+    });
+  }
+  assertWorkEffect(worker: string, token: string): boolean {
+    return this.store.transaction(() => this.workEffectAllowed(worker, token));
+  }
+  /** Caller holds the owner writer transaction. */
+  private workEffectAllowed(worker: string, token: string): boolean {
+    if (!this.executionOwner.startPermit(worker, token)) return false;
+    const command = this.activeAttempt(worker, token, this.clock());
+    if (!command) return false;
+    const work = this.executionOwner.work(command.run_id);
+    if (!work)
+      throw new WorkflowError(
+        "WorkBindingMissing",
+        "Effect authorization requires common work.",
+        409,
+      );
+    const definition = JSON.parse(command.definition) as ActivityCommand;
+    this.assertWorkPolicy(work, worker, definition.type, "effect");
+    this.resourceOwner.assertHeld(token);
+    return true;
+  }
+  /** Checked evidence for the assigned worker, never an implicit begin or an
+   * offline authority token. A replayed launch permit alone is insufficient. */
+  executionDelegation(worker: string, token: string): WorkExecutionDelegation {
+    return this.store.transaction(() => {
+      if (!this.workEffectAllowed(worker, token))
+        throw new WorkflowError(
+          "WorkDelegationFenced",
+          "Execution delegation requires a current activated attempt.",
+          409,
+        );
+      const row = this.store.one<{
+        run_id: string;
+        owner_epoch: string;
+        activated_at: number | null;
+        receipt: string | null;
+        cancel_requested: number;
+      }>(
+        "SELECT run_id,owner_epoch,activated_at,receipt,json_extract(observation,'$.cancel_requested') cancel_requested FROM workflow_work_executions WHERE worker=? AND token=?",
+        worker,
+        token,
+      );
+      if (
+        !row ||
+        row.owner_epoch !== this.epoch ||
+        row.activated_at === null ||
+        row.receipt !== null ||
+        row.cancel_requested
+      )
+        throw new WorkflowError(
+          "WorkDelegationFenced",
+          "Execution delegation is fenced by owner recovery or terminal evidence.",
+          409,
+        );
+      const start = this.executionOwner.startPermit(worker, token)!;
+      const work = this.executionOwner.work(start.workflow_id);
+      if (
+        !work ||
+        row.run_id !== start.workflow_id ||
+        start.attempt_id !== token ||
+        start.work_id !== work.work_id ||
+        start.owner !== work.namespace.installation ||
+        work.facts.stop_requested
+      )
+        throw new WorkflowError(
+          "WorkBindingMissing",
+          "Execution delegation has no matching accepted work.",
+          409,
+        );
+      const retained = this.store.one<{ evidence: string }>(
+        "SELECT evidence FROM workflow_work_grants WHERE run_id=? AND revision=?",
+        work.workflow_id,
+        start.grant_revision,
+      );
+      if (!retained)
+        throw new WorkflowError(
+          "WorkGrantInvalid",
+          "Execution delegation requires retained grant evidence.",
+          409,
+        );
+      const delegation = workExecutionDelegationSchema.safeParse({
+        version: 1,
+        admission_request_hash: work.request_hash,
+        start,
+        namespace: work.namespace,
+        origin: work.origin,
+        grant: JSON.parse(retained.evidence),
+        plan: work.plan,
+      });
+      if (!delegation.success)
+        throw new WorkflowError(
+          "WorkDelegationInvalid",
+          "Retained execution delegation is inconsistent or exceeds transport limits.",
+          409,
+        );
+      // Decoding/hashing a large retained plan must not bridge an expired lease.
+      if (!this.workEffectAllowed(worker, token))
+        throw new WorkflowError(
+          "WorkDelegationFenced",
+          "Execution delegation expired during verification.",
+          409,
+        );
+      return delegation.data;
+    });
+  }
+  observeWork(
+    worker: string,
+    token: string,
+    observation: WorkExecutionObservation,
+  ): "accepted" | "duplicate" | "stale" {
+    return this.store.transaction(() => {
+      const status = this.executionOwner.observe(worker, token, observation);
+      if (status === "accepted") this.executionOwner.publish(observation.workflow_id);
+      return status;
+    });
+  }
+  inspectWork(
+    worker: string,
+    token: string,
+  ): { observation: WorkExecutionObservation; stop_requested: boolean } {
+    return this.executionOwner.inspect(worker, token);
+  }
+  completeWorkReceipt(
+    worker: string,
+    token: string,
+    receipt: WorkExecutionReceipt,
+  ): "accepted" | "alreadyAccepted" | "stale" {
+    const result = this.store.transaction(() => {
+      const evidence = this.executionOwner.receipt(worker, token, receipt);
+      this.resourceOwner.prepareSettlement(token, receipt);
+      const at = this.clock(),
+        command = this.activeAttempt(worker, token, at);
+      if (evidence.ceased)
+        this.store.run(
+          "UPDATE workflow_attempts SET physical_state='settled',settled_at=coalesce(settled_at,?) WHERE token=? AND worker=?",
+          at,
+          token,
+          worker,
+        );
+      if (evidence.state === "duplicate") return "alreadyAccepted" as const;
+      if (evidence.stale || !command) {
+        if (!evidence.stale && receipt.outcome === "uncertain") {
+          const current = this.store.one<CommandRow>(
+            "SELECT c.* FROM workflow_commands c JOIN workflow_runs r ON r.id=c.run_id WHERE c.id=? AND c.token=? AND c.state='leased' AND r.status='running'",
+            receipt.activity_id,
+            token,
+          );
+          if (current) {
+            const outcome = failed(
+              "ExecutionUncertain",
+              "Executor confirms an uncertain outcome after attempt authority expired.",
+            );
+            this.store.run(
+              "UPDATE workflow_attempts SET state='accepted',outcome=? WHERE token=?",
+              encode(outcome),
+              token,
+            );
+            this.resolve(current, outcome, at);
+            this.block(
+              this.required(current.run_id),
+              "ExecutionUncertain: reconcile durable executor evidence",
+              at,
+            );
+          }
+        }
+        this.executionOwner.publish(receipt.workflow_id);
+        this.admissionOwner.releaseSettled();
+        if (!["running", "blocked"].includes(this.required(receipt.workflow_id).status))
+          this.settleBudget(receipt.workflow_id);
+        return "stale" as const;
+      }
+      if (receipt.outcome === "uncertain") {
+        this.resolve(
+          command,
+          failed("ExecutionUncertain", "Executor receipt retains uncertain effects or settlement."),
+          at,
+        );
+        this.block(
+          this.required(command.run_id),
+          "ExecutionUncertain: reconcile durable executor evidence",
+          at,
+        );
+      } else {
+        const outcome: Outcome =
+          receipt.outcome === "complete"
+            ? { ok: true, value: evidence.value }
+            : failed(
+                receipt.outcome === "timed-out"
+                  ? "AttemptTimeout"
+                  : receipt.outcome === "cancelled"
+                    ? "Cancelled"
+                    : "ExecutionFailed",
+                receipt.summary,
+              );
+        const invalid =
+          evidence.invalid_output ??
+          (outcome.ok ? this.rejectedOutput(command, outcome.value) : undefined);
+        this.store.run(
+          "UPDATE workflow_attempts SET state='accepted',outcome=?,settled_at=? WHERE token=?",
+          encode(invalid ? failed("InvalidOutput", invalid) : outcome),
+          at,
+          token,
+        );
+        if (
+          !invalid &&
+          !outcome.ok &&
+          receipt.outcome === "failed" &&
+          this.scheduleKnownWorkRetry(command, receipt, at)
+        ) {
+          // Keep the same logical command pending; this immutable receipt owns the settled attempt.
+        } else this.resolve(command, invalid ? failed("InvalidOutput", invalid) : outcome, at);
+        this.advance(this.required(command.run_id), at);
+      }
+      this.executionOwner.publish(command.run_id);
+      if (!["running", "blocked"].includes(this.required(command.run_id).status))
+        this.settleBudget(command.run_id);
+      return "accepted" as const;
+    });
+    this.resourceOwner.reconcile(64, token);
+    return result;
+  }
+  /** Internal maintenance: recover broker settlement after crashes or lost acknowledgements. */
+  reconcileWorkResources(): number {
+    this.store.transaction(() => this.resourceOwner.prepareUnlaunched());
+    return this.resourceOwner.reconcile();
+  }
 
+  /** Trusted control reads verified receipt metadata and immutable audit; output stays under result permission. */
+  workReconciliationEvidence(workId: string) {
+    identifier.parse(workId);
+    return this.store.read(() => {
+      const row = this.store.one<{ run_id: string }>(
+        "SELECT run_id FROM workflow_work_admissions WHERE work_id=?",
+        workId,
+      );
+      if (!row) throw new WorkflowError("WorkNotFound", "Work is unavailable.", 404);
+      const work = this.executionOwner.work(row.run_id)!;
+      const attempts = this.store.rows<{ token: string }>(
+        "SELECT e.token FROM workflow_work_executions e JOIN workflow_attempts a ON a.token=e.token WHERE e.run_id=? AND e.receipt IS NOT NULL ORDER BY a.started_at DESC,e.token DESC LIMIT 101",
+        row.run_id,
+      );
+      const receipts = attempts.slice(0, 100).map(({ token }) => {
+        const evidence = this.executionOwner.retainedReceipt(token),
+          receipt = evidence.receipt;
+        return {
+          attempt_id: token,
+          receipt_digest: receipt.receipt_digest,
+          receipt_ref: receipt.receipt_ref,
+          outcome: receipt.outcome,
+          physical_state: receipt.physical_state,
+          effect_certainty: receipt.effect_certainty,
+          validation: receipt.validation,
+          validation_failures: receipt.validation_failures,
+          summary: receipt.summary,
+          committed_at: receipt.committed_at,
+          invalid_output: evidence.invalid_output ?? null,
+          owner_epoch: evidence.owner_epoch,
+        };
+      });
+      const audit = this.store
+        .rows<{ request_id: string; audit: string; response: string }>(
+          "SELECT request_id,audit,response FROM workflow_work_reconciliations WHERE run_id=? ORDER BY rowid LIMIT 100",
+          row.run_id,
+        )
+        .map((entry) => ({
+          request_id: entry.request_id,
+          evidence: JSON.parse(entry.audit) as Json,
+          acknowledgement: JSON.parse(entry.response) as WorkReconciliationAck,
+        }));
+      return {
+        version: 2 as const,
+        work_id: workId,
+        revision: work.revision,
+        reason: work.reason,
+        receipts,
+        truncated: attempts.length > 100,
+        audit,
+      };
+    });
+  }
+
+  /** Trusted control boundary: apply matching evidence without fabricating a receipt or launching. */
+  reconcileWorkReceipt(
+    workId: string,
+    input: WorkReconciliation,
+    actor: string,
+  ): WorkReconciliationAck {
+    identifier.parse(workId);
+    identifier.parse(actor);
+    const request = workReconciliationSchema.parse(input),
+      binding = encode({ operation: "apply-receipt", actor, ...request });
+    return this.store.transaction(() => {
+      const row = this.store.one<{ run_id: string }>(
+        "SELECT run_id FROM workflow_work_admissions WHERE work_id=?",
+        workId,
+      );
+      if (!row) throw new WorkflowError("WorkNotFound", "Work is unavailable.", 404);
+      const previous = this.store.one<{ request: string; response: string }>(
+        "SELECT request,response FROM workflow_work_reconciliations WHERE run_id=? AND request_id=?",
+        row.run_id,
+        request.request_id,
+      );
+      if (previous) {
+        if (previous.request !== binding)
+          throw new WorkflowError(
+            "WorkControlConflict",
+            "Reconciliation request ID already identifies different evidence or actor.",
+            409,
+          );
+        return JSON.parse(previous.response) as WorkReconciliationAck;
+      }
+      const work = this.executionOwner.work(row.run_id)!,
+        run = this.required(row.run_id);
+      if (work.revision !== request.expected_revision)
+        throw new WorkflowError(
+          "WorkRevisionConflict",
+          "Work changed; inspect current evidence before reconciling.",
+          409,
+        );
+      if (run.status !== "blocked")
+        throw new WorkflowError(
+          "WorkReconciliationConflict",
+          "Only blocked work can apply a late receipt; terminal decisions remain unchanged.",
+          409,
+        );
+      if (
+        this.store.one<{ count: number }>(
+          "SELECT count(*) count FROM workflow_work_reconciliations WHERE run_id=?",
+          row.run_id,
+        )!.count >= 100
+      )
+        throw new WorkflowError(
+          "WorkControlQuota",
+          "Reconciliation audit quota requires explicit archival.",
+          429,
+        );
+      const evidence = this.executionOwner.retainedReceipt(request.attempt_id),
+        receipt = evidence.receipt;
+      if (
+        receipt.work_id !== workId ||
+        receipt.workflow_id !== row.run_id ||
+        receipt.receipt_digest !== request.receipt_digest
+      )
+        throw new WorkflowError(
+          "WorkReceiptConflict",
+          "Chosen evidence belongs to another work item or digest.",
+          409,
+        );
+      if (
+        receipt.outcome === "uncertain" ||
+        receipt.effect_certainty === "uncertain" ||
+        !["ceased", "not-started"].includes(receipt.physical_state)
+      )
+        throw new WorkflowError(
+          "WorkReconciliationUnproven",
+          "Receipt does not prove a known result and cessation.",
+          409,
+        );
+      if (
+        this.store.one(
+          "SELECT 1 FROM workflow_attempts WHERE command_id=? AND token<>?",
+          receipt.activity_id,
+          request.attempt_id,
+        )
+      )
+        throw new WorkflowError(
+          "WorkReconciliationConflict",
+          "Activity has another physical attempt; reconcile its full history explicitly.",
+          409,
+        );
+      if (
+        this.store.one(
+          "SELECT 1 FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id WHERE c.run_id=? AND a.physical_state!='settled'",
+          row.run_id,
+        )
+      )
+        throw new WorkflowError(
+          "WorkReconciliationUnproven",
+          "Another execution still has unproven physical settlement.",
+          409,
+        );
+      const command = this.store.one<CommandRow>(
+        "SELECT * FROM workflow_commands WHERE id=? AND run_id=?",
+        receipt.activity_id,
+        row.run_id,
+      );
+      if (
+        !command ||
+        (command.state !== "done" &&
+          !(command.state === "pending" && evidence.owner_epoch !== this.epoch))
+      )
+        throw new WorkflowError(
+          "WorkReconciliationConflict",
+          "Activity is not awaiting a settled reconciliation verdict.",
+          409,
+        );
+      const priorOutcome = command.outcome ? (JSON.parse(command.outcome) as Outcome) : null;
+      if (
+        work.reason?.code !== "LateExecutionEvidence" ||
+        (priorOutcome?.ok && evidence.owner_epoch === this.epoch)
+      )
+        throw new WorkflowError(
+          "WorkReconciliationConflict",
+          "Receipt does not resolve this blocking decision.",
+          409,
+        );
+      const outcome: Outcome =
+        receipt.outcome === "complete"
+          ? { ok: true, value: evidence.value }
+          : failed(
+              receipt.outcome === "timed-out"
+                ? "AttemptTimeout"
+                : receipt.outcome === "cancelled"
+                  ? "Cancelled"
+                  : "ExecutionFailed",
+              receipt.summary,
+            );
+      const invalid =
+        evidence.invalid_output ??
+        (outcome.ok ? this.rejectedOutput(command, outcome.value) : undefined);
+      const accepted = invalid ? failed("InvalidOutput", invalid) : outcome,
+        at = this.clock();
+      const audit = encode({
+        version: 2,
+        actor,
+        at,
+        reason: request.reason,
+        residualRisk: request.residual_risk,
+        receiptRef: receipt.receipt_ref,
+        receiptDigest: receipt.receipt_digest,
+        attemptId: request.attempt_id,
+        previousRevision: work.revision,
+        previousOutcome: priorOutcome,
+        previousCommandState: command.state,
+        evidenceOwnerEpoch: evidence.owner_epoch,
+        currentOwnerEpoch: this.epoch,
+      });
+      this.reserve(row.run_id, Buffer.byteLength(binding) + Buffer.byteLength(audit) + 2048);
+      this.resolve(command, accepted, at);
+      this.store.run(
+        "UPDATE workflow_attempts SET state='accepted',outcome=? WHERE token=?",
+        encode(accepted),
+        request.attempt_id,
+      );
+      this.store.run("UPDATE workflow_runs SET status='running',error=NULL WHERE id=?", row.run_id);
+      this.store.event(row.run_id, at, "WorkReceiptReconciled", JSON.parse(audit) as Json);
+      this.advance(this.required(row.run_id), at);
+      this.executionOwner.publish(row.run_id);
+      const response: WorkReconciliationAck = {
+        version: 2,
+        work_id: workId,
+        request_id: request.request_id,
+        receipt_digest: receipt.receipt_digest,
+        applied_revision: this.executionOwner.work(row.run_id)!.revision,
+        applied_at: at,
+      };
+      this.store.run(
+        "INSERT INTO workflow_work_reconciliations VALUES(?,?,?,?,?)",
+        row.run_id,
+        request.request_id,
+        binding,
+        audit,
+        encode(response),
+      );
+      return response;
+    });
+  }
   complete(worker: string, token: string, outcome: Outcome): boolean {
     const status = this.completeStatus(worker, token, outcome);
     return status === "accepted" || status === "alreadyAccepted";
@@ -1622,6 +2894,17 @@ export class WorkflowOwner {
     if (outcome.ok) encodePayload(outcome.value);
     const serialized = encode(outcomeSchema.parse(JSON.parse(encode(outcome))));
     return this.store.transaction(() => {
+      const common = this.store.one(
+        "SELECT 1 FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id JOIN workflow_work_admissions w ON w.run_id=c.run_id WHERE a.token=? AND a.worker=?",
+        token,
+        worker,
+      );
+      if (common)
+        throw new WorkflowError(
+          "WorkReceiptRequired",
+          "Common work completion requires its durable executor receipt.",
+          409,
+        );
       const previous = this.store.one<AttemptRow>(
         "SELECT * FROM workflow_attempts WHERE token=? AND worker=?",
         token,
@@ -1714,6 +2997,18 @@ export class WorkflowOwner {
   /** A worker acknowledges only after its activity has actually returned. Lease expiry is not evidence. */
   settlePhysical(worker: string, token: string): boolean {
     if (
+      this.store.one(
+        "SELECT 1 FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id JOIN workflow_work_admissions w ON w.run_id=c.run_id WHERE a.token=? AND a.worker=?",
+        token,
+        worker,
+      )
+    )
+      throw new WorkflowError(
+        "WorkReceiptRequired",
+        "Common work settlement requires observed cessation in its receipt.",
+        409,
+      );
+    if (
       !this.store.one("SELECT 1 FROM workflow_attempts WHERE token=? AND worker=?", token, worker)
     )
       return false;
@@ -1729,6 +3024,7 @@ export class WorkflowOwner {
     if (this.closed) return;
     if (this.pumping) throw new Error("drain owner evaluation before closing storage");
     this.closed = true;
+    this.admissionOwner.close();
     this.store.close();
   }
   async drain(): Promise<void> {
@@ -1813,7 +3109,7 @@ export class WorkflowOwner {
       return;
     }
     const next = this.store.one<{ due: number | null }>(
-      "SELECT min(CASE WHEN state='leased' THEN min(deadline,lease_until) WHEN ?='running' AND json_extract(definition,'$.kind')='signal' AND EXISTS(SELECT 1 FROM workflow_signals s WHERE s.run_id=c.run_id AND s.name=json_extract(c.definition,'$.name') AND s.consumed=0) THEN ? ELSE deadline END) due FROM workflow_commands c WHERE run_id=? AND state IN ('pending','leased')",
+      "SELECT min(CASE WHEN state='leased' THEN min(deadline,lease_until,coalesce(work_retry_deadline,deadline)) WHEN ?='running' AND json_extract(definition,'$.kind')='signal' AND EXISTS(SELECT 1 FROM workflow_signals s WHERE s.run_id=c.run_id AND s.name=json_extract(c.definition,'$.name') AND s.consumed=0) THEN ? ELSE min(deadline,coalesce(work_retry_deadline,deadline)) END) due FROM workflow_commands c WHERE run_id=? AND state IN ('pending','leased')",
       run.status,
       this.clock(),
       id,
@@ -1821,7 +3117,11 @@ export class WorkflowOwner {
     this.store.run(
       "UPDATE workflow_due SET due_at=CASE WHEN dirty=1 AND ?='running' THEN due_at ELSE ? END WHERE run_id=?",
       run.status,
-      Math.min(run.deadline, next ?? run.deadline),
+      Math.min(
+        run.deadline,
+        next ?? run.deadline,
+        this.workDispatchDeadline(id) ?? Number.MAX_SAFE_INTEGER,
+      ),
       id,
     );
   }
@@ -2020,6 +3320,7 @@ export class WorkflowOwner {
               at,
             );
           else throw new Error("invalid evaluator proposal");
+          this.executionOwner.publish(id);
           this.refreshDue(id);
         });
       }),
@@ -2050,6 +3351,18 @@ export class WorkflowOwner {
   }
   private checkResume(run: RunRow): void {
     this.store.assertAccounted();
+    const work = this.executionOwner.work(run.id);
+    if (
+      work &&
+      (work.facts.effect === "uncertain" ||
+        work.facts.physical === "unknown" ||
+        work.reason?.code === "LateExecutionEvidence")
+    )
+      throw new WorkflowError(
+        "ReconciliationRequired",
+        "Common work needs audited executor reconciliation before resume.",
+        409,
+      );
     if (run.error?.startsWith("OutcomeUnknown"))
       throw new WorkflowError(
         "ReconciliationRequired",
@@ -2065,6 +3378,18 @@ export class WorkflowOwner {
       throw new WorkflowError(
         "ReconciliationRequired",
         "Reconcile the session turn before resuming this run.",
+        409,
+      );
+    if (
+      this.recoveryAdmission &&
+      this.store.one(
+        "SELECT 1 FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id WHERE c.run_id=? AND a.physical_state!='settled' LIMIT 1",
+        run.id,
+      )
+    )
+      throw new WorkflowError(
+        "ReconciliationRequired",
+        "Restored execution/effects remain unproven; admission activation does not authorize another attempt.",
         409,
       );
     if (run.budget_bytes > 67_108_864)
@@ -2165,7 +3490,7 @@ export class WorkflowOwner {
       const active = occupancy
         ? (occupancy.get(id) ?? 0)
         : this.store.one<{ count: number }>(
-            "SELECT count(*) AS count FROM workflow_attempts WHERE worker=? AND state='active'",
+            "SELECT count(*) AS count FROM workflow_attempts WHERE worker=? AND physical_state!='settled'",
             id,
           )!.count;
       return this.workerReason(command, id, worker, at, active, profile, runNodes) === null;
@@ -2193,8 +3518,10 @@ export class WorkflowOwner {
         reference === "local" ? this.id : this.resolveNode(reference),
       );
     return (
-      (bound.deny !== undefined && names(bound.deny).includes(id)) ||
-      (bound.allow !== undefined && !names(bound.allow).includes(id))
+      (bound.deny !== undefined &&
+        names(bound.deny).some((node) => node === id || node === this.workerNode(id))) ||
+      (bound.allow !== undefined &&
+        !names(bound.allow).some((node) => node === id || node === this.workerNode(id)))
     );
   }
   private workerReason(
@@ -2208,12 +3535,19 @@ export class WorkflowOwner {
   ): string | null {
     if (worker.expiresAt <= at) return "WORKER_OFFLINE";
     if (!this.permitsWorkerJob(id, command.type)) return "WORKER_JOB_SCOPE_EXCLUDED";
-    if (this.nodeExcluded(id, command.placement.nodes) || this.nodeExcluded(id, runNodes))
+    const job = this.jobContract(command.type);
+    if (
+      this.nodeExcluded(id, command.placement.nodes) ||
+      this.nodeExcluded(id, runNodes) ||
+      (job && this.nodeExcluded(id, job.nodes ?? { allow: ["local"] }))
+    )
       return "NODE_BOUND_EXCLUDED";
     if (!(this.workerProfiles[id] ?? ["portable"]).includes(profile))
       return "REQUIRED_CONTAINMENT_UNAVAILABLE";
     if (
-      (command.placement.node && command.placement.node !== id) ||
+      (command.placement.node &&
+        command.placement.node !== id &&
+        command.placement.node !== this.workerNode(id)) ||
       !worker.types.includes(command.type) ||
       !Object.entries(command.placement.requires).every(
         ([key, value]) => worker.labels[key] === value,
@@ -2229,19 +3563,74 @@ export class WorkflowOwner {
   }
 
   private reconcile(run: RunRow, at: number): void {
+    const dispatchDeadline = this.workDispatchDeadline(run.id);
+    if (
+      dispatchDeadline !== null &&
+      dispatchDeadline <= at &&
+      ["running", "blocked"].includes(run.status)
+    ) {
+      if (
+        this.store.one(
+          "SELECT 1 FROM workflow_attempts a JOIN workflow_commands c ON c.id=a.command_id LEFT JOIN workflow_work_executions e ON e.token=a.token WHERE c.run_id=? AND (e.request IS NULL OR coalesce(json_extract(e.request,'$.launch_authorized'),1)!=0) LIMIT 1",
+          run.id,
+        )
+      ) {
+        const reason =
+          "DispatchUncertain: existing execution evidence must be reconciled before deadline settlement";
+        if (run.status !== "blocked" || run.error !== reason) this.block(run, reason, at);
+      } else {
+        this.store.run(
+          "UPDATE workflow_attempts SET physical_state='settled',settled_at=? WHERE token IN (SELECT e.token FROM workflow_work_executions e WHERE e.run_id=? AND json_extract(e.request,'$.launch_authorized')=0)",
+          at,
+          run.id,
+        );
+        this.finish(
+          run,
+          "failed",
+          failed(
+            "DispatchTimeout",
+            "No execution launch was authorized before the dispatch deadline.",
+          ),
+          at,
+        );
+      }
+      return;
+    }
     if (run.status !== "running" && run.status !== "blocked") return;
     if (run.deadline <= at) {
       this.finish(run, "timed_out", failed("WorkflowTimeout", "workflow deadline passed"), at);
       return;
     }
     for (const command of this.store.rows<CommandRow>(
-      `SELECT * FROM workflow_commands c WHERE run_id=? AND state IN ('pending','leased') ${this.executor ? "AND (deadline<=? OR (state='leased' AND lease_until<=?) OR (?='running' AND json_extract(definition,'$.kind')='signal' AND EXISTS(SELECT 1 FROM workflow_signals s WHERE s.run_id=c.run_id AND s.name=json_extract(c.definition,'$.name') AND s.consumed=0)))" : ""} ORDER BY position,slot LIMIT ${this.executor ? 64 : 1000}`,
+      `SELECT * FROM workflow_commands c WHERE run_id=? AND state IN ('pending','leased') ${this.executor ? "AND (deadline<=? OR work_retry_deadline<=? OR (state='leased' AND lease_until<=?) OR (?='running' AND json_extract(definition,'$.kind')='signal' AND EXISTS(SELECT 1 FROM workflow_signals s WHERE s.run_id=c.run_id AND s.name=json_extract(c.definition,'$.name') AND s.consumed=0)))" : ""} ORDER BY position,slot LIMIT ${this.executor ? 64 : 1000}`,
       run.id,
-      ...(this.executor ? [at, at, run.status] : []),
+      ...(this.executor ? [at, at, at, run.status] : []),
     )) {
       const definition = JSON.parse(command.definition) as LeafCommand;
       if (definition.kind === "timer") {
         if (command.deadline <= at) this.resolve(command, { ok: true, value: null }, at);
+      } else if (
+        definition.kind === "activity" &&
+        command.work_dispatch_deadline !== null &&
+        command.work_dispatch_deadline <= at &&
+        !this.store.one(
+          "SELECT 1 FROM workflow_work_executions WHERE run_id=? AND json_extract(request,'$.activity_id')=? AND coalesce(json_extract(request,'$.launch_authorized'),1)!=0",
+          run.id,
+          command.id,
+        )
+      ) {
+        this.expireAttempt(command);
+        this.resolve(
+          command,
+          failed(
+            "DispatchTimeout",
+            "Eligible activity did not receive launch authorization before its dispatch deadline.",
+          ),
+          at,
+        );
+      } else if (command.work_retry_deadline !== null && command.work_retry_deadline <= at) {
+        this.expireAttempt(command);
+        this.resolve(command, failed("RetryBudgetExpired", "Original retry budget expired."), at);
       } else if (command.deadline <= at) {
         this.expireAttempt(command);
         this.resolve(command, failed("CommandTimeout", "command deadline passed"), at);
@@ -2274,13 +3663,33 @@ export class WorkflowOwner {
       }
     }
   }
+  private workDispatchDeadline(runId: string): number | null {
+    const work = this.executionOwner.work(runId);
+    // Generic workflow waits have separate eligibility contracts; legacy action
+    // and job dispatch budgets are measured from their accepted invocation.
+    if (work?.facts.coordinator === "blocked" && work.facts.effect === "uncertain") return null;
+    return work && work.plan.definition.kind !== "workflow" && work.first_started_at === null
+      ? work.dispatch_deadline
+      : null;
+  }
   private expireAttempt(command: CommandRow): void {
-    if (command.token)
-      this.store.run(
-        "UPDATE workflow_attempts SET state='expired',physical_state='unknown',settled_at=? WHERE token=? AND state='active'",
-        this.clock(),
+    if (command.token) {
+      const unlaunched = this.store.one(
+        "SELECT 1 FROM workflow_work_executions WHERE token=? AND json_extract(request,'$.launch_authorized')=0",
         command.token,
       );
+      // Logical lease expiry cannot revoke physical cessation already proven
+      // by a bound executor receipt delivered before this maintenance pass.
+      const at = this.clock();
+      this.store.run(
+        "UPDATE workflow_attempts SET state='expired',physical_state=CASE WHEN physical_state='settled' THEN 'settled' ELSE ? END,settled_at=CASE WHEN physical_state='settled' THEN coalesce(settled_at,?) ELSE ? END WHERE token=? AND state='active'",
+        unlaunched ? "settled" : "unknown",
+        at,
+        at,
+        command.token,
+      );
+      if (unlaunched) this.resourceOwner.prepareUnlaunched(command.run_id);
+    }
   }
   private resolve(command: CommandRow, outcome: Outcome, at: number): void {
     this.store.run(
@@ -2290,7 +3699,98 @@ export class WorkflowOwner {
     );
     this.store.event(command.run_id, at, "CommandResolved", { command: command.id, outcome });
   }
+  private scheduleKnownWorkRetry(
+    command: CommandRow,
+    receipt: WorkExecutionReceipt,
+    at: number,
+  ): boolean {
+    const work = this.executionOwner.work(command.run_id)!;
+    const policy = work.plan.effect_policy;
+    const definition = JSON.parse(command.definition) as ActivityCommand;
+    if (
+      (policy.class !== "pure" && policy.class !== "repeatable") ||
+      !receipt.failure?.retryable ||
+      receipt.effect_certainty !== "known" ||
+      receipt.physical_state !== "ceased" ||
+      ["failed", "unknown"].includes(receipt.validation) ||
+      receipt.stages.some((stage) => stage.stage === "execution" && stage.state === "passed") ||
+      receipt.stages.some(
+        (stage) =>
+          stage.state === "unknown" || (stage.stage === "validation" && stage.state === "failed"),
+      ) ||
+      ["InvalidOutput", "ValidationFailed", "SchemaError"].includes(receipt.failure.code) ||
+      work.plan.resources.endpoint !== null ||
+      work.facts.stop_requested ||
+      command.attempts >= Math.min(policy.max_attempts, definition.retry.maxAttempts)
+    )
+      return false;
+    const first = this.store.one<{ at: number | null }>(
+      "SELECT min(e.activated_at) at FROM workflow_work_executions e JOIN workflow_attempts a ON a.token=e.token WHERE a.command_id=?",
+      command.id,
+    )?.at;
+    if (first === null || first === undefined) return false;
+    const base = Math.min(
+      definition.retry.maxDelayMs,
+      definition.retry.initialDelayMs * 2 ** Math.min(30, command.attempts - 1),
+    );
+    const delay = base === 0 ? 0 : randomInt(Math.ceil(base / 2), base + 1);
+    const deadline = Math.min(
+      command.deadline,
+      work.execution_deadline!,
+      this.required(command.run_id).deadline,
+      first + policy.retry_budget_ms,
+    );
+    if (at + delay >= deadline) return false;
+    this.store.run(
+      "UPDATE workflow_commands SET state='pending',token=NULL,lease_until=NULL,ready_at=?,work_retry_deadline=coalesce(work_retry_deadline,?) WHERE id=?",
+      at + delay,
+      deadline,
+      command.id,
+    );
+    this.store.event(command.run_id, at, "WorkRetryScheduled", {
+      command: command.id,
+      previousAttempt: receipt.attempt_id,
+      receiptDigest: receipt.receipt_digest,
+      readyAt: at + delay,
+      budgetDeadline: work.execution_deadline,
+      retryDeadline: deadline,
+      attemptLimit: Math.min(policy.max_attempts, definition.retry.maxAttempts),
+    });
+    return true;
+  }
   private retryOrResolve(command: CommandRow, error: Failure, at: number): void {
+    if (this.executionOwner.work(command.run_id)) {
+      if (
+        command.token &&
+        this.store.one(
+          "SELECT 1 FROM workflow_work_executions WHERE token=? AND json_extract(request,'$.launch_authorized')=0",
+          command.token,
+        )
+      ) {
+        this.resolve(
+          command,
+          failed("WorkLaunchExpired", "Reservation expired before any launch was authorized."),
+          at,
+        );
+        this.executionOwner.publish(command.run_id);
+        return;
+      }
+      this.resolve(
+        command,
+        failed(
+          "ExecutionUncertain",
+          "Common work requires executor evidence before another physical attempt.",
+        ),
+        at,
+      );
+      this.block(
+        this.required(command.run_id),
+        "ExecutionUncertain: inspect the existing execution before any retry",
+        at,
+      );
+      this.executionOwner.publish(command.run_id);
+      return;
+    }
     const definition = JSON.parse(command.definition) as ActivityCommand;
     const delay = Math.min(
       definition.retry.maxDelayMs,
@@ -2330,12 +3830,29 @@ export class WorkflowOwner {
       "UPDATE workflow_commands SET state='cancelled',token=NULL WHERE run_id=? AND state IN ('pending','leased')",
       run.id,
     );
+    this.store.run(
+      `UPDATE workflow_attempts SET physical_state='settled',settled_at=coalesce(settled_at,?)
+      WHERE token IN (SELECT token FROM workflow_work_executions WHERE run_id=? AND json_extract(request,'$.launch_authorized')=0)`,
+      at,
+      run.id,
+    );
+    this.resourceOwner.prepareUnlaunched(run.id);
     this.store.event(run.id, at, "WorkflowClosed", { status, outcome });
+    this.executionOwner.publish(run.id);
     this.settleBudget(run.id);
+    this.admissionOwner.releaseSettled();
   }
   private settleBudget(id: string): void {
-    const run = this.required(id);
-    let bytes = Buffer.byteLength(encode(run)) + 1_048_576;
+    const run =
+      this.store.one<RunRow>("SELECT * FROM workflow_runs WHERE id=?", id) ?? this.required(id);
+    let bytes = Buffer.byteLength(encode(run)) + 512;
+    if (
+      this.store.one(
+        "SELECT 1 FROM workflow_work_executions e JOIN workflow_attempts a ON a.token=e.token WHERE e.run_id=? AND a.physical_state!='settled' LIMIT 1",
+        id,
+      )
+    )
+      bytes += 1048576;
     for (const [table, expression] of [
       ["workflow_groups", "length(CAST(definition AS BLOB))+256"],
       [
@@ -2345,8 +3862,36 @@ export class WorkflowOwner {
       ["workflow_events", "length(CAST(details AS BLOB))+256"],
       ["workflow_signals", "length(CAST(payload AS BLOB))+256"],
       ["workflow_payloads", "bytes+256"],
+      ["workflow_receipts", "length(CAST(request AS BLOB))+length(CAST(response AS BLOB))+256"],
       ["workflow_grants", "length(CAST(evidence AS BLOB))+512"],
       ["workflow_session_bindings", "512"],
+      ["workflow_work_admissions", "length(CAST(record AS BLOB))+512"],
+      ["workflow_work_grants", "length(CAST(evidence AS BLOB))+512"],
+      ["workflow_work_sources", "256"],
+      ["workflow_work_reservations", "512"],
+      ["workflow_work_outbox", "length(CAST(body AS BLOB))+512"],
+      ["workflow_work_nonces", "length(CAST(binding AS BLOB))+512"],
+      ["workflow_work_delegations", "length(CAST(evidence AS BLOB))+512"],
+      [
+        "workflow_work_executions",
+        "length(CAST(request AS BLOB))+length(CAST(observation AS BLOB))+coalesce(length(CAST(receipt AS BLOB)),0)+512",
+      ],
+      [
+        "workflow_work_index",
+        "length(installation)+length(namespace_hash)+coalesce(length(identity_id),0)+length(state)+length(definition_ref)+512",
+      ],
+      [
+        "workflow_work_resource_intents",
+        "length(CAST(request AS BLOB))+coalesce(length(CAST(settlement AS BLOB)),0)+512",
+      ],
+      [
+        "workflow_work_stop_receipts",
+        "length(CAST(request AS BLOB))+length(CAST(response AS BLOB))+512",
+      ],
+      [
+        "workflow_work_reconciliations",
+        "length(CAST(request AS BLOB))+length(CAST(audit AS BLOB))+length(CAST(response AS BLOB))+512",
+      ],
     ])
       bytes += this.store.one<{ bytes: number }>(
         `SELECT coalesce(sum(${expression}),0) bytes FROM ${table} WHERE run_id=?`,
@@ -2380,11 +3925,20 @@ export class WorkflowOwner {
       );
     }
     this.store.event(run.id, at, "WorkflowBlocked", { error });
+    this.executionOwner.publish(run.id);
   }
 
   private advance(run: RunRow, at: number): void {
     if (this.executor) return;
     if (run.status !== "running") return;
+    if (this.store.one("SELECT 1 FROM workflow_work_admissions WHERE run_id=?", run.id)) {
+      this.block(
+        run,
+        "common work requires the verified artifact evaluator; restore this runtime before continuing",
+        at,
+      );
+      return;
+    }
     const definition = this.definitions.get(encode([run.type, run.version]));
     if (!definition) {
       this.block(run, "workflow definition is unavailable", at);
@@ -2467,17 +4021,28 @@ export class WorkflowOwner {
     const id = createHash("sha256")
       .update(encode([this.id, run.id, position, slot]))
       .digest("hex");
-    const deadline = Math.min(
-      run.deadline,
-      at +
-        (definition.kind === "timer"
-          ? definition.delayMs
-          : "timeoutMs" in definition
-            ? definition.timeoutMs
-            : 0),
-    );
+    const work = definition.kind === "activity" ? this.executionOwner.work(run.id) : null;
+    const eligibleDispatch =
+      work?.plan.definition.kind === "workflow" && work.plan.overall_budget_ms !== undefined
+        ? Math.min(run.deadline, at + work.plan.dispatch_budget_ms)
+        : null;
+    const deadline = work
+      ? Math.min(
+          run.deadline,
+          work.execution_deadline ?? Number.MAX_SAFE_INTEGER,
+          eligibleDispatch ?? work.dispatch_deadline,
+        )
+      : Math.min(
+          run.deadline,
+          at +
+            (definition.kind === "timer"
+              ? definition.delayMs
+              : "timeoutMs" in definition
+                ? definition.timeoutMs
+                : 0),
+        );
     this.store.run(
-      "INSERT INTO workflow_commands(id,run_id,position,slot,definition,state,deadline,ready_at) VALUES(?,?,?,?,?,'pending',?,?)",
+      "INSERT INTO workflow_commands(id,run_id,position,slot,definition,state,deadline,ready_at,work_eligible_at,work_dispatch_deadline) VALUES(?,?,?,?,?,'pending',?,?,?,?)",
       id,
       run.id,
       position,
@@ -2485,6 +4050,8 @@ export class WorkflowOwner {
       encode(definition),
       deadline,
       at,
+      eligibleDispatch === null ? null : at,
+      eligibleDispatch,
     );
     this.store.event(run.id, at, "CommandScheduled", {
       command: id,

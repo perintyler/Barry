@@ -191,7 +191,8 @@ export function barryArchivesDir() { return join(barryAppSupportDir(), "archives
 export function barryBackupsDir() { return join(barryAppSupportDir(), "backups"); }
 
 /** Explicitly selected model adapter packages for this installation. */
-export function barryModelProvidersPath() { return join(barryAppSupportDir(), "model-providers.json"); }
+export function barryVendorAdaptersPath() { return join(barryAppSupportDir(), "model-providers.json"); }
+export function barryModelVendorsPath() { return join(barryAppSupportDir(), "model-providers.json"); }
 
 /** Release copies and the stable selector for this instance's installation. */
 export function barryReleasesDir() { return join(barryAppSupportDir(), "releases"); }

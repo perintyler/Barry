@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { NotSupportedInMode } from "@barry-rocks/sdk/sessions";
@@ -83,6 +84,26 @@ describe("planAntigravityLaunch", () => {
         ANTIGRAVITY_GUEST.guarantees,
       ),
     ).toThrow(/GEMINI_API_KEY/);
+  });
+
+  it("on the account path, needs no key and keeps any key away from agy", () => {
+    const signIn = join(mkdtempSync(join(tmpdir(), "agy-signin-")), "antigravity-oauth-token");
+    writeFileSync(signIn, "signed-in");
+    const plan = planAntigravityLaunch(
+      { sessionId: "sess-account", cwd: "/repos/app", env: { ANTIGRAVITY_AUTH: "google-account", GEMINI_API_KEY: "unbilled-project-key" }, mcpServers: {} },
+      ANTIGRAVITY_GUEST.guarantees,
+      { signInPath: signIn },
+    );
+    expect(plan.env.GEMINI_API_KEY).toBeUndefined();
+    expect(plan.env.ANTIGRAVITY_AUTH).toBe("google-account");
+    expect(readFileSync(join(plan.cwd!, ".gemini", "antigravity-cli", "antigravity-oauth-token"), "utf8")).toBe("signed-in");
+    expect(() =>
+      planAntigravityLaunch(
+        { sessionId: "sess-account-unsigned", cwd: "/repos/app", env: { ANTIGRAVITY_AUTH: "google-account" }, mcpServers: {} },
+        ANTIGRAVITY_GUEST.guarantees,
+        { signInPath: join(tmpdir(), "nowhere", "antigravity-oauth-token") },
+      ),
+    ).toThrow(/not signed in/);
   });
 
   it("refuses resume without exact harnessSessionId", () => {

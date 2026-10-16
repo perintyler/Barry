@@ -19,7 +19,7 @@ class Transport extends EventEmitter {
 }
 const senders: SocketPublications[] = [];
 afterEach(() => { for (const sender of senders.splice(0)) sender.dispose(); });
-async function create(options: { maxBytes?: number; maxFrames?: number } = {}, verifier?: () => unknown) {
+async function create(options: { maxBytes?: number; maxFrames?: number; onSent?: (bytes: number, queuedAt: number) => void } = {}, verifier?: () => unknown) {
   const transport = new Transport();
   const authorization = await authenticateCredential("fixture", { verifyCredential: verifier ?? (() => ({ kind: "installation", actorId: 1, credentialId: "installation" })) });
   const sender = new SocketPublications(transport, authorization!, options); senders.push(sender);
@@ -29,7 +29,7 @@ describe("authorized socket publications", () => {
   it("keeps publication order and stops between frames when the original credential changes", async () => {
     let active = true;
     const { sender, transport } = await create({}, () => active ? { kind: "installation", actorId: 1, credentialId: "installation" } : null);
-    transport.sent = () => { active = false; };
+    transport.sent = () => { active = false; sender.invalidateAuthorization(); };
     expect(sender.send("first")).toBe(true); expect(sender.send("second")).toBe(true);
     await vi.waitFor(() => expect(transport.close).toHaveBeenCalledWith(1008, "Authorization unavailable"));
     expect(transport.published).toEqual(["first"]);
@@ -99,4 +99,35 @@ describe("authorized socket publications", () => {
     expect(() => new SocketPublications(new Transport(), authorization!)).toThrow("Installation publication authorization required");
     authorization!.dispose();
   });
+});
+
+it("reports timing only after native transport completion", async () => {
+  const onSent=vi.fn(), completed=vi.fn();
+  const {sender,transport}=await create({onSent}); transport.paused=true;
+  sender.publish("abc",completed);
+  await vi.waitFor(()=>expect(transport.published).toEqual(["abc"]));
+  expect(onSent).not.toHaveBeenCalled();expect(completed).not.toHaveBeenCalled();
+  transport.callbacks.shift()!();
+  await vi.waitFor(()=>expect(completed).toHaveBeenCalledOnce());
+  expect(onSent).toHaveBeenCalledWith(3,expect.any(Number));
+});
+
+it("reuses authorization within a second and invalidates immediately",async()=>{
+ const verify=vi.fn(()=>({kind:"installation",actorId:1,credentialId:"installation"}));
+ const {sender,transport}=await create({},verify);verify.mockClear();
+ sender.send(JSON.stringify({type:"partial",content:"one"}));sender.send(JSON.stringify({type:"partial",content:"two"}));await vi.waitFor(()=>expect(transport.published).toHaveLength(2));
+ expect(verify).toHaveBeenCalledTimes(1);
+ sender.invalidateAuthorization();sender.send(JSON.stringify({type:"partial",content:"three"}));await vi.waitFor(()=>expect(transport.published).toHaveLength(3));expect(verify).toHaveBeenCalledTimes(2);
+});
+it("coalesces adjacent deltas under soft pressure without crossing a barrier",async()=>{
+ const {sender,transport}=await create();transport.paused=true;
+ sender.send("hold");await vi.waitFor(()=>expect(transport.published).toHaveLength(1));
+ for(let i=0;i<100;i++) sender.send(JSON.stringify({type:"partial",sessionId:"s",content:"x"}));
+ sender.send(JSON.stringify({type:"tool_start",sessionId:"s",toolUseId:"t"}));
+ sender.send(JSON.stringify({type:"partial",sessionId:"s",content:"after"}));
+ transport.paused=false;transport.callbacks.shift()!();
+ await vi.waitFor(()=>expect(transport.published.at(-1)).toContain("after"));
+ const frames=transport.published.slice(1).map(x=>JSON.parse(x));
+ expect(frames.filter(x=>x.type==="partial").map(x=>x.content).join("")).toBe("x".repeat(100)+"after");
+ expect(frames.length).toBeLessThan(40);expect(transport.close).not.toHaveBeenCalled();expect(frames.at(-2)?.type).toBe("tool_start");
 });

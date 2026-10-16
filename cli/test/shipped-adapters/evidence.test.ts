@@ -16,7 +16,17 @@ it.each(["claude", "codex", "cursor", "antigravity", "opencode", "pi"])("%s mode
       const path = entry.trim().split(/\s+/)[0];
       expect(existsSync(join(root, path)), `missing evidence: ${entry}`).toBe(true);
     }
-    if (mode.build !== "bundled") expect(mode.verifiedOn).toBe(adapter.requirements.binary.pin.version);
+    expect(mode.versions?.testedVersions).toContain(mode.verifiedOn);
+    expect(mode.versions?.recommendedVersion).toBeTruthy();
   }
   for (const path of adapter.requirements.binary.paths ?? []) expect(isAbsolute(path)).toBe(true);
+});
+
+it("retains prerelease and build identities rather than verifying them as a release", () => {
+  for (const adapter of adapters.installed()) {
+    const pattern = new RegExp(adapter.requirements.binary.versionPattern);
+    if (adapter.id === "cursor") continue;
+    const version = "2.3.4-rc.1+probe";
+    expect(pattern.exec(`${adapter.requirements.binary.command} ${version}`)?.[1]).toBe(version);
+  }
 });

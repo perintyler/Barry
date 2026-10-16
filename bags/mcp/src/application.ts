@@ -1,18 +1,25 @@
+import { Barry } from "@barry-rocks/sdk";
 import { servicesRouter } from "./services/routes.js";
-import { loadModelProviders, createModels, installModels, installedModels, mergeVendorFactories, assembleVendors, registeredVendorRows } from "@barry-rocks/sdk/adapters/models";
-import { barryModelProvidersPath, validateEnv, assignedPort, listenOnAssignedPort, LOOPBACK, barryAdaptersPath } from "@barry-rocks/sdk/services";
-import { expandComposition } from "@barry-rocks/sdk/internal/traits";
+import { loadModelVendors, createModels, installModels, installedModels, mergeVendorFactories, assembleVendors, registeredVendorRows } from "@barry-rocks/sdk/adapters/models";
+import { barryModelVendorsPath, validateEnv, assignedPort, listenOnAssignedPort, LOOPBACK, barryAdaptersPath } from "@barry-rocks/sdk/services";
+import { expandComposition, type BagRegistrySnapshot } from "@barry-rocks/sdk/bags";
 import { applyToolVisibility } from "@barry-rocks/sdk/internal/tools";
 import { installationRegistry } from "@barry-rocks/sdk/internal/nodes";
 import { type StoreContext, sessionIdentity } from "@barry-rocks/sdk/stores";
-import { withStoreContext } from "@barry-rocks/sdk/internal/stores";
-import type { ExecutionContext } from "@barry-rocks/sdk/bounds";
+import { installStoreContext, withStoreContext } from "@barry-rocks/sdk/internal/stores";
 
 import { installationWorkflowActor } from "./workflow-actor.js";
-import { verifyWorkflowSessionCredential, verifyWorkflowSessionCredentialForSession, type WorkflowSessionCredential, authorizeRequest, requestCredential } from "@barry-rocks/sdk/internal/auth";
+import {
+  verifyWorkflowSessionCredential,
+  verifyWorkflowSessionCredentialForSession,
+  type WorkflowSessionCredential,
+  type WorkflowActorContext,
+  authorizeRequest,
+  requestCredential,
+} from "@barry-rocks/sdk/internal/auth";
 import { TransportAuthorization } from "./transport-authorization.js";
 import { WorkflowAuthorization } from "./workflow-authorization.js";
-import { assertToolAllowed, qualifyToolId } from "@barry-rocks/sdk/bounds";
+import { qualifyToolId, type Bound } from "@barry-rocks/sdk/bounds";
 import { registerTsSpecifierHook } from "./ts-specifier-hook.js";
 import { randomUUID } from "node:crypto";
 import express from "express";
@@ -31,9 +38,6 @@ import { wrapReadTracking } from "./read-tracking.js";
 import { sweepSessionState } from "./session-state.js";
 import { createLogger } from "@barry-rocks/sdk/logging";
 
-
-
-
 import { access, identityRecords, type IdentityRecord } from "@barry-rocks/identities-bag";
 import {
   createRequestLogger,
@@ -45,13 +49,9 @@ import {
 } from "@barry-rocks/tracker-bag";
 import { loadBagRegistrySnapshot } from "@barry-rocks/sdk/internal/bags";
 
-
-
 import { installRemoteBagLoader } from "@barry-rocks/sdk/internal/mcp";
 import { identityEnvironmentForId as buildIdentityEnvironmentShared, setIdentityStore } from "@barry-rocks/sdk/internal/env";
 
-
-import type { BagRegistrySnapshot } from "@barry-rocks/sdk/bags";
 import {
   BagConnectionPool,
   type FilterableProxiedTool,
@@ -70,7 +70,6 @@ import { createTransportRefresh } from "./transport-refresh.js";
 import { pickEnv, createRateLimiter } from "./http-helpers.js";
 
 import {
-  applyBoundGuards,
   createToolServer,
   createToolServerHandle,
   type ToolServerHandle,
@@ -83,7 +82,7 @@ import {
   resolveToolDiscovery,
   type RuntimeTool,
 } from "./tool-runtime.js";
-import { resolveSessionBound, ANONYMOUS_SESSION_ID } from "./session-bound.js";
+import { sessionBound, ANONYMOUS_SESSION_ID } from "./session-bound.js";
 
 import { transportsWithDeadOwners } from "./dead-sessions.js";
 import {
@@ -95,9 +94,7 @@ import {
 } from "./transport-slots.js";
 import { ConnectionLeases } from "./connection-leases.js";
 
-
 import { loadAdapters } from "@barry-rocks/sdk/internal/adapters";
-
 
 export interface McpApplicationOptions {
   /** Identity whose declared bindings authorize standalone stdio credentials. */
@@ -112,12 +109,14 @@ export async function startMcpApplication(
   options: McpApplicationOptions = {},
 ): Promise<{ close(): Promise<void> }> {
   options.signal?.throwIfAborted();
-  const catalog = () =>
+  installStoreContext();
+  const loadSnapshot = () =>
     options.snapshot
       ? Promise.resolve(options.snapshot)
       : loadBagRegistrySnapshot();
-  async function invocationStores(execution: ExecutionContext, node: string): Promise<StoreContext> {
-    const snapshot = await catalog();
+  async function invocationStores(execution: WorkflowActorContext, node: string): Promise<StoreContext> {
+    installStoreContext();
+    const snapshot = await loadSnapshot();
     let localIdentityId: number | undefined;
     if (execution.identity) {
       try { localIdentityId = installationRegistry().legacyIdentityId(execution.identity); }
@@ -177,7 +176,7 @@ export async function startMcpApplication(
     for (const [id, problems] of installedVendorCode.refused) {
       log.error("models.vendor-code-refused", { adapter: id, problems });
     }
-    const providers = loadModelProviders({ file: barryModelProvidersPath() });
+    const providers = loadModelVendors({ file: barryModelVendorsPath() });
     const providerFactories = await providers.load();
     for (const [packageName, problems] of providers.refused) {
       log.error("models.provider-refused", { packageName, problems });
@@ -268,15 +267,14 @@ export async function startMcpApplication(
    * refusal is the session gate's job at the harness boundary.
    *
    * The work lives in `@barry-rocks/sdk/internal/env` so bag services build an
-   * identity environment the same way rather than reimplementing it. No cache
-   * TTL here: MCP resolves once per session init, and the values must reflect
-   * an identity edited a moment ago.
+   * identity environment the same way rather than reimplementing it. A short cross-process TTL: edits in other processes are seen within 90 s.
+   * Local mutations invalidate immediately; BARRY_IDENTITY_ENV_TTL_MS=0 disables caching.
    */
   async function resolveIdentityCredentials(
     identityId: number,
   ): Promise<Record<string, string>> {
     try {
-      return (await buildIdentityEnvironmentShared(identityId, { log })).vars;
+      return (await buildIdentityEnvironmentShared(identityId, { log, cacheTtlMs: Math.max(0, Number(process.env.BARRY_IDENTITY_ENV_TTL_MS ?? 90_000)) })).vars;
     } catch (err) {
       log.warn("identity.environment_build_failed", {
         identityId,
@@ -289,7 +287,7 @@ export async function startMcpApplication(
 
   async function identityToolVisibility(allTools: RuntimeTool[], identity: IdentityRecord): Promise<RuntimeTool[]> {
     const configuration = identityRecords.config(identity);
-    const snapshot = await catalog();
+    const snapshot = await loadSnapshot();
     for (const [bagName, overrides] of Object.entries(configuration.bag_configs ?? {})) {
       if (!overrides.tools) continue;
       const definitions = bagToolDefinitions.get(bagName);
@@ -323,39 +321,45 @@ export async function startMcpApplication(
       const identity = await identityRecords.row(options.identityId);
       if (!identity) throw new Error(`identity ${options.identityId} not found`);
       allTools = await identityToolVisibility(allTools, identity);
-      identityBagNames = expandComposition(identityRecords.config(identity).bags, (await catalog()).byName);
+      identityBagNames = expandComposition(identityRecords.config(identity).bags, (await loadSnapshot()).byName);
     }
     const installation = installationRegistry();
     const resolvedEnv = options.identityId === undefined ? {} :
       (await buildIdentityEnvironmentShared(options.identityId, { log })).vars;
-    const scope = await resolveSessionBound(ANONYMOUS_SESSION_ID, toToolMeta(allTools), {
+    const identityName =
+      options.identityId === undefined
+        ? undefined
+        : installation.identityId(options.identityId);
+    const scope = await sessionBound(ANONYMOUS_SESSION_ID, toToolMeta(allTools), {
       identityId: options.identityId,
       harness: options.harness,
-      identity: options.identityId === undefined ? undefined : installation.identityId(options.identityId),
+      identity: identityName,
     });
-    allTools = allTools.filter(tool => scope.allowedToolIds.has(qualifyToolId(tool.namespace, tool.name)));
-    if (scope.bound) allTools = applyBoundGuards(allTools, scope.bound);
-    const execution: ExecutionContext = {
-      ...(options.identityId === undefined ? {} : { identity: installation.identityId(options.identityId) }),
-      traits: scope.traits ?? [],
+    const execution: WorkflowActorContext = {
+      ...(identityName === undefined ? {} : { identity: identityName }),
+      bags: scope.bags,
+      bounds: scope.bounds,
       harness: scope.harness,
       bound: scope.bound,
       allowedToolIds: [...scope.allowedToolIds],
     };
-    allTools = allTools.map((tool) => ({
-      ...tool,
-      handler: async (params, context) => {
-        assertToolAllowed(execution, { namespace: tool.namespace, toolName: tool.name }, installation.id);
-        return withStoreContext(
-          await invocationStores(execution, installation.id),
-          () => tool.handler(params, context),
-        );
+    const allowedCandidates = allTools.filter((tool) =>
+      scope.allowedToolIds.has(qualifyToolId(tool.namespace, tool.name)),
+    );
+    allTools = Barry.tools<RuntimeTool>(
+      {
+        name: identityName,
+        node: installation.id,
+        storeContext: () => invocationStores(execution, installation.id),
       },
-    }));
+      allowedCandidates,
+      scope.bound ?? {},
+    );
     allTools = wrapForServing(allTools, [], resolvedEnv, null, { advertiseCallable: true, bagNames: identityBagNames });
     const visibleNamespaces = new Set(allTools.map(tool => tool.namespace));
     const server = createToolServer({
       tools: allTools,
+      bound: scope.bound,
       resourceRegistrars: resourceRegistrars.filter(r => visibleNamespaces.has(r.namespace)
         && (identityBagNames === undefined || identityBagNames.includes(r.bag))).map(
         (r) => (server: McpServer) =>
@@ -1015,6 +1019,7 @@ export async function startMcpApplication(
             let resolvedEnv: Record<string, string> = {};
             let toolDiscovery: "provider" | "barry" | undefined;
             let sessionBagNames: string[] | undefined;
+            let sessionBound: Bound | null = null;
 
             // Namespaces this session also mounts as their own `/mcp/ns/<ns>` entry.
             // Serving them here too would hand the agent every split tool twice —
@@ -1030,7 +1035,7 @@ export async function startMcpApplication(
                     .filter(Boolean),
             );
 
-            // Anonymous initializes receive the default-trait scope; see docs/decisions/0018-mcp-transport-and-action-metadata.md.
+            // Anonymous initializes receive the base-identity scope; see docs/decisions/0018-mcp-transport-and-action-metadata.md.
             const scopeSessionId = barrySessionId ?? ANONYMOUS_SESSION_ID;
             let resolveFailed = false;
             {
@@ -1058,11 +1063,12 @@ export async function startMcpApplication(
                 resolvedEnv = result.resolvedEnv;
                 toolDiscovery = result.toolDiscovery;
                 sessionBagNames = result.identityBagNames;
+                sessionBound = result.bound ?? null;
                 if (namespace) {
                   log.info("session.ns_scoped", {
                     barrySessionId: scopeSessionId,
                     namespace,
-                    nativeTools: sessionTools.length,
+                    localTools: sessionTools.length,
                     proxiedTools: sessionProxiedTools.length,
                   });
                 }
@@ -1098,7 +1104,7 @@ export async function startMcpApplication(
               // deferred tool is absent from tools/list on both endpoints
               // (`listedTools()` in tool-runtime), so keeping it here cannot double
               // it. What it does buy is the one thing barry-mode discovery needs: a
-              // GLOBAL catalog. Each /mcp/ns/<ns> server has its own registry, so
+              // GLOBAL deferred index. Each /mcp/ns/<ns> server has its own registry, so
               // its tool_search only ever sees its own namespace and its call_tool
               // can only dispatch its own tools. Without this, an agent on
               // /mcp/ns/git cannot reach a deferred `changes` tool at all, and a
@@ -1138,9 +1144,7 @@ export async function startMcpApplication(
               // mounted an entry for. Its tools stay on the aggregate, so they
               // reach the agent under the `barry` prefix
               // (mcp__barry__navigate_page) instead of their own, and nothing said
-              // so. This happens whenever a trait is granted mid-session, because
-              // the client's `split` list and server entries are both fixed when
-              // `barry start` writes mcp.json — a later grant has no home to go to.
+              // so.
               const orphaned = [...present].filter(
                 (ns) => ns && !splitNamespaces.has(ns),
               );
@@ -1250,7 +1254,7 @@ export async function startMcpApplication(
 
             // Resources ride along with their namespace: registered only when this
             // connection serves at least one tool of the bag's namespace, so
-            // trait denial of a bag also denies its resources. On the aggregate
+            // bound denial of a bag also denies its resources. On the aggregate
             // route, namespaces split to their own endpoint are not served twice;
             // on a namespace endpoint only that one namespace's registrars apply.
             const applicableRegistrars = resourceRegistrars.filter((r) =>
@@ -1270,6 +1274,7 @@ export async function startMcpApplication(
               proxiedTools: sessionProxiedTools,
               pool,
               toolDiscovery,
+              bound: sessionBound,
               ...(namespace ? { namespaceScoped: true } : {}),
               barrySessionId: barrySessionId ?? undefined,
               resourceRegistrars: applicableRegistrars.map(
@@ -1403,7 +1408,7 @@ export async function startMcpApplication(
     installRemoteBagLoader();
 
     await initializeModels()
-      .then(() => catalog())
+      .then(() => loadSnapshot())
       .then(async (snapshot) => {
         const { tools: allTools, resourceRegistrars } =
           await loadToolset(snapshot);

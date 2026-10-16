@@ -94,9 +94,9 @@ export function serializeSession(
       ? metadata.barry_source
       : null,
     status: resolveStatus(record, isLive),
-    traits: record.traits,
-    bounds: record.bounds,
-    bound: record.bound,
+    bags: record.bags ?? [],
+    bounds: record.bounds ?? [],
+    bound: record.bound ?? null,
     pinned: metadata.pinned === true,
     useWorktree: metadata.use_worktree === true,
     worktreeStatus: typeof metadata.worktree_status === "string" ? metadata.worktree_status : null,

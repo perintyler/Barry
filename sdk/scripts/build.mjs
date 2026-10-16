@@ -27,7 +27,7 @@ rmSync(join(root, "dist"), { recursive: true, force: true });
 let status = 0;
 try {
   execFileSync(process.execPath, [require.resolve("typescript/bin/tsc"), "-p", config], { cwd: root, stdio: "inherit" });
-  copyFileSync(join(root, "src/adapters/models/vendors/shipped-catalog.yaml"), join(root, "dist/adapters/models/vendors/shipped-catalog.yaml"));
+  copyFileSync(join(root, "src/adapters/models/vendors/shipped-models.yaml"), join(root, "dist/adapters/models/vendors/shipped-models.yaml"));
 } catch (error) {
   status = typeof error.status === "number" ? error.status : 1;
 } finally {

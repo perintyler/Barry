@@ -2,11 +2,11 @@
 
 ## Context
 
-Historical restructuring notes obscured root registration authority, namespace classification, reserved-name refusal and completion traversal. Trait exports also cited an unfinished historical phase instead of the current exclusion rule.
+Historical restructuring notes obscured root registration authority, namespace classification, reserved-name refusal and completion traversal. Config exports also cited an unfinished historical phase instead of the current exclusion rule.
 
 ## Decision
 
-Describe actual root registration and compare classifications against Commander in the existing root-surface tests. Keep hidden generic-name blockers, replacement guidance and help interception rules. Traverse the live tree for completion, using bag metadata only for lazy groups. Exclude bag-defined and retired shipped traits from user exports. Preserve all original rationale below.
+Describe actual root registration and compare classifications against Commander in the existing root-surface tests. Keep hidden generic-name blockers, replacement guidance and help interception rules. Traverse the live tree for completion, using bag metadata only for lazy groups. Preserve all original rationale below.
 
 ## Consequences
 

@@ -19,6 +19,8 @@ export interface SessionConfig {
   model?: ModelRef;
   /** For the harness's own cheap background calls, where it makes any. */
   smallModel?: ModelRef;
+  promptCacheTtl?: "5m" | "1h";
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
   /**
    * Set only when the model's vendor is not the harness's own: where to send
    * requests instead, and with what key. Absent means the harness's own settings.
@@ -42,7 +44,7 @@ export interface SessionConfig {
   telemetryEndpoint?: string;
   /** Headers the receiver requires — its auth, which is the host's to know. */
   telemetryHeaders?: Record<string, string>;
-  egressSandbox?: EgressPolicy;
+  egressSandbox?: EgressSandbox;
   /** Raw passthrough args the user typed after Barry's own flags. */
   extraArgs?: string[];
   maxTurns?: number;
@@ -66,17 +68,22 @@ export interface SessionConfig {
  * The network half of a bound, when it asks to be enforced by a sandbox
  * rather than by guards. An empty allowlist means nothing leaves the machine.
  */
-export interface EgressPolicy {
-  allowDomains: string[];
+export interface EgressSandbox {
+  allow?: string[];
+  allowDomains?: string[];
   /** Unix sockets the session still needs, such as a local MCP server. */
   allowUnixSockets?: string[];
 }
+
+export type EgressPolicy = EgressSandbox;
 
 export interface Session {
   readonly id: string;
   readonly harnessSessionId: string | null;
   /** The harness build this session observed, when it could see one. */
   readonly harnessVersion: string | null;
+  /** Snapshot of the executable/build assessed at launch, without credentials. */
+  readonly runtimeVersion?: import("../adapters/harnesses/versions.js").VersionAssessment & { binary?: string };
   readonly mode: ModeId;
   /** Copied from the mode that started it — what this session has, not what a new one would. */
   readonly guarantees: Guarantees;
@@ -96,10 +103,20 @@ export interface Session {
    * Stop the running turn. Rejects with `NotSupportedInMode` where the mode
    * cannot — resolving and doing nothing would read as "stopped" to every caller.
    */
+  /** Request current-turn cancellation idempotently. Ack alone is not completion.
+   * The runtime owns a deadline and may abandon a silent reader after close. */
   interrupt(): Promise<void>;
   answer(request: PermissionRequest, decision: PermissionDecision): Promise<void>;
   status(): "idle" | "active" | "error";
+  /** Idempotently abort startup and owned resources; finish an open reader with
+   * exactly one done, and emit nothing when no turn is open. */
   close(): Promise<void>;
+  /** Open and initialize the harness before delivery. Idempotent; a failure can be retried cold. */
+  warm?(): Promise<void>;
+  /** Renew the idle process lease for an attached, active client. */
+  touch?(): void;
+  /** Whether a prepared process is still linked, when the adapter releases idle processes. */
+  isWarm?(): boolean;
   /**
    * Compact the conversation so far, where the harness supports it. Optional:
    * its presence is the capability. A harness that cannot compact (codex,
@@ -178,15 +195,17 @@ export type SessionEvent = {
   | { type: "init"; harnessSessionId: string }
   | { type: "text"; text: string; role?: "assistant" | "user" }
   | { type: "partial"; text: string }
+  | { type: "thinking"; text: string }
+  | { type: "tool_input_delta"; id: string; text: string }
   | { type: "tool_use"; id: string; tool: string; input: unknown }
   | { type: "tool_result"; id?: string; result: unknown; error?: boolean }
   | { type: "tool_progress"; id: string; tool: string; elapsedSeconds: number }
   | { type: "permission_request"; id: string; tool: string; input: unknown; description?: string }
-  | { type: "status"; status: "idle" | "active" | "error" }
+  | { type: "status"; status: "idle" | "active" | "error" | "retrying" }
   | { type: "result"; result?: string; structured?: unknown; error?: string }
   | { type: "error"; error: string }
   | { type: "usage"; id: string; usage: TokenUsage }
-  | { type: "done"; usage?: TokenUsage; turns?: number; durationMs?: number }
+  | { type: "done"; usage?: TokenUsage; turns?: number; durationMs?: number; sdk?: { ttft_ms?: number; ttft_stream_ms?: number; time_to_request_ms?: number } }
 );
 
 export type McpServerConfig =
@@ -207,19 +226,22 @@ export class NotSupportedInMode extends Error {
 
 export { perTurnSession, type PerTurnOptions } from "./per-turn.js";
 export { canEnforceInSandbox } from "./egress.js";
-export { runStructured, structuredOutputFor, type StructuredRun, type StructuredReply } from "./structured.js";
+export { runStructured, structuredOutputFor, structuredOutputContract, parseStructuredOutput, type StructuredRun, type StructuredReply } from "./structured.js";
 export { declareSession, type SessionDeclaration } from "./declare.js";
 export { refuseDeniedTools } from "./rulings.js";
 export { EventQueue } from "./event-queue.js";
 export { canonicalJson, executionHash } from "./json.js";
 export { TurnExecution, type TurnExecutionStore, type TurnExecutionDependencies } from "./execution.js";
 export { LiveContinuation } from "./live-continuation.js";
-export { ReviewPolicySchema } from "./continuations.js";
+export { ReviewRulesSchema } from "./continuations.js";
 export type {
-  ApprovalContinuation, ReviewPolicy, TurnState, CallState,
+  ApprovalContinuation, ReviewRules, TurnState, CallState,
   ContinuationDescriptor, RecordedCallResult, SegmentOutcome,
   ContinuationHarness, ContinuationEffects, ApprovalDecision,
   PublicInterrupt, TurnSnapshot,
 } from "./continuations.js";
 export * from "./extract-fence.js";
 export * from "./configure.js";
+
+export {envMs,withDeadline,forcedAfter,deferred,untilAborted,DeadlineError} from "./deadline.js";
+export {stopProcess,stopOwnedProcess} from "./stop-process.js";

@@ -78,7 +78,7 @@ export function createTransportRefresh(
    * connected clients whose visible list changed.
    *
    * This is the missing link between "bag enabled in the DB" and "running
-   * session can use it": nothing else ever re-reads a session's grants after a
+   * session can use it": nothing else ever re-reads a session's selection after a
    * transport initializes — tools/list answered from init-time state forever.
    * Returns counts so the caller can tell "nothing owned" from "refreshed but
    * identical" from "tools actually changed"; a refresh that cannot report the
@@ -89,7 +89,7 @@ export function createTransportRefresh(
     authorize?: () => Promise<void>,
   ): Promise<{ transports: number; changed: number }> {
     await authorize?.();
-    // The resolve cache stamps entries with session traits, which a bag toggle
+    // The resolve cache stamps entries with session bags and bounds, which a bag_auth
     // does not touch — a young entry would serve the pre-change answer. Drop it.
     invalidateSessionResolve(barrySessionId);
 
@@ -107,14 +107,14 @@ export function createTransportRefresh(
       const split = transportSplit[sid] ?? new Set<string>();
       // Same rule as the initialize path: in barry mode the aggregate keeps
       // split namespaces' DEFERRED tools, because it is the only transport that
-      // can hold a global tool_search/call_tool catalog. Omitting it here would
-      // hand the aggregate a catalog at initialize and strip it on the first
+      // can hold a global tool_search/call_tool deferred list. Omitting it here would
+      // hand the aggregate a deferred list at initialize and strip it on the first
       // refresh — a session that started able to reach deferred tools would
       // quietly stop being able to.
       // Through the resolver, not `=== "barry"` on a possibly-undefined value:
       // `toolDiscovery` is undefined when no identity chose one, and comparing
       // that to "barry" silently answers false — which would strip the deferred
-      // catalog while tools/list (which DOES apply the default) hides those same
+      // list while tools/list (which DOES apply the default) hides those same
       // tools, leaving them reachable by neither route.
       const keepDeferred =
         resolveToolDiscovery(result.toolDiscovery) === "barry";
@@ -145,11 +145,12 @@ export function createTransportRefresh(
       const didChange = handle.refreshTools({
         tools: nextTools,
         proxiedTools: nextProxied,
+        bound: result.bound,
       });
-      // Resolution can connect a newly granted bag or stop using a revoked
+      // Resolution can connect a newly packed bag or stop using a removed
       // one. Keep cleanup's ownership view in lockstep with the tools this
       // transport now serves, or the next prune can disconnect a live bag (or
-      // retain a revoked one) using the leases recorded at initialize time.
+      // retain a removed one) using the leases recorded at initialize time.
       connectionLeases.commit(sid, result.activePoolKeys);
       if (didChange) {
         changed++;
@@ -231,8 +232,8 @@ export function createTransportRefresh(
   }
 
   /**
-   * Re-scope live sessions after a grant change (bag enable/disable, trait
-   * edit). Body: `{sessionId}` for one session, `{identityId}` for every live
+   * Re-scope live sessions after a session selection or auth change (`session.update({ bounds })`,
+   * `bag_auth`). Body: `{sessionId}` for one session, `{identityId}` for every live
    * session of that barry, `{}` for every owned session.
    *
    * Called by the API's identity PATCH so a bag enabled in the macOS app

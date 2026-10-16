@@ -1,7 +1,11 @@
+import {deferred,untilAborted} from "@barry-rocks/sdk/sessions";
+import { claudeProcessCount } from "./process-count.js";
+import { TurnTimer } from "./turn-timer.js";
 // Method bodies extracted from session-runtime.ts for file size.
 // Moved verbatim as free functions taking the runtime instance (`rt`);
 // the SessionRuntime class delegates to these. Pure move + rewire.
 import {SessionRuntime, RunnerExecutionError, drainTurn, log} from "../session-runtime.js";
+import { assertInteractiveDestination } from "../workflow-session-ownership.js";
 import type { ActiveSession, McpServerConfig, SessionTurnOutcome } from "../session-runtime.js";
 import {forgetSession, getSessionRecord, updateSessionMetadata, updateSessionRecord} from "../db.js";
 import {drainInbox} from "../inbox-relay.js";
@@ -30,15 +34,18 @@ import {randomUUID} from "node:crypto";
 export function rt_runSession(rt: SessionRuntime, 
     activeSession: ActiveSession,
     prompt: string,
-    mcpServers: Record<string, McpServerConfig>
+    mcpServers: Record<string, McpServerConfig>,
+    ingressAt?: number,
   ): Promise<SessionTurnOutcome> {
+    assertInteractiveDestination(activeSession.id);
+    const timer = new TurnTimer(ingressAt);
     const effectivePrompt = rt.withActionsIndex(activeSession, prompt);
     const gen = activeSession.generation;
     const interruptGen = activeSession.interruptGeneration;
     activeSession.pendingTurns++;
     const next = activeSession.turnQueue
       .catch(() => {}) // isolate: a failed prior turn shouldn't reject the chain
-      .then(() => rt.runTurn(activeSession, effectivePrompt, mcpServers, gen, interruptGen))
+      .then(() => rt.runTurn(activeSession, effectivePrompt, mcpServers, gen, interruptGen, timer))
       .catch((error): SessionTurnOutcome => ({ state: "failed", error: error instanceof Error ? error.message : String(error) }))
       .finally(() => { activeSession.pendingTurns--; });
     activeSession.lastTurn = next;
@@ -98,10 +105,12 @@ export async function rt_runTurn(rt: SessionRuntime,
     mcpServers: Record<string, McpServerConfig>,
     gen: number,
     interruptGen: number,
+    timer = new TurnTimer(),
   ): Promise<SessionTurnOutcome> {
     // Staleness check BEFORE anything else — a turn queued behind a stop
     // must not run at all, let alone create a new provider session
     // (, defect D).
+    assertInteractiveDestination(activeSession.id);
     if (rt.isStale(activeSession, gen)) return { state: "stopped" };
     if (activeSession.interruptGeneration !== interruptGen) return { state: "interrupted" };
 
@@ -119,8 +128,13 @@ export async function rt_runTurn(rt: SessionRuntime,
       return { state: "interrupted" };
     }
 
-    activeSession.status = "streaming";
-    rt.broadcastToSession(activeSession.id, { type: "status", sessionId: activeSession.id, status: "streaming" });
+    activeSession.turnTimer = timer;
+    timer.mark("queue_ms");
+    const turnStart = performance.now();
+    delete activeSession.timings.first_event_ms;
+    delete activeSession.timings.first_token_ms;
+    activeSession.status = "starting";
+    rt.broadcastToSession(activeSession.id, { type: "status", sessionId: activeSession.id, status: "starting", metadata: { warm: activeSession.session?.isWarm?.() === true ? 1 : 0, phase: "initializing" } });
 
     // Wires the abortController field that stopSession/removeSession already
     // call.abort() on — it was declared on ActiveSession but never assigned
@@ -129,14 +143,27 @@ export async function rt_runTurn(rt: SessionRuntime,
     // two turns of the same session must not abort the wrong one.
     const controller = new AbortController();
     activeSession.abortController = controller;
+    const completion=deferred<void>();
+    const control={force:new AbortController(),done:completion.promise,finish:()=>completion.resolve()};
+    activeSession.turnControl=control;activeSession.lastEventAt=undefined;activeSession.lastEventAtMonotonic=performance.now();
+    const cancellable=<T>(work:PromiseLike<T>)=>untilAborted(work,control.force.signal);
 
-    // Capacity is released only in `finally`, once the provider iterator has
-    // actually terminated — not when the UI's stop request is accepted, and
-    // not when this function merely returns early. Holding the lease through
-    // a codex drain-after-abort (the iterator keeps running briefly after
-    // signal.abort() until the child process actually exits) is what makes
-    // "no longer counted as executing" mean "actually stopped executing".
+    // This turn owns its lease until its reader finishes or explicit forced
+    // cancellation abandons that reader. Adapter close owns process cleanup;
+    // late provider completions cannot release a subsequent turn's lease.
     try {
+      await timer.measure("warm_wait_ms", async () => { await cancellable(activeSession.warming??Promise.resolve()); });
+      if (rt.isStale(activeSession, gen)) return { state: "stopped" };
+      const wasWarm = activeSession.session?.isWarm?.() === true;
+      if (!wasWarm && activeSession.warm) delete activeSession.warm.preparedAt;
+      activeSession.timings.warm_hit = wasWarm ? 1 : 0;
+      if (wasWarm) { delete activeSession.timings.harness_create_ms; delete activeSession.timings.harness_ready_ms; }
+      const recordStart = performance.now();
+      if (!activeSession.startedAtRecorded) {
+        await updateSessionRecord(activeSession.id, { started_at: new Date(), status: "running" },{defer:true});
+        activeSession.startedAtRecorded = true;
+      }
+      timer.sample("record", performance.now() - recordStart);
       let runnerFailure: string | null = null;
       let turnResult: string | null = null;
       let wasInterrupted = false;
@@ -144,15 +171,26 @@ export async function rt_runTurn(rt: SessionRuntime,
       // Resolve the identity's environment fresh on every turn (supports key
       // rotation). A build that fails returns environment: null, which the
       // gate below refuses on — a turn never starts on half-read credentials.
-      const env = await rt.resolveHarnessEnvironment(activeSession);
+      const env = await cancellable(timer.measure("env_ms", () => rt.resolveHarnessEnvironment(activeSession)));
 
       if (activeSession.session) log.info("sdk.session_followup", { sessionId: activeSession.id, sdkSessionId: activeSession.sessionId });
-      const session = await rt.ensureHarnessSession(activeSession, mcpServers, env);
+      const session = await cancellable(timer.measure("open_ms", () => rt.ensureHarnessSession(activeSession, mcpServers, env)));
+      if(rt.isStale(activeSession,gen)||control.force.signal.aborted)return {state:"stopped"};
 
-      for await (const event of rt.turnEvents(session, prompt, () => controller.signal.aborted || rt.isStale(activeSession, gen))) {
-        await rt.handleRunnerEvent(activeSession, event);
+      activeSession.status = "streaming";
+      rt.broadcastToSession(activeSession.id, { type: "status", sessionId: activeSession.id, status: "streaming" });
+      timer.mark("deliver_ms");
+      activeSession.timings.deliver_at = performance.now();
+      for await (const event of rt.turnEvents(session, prompt, () => controller.signal.aborted || rt.isStale(activeSession, gen),control.force.signal,()=>{if(!rt.isStale(activeSession,gen)){activeSession.lastEventAt=new Date().toISOString();activeSession.lastEventAtMonotonic=performance.now();}})) {
+        timer.event(event.type);
+        if (event.type === "partial") timer.count("partial_frames");
+        if (event.type === "thinking") timer.count("thinking_frames");
+        activeSession.timings.first_event_ms ??= performance.now() - turnStart;
+        if (event.type === "partial" || event.type === "text") activeSession.timings.first_token_ms ??= performance.now() - turnStart;
+        await cancellable(rt.handleRunnerEvent(activeSession, event));
         if (event.type === "error") runnerFailure = event.error;
         if (event.type === "result") {
+          for (const [name, value] of Object.entries(event.usage?.sdk ?? {})) if (typeof value === "number") timer.count(`sdk_${name}`, value);
           if (event.error) runnerFailure = event.error;
           if (event.result !== undefined) turnResult = event.result;
         }
@@ -176,9 +214,14 @@ export async function rt_runTurn(rt: SessionRuntime,
       }
 
       activeSession.consecutiveFailures = 0;
+      activeSession.thinkingBuffer = "";
+      activeSession.turnFrames = activeSession.persistence?.pending().slice() ?? [];
       activeSession.status = "waiting";
+      activeSession.timings.turn_done_ms = performance.now() - turnStart;
+      timer.mark("turn_done_ms");
+      log.info("session.timing", { sessionId: activeSession.id, warm_hit:wasWarm?1:0, ...timer.summary() });
       log.info("session.turn_complete", { sessionId: activeSession.id, sdkSessionId: activeSession.sessionId });
-      rt.broadcastToSession(activeSession.id, { type: "status", sessionId: activeSession.id, status: "waiting" });
+      rt.broadcastToSession(activeSession.id, { type: "status", sessionId: activeSession.id, status: "waiting", metadata: { timing: {warm_hit: wasWarm ? 1 : 0,...timer.summary()}, session: {...activeSession.timings} } });
 
       // Persist the resting state so the DB row no longer shows "running" after a
       // natural turn completion. Otherwise reconcileStaleSessions treats a healthy
@@ -190,7 +233,7 @@ export async function rt_runTurn(rt: SessionRuntime,
       // in-memory status is the authority, since it is updated synchronously
       // while the DB write is not.
       if (activeSession.status === "waiting") {
-        await updateSessionRecord(activeSession.id, { status: "pending" }).catch((e) => {
+        await updateSessionRecord(activeSession.id, { status: "pending" },{defer:true}).catch((e) => {
           log.warn("session.rest_status_failed", { sessionId: activeSession.id, error: e instanceof Error ? e.message : String(e) });
         });
       }
@@ -212,7 +255,8 @@ export async function rt_runTurn(rt: SessionRuntime,
 
       // Check if we should emit worktree_ready (when SDK finishes naturally, not via stop)
       // This is handled by stopSession when user manually stops; for natural completion check DB
-      const completedDbSession = await getSessionRecord(activeSession.id);
+      const completedDbSession = await cancellable(getSessionRecord(activeSession.id));
+      if(rt.isStale(activeSession,gen))return {state:"stopped"};
       if (completedDbSession?.metadata?.use_worktree && completedDbSession.metadata.worktree_status === "active") {
         // Atomic partial merge — don't read-spread-overwrite the whole metadata
         // column (that races with concurrent metadata writers and drops keys).
@@ -225,7 +269,20 @@ export async function rt_runTurn(rt: SessionRuntime,
       return wasInterrupted ? { state: "interrupted" } : { state: "completed", result: turnResult };
 
     } catch (err) {
+      if(rt.turnWasStopped(activeSession,controller,gen)||control.force.signal.aborted)return {state:"stopped"};
+      const retryable = /Subprocess initialization did not complete|initializ(?:e|ation|ing).*?(?:timeout|timed out)|(?:timeout|timed out).*initializ/i.test(err instanceof Error ? err.message : String(err));
+      if (retryable) {
+        await cancellable(Promise.resolve(activeSession.session?.close()).catch(() => {}));
+        if(rt.isStale(activeSession,gen)||control.force.signal.aborted)return {state:"stopped"};
+        activeSession.session=null; activeSession.warm=null;
+        activeSession.status="waiting";
+        rt.broadcastToSession(activeSession.id, { type: "error", sessionId: activeSession.id, error: String(err), metadata: { code: "harness_initialize_timeout", retryable: true } });
+        rt.broadcastToSession(activeSession.id, { type: "status", sessionId: activeSession.id, status: "waiting" });
+        await updateSessionRecord(activeSession.id, { status: "pending" });
+        return { state: "failed", error: String(err) };
+      }
       activeSession.consecutiveFailures++;
+      void claudeProcessCount().then(claude_processes=>log.info("sdk.query_error_processes", {sessionId:activeSession.id,claude_processes}));
       log.error("sdk.query_error", { sessionId: activeSession.id, consecutiveFailures: activeSession.consecutiveFailures, error: err instanceof Error ? err.message : String(err) });
       activeSession.status = "error";
       // Said aloud, as a finished turn's "waiting" is: a client waiting for
@@ -246,6 +303,11 @@ export async function rt_runTurn(rt: SessionRuntime,
         });
       }
 
+      // Preserve the row if accepted transcript writes are still pending.
+      if (!await cancellable(rt.flushPersistence(activeSession.id,30_000))) {
+        await updateSessionRecord(activeSession.id,{status:"pending"});
+        return {state:"failed",error:"Recording delayed; session retained"};
+      }
       // End the session in DB (use Barry canonical ID)
       await endSessionLifecycle({ session_id: activeSession.id, reason: "error" }).catch((err2) => {
         log.warn("sdk.session_end_error", { sessionId: activeSession.id, error: err2 instanceof Error ? err2.message : String(err2) });
@@ -280,11 +342,9 @@ export async function rt_runTurn(rt: SessionRuntime,
       if (activeSession.abortController === controller) {
         activeSession.abortController = null;
       }
-      // Capacity frees only now: the provider iterator has actually ended
-      // (normally, on error, or after draining post-abort), not merely when
-      // a stop request was accepted. This is what makes the execution
-      // budget reflect real concurrency instead of "turns we asked to stop".
-      lease.release();
+      // Completion and capacity settle once for this captured turn, including
+      // a forced cancellation of an otherwise silent provider iterator.
+      lease.release();control.finish();if(activeSession.turnControl===control)delete activeSession.turnControl;
     }
   }
 
@@ -305,16 +365,17 @@ export function rt_sweepToolTimers(rt: SessionRuntime, sessionId: string): void 
    * read as the start of the next one. It also means the turn has really
    * stopped before its execution slot is released.
    */
-export async function* rt_turnEvents(rt: SessionRuntime, session: Session, prompt: string, stopped: () => boolean): AsyncGenerator<TurnEvent> {
-    await session.deliver(prompt);
-    // Read with `next()` rather than `for await`, and only ever stop between
-    // events: a reader abandoned while waiting would take the next event
-    // with it, and one returned early would end the stream for good.
+export async function* rt_turnEvents(rt: SessionRuntime, session: Session, prompt: string, stopped: () => boolean, force?:AbortSignal, onEvent?:()=>void): AsyncGenerator<TurnEvent> {
+    await untilAborted(session.deliver(prompt),force);
+    // Ordinary interrupts drain through done before reusing this stream. A
+    // forced cancellation abandons pending reads and closes that harness; its
+    // late events can never become a subsequent turn's input.
     const reader = session.events()[Symbol.asyncIterator]();
     let finished = false;
     async function* thisTurn(): AsyncGenerator<SessionEvent> {
       for (;;) {
-        const next = await reader.next();
+        const next = await untilAborted(reader.next(),force);
+        if(!next.done)onEvent?.();
         if (next.done) {
           finished = true;
           return;
@@ -328,12 +389,12 @@ export async function* rt_turnEvents(rt: SessionRuntime, session: Session, promp
     }
     for await (const event of turnEventsOf(thisTurn())) {
       if (stopped()) {
-        await session.interrupt().catch(() => {});
+        void session.interrupt().catch(() => {});
         break;
       }
       yield event;
     }
-    if (!finished) await drainTurn(reader);
+    if (!finished) await untilAborted(drainTurn(reader),force);
   }
 
   /**
@@ -358,17 +419,11 @@ export async function rt_handleRunnerEventInner(rt: SessionRuntime, activeSessio
         log.info("sdk.session_started", { sessionId: activeSession.id, sdkSessionId: event.sessionId });
 
         // Link the SDK runtime ID to the Barry session via provider_sessions
-        try {
-          await createProviderSession({
-            session_id: activeSession.id,
-            provider: activeSession.provider,
-            provider_session_id: event.sessionId,
-          });
-          activeSession.sessionId = event.sessionId;
-        } catch (err) {
+        activeSession.sessionId = event.sessionId;
+        void createProviderSession({ session_id: activeSession.id, provider: activeSession.provider,
+          provider_session_id: event.sessionId }).catch(err => {
           log.warn("sdk.provider_session_create_warn", { error: err instanceof Error ? err.message : String(err) });
-          activeSession.sessionId = event.sessionId;
-        }
+        });
 
         rt.broadcastToSession(activeSession.id, {
           type: "init",
@@ -377,7 +432,18 @@ export async function rt_handleRunnerEventInner(rt: SessionRuntime, activeSessio
         });
         break;
 
+      case "starting":
+        rt.broadcastToSession(activeSession.id, {type:"status",sessionId:activeSession.id,status:"starting",metadata:{phase:event.phase,warm:0}});
+        break;
+      case "thinking":
+        if (!event.parentToolUseId) activeSession.thinkingBuffer = (activeSession.thinkingBuffer ?? "") + event.content;
+        rt.broadcastToSession(activeSession.id, { type: "thinking", sessionId: activeSession.id, content: event.content });
+        break;
+      case "tool_input_delta":
+        rt.broadcastToSession(activeSession.id, { type: "tool_input_delta", sessionId: activeSession.id, content: event.content, toolUseId: event.toolUseId });
+        break;
       case "partial":
+        if (!event.parentToolUseId) activeSession.thinkingBuffer = "";
         activeSession.outputBuffer += event.content;
         rt.broadcastToSession(activeSession.id, {
           type: "partial",
@@ -397,6 +463,7 @@ export async function rt_handleRunnerEventInner(rt: SessionRuntime, activeSessio
         break;
 
       case "tool_start":
+        if (!event.parentToolUseId) activeSession.thinkingBuffer = "";
         rt.toolTimers.set(event.toolUseId, { start: Date.now(), name: event.name, sessionId: activeSession.id });
         log.info("session.tool_start", { sessionId: activeSession.id, tool: event.name, toolUseId: event.toolUseId });
         rt.broadcastToSession(activeSession.id, {

@@ -8,9 +8,9 @@
   --surface: #ffffff;
   --ink: #1c1917;
   --muted: #57534e;
-  --faint: #a8a29e;
+  --faint: #66605b;
   --line: #eae6df;
-  --accent: #c49332;
+  --accent: #9a6f1a;
   --ok: #14805a;
   --err: #b91c1c;
   --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -163,3 +163,8 @@ a.session { font: 400 12px/1 var(--mono); color: var(--muted); }
   #sheet { padding: 0; }
   #sheet-card { border-radius: 0; min-height: 100dvh; max-width: none; }
 }
+
+.dot.needs-attention, .dot.stopping, .dot.waiting, .dot.waiting-for-approval, .dot.queued { background: var(--accent); }
+.dot.running { background: var(--accent); }
+.dot.completed { background: var(--ok); }
+.work-link { color: var(--ink); text-underline-offset: 3px; }

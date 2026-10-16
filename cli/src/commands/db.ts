@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { barryAppSupportDir, barryStoresDir } from "@barry-rocks/sdk/services";
 import { activeStoreRoot } from "@barry-rocks/sdk/internal/stores";
-import { backupManagedStores, MANAGED_STORES_DIR, UNMANAGED_DATA_DIR, UNMANAGED_STORES_DIR } from "./db-stores.js";
+import { backupManagedStores, DATA_EVIDENCE_TREES, MANAGED_STORES_DIR, UNMANAGED_DATA_DIR, UNMANAGED_STORES_DIR } from "./db-stores.js";
 
 /** Where each backed-up store lives in the instance the backup was taken from. */
 interface StorePaths {
@@ -60,11 +60,11 @@ an empty history.
 
 - \`config.db\` — installed bags and service port assignments. Restore to
   \`${paths.config}\`.
-- \`identities.db\` — identities, actors, traits and bounds. Restore to
+- \`identities.db\` — identities and actors. Restore to
   \`${paths.identities}\`. Sessions carry an \`identity_id\`, so a
   sessions.db restored without its matching identities.db leaves every session
   pointing at an identity that is not there — and every reader of that column
-  degrades SILENTLY (lost traits, lost bags, lost credentials).
+  degrades SILENTLY (lost bags, lost bounds, lost credentials).
 - \`actions.db\` — action runs. Restore to \`${paths.actions}\`.
 - \`events.db\` — the events log. Restore to \`${paths.events}\`.
 - \`file-tracker.db\` — file tracking. Restore to \`${paths.fileTracker}\`.
@@ -94,10 +94,12 @@ This backup holds every store of the installation it was taken from:
   identity and checksum.
 - \`${UNMANAGED_STORES_DIR}/\` — SQLite files no installed bag declares, copied
   as-is at their path inside the generation.
-- \`${UNMANAGED_DATA_DIR}/<bag>/<file>\` — stores bags keep in their own data
+- \`${UNMANAGED_DATA_DIR}/<bag>/<path>\` — stores bags keep in their own data
   directory, \`${join(barryAppSupportDir(), "data")}/<bag>/\`, outside the
-  store generation, copied consistently. \`barry db restore\` does not put
-  these back; see below.
+  store generation, copied consistently, including nested ones such as
+  \`sessions/workflow-runtimes/generations.db\`. Beside them are the file trees
+  Sessions workflow recovery reads: ${DATA_EVIDENCE_TREES.map(tree => `\`${tree}/\``).join(", ")}.
+  \`barry db restore\` does not put these back; see below.
 - \`config.db\`, \`sessions.db\`, \`identities.db\`, \`actions.db\`, \`events.db\`,
   \`file-tracker.db\` — top-level copies of node stores, kept for tools that
   read them. \`sessions.db\` here is the sessions CATALOG; each identity's
@@ -156,6 +158,12 @@ To put one back, stop every process that has it open first:
 Move the \`-wal\` and \`-shm\` files too: SQLite would replay a left-behind
 WAL into the copied store. Writes made since this backup are lost from the
 store; the \`.before-restore\` files keep them.
+
+A tree ending in \`/\` is the Sessions workflow evidence those stores point
+at. Put it back with the sessions service stopped, adding only what is
+missing so newer evidence on disk is kept:
+
+    cp -Rn "${UNMANAGED_DATA_DIR}/<tree>/" "${join(barryAppSupportDir(), "data")}/<tree>/"
 
 ## Undo a restore
 
@@ -367,8 +375,8 @@ export async function dbBackupCommand(destination?: string, options: { vault?: b
   const vaultLine = await backupVaultLine(backupRoot, options);
 
   // Every file this command wrote gets a line. config.db was backed up but
-  // never printed, so a reader checking the output concluded bags, traits and
-  // bounds were unprotected -- and the fix for an imagined gap is to go
+  // never printed, so a reader checking the output concluded bags and port
+  // assignments were unprotected -- and the fix for an imagined gap is to go
   // looking for a second backup mechanism that does not exist.
   console.log(`Database backup created: ${backupRoot}`);
   for (const name of written) console.log(`  ${name}`);

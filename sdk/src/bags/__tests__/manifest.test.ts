@@ -47,11 +47,11 @@ mcp-servers:
     args: ["-y", "mcp-remote", "https://mcp.linear.app/mcp"]
     env: [LINEAR_API_KEY]
 
-traits:
+bounds:
   test-debug:
     description: Debug tools
-    access: read
-    namespaces: [sentry, linear]
+    tools:
+      allow: [sentry:read, linear:read]
 
 tools:
   - create-report: deferred
@@ -68,15 +68,13 @@ tools:
     expect(manifest!.mcpServers.linear.command).toBe("npx");
     expect(manifest!.mcpServers.linear.env).toEqual(["LINEAR_API_KEY"]);
 
-    // Traits
-    expect(Object.keys(manifest!.traits)).toEqual(["test-bag:test-debug"]);
-    expect(manifest!.traits[`${manifest!.name}:test-debug`].bags).toEqual(["sentry", "linear"]);
+    // Bounds
+    expect(Object.keys(manifest!.bounds ?? {})).toEqual(["test-bag:test-debug"]);
+    expect(manifest!.bounds![`${manifest!.name}:test-debug`].bound.tools?.allow).toEqual(["sentry:read", "linear:read"]);
 
     expect(manifest!.toolsEntry).toEqual({ entry: "tools.ts" });
     expect(manifest!.toolVisibility).toEqual({ "create-report": "deferred" });
   });
-
-
 
   it.each([{ entry: "tools.ts" }, { entry: "tools.ts", env: ["KEY"] }, { entry: "tools.ts", deferred: ["read"] }, { entry: "tools.ts", default_access: "deferred" }])("rejects legacy tool-entry authoring %j", tools => {
     expect(() => parseManifestObject({ name: "fixture", description: "Fixture", tools })).toThrow(/tools/);
@@ -85,7 +83,6 @@ tools:
   it("rejects duplicate tool metadata with a code-owned metadata diagnostic", () => {
     expect(() => parseManifestObject({ name: "combo", description: "Fixture", "tool-metadata": [{ toolName: "read", namespace: "fixture", access: "read" }] })).toThrow(/declare local metadata in Barry.Tool code/);
   });
-
 
   it("handles minimal manifest", () => {
     writeFileSync(join(tmpDir, "bag.yaml"), `
@@ -96,129 +93,56 @@ description: Just a name
     const manifest = parseManifest(tmpDir);
     expect(manifest!.name).toBe("minimal");
     expect(manifest!.mcpServers).toEqual({});
-    expect(manifest!.traits).toEqual({});
+    expect(manifest!.bounds).toBeUndefined();
     expect(manifest!.tools).toEqual([]);
   });
 
-  // Read-only is composed as a grant plus `bounds: [readonly]` — auto-traits
-  // stopped generating a second `<bag>-read` trait, so without this key a bag
-  // author has no way to express read-only.
-  it("parses a trait's named bounds", () => {
-    writeFileSync(join(tmpDir, "bag.yaml"), `
-version: v0.1
-name: bounded-bag
-description: A bag with a read-only trait
-
-traits:
-  bounded-read:
-    description: Read-only view
-    access: readwrite
-    bags: [sentry]
-    bounds: [readonly]
-`);
-    const manifest = parseManifest(tmpDir);
-    expect(manifest!.traits[`${manifest!.name}:bounded-read`].boundNames).toEqual(["readonly"]);
-  });
-
-  // The legacy spelling is gone, and this schema is strict, so a straggler
-  // fails loudly here rather than loading as an unrestricted trait.
-  it("rejects the legacy `scopes` spelling", () => {
-    writeFileSync(join(tmpDir, "bag.yaml"), `
-version: v0.1
-name: legacy-bag
-description: A bag still using the pre-rename key
-
-traits:
-  legacy:
-    description: Read-only view
-    access: readwrite
-    bags: [sentry]
-    scopes: [readonly]
-`);
-    expect(() => parseManifest(tmpDir)).toThrow(/scopes/);
-  });
-
-  it("defaults a trait with no bounds to an empty list", () => {
-    writeFileSync(join(tmpDir, "bag.yaml"), `
-version: v0.1
-name: unbounded-bag
-description: A bag whose trait declares no bounds
-
-traits:
-  plain:
-    description: Everything
-    access: readwrite
-    bags: [sentry]
-`);
-    const manifest = parseManifest(tmpDir);
-    expect(manifest!.traits[`${manifest!.name}:plain`].boundNames).toEqual([]);
-    expect(manifest!.traits[`${manifest!.name}:plain`].bound).toBeUndefined();
-  });
-
-  // An inline bound lets a bag outside this repo ship its own restriction
-  // without a row in the framework's bounds table.
-  it("parses a trait's inline bound", () => {
+  it("parses a manifest bound in both flat and nested forms", () => {
     writeFileSync(join(tmpDir, "bag.yaml"), `
 version: v0.1
 name: inline-bound-bag
-description: A bag whose trait carries its own restriction
+description: A bag whose bound carries restrictions
 
-traits:
+bounds:
   guarded:
-    description: Grants git tools but keeps raw git out of Bash
-    access: readwrite
-    bags: [sentry]
-    bound:
-      deniedTools: [dangerous]
-      bash:
-        denyPrograms: [git, gh]
-      network:
-        actions: [write]
+    description: Keeps raw git out of Bash
+    tools:
+      deny: ["*:dangerous"]
+    bash:
+      deny: [git *, gh *]
+    network:
+      deny: [write]
 `);
     const manifest = parseManifest(tmpDir);
-    expect(manifest!.traits[`${manifest!.name}:guarded`].bound).toEqual({
-      deniedTools: ["dangerous"],
-      bash: { denyPrograms: ["git", "gh"] },
-      network: { actions: ["write"] },
+    expect(manifest!.bounds![`${manifest!.name}:guarded`].bound).toEqual({
+      tools: { deny: ["*:dangerous"] },
+      bash: { deny: ["git *", "gh *"] },
+      network: { deny: ["write"] },
     });
   });
 
-  // A bound that parses to {} restricts nothing and is indistinguishable from
-  // a working one, so a misspelled dimension has to fail at parse time.
-  it("rejects a misspelled key inside an inline bound", () => {
+  it("rejects a misspelled key inside a bound", () => {
     writeFileSync(join(tmpDir, "bag.yaml"), `
 version: v0.1
 name: typo-bound-bag
-description: A bag whose inline bound has a typo
+description: A bag whose bound has a typo
 
-traits:
+bounds:
   guarded:
     description: Means to deny git
-    access: readwrite
-    bags: [sentry]
-    bound:
-      bash:
-        denyProgram: [git]
+    bash:
+      denyProgram: [git]
 `);
     expect(() => parseManifest(tmpDir)).toThrow(/denyProgram/);
   });
 
-  it("rejects an unknown network action in an inline bound", () => {
-    writeFileSync(join(tmpDir, "bag.yaml"), `
-version: v0.1
-name: bad-action-bag
-description: A bag whose inline bound names a tag that enforces nothing
-
-traits:
-  guarded:
-    description: Means to deny outbound writes
-    access: readwrite
-    bags: [sentry]
-    bound:
-      network:
-        actions: [writes]
-`);
-    expect(() => parseManifest(tmpDir)).toThrow();
+  it("rejects retired traits and extends keys", () => {
+    expect(() =>
+      parseManifestObject({ name: "legacy", description: "d", traits: { x: { description: "x" } } }),
+    ).toThrow(/traits/);
+    expect(() =>
+      parseManifestObject({ name: "legacy", description: "d", extends: "sessions" }),
+    ).toThrow(/extends/);
   });
 
   it("rejects unknown fields with a path-specific error", () => {
@@ -427,7 +351,7 @@ describe("service literal environment", () => {
  * The map form exists so a bag can say where its children come from, replacing
  * the git submodules that did that job outside Barry's view. The property that
  * matters most here is that BOTH forms normalize to the same `bags: string[]`
- * — every consumer of composition (auto-traits, identity sync, doctor) reads
+ * — every consumer of composition (identity sync, doctor) reads
  * that array and must never learn which form was written.
  */
 describe("manifest bags: composition", () => {
@@ -645,29 +569,5 @@ describe("declared store restore adapters", () => {
   });
   it.each(["../restore.js", "/restore.js", "./restore.ts", "./dist/../restore.js"])("refuses unsafe or uncompiled restore entry %s", entry => {
     expect(() => parseManifestObject({ ...base, restores: { default: { entry } } })).toThrow(/restore entry/);
-  });
-});
-
-
-describe("extensions", () => {
-  const base = { name: "search", extends: "sessions", description: "Search" };
-  it("parses the parent and short name", () => {
-    expect(parseManifestObject(base)).toMatchObject(base);
-    expect(parseManifestObject({ name: "plain", description: "Plain", extends: undefined, services: {} }).extends).toBeUndefined();
-  });
-  it.each([
-    ["bags", []], ["services", {}], ["apps", {}],
-    ["store", { owned_by: "identity", engine: "sqlite", migrations: "migrations" }],
-    ["stores", {}], ["snapshots", {}], ["restores", {}], ["traits", {}], ["bounds", {}],
-    ["mcp-servers", {}], ["jobs", {}], ["hooks", {}], ["requires", {}],
-    ["prompts", { entry: "prompt.ts" }], ["permissions", []], ["credentials", {}],
-    ["constants", {}], ["verbs", {}], ["nouns", {}], ["auth", {}], ["cli", {}],
-    ["slash-commands", {}], ["default_notifier", {}], ["native-policy", {}], ["vendors", {}],
-    ["infra", {}], ["provides", {}], ["deployments", {}], ["tool-metadata", {}], ["unknown-key", {}],
-  ])("refuses %s and names the parent", (key, value) => {
-    expect(() => parseManifestObject({ ...base, [key]: value })).toThrow(new RegExp(`${key}.*declare it on the parent`));
-  });
-  it.each([{ name: "sessions/search" }, { extends: "sessions/search" }, { extends: "search" }])("refuses invalid names %j", (value) => {
-    expect(() => parseManifestObject({ ...base, ...value })).toThrow();
   });
 });

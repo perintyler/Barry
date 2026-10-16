@@ -4,7 +4,6 @@ import {
   collectProvidedNamespaces,
   findServerKeyConflicts,
   findEndpointDuplicates,
-  findDanglingTraitNamespaces,
   type BagWithMcpServers,
 } from "../mcp-server-conflicts.js";
 
@@ -156,32 +155,5 @@ describe("collectProvidedNamespaces", () => {
       bag("scout", { manifest: { toolsEntry: { entry: "tools.ts" } }, toolsError: "boom" }),
     ]);
     expect(provided).toEqual(new Set());
-  });
-});
-
-describe("findDanglingTraitNamespaces", () => {
-  it("flags trait namespaces no bag provides", () => {
-    const bags = [
-      bag("sentry", { mcpServers: { "sentry-mcp": { url: SENTRY_URL } } }),
-      bag("scout", {
-        manifest: { toolsEntry: { entry: "tools.ts" } },
-        traits: [{ name: "scout-observability", bags: ["scout", "sentry-mcp", "datadog-mcp"] }],
-      }),
-    ];
-    const dangling = findDanglingTraitNamespaces(bags);
-    expect(dangling).toHaveLength(1);
-    expect(dangling[0]).toMatchObject({ bag: "scout", trait: "scout-observability", namespace: "datadog-mcp" });
-  });
-
-  it("a trait cannot vouch for its own namespaces", () => {
-    const bags = [
-      bag("ghost", { manifest: {}, traits: [{ name: "ghost-all", bags: ["phantom"] }] }),
-    ];
-    expect(findDanglingTraitNamespaces(bags)).toHaveLength(1);
-  });
-
-  it("accepts an explicit provided set", () => {
-    const bags = [bag("a", { traits: [{ name: "t", bags: ["x"] }] })];
-    expect(findDanglingTraitNamespaces(bags, new Set(["x"]))).toEqual([]);
   });
 });

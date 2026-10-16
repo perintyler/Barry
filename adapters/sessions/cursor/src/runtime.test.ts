@@ -59,22 +59,22 @@ describe("a session's MCP servers", () => {
 });
 
 describe("the cursor-agent a session runs", () => {
-  it("is the pinned build when it is installed, else the current one", () => {
+  it("uses the current installation even when the recommended historic build exists", () => {
     const home = join(scratch, "user");
     const versions = join(home, ".local", "share", "cursor-agent", "versions");
-    expect(resolveCursorAgent(home)).toEqual({ command: "cursor-agent", pinned: false });
+    expect(resolveCursorAgent(home, { PATH: "" })).toEqual({ command: "cursor-agent", pinned: false });
 
     mkdirSync(join(home, ".local", "bin"), { recursive: true });
-    writeFileSync(join(home, ".local", "bin", "cursor-agent"), "");
-    expect(resolveCursorAgent(home)).toEqual({ command: join(home, ".local", "bin", "cursor-agent"), pinned: false });
+    writeFileSync(join(home, ".local", "bin", "cursor-agent"), "", { mode: 0o700 });
+    expect(resolveCursorAgent(home, { PATH: "" })).toEqual({ command: join(home, ".local", "bin", "cursor-agent"), pinned: false });
 
     mkdirSync(join(versions, `${VERIFIED_ON}-other`), { recursive: true });
-    writeFileSync(join(versions, `${VERIFIED_ON}-other`, "cursor-agent"), "");
-    expect(resolveCursorAgent(home).pinned).toBe(false);
+    writeFileSync(join(versions, `${VERIFIED_ON}-other`, "cursor-agent"), "", { mode: 0o700 });
+    expect(resolveCursorAgent(home, { PATH: "" }).pinned).toBe(false);
 
     mkdirSync(join(versions, `${VERIFIED_ON}-14929f9`), { recursive: true });
-    writeFileSync(join(versions, `${VERIFIED_ON}-14929f9`, "cursor-agent"), "");
+    writeFileSync(join(versions, `${VERIFIED_ON}-14929f9`, "cursor-agent"), "", { mode: 0o700 });
     mkdirSync(join(versions, "2099.01.01-ffffff0"), { recursive: true });
-    expect(resolveCursorAgent(home)).toEqual({ command: join(versions, `${VERIFIED_ON}-14929f9`, "cursor-agent"), pinned: true });
+    expect(resolveCursorAgent(home, { PATH: "" })).toEqual({ command: join(home, ".local", "bin", "cursor-agent"), pinned: false });
   });
 });

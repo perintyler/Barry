@@ -69,7 +69,7 @@ Original rationale:
 
 Source: [adapters/sessions/cursor/src/listing.test.ts](../../adapters/sessions/cursor/src/listing.test.ts)
 
-Use the captured model catalog for parser and picker agreement tests.
+Use the captured model list for parser and picker agreement tests.
 
 Original rationale:
 
@@ -78,9 +78,9 @@ Original rationale:
  * What `cursor agent --list-models` prints, parsed.
  *
  * Recorded from `cursor agent --list-models`, 2026-09-22, 241 models. The
- * catalog the picker offers is checked against the same recording where every
- * adapter and the vendor catalog can be loaded together
- * (cli/test/shipped-adapters/cursor-catalog.test.ts).
+ * model list the picker offers is checked against the same recording where every
+ * adapter and the vendor list can be loaded together
+ * (cli/test/shipped-adapters/cursor-models.test.ts).
  */
 ```
 
@@ -290,21 +290,17 @@ Original rationale:
 
 Source: [bags/identities/src/store/identity-bags.ts](../../bags/identities/src/store/identity-bags.ts)
 
-Trait absorption requires the full transitive composition closure, without importing unrelated installed bags.
+Bag composition expansion requires the full transitive composition closure, without importing unrelated installed bags.
 
 Original rationale:
 
 ```text
 /**
-   * The bags trait absorption may draw on, keyed by name.
+   * The bags composition expansion may draw on, keyed by name.
    *
-   * A parent's auto-trait folds in its sub-bags' namespaces, and `getAllTraits`
-   * can only absorb what this map contains, so it must hold every child of
-   * every bag synced here. `loaded` does: `composed` is the full transitive
-   * closure (the loop above), and absorption walks nothing but that closure
-   * (`expandComposition` from each bag). A map narrower than the closure would
-   * rewrite parent rows without their children's namespaces; that is the
-   * failure to guard against, and why `composed` must stay a closure.
+   * `loaded` holds the full transitive closure (the loop above), and
+   * `expandComposition` walks nothing but that closure. A map narrower than
+   * the closure would omit child bags.
    *
    * This used to be `loadAllBags()`, the full registry, which added nothing
    * the closure lacks but built and imported every installed bag's tool code
@@ -792,39 +788,6 @@ Original rationale:
  *
  * The function is not exported and its body does real git and registry work, so
  * this asserts on the key expression itself.
- */
-```
-
-## Note 038
-
-Source: [cli/test/unselected-server-label.test.ts](../../cli/test/unselected-server-label.test.ts)
-
-Describe the selected grant mode accurately; mounted namespaces alone do not establish tool access.
-
-Original rationale:
-
-```text
-/**
- * The banner printed when a session selects NO traits.
- *
- * It used to hardcode "(always-on only)" on all seven empty-selection branches.
- * That was true before the namespace split, when the config really was just
- * `ALWAYS_ON_SERVERS`. It stopped being true once identity bags began granting
- * their own namespaces: `generateMcpConfig("http")` writes a single server
- * (`barry`), so the always-on seed contributes ONE key and everything else is
- * identity-granted — which the capability picker does not control.
- *
- * Why this matters enough to pin: the old label asserted a SECURITY property
- * the code did not deliver. Someone unchecking every trait reasonably concluded
- * they had minimized exposure, and instead got ~25 servers. `--none` made the
- * same promise. A label that lies about capability is the same defect class as
- * a check that cannot fail.
- *
- * `bag_grant: session` made that property real for TOOLS — the servers are
- * still mounted, but nothing grants their tools. So the label now takes the
- * mode, and both readings are pinned here. Keeping the old wording under the
- * new default would lie in the opposite direction: claiming a grant that was
- * withheld is no better than hiding one that was not.
  */
 ```
 

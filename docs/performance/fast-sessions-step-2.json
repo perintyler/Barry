@@ -1,0 +1,50 @@
+{
+  "step": 2,
+  "date": "2026-10-14",
+  "entry": "tsx",
+  "before": {
+    "hosted_ui_spawn_ms": 7088.8,
+    "composition_ms": 5205.1,
+    "identity_sync_ms": 185.7,
+    "guest_load_bags_ms": 3886.4,
+    "guest_snapshot_ms": 247.1
+  },
+  "after": {
+    "hosted_ui_spawn_ms": 932.6,
+    "hosted_composition_ms": 8.7,
+    "identity_sync_ms": 1.6,
+    "guest_composition_ms": 44.7,
+    "guest_load_bags_ms": 28.6,
+    "guest_snapshot_ms": 95.1,
+    "guest_launch_plan_ms": 4653.3
+  },
+  "gates": {
+    "composition_under_50_ms": true,
+    "guest_bags_under_300_ms": true,
+    "identity_sync_under_10_ms": true,
+    "second_launch_tool_failure_warnings": 0
+  },
+  "cache_findings": "Summary fingerprints differ between source and compiled SDK hosts; caches are now per derivation. Disk manifest/snapshot caches were enabled after measured composition 92.7 ms and snapshot 247.1 ms. Background builds run in a worker and share the CLI build lock.",
+  "verification": {
+    "sdk_focused": "59 tests passed (registry, loader/disk cache, failure cache, summaries, migration read-lock check)",
+    "identities": "99 tests passed",
+    "CLI": "100 tests passed, including unchanged launch parity goldens",
+    "typechecks": [
+      "SDK",
+      "CLI",
+      "identities",
+      "sessions API"
+    ]
+  },
+  "environment_actions": [
+    "refreshed installed Claude adapter declaration stamp",
+    "restarted MCP after rebuilt SDK"
+  ],
+  "remaining_steps": [
+    3,
+    4,
+    5,
+    6,
+    7
+  ]
+}

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import { afterEach, beforeAll, expect, it } from "vitest";
 import { createArtifactCreator } from "../create.js";
-import { createSqliteArtifactRepository } from "./catalog.js";
+import { createSqliteArtifactRepository } from "./index-store.js";
 import { createLocalArtifactBlobs } from "./blobs.js";
 import type { ArtifactGrant } from "../types.js";
 import type { ArtifactBlobStore } from "../blobs.js";
@@ -111,7 +111,7 @@ it("a cancelled uncooperative authorization returns without creating an intent",
 for (const boundary of ["published", "committed"]) {
   it(`survives SIGKILL after ${boundary} and safely retries`, async () => {
     const f = await fixture(), childPath = join(f.filepath, "..", "crash.mjs");
-    const modules = { catalog: new URL("../../dist/local/catalog.js", import.meta.url).href, blobs: new URL("../../dist/local/blobs.js", import.meta.url).href, create: new URL("../../dist/create.js", import.meta.url).href, sqlite: import.meta.resolve("better-sqlite3") };
+    const modules = { catalog: new URL("../../dist/local/index-store.js", import.meta.url).href, blobs: new URL("../../dist/local/blobs.js", import.meta.url).href, create: new URL("../../dist/create.js", import.meta.url).href, sqlite: import.meta.resolve("better-sqlite3") };
     await writeFile(childPath, `
 import Database from ${JSON.stringify(modules.sqlite)};
 import { createHash } from 'node:crypto';

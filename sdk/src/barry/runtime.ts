@@ -14,6 +14,19 @@ import { BarryClient } from "../client/platypus.js";
 import type { BarryClientOptions } from "../client/http.js";
 import type { StoreBinding } from "../stores/bindings.js";
 import { BarryError } from "./errors.js";
+import {
+  defineBound,
+  defineStore,
+  resolveBarryActions,
+  resolveBarryBound,
+  resolveBarryInstructions,
+  resolveBarrySkills,
+  resolveBarryTools,
+  type BagLike,
+  type BagToolInput,
+  type BoundConstructor,
+  type IdentityLike,
+} from "./resolve.js";
 import type {
   ActionHandle,
   BagHandle,
@@ -27,7 +40,7 @@ import type {
   SessionHandle,
 } from "./api.js";
 import type { Caller, Page, Subject, SubjectName, SubjectNamed } from "./subjects.js";
-import type { IdentityReference } from "./types.js";
+import type { Action, Bag, Bound, IdentityReference, Tool } from "./types.js";
 import { overHttp } from "./http.js";
 
 interface Runtime {
@@ -102,18 +115,42 @@ function whole<T>(items: () => Promise<T[]>): Collection<T> {
 function sessionHandle(identity: IdentityHandle, id: string, options: ScopeOptions): SessionHandle {
   const sessions = () => subject("sessions", options);
   const who = () => callerOf(options);
-  const grants = () => sessions().grants(identity.ref, id, who());
   return {
     id,
     identity,
     get: async () => sessions().get(identity.ref, id, who()),
     update: async (changes) => sessions().update(identity.ref, id, changes, who()),
-    grants,
-    tools: async () => (await grants()).tools,
-    skills: async () => (await grants()).skills,
-    instructions: async () => (await grants()).instructions,
-    bound: async () => (await grants()).bound,
-    actions: async () => subject("actions", options).forSession(identity.ref, id, who()),
+    bags: async () => {
+      const subj = sessions();
+      return subj.bags ? subj.bags(identity.ref, id, who()) : [];
+    },
+    bounds: async () => {
+      const subj = sessions();
+      return subj.bounds ? subj.bounds(identity.ref, id, who()) : [];
+    },
+    tools: async () => {
+      const subj = sessions();
+      if (!subj.tools) throw new BarryError("unavailable", "sessions.tools is not implemented");
+      return subj.tools(identity.ref, id, who());
+    },
+    skills: async () => {
+      const subj = sessions();
+      return subj.skills ? subj.skills(identity.ref, id, who()) : [];
+    },
+    instructions: async () => {
+      const subj = sessions();
+      return subj.instructions ? subj.instructions(identity.ref, id, who()) : [];
+    },
+    bound: async () => {
+      const subj = sessions();
+      return subj.bound ? subj.bound(identity.ref, id, who()) : null;
+    },
+    actions: async () => {
+      const subj = sessions();
+      return subj.actions
+        ? subj.actions(identity.ref, id, who())
+        : subject("actions", options).forSession(identity.ref, id, who());
+    },
     messages: (query = {}) => {
       if (query.after !== undefined && (query.before !== undefined || query.newestFirst === true)) {
         throw new BarryError("invalid", "after cannot be combined with before or newestFirst");
@@ -148,9 +185,28 @@ function identityHandle(ref: IdentityReference, options: ScopeOptions): Identity
       return local ? { ...removal, sessionsDeleted } : removal;
     },
     makeDefault: async () => identities().makeDefault(ref, who()),
-    traits: async () => identities().traits(ref, who()),
-    grants: async (selection = {}) => identities().grants(ref, selection, who()),
-    tools: async (selection = {}) => (await identities().grants(ref, selection, who())).tools,
+    bags: async () => {
+      const subj = identities();
+      if (subj.bags) return subj.bags(ref, who());
+      const idRecord = await subj.get(ref, who());
+      const allBags = await subject("bags", options).list(who());
+      return allBags.filter((b) => idRecord.bags.includes(b.name));
+    },
+    bounds: async () => identities().bounds(who(), ref),
+    bound: async (bounds) => {
+      const subj = identities();
+      if (!subj.bound) throw new BarryError("unavailable", "identities.bound is not implemented");
+      return subj.bound(ref, bounds, who());
+    },
+    tools: async (selection = {}) => {
+      const subj = identities();
+      if (!subj.tools) throw new BarryError("unavailable", "identities.tools is not implemented");
+      return subj.tools(
+        ref,
+        selection as { bags?: readonly (Bag | string)[]; bounds?: Bound | readonly (Bound | string)[] },
+        who(),
+      );
+    },
     sessions: (query = {}) => collection((cursor) => subject("sessions", options).list(ref, query, cursor, who())),
     session: (id) => sessionHandle(handle, id, options),
     start: async (input = {}) => {
@@ -167,9 +223,31 @@ function bagHandle(name: string, options: ScopeOptions): BagHandle {
   const binding = bagBinding(name);
   return {
     name,
+    get: async () => {
+      const subj = bags();
+      if (subj.get) return subj.get(name, who());
+      const found = (await subj.list(who())).find((b) => b.name === name);
+      if (!found) throw new BarryError("not_found", `Bag "${name}" not found`);
+      return found;
+    },
     store: (store?: string): StoreBinding => binding.store(store),
     tools: async () => bags().tools(name, who()),
-    extensions: async () => bags().extensions(name, who()),
+    bounds: async () => {
+      const subj = bags();
+      return subj.bounds ? subj.bounds(name, who()) : [];
+    },
+    skills: async () => {
+      const subj = bags();
+      return subj.skills ? subj.skills(name, who()) : [];
+    },
+    instructions: async () => {
+      const subj = bags();
+      return subj.instructions ? subj.instructions(name, who()) : [];
+    },
+    actions: async () => {
+      const subj = bags();
+      return subj.actions ? subj.actions(name, who()) : [];
+    },
     job: (job): JobHandle => ({
       bag: name,
       name: job,
@@ -180,16 +258,137 @@ function bagHandle(name: string, options: ScopeOptions): BagHandle {
 
 function scope(options: ScopeOptions): BarryQuestions {
   const who = () => callerOf(options);
+
+  function hasSubject(name: SubjectName): boolean {
+    if (options.client) return true;
+    const { installed, connection } = runtime();
+    return installed.has(name) || connection !== null;
+  }
+
+  function toolsImpl<T extends BagToolInput = Tool>(
+    identity: IdentityLike | IdentityReference | null | undefined,
+    bags?: readonly (Bag | BagLike | T | string)[],
+    bounds?: Bound | readonly (Bound | string)[],
+    availableBounds?: ReadonlyMap<string, Bound> | Readonly<Record<string, Bound>>,
+  ): (Tool & T)[] | Promise<Tool[]> {
+    const isRef = typeof identity === "string" || typeof identity === "number";
+    const needsSubjectForNull =
+      identity === null &&
+      availableBounds === undefined &&
+      hasSubject("identities") &&
+      (bags === undefined || bags.length === 0 || bags.some((b) => typeof b === "string"));
+    if (isRef || needsSubjectForNull) {
+      const subj = subject("identities", options);
+      if (!subj.tools) {
+        throw new BarryError("unavailable", "identities.tools is not implemented");
+      }
+      return subj.tools(
+        isRef ? identity : null,
+        { bags: bags as readonly (Bag | string)[] | undefined, bounds },
+        who(),
+      );
+    }
+    return resolveBarryTools<T>(
+      identity,
+      (bags ?? []) as readonly (Bag | BagLike | T)[],
+      bounds,
+      availableBounds,
+    );
+  }
+
+  function boundImpl(
+    identity: IdentityLike | IdentityReference | null | undefined,
+    bounds?: readonly (Bound | string)[],
+    availableBounds?: ReadonlyMap<string, Bound> | Readonly<Record<string, Bound>>,
+  ): Bound | null | Promise<Bound | null> {
+    const isRef = typeof identity === "string" || typeof identity === "number";
+    const needsSubjectForNull =
+      identity === null && availableBounds === undefined && hasSubject("identities");
+    if (isRef || needsSubjectForNull) {
+      const subj = subject("identities", options);
+      if (!subj.bound) {
+        throw new BarryError("unavailable", "identities.bound is not implemented");
+      }
+      return subj.bound(isRef ? identity : null, bounds, who());
+    }
+    return resolveBarryBound(identity, bounds, availableBounds);
+  }
+
+  function skillsImpl(
+    identity: IdentityLike | IdentityReference | null | undefined,
+    bags?: readonly (Bag | BagLike | string)[],
+  ) {
+    const isRef = typeof identity === "string" || typeof identity === "number";
+    const hasStrBag = bags?.some((b) => typeof b === "string") ?? false;
+    if (isRef || hasStrBag) {
+      const names = (bags ?? []).map((b) => (typeof b === "string" ? b : b.name));
+      return Promise.all(
+        names.map((name) =>
+          Promise.resolve()
+            .then(() => bagHandle(name, options).skills())
+            .catch(() => []),
+        ),
+      ).then((lists) => lists.flat());
+    }
+    return resolveBarrySkills(identity, (bags ?? []) as readonly (Bag | BagLike)[]);
+  }
+
+  function instructionsImpl(
+    identity: IdentityLike | IdentityReference | null | undefined,
+    bags?: readonly (Bag | BagLike | string)[],
+  ) {
+    const isRef = typeof identity === "string" || typeof identity === "number";
+    const hasStrBag = bags?.some((b) => typeof b === "string") ?? false;
+    if (isRef || hasStrBag) {
+      const names = (bags ?? []).map((b) => (typeof b === "string" ? b : b.name));
+      return Promise.all(
+        names.map((name) =>
+          Promise.resolve()
+            .then(() => bagHandle(name, options).instructions())
+            .catch(() => []),
+        ),
+      ).then((lists) => lists.flat());
+    }
+    return resolveBarryInstructions(identity, (bags ?? []) as readonly (Bag | BagLike)[]);
+  }
+
+  function actionsImpl(
+    identity?: IdentityLike | IdentityReference | null,
+    bags?: readonly (Bag | BagLike | string)[],
+  ): Promise<Action[]> | Action[] {
+    if (bags !== undefined) {
+      const isRef = typeof identity === "string" || typeof identity === "number";
+      const hasStrBag = bags.some((b) => typeof b === "string");
+      if (isRef || hasStrBag) {
+        const names = bags.map((b) => (typeof b === "string" ? b : b.name));
+        return Promise.all(
+          names.map((name) =>
+            Promise.resolve()
+              .then(() => bagHandle(name, options).actions())
+              .catch(() => []),
+          ),
+        ).then((lists) => lists.flat());
+      }
+      return resolveBarryActions(identity, bags as readonly (Bag | BagLike)[]);
+    }
+    return subject("actions", options).list(who());
+  }
+
   return {
+    tools: toolsImpl as BarryQuestions["tools"],
+    bound: boundImpl as BarryQuestions["bound"],
+    skills: skillsImpl as BarryQuestions["skills"],
+    instructions: instructionsImpl as BarryQuestions["instructions"],
     identities: () => whole(() => subject("identities", options).list(who())),
     identity: (ref) => identityHandle(ref, options),
     createIdentity: async (input) => subject("identities", options).create(input, who()),
-    traits: async () => subject("identities", options).allTraits(who()),
-    bounds: async () => subject("identities", options).bounds(who()),
-    grants: async (selection = {}) => subject("identities", options).grants(null, selection, who()),
+    bounds: async (ref) =>
+      ref !== undefined
+        ? subject("identities", options).bounds(who(), ref)
+        : subject("identities", options).bounds(who()),
     bags: async () => subject("bags", options).list(who()),
     bag: (name) => bagHandle(name, options),
-    actions: async () => subject("actions", options).list(who()),
+    actions: actionsImpl as BarryQuestions["actions"],
     action: (name): ActionHandle => ({
       name,
       run: async (inputs = {}, runOptions = {}) => subject("actions", options).run(name, inputs, runOptions, who()),
@@ -201,9 +400,27 @@ function scope(options: ScopeOptions): BarryQuestions {
     schedules: async () => subject("schedules", options).list(who()),
     scheduler: async () => subject("schedules", options).scheduler(who()),
     schedule: (id): ScheduleHandle => ({ id, runs: async () => subject("actions", options).runs({ schedule: id }, who()) }),
-    oneOff: (id) => ({ id, cancel: () => subject("schedules", options).cancelOneOff(id, who()) }),
-    oneOffs: async (query = {}) => subject("schedules", options).oneOffs(query, who()),
-    scheduleOnce: async (input) => subject("schedules", options).scheduleOnce(input, who()),
+    atSchedule: (id) => ({
+      id,
+      cancel: () => {
+        const s = subject("schedules", options);
+        const fn = s.cancelAtSchedule;
+        if (!fn) throw new BarryError("unavailable", "schedules.cancelAtSchedule is not implemented");
+        return fn.call(s, id, who());
+      },
+    }),
+    atSchedules: async (query = {}) => {
+      const s = subject("schedules", options);
+      const fn = s.atSchedules;
+      if (!fn) throw new BarryError("unavailable", "schedules.atSchedules is not implemented");
+      return fn.call(s, query, who());
+    },
+    scheduleAt: async (input) => {
+      const s = subject("schedules", options);
+      const fn = s.scheduleAt;
+      if (!fn) throw new BarryError("unavailable", "schedules.scheduleAt is not implemented");
+      return fn.call(s, input, who());
+    },
     services: async () => subject("services", options).list(who()),
     service: (key): ServiceHandle => ({
       key,
@@ -225,6 +442,10 @@ export type Barry = BarryQuestions;
 interface BarryControls extends BarryQuestions {
   /** Define an MCP tool in a bag. */
   Tool: typeof defineTool;
+  /** Define and validate a Bound, or merge multiple Bounds via `Barry.Bound.merge(...)`. */
+  Bound: BoundConstructor;
+  /** Access a bag's store binding inside a Barry execution context. */
+  Store: typeof defineStore;
   /** Install the subjects this process hosts; their calls then run in-process. */
   use(...subjects: Subject[]): void;
   /** Forget every installed subject, the connection and the caller resolver (tests). */
@@ -242,6 +463,8 @@ interface BarryControls extends BarryQuestions {
 export const Barry: BarryControls = {
   ...scope({}),
   Tool: defineTool,
+  Bound: defineBound,
+  Store: defineStore,
   use(...subjects) {
     for (const provided of subjects) runtime().installed.set(provided.name, provided);
   },

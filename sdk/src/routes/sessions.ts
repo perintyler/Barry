@@ -1,14 +1,11 @@
-import { TraitSchema } from "../identities/types.js";
 import { z } from "zod";
 import { route } from "./route.js";
 import { ActionAckSchema } from "../errors.js";
-import { ActionResponseSchema, AttachRendererRequestSchema, CreateSessionRequestSchema, CreateSessionResponseSchema, DetachRendererRequestSchema, MessageDetailResponseSchema, MessageListResponseSchema, PersistMessageRequestSchema, RendererAttachmentSchema, ResolvedToolsResponseSchema as ResolvedToolsEnvelopeSchema, SearchResponseSchema, SendMessageRequestSchema, SendMessageResponseSchema as SendMessageEnvelopeSchema, SessionSchema, SessionListResponseSchema, UpdateSessionRequestSchema } from "../sessions/types.js";
+import { ActionResponseSchema, AttachRendererRequestSchema, CreateSessionRequestSchema, CreateSessionResponseSchema, DetachRendererRequestSchema, MessageDetailResponseSchema, MessageListResponseSchema, PersistMessageRequestSchema, RendererAttachmentSchema, ResolvedToolsResponseSchema, SearchResponseSchema, SendMessageRequestSchema, SendMessageResponseSchema as SendMessageEnvelopeSchema, SessionSchema, SessionListResponseSchema, UpdateSessionRequestSchema } from "../sessions/types.js";
 import { ModelCatalogResponseSchema } from "../adapters/models/types.js";
 
-const ResolvedToolsResponseSchema = ResolvedToolsEnvelopeSchema.extend({
-  traits: ResolvedToolsEnvelopeSchema.shape.traits.extend({ available: z.array(TraitSchema) }),
-});
 const BackfillSessionRequest = z.object({ transcriptPath: z.string().optional() }).default({});
+const SendMessageUnavailableResponseSchema=z.object({ok:z.literal(false),error:z.string(),code:z.string(),retryable:z.boolean()});
 const SendMessageResponseSchema = SendMessageEnvelopeSchema.omit({ ok: true });
 const SessionIdsResponseSchema = z.strictObject({ sessions: z.array(z.strictObject({ id: z.string() })), nextCursor: z.string().nullable() });
 const SessionListingResponseSchema = z.union([SessionListResponseSchema, SessionIdsResponseSchema]);
@@ -21,7 +18,7 @@ const GuaranteesResponse = z.strictObject({
 const OpaqueEntity = z.record(z.string(), z.unknown());
 
 const CompactSessionRequest = z.object({ targetTokens: z.number().int().min(1).optional() }).strict();
-const NativeSessionRequest = z.object({ sessionId: z.string() }).strict();
+const NativeSessionRequest = z.object({ sessionId: z.string(), bags: z.array(z.string().min(1)).optional(), bounds: z.array(z.union([z.string().min(1), z.record(z.string(), z.unknown())])).optional(), traits: z.array(z.string().min(1)).optional(), model: z.string().optional(), model_provider: z.string().optional(), mode: z.string().optional(), status: z.enum(["pending", "running"]).optional() }).strict();
 const SessionChangeSummaryResponse = z.object({ files: z.array(OpaqueEntity), additions: z.number().int(), deletions: z.number().int() }).strict();
 const SessionContextResponse = z.object({ context: z.unknown().nullable(), message: z.string().optional() }).strict();
 const SessionTranscriptResponse = z.object({ entries: z.array(OpaqueEntity) }).strict();
@@ -34,15 +31,16 @@ export const sessionsRoutes = {
   createSession: route({ method: "post", path: "/sessions", operationId: "createSession", body: CreateSessionRequestSchema, responses: { 201: CreateSessionResponseSchema } }),
   getSession: route({ method: "get", path: "/sessions/{sessionId}", operationId: "getSession", params: z.object({ "sessionId": z.string() }), responses: { 200: SessionSchema } }),
   updateSession: route({ method: "patch", path: "/sessions/{sessionId}", operationId: "updateSession", params: z.object({ "sessionId": z.string() }), body: UpdateSessionRequestSchema, responses: { 200: SessionSchema } }),
-  archiveSession: route({ method: "delete", path: "/sessions/{sessionId}", operationId: "archiveSession", params: z.object({ "sessionId": z.string() }), responses: { 204: null } }),
+  archiveSession: route({ method: "delete", path: "/sessions/{sessionId}", operationId: "archiveSession", params: z.object({ "sessionId": z.string() }), responses: { 200: ActionResponseSchema, 204: null } }),
   listMessages: route({ method: "get", path: "/sessions/{sessionId}/messages", operationId: "listMessages", params: z.object({ "sessionId": z.string() }), query: z.object({ "after": z.number().int().min(-1).optional().describe("Answer the messages after this sequence; -1 starts at the first"), "before": z.number().int().min(0).optional(), "limit": z.number().int().min(1).max(5000).optional(), "summary": z.boolean().optional() }), responses: { 200: MessageListResponseSchema } }),
-  sendMessage: route({ method: "post", path: "/sessions/{sessionId}/message", operationId: "sendMessage", params: z.object({ "sessionId": z.string() }), body: SendMessageRequestSchema, responses: { 200: SendMessageResponseSchema } }),
+  sendMessage: route({ method: "post", path: "/sessions/{sessionId}/message", operationId: "sendMessage", params: z.object({ "sessionId": z.string() }), body: SendMessageRequestSchema, responses: { 200: SendMessageResponseSchema, 202: SendMessageResponseSchema, 503: SendMessageUnavailableResponseSchema } }),
   listModels: route({ method: "get", path: "/models", operationId: "listModels", query: z.object({ "repoPath": z.string().optional() }), responses: { 200: ModelCatalogResponseSchema } }),
   getMessageDetail: route({ method: "get", path: "/sessions/{sessionId}/messages/{sequence}/detail", operationId: "getMessageDetail", params: z.object({ "sessionId": z.string(), "sequence": z.number().int() }), responses: { 200: MessageDetailResponseSchema } }),
   getResolvedSessionTools: route({ method: "get", path: "/sessions/{sessionId}/tools/resolved", operationId: "getResolvedSessionTools", params: z.object({ "sessionId": z.string() }), responses: { 200: ResolvedToolsResponseSchema } }),
-  previewSessionTools: route({ method: "get", path: "/sessions/{sessionId}/tools/preview", operationId: "previewSessionTools", params: z.object({ "sessionId": z.string() }), query: z.object({ "traits": z.string().optional(), "namespaces": z.string().optional(), "tools": z.string().optional() }), responses: { 200: ResolvedToolsResponseSchema } }),
+  previewSessionTools: route({ method: "get", path: "/sessions/{sessionId}/tools/preview", operationId: "previewSessionTools", params: z.object({ "sessionId": z.string() }), query: z.object({ "bags": z.string().optional(), "bounds": z.string().optional(), "namespaces": z.string().optional(), "tools": z.string().optional() }), responses: { 200: ResolvedToolsResponseSchema } }),
   stopSession: route({ method: "post", path: "/sessions/{sessionId}/stop", operationId: "stopSession", params: z.object({ "sessionId": z.string() }), responses: { 200: ActionResponseSchema } }),
   interruptSession: route({ method: "post", path: "/sessions/{sessionId}/interrupt", operationId: "interruptSession", params: z.object({ "sessionId": z.string() }), responses: { 200: ActionResponseSchema } }),
+  prepareSession: route({ method: "post", path: "/sessions/{sessionId}/prepare", operationId: "prepareSession", params: z.object({ sessionId: z.string() }), responses: { 202: ActionAckSchema } }),
   attachRenderer: route({ method: "post", path: "/sessions/{sessionId}/attach", operationId: "attachRenderer", params: z.object({ "sessionId": z.string() }), body: AttachRendererRequestSchema, responses: { 200: RendererAttachmentSchema } }),
   detachRenderer: route({ method: "post", path: "/sessions/{sessionId}/detach", operationId: "detachRenderer", params: z.object({ "sessionId": z.string() }), body: DetachRendererRequestSchema, responses: { 200: ActionResponseSchema } }),
   searchSessions: route({ method: "get", path: "/sessions/search", operationId: "searchSessions", query: z.object({ "q": z.string(), "limit": z.number().int().min(1).max(50).optional(), "session_id": z.string().optional(), "role": z.enum(["user", "assistant"]).optional() }), responses: { 200: SearchResponseSchema } }),
@@ -79,6 +77,7 @@ export const sessionsComponents = {
   RendererAttachment: RendererAttachmentSchema,
   ResolvedToolsResponse: ResolvedToolsResponseSchema,
   SearchResponse: SearchResponseSchema,
+  SendMessageUnavailableResponse: SendMessageUnavailableResponseSchema,
   SendMessageRequest: SendMessageRequestSchema,
   SendMessageResponse: SendMessageResponseSchema,
   Session: SessionSchema,

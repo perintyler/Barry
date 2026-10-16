@@ -6,7 +6,7 @@
  * tells an operator what the thing IS. That makes a weak description a real
  * defect rather than a style nit: `bdiff.review`'s "BDiff review-comments
  * service (SQLite-backed HTTP API)" spends its one line on the storage engine,
- * and `identities`'s "Identity, trait and bound management — REST API" ends on
+ * and `identities`'s "Identity and bound management — REST API" ends on
  * the transport. Neither says what it does FOR YOU.
  *
  * Deliberately narrow. This is a warning in `bag doctor`, not a parse error,

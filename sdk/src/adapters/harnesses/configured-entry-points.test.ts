@@ -14,7 +14,7 @@ function fixture() {
   const base = testAdapter();
   const defined = defineAdapter({
     ...base,
-    nativeTools: ["Read", "Write"],
+    tools: ["Read", "Write"],
     capabilities: { ...base.capabilities, toolDenial: "native" },
     modes: {
       ...base.modes,

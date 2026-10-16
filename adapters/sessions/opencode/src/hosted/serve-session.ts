@@ -314,8 +314,9 @@ export class OpenCodeServeSession implements Session {
       this.interruptWanted = true;
       return;
     }
+    const number=this.turnNumber;
     const { connection, sessionId } = await this.link;
-    await connection.client.interrupt(sessionId);
+    if(!this.closed && this.turnOpen && this.turnNumber===number)await connection.client.interrupt(sessionId);
   }
 
   async answer(request: PermissionRequest, decision: PermissionDecision): Promise<void> {

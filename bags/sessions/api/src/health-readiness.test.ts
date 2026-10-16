@@ -46,6 +46,8 @@ describe("GET /health readiness", () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(body.dbConnected).toBe(true);
+    expect(body.build.schema.sessions).toBeGreaterThan(0);
+    expect(body.build).toHaveProperty("release");
   });
 
   it("answers 503 with ok:false when the store is unreachable", async () => {

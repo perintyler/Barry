@@ -53,18 +53,17 @@ Barry treats agent capabilities as something you compose, govern, and reuse like
 ## Primitives
 
 
-Barry's architecture was designed from first principles, meaning it comes with its own set of primitives. To put it most simply: *you put things in Bags, Traits enable, Bounds restrict.*
+Barry's architecture was designed from first principles, meaning it comes with its own set of primitives. To put it most simply: *you put things in Bags, Identities pack them, Bounds restrict.*
 
 - **Bag**: a collection of tools, services, instructions, actions, schedules, apps, and other bags
-- **Bound**: a restriction, denied tools, write access, file globs, shell programs, network actions or domains. Denials union, allowlists intersect.
-- **Trait**: a named set of tool grants and bounds
-- **Identity**: a Barry persona with its own bags, default traits, shipped bounds, a default adapter, its own secrets. Inherits from a parent.
-- **Adapter**: Embedding models, decision, and agent harnesses, which support 3 modes: guest, instrumented, hosted.
+- **Bound**: a restriction over tools, inputs, files, shell commands, network URLs, or execution nodes. Denials union, allowlists intersect.
+- **Identity**: a Barry persona with its own packed bags, default bounds, a default adapter, and its own secrets. Inherits from a parent.
+- **Adapter**: Embedding models, decision models, and agent harnesses, which support 3 modes: guest, instrumented, hosted.
 - **Instruction**: natural language agent guidance, always or on demand.
 - **Action**: an LLM-powered job with inputs, outputs, and lifecycle. My take on skills.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/perintyler/barry-assets/main/diagrams/tool-resolution.svg" alt="Tool resolution: packed bags produce traits; the session's selected traits union into a grant; bounds such as readonly and no-egress subtract from it; what remains is the allowed namespaces, denied tools and access, file, shell and network rules, and native tool grants" width="760">
+  <img src="https://raw.githubusercontent.com/perintyler/barry-assets/main/diagrams/tool-resolution.svg" alt="Tool resolution: packed bags and session bags supply tools; bounds such as readonly and no-network subtract from them; what remains is the allowed tools, narrowed inputs, and file, shell, network, and node guards" width="760">
   <br>
   <sub><em>Tool Resolution</em></sub>
 </p>
@@ -72,22 +71,21 @@ Barry's architecture was designed from first principles, meaning it comes with i
 ## Example Use Case
 
 
-Say an alert fires at 2am and you want an agent to look into it, but you do not want it touching anything: no edits, no pushes, no writes. You give it a `debug` trait that opens the Datadog and Slack bags for reading, composed with a bound that denies writes. Start a session with it and the write tools are never even discoverable, enforced when the tool list is built and again on every call, failing closed if anything is unclear.
+Say an alert fires at 2am and you want an agent to look into it, but you do not want it touching anything: no edits, no pushes, no writes. You start a session with the Datadog and Slack bags and an `employer:debug-readonly` bound that denies write tools and outbound network writes. The write tools are never even discoverable, enforced when the tool list is built and again on every call, failing closed if anything is unclear.
 
 ```sh
-my-work-identity start --trait employer:debug
+my-work-identity start --bag datadog --bag slack --bound employer:debug-readonly
 ```
 
-Here `employer` is a bag you would write for your work identity; it defines the `debug` trait, referenced as `employer:debug`.
+Here `employer` is a bag you would write for your work identity; it defines the `debug-readonly` bound, referenced as `employer:debug-readonly`.
 
 ```yaml
-traits:
-  debug:
-    includes: [datadog, slack]
-    bound:
-      deniedAccess: [write]
-      network:
-        actions: [write]
+bounds:
+  debug-readonly:
+    tools:
+      deny: ["*:write"]
+    network:
+      deny: ["POST *", "PUT *", "PATCH *", "DELETE *"]
 ```
 
 The Datadog and Slack tools need API keys. You store them in the identity's vault and declare them in its `identity.yaml`; the tools receive the values, and the model never sees them.
@@ -122,7 +120,7 @@ output_schema:
 model: claude-sonnet-4-5
 ```
 
-Now you would rather not be woken up at all, so you schedule it. It runs on its own under `my-work-identity`, with the same read-only `debug` trait, and leaves its findings as an event you read over coffee.
+Now you would rather not be woken up at all, so you schedule it. It runs on its own under `my-work-identity`, with the same bags and read-only bound, and leaves its findings as an event you read over coffee.
 
 ```yaml
 schedules:
@@ -130,7 +128,8 @@ schedules:
     every: 1d
     action: triage-alert
     identity: my-work-identity
-    traits: [debug]
+    bags: [datadog, slack]
+    bounds: [employer:debug-readonly]
 ```
 
 But running a frontier model every night burns tokens, so you point the action at a local open-source model instead. It is free, and the triage never leaves your machine.
@@ -145,7 +144,7 @@ Now your Mac is pinned running inference while you work, so you hand the job to 
 barry workers join <invite-token>
 ```
 
-A trait and a bound became a policy, an action became a repeatable unit of work, a schedule made it autonomous, a local model made it cheap, and a worker made it distributed. Those pieces compose everything else Barry does.
+Bags and a bound defined the capability boundary, an action became a repeatable unit of work, a schedule made it autonomous, a local model made it cheap, and a worker made it distributed. Those pieces compose everything else Barry does.
 
 ## Installation
 
@@ -181,7 +180,7 @@ Every identity you create inherits from `base` automatically, so those fundament
 inherits: base
 ```
 
-The base identity packs [Actions](bags/actions), [Artifacts](bags/artifacts), [Bash](bags/bash), [Decisions](bags/decisions), [Embeddings](bags/embeddings), [Events](bags/events), [Filesystem](bags/filesystem), [Identities](bags/identities), [Instructions](bags/instructions), [MCP](bags/mcp), [Memory](bags/memory), [Nodes](bags/nodes), [Schedules](bags/schedules), [Sessions](bags/sessions), and [Telemetry](bags/telemetry).
+The base identity packs [Actions](bags/actions), [Artifacts](bags/artifacts), [Bash](bags/bash), [Decisions](bags/decisions), [Embeddings](bags/embeddings), [Events](bags/events), [Filesystem](bags/filesystem), [Identities](bags/identities), [Instructions](bags/instructions), [MCP](bags/mcp), [Memory](bags/memory), [Nodes](bags/nodes), [Schedules](bags/schedules), [Session Vector Search](bags/session-vector-search), [Sessions](bags/sessions), and [Telemetry](bags/telemetry).
 
 ## Further Reading
 

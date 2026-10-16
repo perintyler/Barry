@@ -300,17 +300,11 @@ export function createIdentitiesRouter(): Router {
   routes.route(identitiesRoutes.listAvailableBags, async (_req, res) => {
     try {
       const bags = await Barry.as(requestCaller(_req.authPrincipal)).bags();
-      // Bare, per AvailableBagsResponseSchema -- see the note on GET /traits.
       res.json({ bags });
     } catch (err) {
       log.error("identities.bags_available_failed", { error: err instanceof Error ? err.message : String(err) });
       res.status(500).json({ ok: false, error: "Failed to list available bags" });
     }
-  });
-
-  routes.route(identitiesRoutes.listIdentityTraits, async (req, res) => {
-    try { res.json({ traits: await Barry.as(requestCaller(req.authPrincipal)).identity(req.params.identity).traits() }); }
-    catch (error) { failed(res, "identities.traits_failed", error, "Failed to list identity traits"); }
   });
 
   routes.route(identitiesRoutes.getIdentity, async (req, res) => {

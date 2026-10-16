@@ -1,9 +1,10 @@
 import { allowedNative, disallowedTools } from "./native-tools.js";
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { barryCacheDir, writePrivateFile } from "@barry-rocks/sdk/services";
 import { join } from "node:path";
 import { setupGating } from "./hooks.js";
+import { antigravityAuth, cachedSignInPath } from "./credential.js";
 import type { SessionConfig } from "@barry-rocks/sdk/sessions";
 
 export interface WorkspacePlan {
@@ -15,8 +16,9 @@ export function antigravityHome(sessionId: string): string {
   return join(barryCacheDir(), "antigravity-homes", createHash("sha256").update(sessionId).digest("hex").slice(0, 12));
 }
 
-export function writeAntigravityWorkspace(config: SessionConfig, structured = false): WorkspacePlan {
+export function writeAntigravityWorkspace(config: SessionConfig, structured = false, signInPath = cachedSignInPath()): WorkspacePlan {
   const workspaceDir = antigravityHome(config.sessionId);
+  const auth = antigravityAuth(config.env);
   mkdirSync(workspaceDir, { recursive: true, mode: 0o700 });
   const agentsDir = join(workspaceDir, ".agents");
   mkdirSync(agentsDir, { recursive: true });
@@ -24,11 +26,16 @@ export function writeAntigravityWorkspace(config: SessionConfig, structured = fa
   const cliDir = join(workspaceDir, ".gemini", "antigravity-cli");
   mkdirSync(cliDir, { recursive: true });
   const trustedWorkspaces = [workspaceDir, config.cwd, ...(config.projectRoots ?? [])];
+  // modelProvider "gemini" makes agy take GEMINI_API_KEY and skip sign-in.
+  // On the account path it is left out, and the Mac's cached sign-in is
+  // copied in: agy reads it from the session's HOME, and it is copied on
+  // every start because agy refreshes it in place and the Mac's copy is the
+  // one the user keeps signed in.
   writePrivateFile(
     join(cliDir, "settings.json"),
     JSON.stringify(
       {
-        modelProvider: "gemini",
+        ...(auth === "api-key" ? { modelProvider: "gemini" } : {}),
         allowNonWorkspaceAccess: true,
         trustedWorkspaces,
       },
@@ -36,6 +43,11 @@ export function writeAntigravityWorkspace(config: SessionConfig, structured = fa
       2,
     ),
   );
+  if (auth === "google-account") {
+    const target = join(cliDir, "antigravity-oauth-token");
+    copyFileSync(signInPath, target);
+    chmodSync(target, 0o600);
+  }
 
   {
     const mcpServers: Record<string, unknown> = {};

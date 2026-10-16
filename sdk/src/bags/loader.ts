@@ -2,17 +2,19 @@ import { createLogger } from "../logging/emit.js";
 import { loadBagToolSummaries } from "./tool-definitions.js";
 import { homedir } from "os";
 import { createRequire } from "module";
-import { existsSync, statSync } from "fs";
+import { existsSync, statSync, mkdirSync, readFileSync, writeFileSync, renameSync, readdirSync, unlinkSync } from "fs";
+import { fileURLToPath } from "node:url";
+import { contractDerivation } from "../tools/tool-contract.js";
 import { createHash } from "crypto";
-import { dirname, join } from "path";
-import { loadRegistry, getBagSource, isBuiltinBag } from "./registry.js";
-import { getBagBuildDir, getRegistrySnapshotPath } from "./paths.js";
-import { registeredName, parseManifest, getSkillsDirs, findManifest } from "./manifest.js";
+import { dirname, join, extname } from "path";
+import { loadRegistry, getBagSource, isBuiltinBag, snapshotStamp } from "./registry.js";
+import { getBagBuildDir, getRegistrySnapshotPath, getBarryCacheDir } from "./paths.js";
+import { parseManifest, getSkillsDirs, findManifest } from "./manifest.js";
 import { resolveBagHooks } from "../hooks/hooks.js";
 import { getActionsDirs } from "../actions/action-manifest.js";
 import { getInstructionsDirs } from "../instructions/instruction-manifest.js";
-import { expandComposition } from "../traits/auto-traits.js";
-import type { Bag, BagRegistrySnapshot, BagTrait, BagMcpServer, LocalBagSource, RemoteBagSource } from "./types.js";
+import { expandComposition } from "./bag-dependencies.js";
+import type { Bag, BagRegistrySnapshot, BagMcpServer, LocalBagSource, RemoteBagSource } from "./types.js";
 import { resolveBagAccess } from "./types.js";
 
 const log = createLogger("sdk-bags", { transport: "stderr" });
@@ -20,23 +22,6 @@ const log = createLogger("sdk-bags", { transport: "stderr" });
 /**
  * Bag loader — resolves bag entries into fully loaded bags
  */
-
-
-
-
-
-
-
-
-
-
-
-
-
-// auto-traits imports only types, so this direction introduces no cycle.
-
-
-
 
 function resolvePath(p: string): string {
   return p.replace(/^~/, homedir());
@@ -83,10 +68,10 @@ function loadLocalBag(name: string, entry: LocalBagSource): Bag {
 
   // A registry entry pointing at a path that does not exist is always a broken
   // entry, not a bag without a manifest. Without this warning the bag loads
-  // as an empty husk — no tools, no traits — and every trait granting its
-  // namespace silently resolves to nothing (filterTools iterates tools, so a
-  // namespace with no provider is never consulted). Bags relocating on disk
-  // is the common cause; `barry bag doctor` reports and repairs it.
+  // as an empty husk — no tools — and its namespace silently resolves to
+  // nothing (filterTools iterates tools, so a namespace with no provider is
+  // never consulted). Bags relocating on disk is the common cause; `barry bag doctor`
+  // reports and repairs it.
   if (!existsSync(bagDir)) {
     // A git-sourced bag knows where it came from, so say so. Deliberately NOT
     // cloned here: loading happens at session start and on every hook firing,
@@ -97,7 +82,7 @@ function loadLocalBag(name: string, entry: LocalBagSource): Bag {
       ? ` — re-fetch it with: barry install ${entry.git.repo}`
       : "";
     log.warn(
-      `warning: bag "${name}" points at "${entry.path}", which does not exist — it will contribute no tools or traits${recovery}`,
+      `warning: bag "${name}" points at "${entry.path}", which does not exist — it will contribute no tools${recovery}`,
     );
   }
 
@@ -116,14 +101,16 @@ function loadLocalBag(name: string, entry: LocalBagSource): Bag {
   let manifest: ReturnType<typeof parseManifest>;
   try {
     manifest = parseManifest(bagDir);
-    if (manifest?.extends && name !== registeredName(manifest)) {
-      throw new Error(`extension is registered as ${name}, but must be ${registeredName(manifest)}; run barry bag doctor --fix`);
+    if (name.includes("/")) {
+      throw new Error(
+        `registered as "${name}", but ${bagDir}/bag.yaml declares "${manifest?.name ?? name}" — run \`barry bag doctor --fix\``,
+      );
     }
     invalidManifests.delete(name);
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     invalidManifests.set(name, reason);
-    log.warn(`warning: bag "${name}" has an invalid manifest — it will contribute no tools or traits: ${reason}`);
+    log.warn(`warning: bag "${name}" has an invalid manifest — it will contribute no tools: ${reason}`);
     manifest = null;
   }
 
@@ -137,13 +124,12 @@ function loadLocalBag(name: string, entry: LocalBagSource): Bag {
       skillsDirs: getSkillsDirs(bagDir),
       actionsDirs: getActionsDirs(bagDir),
       instructionsDirs: getInstructionsDirs(bagDir),
-      traits: [],
       mcpServers: {},
       tools: [],
       dependencies: [],
       slashCommands: [],
-    hooks: [],
-    requires: [],
+      hooks: [],
+      requires: [],
       services: [],
       apps: [],
       schedules: [],
@@ -151,26 +137,8 @@ function loadLocalBag(name: string, entry: LocalBagSource): Bag {
     };
   }
 
-  const traits: BagTrait[] = [];
-  for (const [traitName, traitDef] of Object.entries(manifest.traits)) {
-    traits.push({
-      name: traitName,
-      includes: traitDef.includes,
-      harnessTraits: traitDef.harnessTraits,
-      nativeTools: traitDef.nativeTools,
-      description: traitDef.description,
-      access: traitDef.access,
-      bags: traitDef.bags,
-      skills: traitDef.skills ?? [],
-      instructions: traitDef.instructions ?? [],
-      boundNames: traitDef.boundNames ?? [],
-      // Preserve validated inline bounds when reconstructing authored traits.
-      bound: traitDef.bound,
-    });
-  }
-
   return {
-    name: registeredName(manifest),
+    name: manifest.name,
     description: manifest.description,
     builtin: false,
     source: entry,
@@ -178,12 +146,12 @@ function loadLocalBag(name: string, entry: LocalBagSource): Bag {
     skillsDirs: getSkillsDirs(bagDir),
     actionsDirs: getActionsDirs(bagDir),
     instructionsDirs: getInstructionsDirs(bagDir),
-    traits,
+    bounds: manifest.bounds,
     mcpServers: manifest.mcpServers,
     tools: manifest.tools,
     dependencies: manifest.dependencies,
     slashCommands: manifest.slashCommands?.commands ?? [],
-    hooks: resolveBagHooks(bagDir, manifest.hooks, registeredName(manifest)),
+    hooks: resolveBagHooks(bagDir, manifest.hooks, manifest.name),
     requires: Object.entries(manifest.requires ?? {}).map(([target, r]) => ({ target, ...r })),
     services: Object.entries(manifest.services).map(([svcName, s]) => ({ name: svcName, ...s })),
     apps: Object.entries(manifest.apps).map(([appName, a]) => ({ ...a, name: appName })),
@@ -226,7 +194,6 @@ function loadRemoteBag(name: string, entry: RemoteBagSource): Bag {
     skillsDirs: [],
     actionsDirs: [],
     instructionsDirs: [],
-    traits: [],
     mcpServers,
     tools: entry.tools ?? [],
     // Remote bags can still need a launcher binary (e.g. npx for mcp-remote)
@@ -242,13 +209,98 @@ function loadRemoteBag(name: string, entry: RemoteBagSource): Bag {
   };
 }
 
+const localBagCache = new Map<string, { stamp: string; bag: Bag }>();
+let manifestCacheDirty = false;
+function localCacheStamp(source: LocalBagSource): string {
+  const root = resolvePath(source.path);
+  const manifest = findManifest(root);
+  return `${JSON.stringify(source)}:${process.env.BARRY_BUILTIN_DIR ?? ""}:${manifest ? statStamp(manifest) : "-"}:${["skills", "actions", "instructions", "hooks", "src/tools.ts", "tools.ts"].map(dir => statStamp(join(root, dir))).join(":")}`;
+}
+function snapshotFingerprint(): string {
+  const inputs: string[] = [snapshotStamp() ?? "-", process.env.BARRY_BUILTIN_DIR ?? "", contractDerivation() ?? "-", process.env.BARRY_CLI_BUILD_COMMIT ?? "", statStamp(fileURLToPath(new URL(`./manifest${extname(fileURLToPath(import.meta.url))}`, import.meta.url)))];
+  for (const [name, source] of Object.entries(loadRegistry())) {
+    if (source.type !== "local") continue;
+    const root = resolvePath(source.path);
+    const manifest = findManifest(root);
+    inputs.push(`${name}:${root}:${manifest ? statStamp(manifest) : "-"}:${statStamp(join(getBagBuildDir(name, root), "tools.js"))}:${["skills", "actions", "instructions", "hooks", "src/tools.ts", "tools.ts"].map(dir => statStamp(join(root, dir))).join(":")}`);
+  }
+  return createHash("sha256").update(JSON.stringify(inputs)).digest("hex").slice(0, 24);
+}
+function snapshotFile(key: string, kind: "manifests" | "snapshot"): string { return join(getBarryCacheDir(), "bags", `${kind}-${key}.json`); }
+function readDiskBags(key: string, kind: "manifests" | "snapshot"): Bag[] | null {
+  try {
+    const parsed = JSON.parse(readFileSync(snapshotFile(key, kind), "utf8")) as { version: number; bags: Bag[] };
+    if (parsed.version !== 2 || !Array.isArray(parsed.bags)) return null;
+    const failures = (parsed as typeof parsed & { invalidManifests?: Record<string, string> }).invalidManifests ?? {};
+    for (const bag of parsed.bags) {
+      const reason = failures[bag.name];
+      if (typeof reason === "string" && !invalidManifests.has(bag.name)) {
+        invalidManifests.set(bag.name, reason);
+        log.warn(`warning: bag "${bag.name}" has an invalid manifest — it will contribute no tools: ${reason}`);
+      }
+    }
+    return parsed.bags;
+  } catch { return null; }
+}
+function writeDiskBags(key: string, kind: "manifests" | "snapshot", bags: Bag[]): void {
+  try {
+    const path = snapshotFile(key, kind);
+    mkdirSync(dirname(path), { recursive: true });
+    const temporary = `${path}.${process.pid}.tmp`;
+    writeFileSync(temporary, JSON.stringify({ version: 2, bags, invalidManifests: Object.fromEntries(bags.flatMap(bag => invalidManifests.has(bag.name) ? [[bag.name, invalidManifests.get(bag.name)]] : [])) }), { mode: 0o600 });
+    renameSync(temporary, path);
+    pruneBagDiskCaches(dirname(path));
+  } catch { /* A regenerable cache must not block a launch. */ }
+}
+/** Keep recent regenerable snapshots; other cache files belong to their owners. */
+export function pruneBagDiskCaches(directory: string): void {
+  try {
+    for (const kind of ["manifests", "snapshot"]) {
+      const files = readdirSync(directory).filter(name => new RegExp(`^${kind}-[a-f0-9]+\\.json$`).test(name))
+        .map(name => ({ name, modified: statSync(join(directory, name)).mtimeMs }))
+        .sort((a, b) => b.modified - a.modified);
+      for (const file of files.slice(3)) {
+        // Concurrent writers may still be using a just-written generation.
+        if (file.modified < Date.now() - 60_000) try { unlinkSync(join(directory, file.name)); } catch { /* Concurrent pruning. */ }
+      }
+    }
+  } catch { /* Cache maintenance cannot prevent a launch. */ }
+}
+let diskManifestsChecked = false;
+function hydrateDiskManifests(): void {
+  if (diskManifestsChecked) return;
+  diskManifestsChecked = true;
+  const key = snapshotFingerprint();
+  const bags = readDiskBags(key, "snapshot") ?? readDiskBags(key, "manifests");
+  for (const bag of bags ?? []) {
+    const source = getBagSource(bag.name);
+    if (source?.type === "local" && JSON.stringify(source) === JSON.stringify(bag.source)) localBagCache.set(bag.name, { stamp: localCacheStamp(source), bag });
+  }
+}
+function persistDiskManifests(): void {
+  if (!localBagCache.size || !manifestCacheDirty) return;
+  const key = snapshotFingerprint();
+  const bags = new Map((readDiskBags(key, "manifests") ?? []).map(bag => [bag.name, bag]));
+  for (const [name, cached] of localBagCache) {
+    const source = getBagSource(name);
+    if (source?.type === "local" && cached.stamp === localCacheStamp(source)) bags.set(name, cached.bag);
+  }
+  writeDiskBags(key, "manifests", [...bags.values()]);
+  manifestCacheDirty = false;
+}
 function loadBagSource(name: string): Bag | null | Promise<Bag | null> {
   const source = getBagSource(name);
   if (!source || resolveBagAccess(source) === "disabled") return null;
 
   if (source.type === "local") {
+    hydrateDiskManifests();
+    const stamp = localCacheStamp(source);
+    const cached = localBagCache.get(name);
+    if (cached?.stamp === stamp) return cached.bag;
     const bag = loadLocalBag(name, source);
     bag.builtin = isBuiltinBag(name);
+    localBagCache.set(name, { stamp, bag });
+    manifestCacheDirty = true;
     return bag;
   }
 
@@ -309,7 +361,7 @@ async function loadRemoteBagWithResources(name: string, source: RemoteBagSource)
   const discover = discoverRemoteBagResources;
   if (!discover) {
     // No host installed a discoverer. Degrade exactly as a failed discovery
-    // does — tools from the registry entry, no skills or traits — and say so,
+    // does — tools from the registry entry, no skills — and say so,
     // because a remote bag quietly missing its resources is indistinguishable
     // from one that declares none.
     log.warn(
@@ -337,7 +389,7 @@ async function loadRemoteBagWithResources(name: string, source: RemoteBagSource)
     return bag;
   } catch (error) {
     // Fall back to the bag's tools alone. Reported rather than swallowed: the
-    // bag still works, but its skills and traits are missing, and a
+    // bag still works, but its skills are missing, and a
     // silent fallback made that indistinguishable from a bag that has none.
     log.warn(
       `[bags] remote bag '${name}': resource discovery failed, falling back to tools only — ` +
@@ -358,6 +410,8 @@ export function loadBagSync(name: string): Bag | null {
 
 /** Report each tool-load failure once and retain the bag with toolsError so one broken import does not reject the whole registry load; see docs/decisions/0014-discovery-vault-and-session-budgets.md. */
 const toolLoadFailures = new Map<string, string>();
+let toolFailureWarningPrinted = false;
+const newlyFailedTools = new Set<string>();
 
 function describeToolLoadError(error: unknown): string {
   if (!(error instanceof Error)) return String(error);
@@ -374,23 +428,23 @@ export async function loadBag(name: string): Promise<Bag | null> {
     tools = await loadBagToolSummaries(bag);
   } catch (error) {
     const reason = describeToolLoadError(error);
-    // Once per process per reason: a single command can load the same bag
-    // several times (identity sync loads the composition frontier, then the
-    // closure), and repeating the warning says nothing new.
-    if (toolLoadFailures.get(name) !== reason) {
-      log.warn(`warning: bag "${name}" could not load its tools — they are unavailable until this is fixed: ${reason}`);
-    }
+    if (toolLoadFailures.get(name) !== reason) newlyFailedTools.add(name);
     toolLoadFailures.set(name, reason);
     bag.toolsError = reason;
     return bag;
   }
   toolLoadFailures.delete(name);
+  delete bag.toolsError;
   if (tools) bag.tools = tools;
   return bag;
 }
 
 export async function loadBags(names: string[]): Promise<Bag[]> {
   const loaded = await Promise.all(names.map((name) => loadBag(name)));
+  if (!toolFailureWarningPrinted && newlyFailedTools.size) {
+    toolFailureWarningPrinted = true;
+    log.warn(`${newlyFailedTools.size} bags could not load their tools — rebuilding in the background; run barry bag build for details${process.env.BARRY_DEBUG ? ` (${[...newlyFailedTools].join(", ")})` : ""}`);
+  }
   const bags: Bag[] = [];
   for (const bag of loaded) {
     if (bag) bags.push(bag);
@@ -413,22 +467,24 @@ function statStamp(path: string): string {
   }
 }
 
-/** Bump when trait derivation changes shape, so stamps it wrote stop matching. */
 const LOAD_STAMP_VERSION = 4;
 
-/**
- * Fingerprint of what syncing traits for `names` would derive from, cheap
- * enough to check on every CLI invocation: stats and manifest parses, no
- * builds and no imports.
- *
- * Covers, for each bag in the composition closure, its registry entry, the
- * manifest (traits, bounds, `bags:`), the built tools bundle (its code stamps
- * the namespaces), and the skills directories (their entries become trait
- * skills). Only the closure's registry entries, not the whole snapshot: every
- * install or unregister rewrites the snapshot, and stamping it made each one
- * re-sync every identity on its next command. A tool source edit therefore registers once something
- * rebuilds the bundle — a session, `barry bag build` — not before.
- */
+/** Inputs whose stat stamps invalidate a cached identity bag sync. */
+export function bagLoadInputs(names: readonly string[]): Array<{ path: string; stamp: string }> {
+  const files = new Set<string>([getRegistrySnapshotPath()]);
+  for (const name of expandCompositionSync(names)) {
+    const source = getBagSource(name);
+    if (source?.type !== "local") continue;
+    const root = resolvePath(source.path);
+    const manifest = findManifest(root);
+    if (manifest) files.add(manifest);
+    const bag = loadBagSync(name);
+    if (!bag) continue;
+    files.add(join(getBagBuildDir(bag.name, root), "tools.js"));
+    for (const dir of bag.skillsDirs) files.add(dir);
+  }
+  return [...files].map(path => ({ path, stamp: statStamp(path) }));
+}
 export function bagLoadStamp(names: readonly string[]): string {
   const hash = createHash("sha256");
   hash.update(JSON.stringify({ version: LOAD_STAMP_VERSION, names }));
@@ -460,14 +516,6 @@ let cachedStamp: string | null = null;
  * Cheap enough (one stat) to check on every call. The registry file is written
  * atomically via rename, so size+mtime moves together with content.
  */
-function snapshotStamp(): string | null {
-  try {
-    const st = statSync(getRegistrySnapshotPath());
-    return `${st.mtimeMs}:${st.size}`;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Resolve builtin and user bags once so every consumer observes the same
@@ -481,7 +529,7 @@ function snapshotStamp(): string | null {
  * either way, being a fresh process each time.
  */
 export function loadBagRegistrySnapshot(): Promise<BagRegistrySnapshot> {
-  const stamp = snapshotStamp();
+  const stamp = snapshotFingerprint();
   if (cachedSnapshot && stamp !== cachedStamp) {
     cachedSnapshot = null;
   }
@@ -489,7 +537,8 @@ export function loadBagRegistrySnapshot(): Promise<BagRegistrySnapshot> {
     cachedStamp = stamp;
     cachedSnapshot = (async () => {
       const registry = loadRegistry();
-      const bags = await loadBags(Object.keys(registry));
+      const bags = readDiskBags(stamp, "snapshot") ?? await loadBags(Object.keys(registry));
+      if (snapshotFingerprint() === stamp) writeDiskBags(stamp, "snapshot", bags);
       return {
         registry: Object.freeze({ ...registry }),
         bags: Object.freeze(bags),
@@ -518,6 +567,21 @@ export function clearBagRegistrySnapshot(): void {
  * a manifest `bags:` edit takes effect on the next load instead of waiting for
  * someone to re-pack the parent.
  */
+/** Manifest-only composition. Never builds tools or opens remote connections. */
+export function expandCompositionSync(names: readonly string[]): string[] {
+  const visited = new Set<string>();
+  const queue = [...names];
+  while (queue.length) {
+    const name = queue.shift()!;
+    if (visited.has(name)) continue;
+    visited.add(name);
+    const source = getBagSource(name);
+    // Remote bags have no local composition manifest; avoid asynchronous discovery.
+    if (source?.type === "local") queue.push(...(loadBagSync(name)?.manifest?.bags ?? []));
+  }
+  persistDiskManifests();
+  return [...visited];
+}
 export async function expandCompositionFromSnapshot(names: readonly string[]): Promise<string[]> {
   if (names.length === 0) return [];
   try {

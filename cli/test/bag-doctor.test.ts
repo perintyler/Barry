@@ -63,7 +63,7 @@ interface FakeDependency {
 
 interface FakeBag {
   name: string;
-  manifest: { name?: string; extends?: string; bags?: string[]; toolsEntry?: { env?: string[] } } | null;
+  manifest: { name?: string; implements?: string; bags?: string[]; toolsEntry?: { env?: string[] } } | null;
   services: Array<{ name: string; user?: string }>;
   source: { type: string; path: string };
   mcpServers: Record<string, { url?: string }>;
@@ -89,11 +89,9 @@ vi.mock("@barry-rocks/sdk/internal/bags", async (importOriginal) => ({
   expandCompositionFromSnapshot: vi.fn(async (names: string[]) => [...names]),
   loadBagSync: vi.fn(),
   getInvalidManifests: vi.fn(() => new Map<string, string>()),
-  collectProvidedNamespaces: vi.fn(() => new Set<string>()),
   collectDeclaredMcpServers: vi.fn(() => []),
   findServerKeyConflicts: vi.fn(() => []),
   findEndpointDuplicates: vi.fn(() => []),
-  getAllTraits: vi.fn((bag: FakeBag) => [{ name: bag.name }]),
   getRegistrySnapshotPath: vi.fn(() => "/tmp/snapshot.json"),
   loadRegistry: vi.fn(() =>
     Object.fromEntries([...bags.keys()].map((n) => [n, { type: "local", path: `/bags/${n}` }])),
@@ -125,31 +123,6 @@ vi.mock("@barry-rocks/sdk/internal/actions", async (importOriginal) => ({
   parseActionFile: vi.fn(),
   listAllActions: vi.fn(async () => []),
 }));
-vi.mock("@barry-rocks/sdk/internal/traits", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@barry-rocks/sdk/internal/traits")>(),
-  expandComposition: vi.fn((names: string[]) => {
-    const out: string[] = [];
-    const seen = new Set<string>();
-    const queue: string[] = [];
-    for (const n of names) {
-      if (seen.has(n)) continue;
-      seen.add(n);
-      out.push(n);
-      queue.push(...(bags.get(n)?.manifest?.bags ?? []));
-    }
-    while (queue.length) {
-      const n = queue.shift() as string;
-      if (seen.has(n)) continue;
-      seen.add(n);
-      if (!bags.has(n)) continue;
-      out.push(n);
-      queue.push(...(bags.get(n)?.manifest?.bags ?? []));
-    }
-    return out;
-  }),
-  resolveComposedNamespaces: vi.fn(() => new Set<string>()),
-}));
-
 
 vi.mock("@barry-rocks/sdk/bags", async (importOriginal) => ({
   ...await importOriginal<typeof import("@barry-rocks/sdk/bags")>(),
@@ -168,22 +141,20 @@ vi.mock("@barry-rocks/sdk/internal/vault", async (importOriginal) => ({
 }));
 
 
-
 vi.mock("../src/bags/scaffold.js", () => ({
   scaffoldBag: vi.fn(),
 }));
 vi.mock("../src/bags/scaffold-kinds.js", () => ({
   scaffoldActionDir: vi.fn(),
   scaffoldInstruction: vi.fn(),
-  scaffoldTrait: vi.fn(),
+  scaffoldBound: vi.fn(),
 }));
 
 
 const identities: Array<{ id: number; name: string; metadata: IdentityDefinition }> = [];
-const traitRows: Array<{ name: string; namespaces: string[] }> = [];
 /** What `--fix` writes: `Barry.identity(name).update(changes)`, which the identities subject receives. */
 const update = vi.fn<Identities["update"]>(async (ref) => ({ ...identityFixture(String(ref)), warnings: [] }));
-const syncBags = vi.hoisted(() => vi.fn());
+const resolveBags = vi.hoisted(() => vi.fn());
 
 vi.mock("@barry-rocks/identities-bag", () => ({
   owner: { current: vi.fn(async () => ({ id: 1 })) },
@@ -191,17 +162,7 @@ vi.mock("@barry-rocks/identities-bag", () => ({
     list: vi.fn(async () => identities.map((record) => ({ record, source: "file", dir: null, isDefault: false }))),
     config: (identity: { metadata: IdentityDefinition }) => resolveIdentityConfig(identity.metadata),
   },
-  traits: {
-    list: vi.fn(async () => traitRows),
-    orphaned: vi.fn(async () => []),
-    syncBags,
-  },
-  // Doctor reports traits naming a scope that no longer exists. An empty list
-  // here means "no scopes known", which that check treats as a failed scope
-  // load and skips — so these cases exercise the rest of doctor unchanged.
-  bounds: {
-    list: vi.fn(async () => []),
-  },
+  resolveBags,
 }));
 // Registry preparation is covered by setup/first-run tests; these doctor
 // cases deliberately stub filesystem reads and inspect diagnostic behavior.
@@ -235,7 +196,6 @@ beforeEach(() => {
   bags.clear();
   definitions.clear();
   identities.length = 0;
-  traitRows.length = 0;
   output = [];
   vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
     output.push(args.join(" "));
@@ -252,11 +212,10 @@ beforeEach(() => {
   // Default: no service management running. Tests that want a running service management
   // override this to return { service management: {}, services: [...] }.
   mockSupervisorRequest.mockRejectedValue(new MockServiceManagementError("no service management"));
-  syncBags.mockResolvedValue({
+  resolveBags.mockResolvedValue({
     bags: [],
     composedBags: [],
     addedSubBags: [],
-    syncedTraits: [],
     warnings: [],
   });
 });
@@ -282,7 +241,6 @@ describe("bag doctor — sub-bag composition", () => {
     bags.set("browser", fakeBag("browser", ["playwright"]));
     bags.set("playwright", fakeBag("playwright"));
     identities.push({ id: 1, name: "bux", metadata: { bags: ["browser"] } });
-    traitRows.push({ name: "browser", namespaces: [] }, { name: "playwright", namespaces: [] });
 
     await bagDoctorCommand({});
 
@@ -300,7 +258,6 @@ describe("bag doctor — sub-bag composition", () => {
     bags.set("browser", fakeBag("browser", ["playwright"]));
     bags.set("playwright", fakeBag("playwright"));
     identities.push({ id: 1, name: "bux", metadata: { bags: ["browser", "playwright"] } });
-    traitRows.push({ name: "browser", namespaces: [] }, { name: "playwright", namespaces: [] });
 
     await bagDoctorCommand({});
 
@@ -313,7 +270,6 @@ describe("bag doctor — sub-bag composition", () => {
     bags.set("browser", fakeBag("browser", ["playwright"]));
     bags.set("playwright", fakeBag("playwright"));
     identities.push({ id: 1, name: "bux", metadata: { bags: ["browser", "playwright"] } });
-    traitRows.push({ name: "browser", namespaces: [] }, { name: "playwright", namespaces: [] });
 
     await bagDoctorCommand({ fix: true });
 
@@ -324,7 +280,7 @@ describe("bag doctor — sub-bag composition", () => {
   });
 });
 
-describe("bag doctor — checks that must survive", () => {
+describe("bag doctor — checks that must survive and bag.yaml migration", () => {
   it("still reports a bag that is not in the registry", async () => {
     identities.push({ id: 1, name: "bux", metadata: { bags: ["ghost"] } });
 
@@ -334,14 +290,100 @@ describe("bag doctor — checks that must survive", () => {
     expect(text()).toContain("ghost");
   });
 
-  it("still reports traits missing from the DB", async () => {
-    bags.set("git", fakeBag("git"));
-    identities.push({ id: 1, name: "bux", metadata: { bags: ["git"] } });
-    // traitRows deliberately empty — git's trait row never made it to the DB.
+  it("detects and migrates legacy traits:, old bounds:, schedules.*.traits, and extends: in user bag.yaml under --fix", async () => {
+    const { writeFileSync } = await import("fs");
+    const { parse } = await import("yaml");
+    bags.set("custom", fakeBag("custom"));
+    let storedManifest = [
+      "name: custom",
+      "description: Custom user bag",
+      "extends: sessions",
+      "traits:",
+      "  custom:restricted:",
+      "    description: Restricted trait",
+      "    bound:",
+      "      deniedAccess: [write]",
+      "      bash:",
+      "        denyPrograms: [rm]",
+      "bounds:",
+      "  no-push:",
+      "    description: No git push",
+      "    bound:",
+      "      deniedTools: [git:push]",
+      "      files:",
+      "        allowOnly: ['/workspace/**']",
+      "jobs:",
+      "  sync-worker:",
+      "    command: 'node sync.js'",
+      "    traits: [read]",
+      "schedules:",
+      "  nightly:",
+      "    cron: '0 2 * * *'",
+      "    prompt: 'Run nightly check'",
+      "    traits: [custom, git:read]",
+      "",
+    ].join("\n");
+
+    mockReadFileSync.mockImplementation((p: unknown) =>
+      String(p) === "/bags/custom/bag.yaml" ? storedManifest : "",
+    );
+    vi.mocked(writeFileSync).mockImplementation((p: unknown, content: unknown) => {
+      if (String(p) === "/bags/custom/bag.yaml") {
+        storedManifest = String(content);
+      }
+    });
 
     await bagDoctorCommand({});
+    expect(text()).toContain('Bag "custom" manifest uses legacy keys');
+    expect(text()).toContain("removed traits: from bag.yaml");
+    expect(text()).toContain("converted bounds: to { allow, deny }");
+    expect(text()).toContain("converted jobs.*.traits to bounds:");
+    expect(text()).toContain("converted schedules.*.traits to bags:/bounds:");
+    expect(text()).toContain("renamed extends: to implements:");
+    expect(writeFileSync).not.toHaveBeenCalledWith("/bags/custom/bag.yaml", expect.anything(), "utf-8");
 
-    expect(text()).toContain("traits missing from DB");
+    output = [];
+    process.exitCode = 0;
+    await bagDoctorCommand({ fix: true });
+    expect(text()).toContain("Migrated /bags/custom/bag.yaml");
+
+    const migrated = parse(storedManifest) as Record<string, unknown>;
+    expect(migrated).not.toHaveProperty("traits");
+    expect(migrated).not.toHaveProperty("extends");
+    expect(migrated.implements).toBe("sessions");
+    expect(migrated.bounds).toEqual({
+      "no-push": {
+        description: "No git push",
+        tools: { deny: ["git:push"] },
+        files: { allow: ["/workspace/**"] },
+      },
+      restricted: {
+        description: "Restricted trait",
+        tools: { deny: ["*:write"] },
+        bash: { deny: ["rm"] },
+      },
+    });
+    expect(migrated.jobs).toEqual({
+      "sync-worker": {
+        command: "node sync.js",
+        bounds: ["readonly"],
+      },
+    });
+    expect(migrated.schedules).toEqual({
+      nightly: {
+        cron: "0 2 * * *",
+        prompt: "Run nightly check",
+        bags: ["custom", "git"],
+        bounds: ["git:read"],
+      },
+    });
+
+    vi.mocked(writeFileSync).mockClear();
+    output = [];
+    process.exitCode = 0;
+    await bagDoctorCommand({ fix: true });
+    expect(text()).not.toContain('Bag "custom" manifest uses legacy keys');
+    expect(writeFileSync).not.toHaveBeenCalledWith("/bags/custom/bag.yaml", expect.anything(), "utf-8");
   });
 });
 
@@ -363,7 +405,6 @@ describe("bag doctor — host binaries", () => {
     const bag = fakeBag(name);
     bag.dependencies = [dep];
     bags.set(name, bag);
-    traitRows.push({ name, namespaces: [name] });
     identities.push({ id: 1, name: "bux", metadata: { bags: [name] } });
   }
 
@@ -452,7 +493,6 @@ describe("bag doctor — host binaries", () => {
     // Deliberately NOT added to any identity's bag list, and another bag is
     // packed so the doctor still has per-barry work to do.
     bags.set("git", fakeBag("git"));
-    traitRows.push({ name: "git", namespaces: ["git"] });
     identities.push({ id: 1, name: "bux", metadata: { bags: ["git"] } });
 
     await bagDoctorCommand({});
@@ -504,12 +544,6 @@ describe("bag doctor — service management services", () => {
     mockSupervisorRequest.mockResolvedValue({ instance: {}, services });
   }
 
-  function bagWithService(name: string, svc: { name: string; user?: string }): void {
-    const bag = fakeBag(name);
-    bag.services = [svc];
-    bags.set(name, bag);
-  }
-
   function serviceStatus(
     bag: string,
     name: string,
@@ -529,7 +563,9 @@ describe("bag doctor — service management services", () => {
   }
 
   it("says nothing about a healthy service known to the service management", async () => {
-    bagWithService("sessions", { name: "api" });
+    const bag = fakeBag("sessions");
+    bag.services = [{ name: "api" }];
+    bags.set("sessions", bag);
     managementWith([serviceStatus("sessions", "api")]);
 
     await bagDoctorCommand({});
@@ -538,7 +574,9 @@ describe("bag doctor — service management services", () => {
   });
 
   it("reports a service not known to service management", async () => {
-    bagWithService("sessions", { name: "api" });
+    const bag = fakeBag("sessions");
+    bag.services = [{ name: "api" }];
+    bags.set("sessions", bag);
     managementWith([]);
 
     await bagDoctorCommand({});
@@ -548,7 +586,9 @@ describe("bag doctor — service management services", () => {
   });
 
   it("skips service checks when no service management is running", async () => {
-    bagWithService("sessions", { name: "api" });
+    const bag = fakeBag("sessions");
+    bag.services = [{ name: "api" }];
+    bags.set("sessions", bag);
     // Default mock throws ServiceManagementError
 
     await bagDoctorCommand({});
@@ -559,7 +599,9 @@ describe("bag doctor — service management services", () => {
   });
 
   it("reports privileged services missing from the prepared management inventory", async () => {
-    bagWithService("vault", { name: "api", user: "_barryvault" });
+    const bag = fakeBag("vault");
+    bag.services = [{ name: "api", user: "_barryvault" }];
+    bags.set("vault", bag);
     managementWith([]);
 
     await bagDoctorCommand({});
@@ -569,7 +611,9 @@ describe("bag doctor — service management services", () => {
   });
 
   it("reports a service in conflict state", async () => {
-    bagWithService("sessions", { name: "api" });
+    const bag = fakeBag("sessions");
+    bag.services = [{ name: "api" }];
+    bags.set("sessions", bag);
     managementWith([serviceStatus("sessions", "api", { state: "conflict", conflict: "pid 12345" })]);
 
     await bagDoctorCommand({});
@@ -580,7 +624,9 @@ describe("bag doctor — service management services", () => {
   });
 
   it("reports a service with a problem", async () => {
-    bagWithService("sessions", { name: "api" });
+    const bag = fakeBag("sessions");
+    bag.services = [{ name: "api" }];
+    bags.set("sessions", bag);
     managementWith([serviceStatus("sessions", "api", { problem: "missing binary" })]);
 
     await bagDoctorCommand({});
@@ -590,7 +636,9 @@ describe("bag doctor — service management services", () => {
   });
 
   it("reports a service bound to a non-loopback address", async () => {
-    bagWithService("sessions", { name: "api" });
+    const bag = fakeBag("sessions");
+    bag.services = [{ name: "api" }];
+    bags.set("sessions", bag);
     managementWith([serviceStatus("sessions", "api", { loopbackOnly: false })]);
 
     await bagDoctorCommand({});
@@ -601,7 +649,9 @@ describe("bag doctor — service management services", () => {
   });
 
   it("reports a service in backoff", async () => {
-    bagWithService("sessions", { name: "api" });
+    const bag = fakeBag("sessions");
+    bag.services = [{ name: "api" }];
+    bags.set("sessions", bag);
     managementWith([serviceStatus("sessions", "api", { state: "backoff" })]);
 
     await bagDoctorCommand({});
@@ -635,45 +685,5 @@ describe("bag doctor secret contracts", () => {
     output = [];
     await bagDoctorCommand({});
     expect(text()).not.toContain("needs unbound secrets");
-  });
-});
-
-
-describe("bag doctor extensions", () => {
-  it("reports a misregistered extension once and fixes exactly its row", async () => {
-    const { parseManifest } = await import("@barry-rocks/sdk/bags");
-    const { deleteBag, getBag } = await import("../src/bags/registration.js");
-    const { getInvalidManifests } = await import("@barry-rocks/sdk/internal/bags");
-    const manifest = (await vi.importActual<typeof import("@barry-rocks/sdk/bags")>("@barry-rocks/sdk/bags")).parseManifestObject({ name: "search", extends: "sessions", description: "Search" });
-    bags.set("sessions-search", fakeBag("sessions-search"));
-    bags.set("sessions", fakeBag("sessions"));
-    vi.mocked(parseManifest).mockImplementation((dir) => dir.endsWith("sessions-search") ? manifest : null);
-    vi.mocked(getInvalidManifests).mockReturnValue(new Map([["sessions-search", "stale extension"]]));
-    vi.mocked(getBag).mockResolvedValue({ name: "sessions-search", source: { type: "local", path: "/bags/sessions-search" }, builtin: true });
-    try {
-      await bagDoctorCommand({});
-      expect(text()).toContain("Extensions registered under another name");
-      expect(text()).toContain("sessions/search");
-      expect(text()).not.toContain("Invalid bag manifests");
-      expect(deleteBag).not.toHaveBeenCalled();
-      output = [];
-      await bagDoctorCommand({ fix: true });
-      expect(vi.mocked(deleteBag).mock.calls).toEqual([["sessions-search"]]);
-      expect(text()).toContain("barry setup");
-    } finally {
-      vi.mocked(parseManifest).mockReturnValue(null);
-      vi.mocked(getInvalidManifests).mockReturnValue(new Map());
-    }
-  });
-
-  it("reports tools outside the parent's namespace without fixing them", async () => {
-    const bag = fakeBag("sessions/search");
-    bag.manifest = { name: "search", extends: "sessions" };
-    bag.tools = [{ toolName: "search_messages", namespace: "wrong" }];
-    bags.set(bag.name, bag);
-    const { deleteBag } = await import("../src/bags/registration.js");
-    await bagDoctorCommand({ fix: true });
-    expect(text()).toContain("search_messages stamps wrong; must stamp parent sessions");
-    expect(deleteBag).not.toHaveBeenCalled();
   });
 });

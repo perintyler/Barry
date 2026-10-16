@@ -8,7 +8,6 @@ packages:
   - bags/identities/*
   - bags/schedules/*
   - bags/sessions/*
-  - bags/sessions/extensions/*
   - bags/telemetry/*
   - bags/workflows/*
   - cli

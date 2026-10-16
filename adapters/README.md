@@ -1,17 +1,17 @@
 # Adapters
 
-This tree splits by the kind of work a vendor's code does, and the catalog is data:
+This tree splits by the kind of work a vendor's code does, and the model list is data:
 
-- [`shipped-catalog.yaml`](../sdk/src/adapters/models/vendors/shipped-catalog.yaml) is the one catalog — every vendor, every model, addresses, credentials, and the compatibility doors between them. The SDK validates its `vendors:` declarations and enforces the catalog's invariants at parse: unique model ids, one role claim per kind, compatibility naming a listed vendor.
+- [`shipped-models.yaml`](../sdk/src/adapters/models/vendors/shipped-models.yaml) is the one model list — every vendor, every model, addresses, credentials, and the compatibility doors between them. The SDK validates its `vendors:` declarations and enforces the invariants at parse: unique model ids, one role claim per kind, compatibility naming a listed vendor.
 - [`sessions/`](sessions/) is the System-2 agent axis: the harness packages (`sessions/{claude,codex,cursor,opencode,pi,antigravity}`, each depending on the SDK and its own vendor SDK, never on another adapter).
 - [`completions/`](completions/) is System-2 token call code: vendors serving direct completions (Anthropic messages, Ollama, llama.cpp), used for one-shot answers and background jobs when no harness is involved.
 - [`embeddings/`](embeddings/) is vector call code (Ollama's `/api/embed`).
 - [`decisions/`](decisions/) is System One call code: the `/v1/systemone` wire protocol written once (`systemone.ts`), serving hosted Jev and the local Von daemon — byte-compatible with it by design — plus the prompted fallbacks on generative models.
-- The composition roots assemble what they install: each names the shipped yaml and call code it ships (see [the CLI's](../cli/src/lib/shipped-vendors.ts) for the shape), and merges installed adapters' vendor code on top — an adapter package may carry [`vendorCode`](../sdk/src/adapters/models/vendors/catalog.ts) (its own vendor rows and per-kind factories), snapshotted into `adapters.json` at install and loaded from the recorded path at boot. One vendor, one provider of call code; a second adapter claiming one is refused at `add`. There is deliberately no package that imports all of the call code: the set of vendors an instance runs is the instance's, not the tree's.
+- The composition roots assemble what they install: each names the shipped yaml and call code it ships (see [the CLI's](../cli/src/lib/shipped-vendors.ts) for the shape), and merges installed adapters' vendor code on top — an adapter package may carry [`vendorCode`](../sdk/src/adapters/models/vendors/models.ts) (its own vendor rows and per-kind factories), snapshotted into `adapters.json` at install and loaded from the recorded path at boot. One vendor, one provider of call code; a second adapter claiming one is refused at `add`. There is deliberately no package that imports all of the call code: the set of vendors an instance runs is the instance's, not the tree's.
 
 The call code is data plus plain HTTP: a kind package depends on the SDK alone, plus `completions/`'s transports where one daemon or one API serves several kinds. No vendor SDK may be added here — that is what a harness package is for. A third party ships the same shape: an adapter package whose default export is `defineAdapter({...})` and whose `bag` directory carries vendor rows in `bag.yaml` and whose named `vendorFactories` export carries call code. Legacy `vendorCode` exports remain supported.
 
-The contracts are in the SDK: [`sdk/src/adapters`](../sdk/src/adapters/harnesses/index.ts) (adapter, modes, guarantees, capabilities, requirements), [`sdk/src/sessions`](../sdk/src/sessions/index.ts) (the session and its events), [`sdk/src/adapters/models/vendors`](../sdk/src/adapters/models/vendors/index.ts) (the vendor shape) and [`sdk/src/adapters/models/vendors/catalog.ts`](../sdk/src/adapters/models/vendors/catalog.ts) (the yaml schema and the merge). The SDK names no harness and no vendor; the CLI and the sessions API are the composition roots that load the adapters and install the models.
+The contracts are in the SDK: [`sdk/src/adapters`](../sdk/src/adapters/harnesses/index.ts) (adapter, modes, guarantees, capabilities, requirements), [`sdk/src/sessions`](../sdk/src/sessions/index.ts) (the session and its events), [`sdk/src/adapters/models/vendors`](../sdk/src/adapters/models/vendors/index.ts) (the vendor shape) and [`sdk/src/adapters/models/vendors/models.ts`](../sdk/src/adapters/models/vendors/models.ts) (the yaml schema and the merge). The SDK names no harness and no vendor; the CLI and the sessions API are the composition roots that load the adapters and install the models.
 
 ## Installing
 
@@ -49,7 +49,7 @@ The Agent Client Protocol is an open standard, so both directions live outside t
 
 Each adapter's `capabilities` (for example [Claude Code's](sessions/claude/src/capabilities.ts)) describe what Barry actually implements for that harness. A vendor CLI having a feature is not evidence that Barry uses it.
 
-Native tools are off by default, granted by traits and taken back by bounds. Codex uses feature switches and a hook gate; OpenCode uses ordered permissions. Cursor reports tools it cannot control; a bound that requires denying those tools refuses launch. See [native grants](../sdk/docs/bounds.md#native-grants) for each mode’s limits. A requested egress sandbox on an unsupported harness falls back to guards with a diagnostic. Do not present those sessions as having the same boundary as a supported sandbox.
+Native tools are provided by the harness's bag and restricted by bounds. Codex uses feature switches and a hook gate; OpenCode uses ordered permissions. Cursor reports tools it cannot control; a bound that requires denying those tools refuses launch. See [native tool bounds](../sdk/docs/bounds.md#native-tool-withholding) for each mode’s limits. A requested egress sandbox on an unsupported harness falls back to guards with a diagnostic. Do not present those sessions as having the same boundary as a supported sandbox.
 
 Where the harness has no system-prompt surface, guidance goes in the prompt prefix. The action index remains necessary on harnesses that do not mount commands or skills. Native structured output is used where the mode declares it; elsewhere `runStructured` prompts and validates.
 
@@ -65,9 +65,9 @@ Every harness now answers `withoutKey: "unauthenticated"`: a missing key refuses
 
 ## Requirements
 
-Each adapter declares what it needs on the host in `requirements`: the binary, how to read its version, an install hint per platform, and the vendor pin **with the mechanism that enforces it**. A pin nothing enforces is a wish — opencode and cursor both self-update at startup unless told otherwise. `barry doctor` and the `barry start` preflight read this same declaration through `checkRequirements`, so a launch cannot succeed against a requirement doctor calls broken. (The `login` requirement is gone with the vendor-login modes.)
+Each adapter declares its binary, version probe, installation hints and advisory recommended version in `requirements`. Each mode declares its own supported ranges, tested builds and known incompatibilities in `versions`. Startup, doctor, setup and local schedule forecasts use the shared assessment. An untested build warns and runs; a documented incompatibility refuses startup with its reason. Vendor auto-update suppression keeps a running session stable without requiring an exact installed version.
 
-`requirements.binary.paths` lists absolute installed paths in preference order before the command on PATH. The version guard, doctor and launch preflight probe the selected executable. Cursor prefers the exact verified 2026.10.01-14929f9 build.
+An explicit executable override takes precedence, followed by declared current paths and the command on PATH. The version assessment and launch use the same resolver. Cursor uses the current installation rather than preferring a historic directory. Bundled Claude/Pi hosted modes are assessed against their SDK runtime independently of the PATH CLI. See [runtime versions](sessions/VERSIONS.md) for fields, overrides and current recommendations.
 
 **Invariant I10 — Barry never permits an undeclared credential.** A session authenticates only through manifest-declared env vars read from declared sources. Each harness bag declares its credential env vars in `bag.yaml` (`credentials:`, vault items), an identity may define the same var with its own source (vault, `.env`, inline) and wins, and the session gate refuses — naming the fix — when a required credential has no definition or will not read. Vendor-login modes (a TUI on the user's own login, codex's `auth.json` link, opencode's own store, the claude subscription opt-in) are refused entirely: they authenticate outside the identity's declared sources.
 
@@ -85,7 +85,7 @@ A TUI mode's gate is installed by Barry but runs inside the vendor's TUI. Where 
 
 ## Cursor contracts
 
-Hosted cursor speaks ACP, and Barry names its tool calls from what cursor says of them (`identifyTool`): a title such as `MCP: tool` or a shell command is not a name a denial list or server scope can match. Each session's home is seeded with an empty allowlist, or cursor runs `ls` without asking. ACP sessions and the TUI's chats are separate stores; a conversation one cannot open starts afresh, with Barry's own history.
+Hosted cursor speaks ACP, and Barry names its tool calls from what cursor says of them (`identifyTool`): a title such as `MCP: tool` or a shell command is not a name a denial list or server bound can match. Each session's home is seeded with an empty allowlist, or cursor runs `ls` without asking. ACP sessions and the TUI's chats are separate stores; a conversation one cannot open starts afresh, with Barry's own history.
 
 In the TUI, `preToolUse` names an MCP call only as `MCP:<tool>`, so Barry's gate checks the server at `beforeMCPExecution`. Cursor's public plugins (Linear, Notion, Slack) come from its backend for the account and load into every session; the gate, and over ACP Barry's per-call ruling, keep them from running.
 
@@ -93,13 +93,13 @@ Cursor denial configuration is written to the temporary workspace's `.cursor/cli
 
 ## Models and local inference
 
-The model catalog is [`shipped-catalog.yaml`](../sdk/src/adapters/models/vendors/shipped-catalog.yaml), and it is advisory. Unknown ids may proceed, and failed live discovery must be marked stale rather than looking like a complete account list. Project configuration can affect discovery, so requests for a new session should supply its repository path.
+The model list is [`shipped-models.yaml`](../sdk/src/adapters/models/vendors/shipped-models.yaml), and it is advisory. Unknown ids may proceed, and failed live discovery must be marked stale rather than looking like a complete account list. Project configuration can affect discovery, so requests for a new session should supply its repository path.
 
 ### Running on Ollama
 
-`barry start --ollama` runs Claude Code against a local Ollama daemon on the catalog's default model. Add `-m <model>` for any installed model, including ones missing from the catalog: the route follows the selected vendor, not the model name. `--model-provider ollama` is the general form. To make it an identity's default, run `barry identity adapters set claude-code --model <model> --provider ollama`. That writes `adapters.claude-code.model: ollama/<model>` in `identity.yaml`. API sessions and drafts accept `modelProvider`; the session records it as `model_provider`, and `barry session resume` restores it.
+`barry start --ollama` runs Claude Code against a local Ollama daemon on the model list's default model. Add `-m <model>` for any installed model, including ones missing from `shipped-models.yaml`: the route follows the selected vendor, not the model name. `--model-provider ollama` is the general form. To make it an identity's default, run `barry identity adapters set claude-code --model <model> --provider ollama`. That writes `adapters.claude-code.model: ollama/<model>` in `identity.yaml`. API sessions and drafts accept `modelProvider`; the session records it as `model_provider`, and `barry session resume` restores it.
 
-The daemon address is `BARRY_OLLAMA_URL`, read from the session's environment (so an identity's `.env` can set it), then Ollama's own default address, which [the catalog](../sdk/src/adapters/models/vendors/shipped-catalog.yaml) carries. An unreachable daemon is reported, never replaced by a hosted endpoint, and Ollama always receives a placeholder key rather than your Anthropic credential.
+The daemon address is `BARRY_OLLAMA_URL`, read from the session's environment (so an identity's `.env` can set it), then Ollama's own default address, which [`shipped-models.yaml`](../sdk/src/adapters/models/vendors/shipped-models.yaml) carries. An unreachable daemon is reported, never replaced by a hosted endpoint, and Ollama always receives a placeholder key rather than your Anthropic credential.
 
 Before launch, the CLI checks whether the model makes a real tool call and prints one line: `tool call ok`, `no tool call` (with what the model said instead), `model is not installed`, `unreachable`, `timed out`, or `probe error`. The session launches regardless. A failed check means that probe did not see a tool call; a passing check does not promise the model will keep calling tools, which is why the small-model warning prints either way.
 
@@ -113,6 +113,7 @@ Declare today's truth, not the plan. A mode you have not verified is `null`, not
 
 An adapter’s optional `experimental` reason names the evidence still missing. Antigravity carries this mark: its hosted checks use a scripted Gemini endpoint, and V02–V04 still need verification against Gemini’s real API. The CLI prints the reason when listing adapters, and Antigravity warns when a session starts.
 
-Claude hosted rules available tool calls in its shared PreToolUse hook. It fails closed before a ten-minute ruling window ends, retaining Barry’s refusal reason. Native tools are excluded unless a trait grants them.
+Claude hosted rules available tool calls in its shared PreToolUse hook. It fails closed before a ten-minute ruling window ends, retaining Barry’s refusal reason. Native tools are controlled by the session's bounds and harness bag.
 
-The launch version guard refuses a build this adapter cannot drive: it compares major/minor for pre-1.0 and calendar versions, and major for stable semantic versions. Patch or day drift does not establish verified guarantees. Refusal names the observed and verified builds and the install hint; bundled modes do not probe an unrelated PATH binary. An explicit `BARRY_HARNESS_VERSION_CHECK=off` override bypasses this compatibility check, not the tool policy.
+The launch version guard does not infer incompatibility from a major, minor or calendar month change. Exact tested builds establish guarantee evidence; supported ranges express compatibility expectations. Unknown versions remain unverified. The former `BARRY_HARNESS_VERSION_CHECK=off` does not bypass a documented incompatibility or mandatory tool bounds.
+

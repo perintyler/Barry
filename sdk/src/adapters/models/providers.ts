@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { acquireLock } from "../../services/lock.js";
-import { mergeVendorFactories, type VendorFactories } from "./vendors/catalog.js";
+import { mergeVendorFactories, type VendorFactories } from "./vendors/models.js";
 
 const descriptor = z.strictObject({ contractVersion: z.literal(1), factoryExport: z.string().regex(/^[A-Za-z_$][\w$]*$/) });
 const registration = z.strictObject({
@@ -16,15 +16,15 @@ const registration = z.strictObject({
   factoryExport: descriptor.shape.factoryExport,
   shipped: z.literal(true).optional(),
 });
-export type InstalledModelProvider = z.infer<typeof registration>;
-export interface ModelProviderStoreOptions {
+export type InstalledModelVendor = z.infer<typeof registration>;
+export interface ModelVendorStoreOptions {
   file: string;
   /** Absolute module entry point; tests may inject imports without contacting a provider. */
   importModule?: (entry: string) => Promise<unknown>;
 }
-export interface ModelProviders {
-  installed(): InstalledModelProvider[];
-  add(path: string, options?: { shipped?: true }): Promise<InstalledModelProvider>;
+export interface ModelVendors {
+  installed(): InstalledModelVendor[];
+  add(path: string, options?: { shipped?: true }): Promise<InstalledModelVendor>;
   /** Refusals from the most recent load; selections remain recorded for repair. */
   refused: Map<string, string[]>;
   remove(packageName: string): boolean;
@@ -32,14 +32,14 @@ export interface ModelProviders {
   load(packageNames?: readonly string[]): Promise<VendorFactories>;
 }
 
-type ShippedModelProvider = Pick<InstalledModelProvider, "packageName" | "version" | "path"> & {
+type ShippedModelVendor = Pick<InstalledModelVendor, "packageName" | "version" | "path"> & {
   contractVersion: unknown;
   factoryExport: unknown;
 };
 
 /** Discover declarations without importing code or requiring a built package. */
-export function shippedModelProviders(root: string): ShippedModelProvider[] {
-  const packages: ShippedModelProvider[] = [];
+export function shippedModelVendors(root: string): ShippedModelVendor[] {
+  const packages: ShippedModelVendor[] = [];
   for (const kind of ["completions", "embeddings", "decisions"]) {
     const directory = resolve(root, "adapters", kind);
     if (!existsSync(directory)) continue;
@@ -60,7 +60,7 @@ export function shippedModelProviders(root: string): ShippedModelProvider[] {
   return packages;
 }
 
-function packageInfo(directory: string): InstalledModelProvider & { entry: string } {
+function packageInfo(directory: string): InstalledModelVendor & { entry: string } {
   const file = join(directory, "package.json");
   if (!existsSync(file)) throw new Error(`No model adapter package at ${directory}; install the package, then run barry adapter model add <package-directory>`);
   const pkg = JSON.parse(readFileSync(file, "utf8"));
@@ -77,7 +77,7 @@ function packageInfo(directory: string): InstalledModelProvider & { entry: strin
 }
 
 const kinds = new Set(["completion", "decision", "embedding", "listModels", "check"]);
-function factoriesOf(module: unknown, record: InstalledModelProvider): VendorFactories {
+function factoriesOf(module: unknown, record: InstalledModelVendor): VendorFactories {
   const value = (module as Record<string, unknown> | null)?.[record.factoryExport];
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${record.packageName} does not export ${record.factoryExport} as factory maps`);
   let count = 0;
@@ -93,10 +93,10 @@ function factoriesOf(module: unknown, record: InstalledModelProvider): VendorFac
 }
 
 /** No discovery of siblings and no implicit defaults: add is the installation's selection. */
-export function loadModelProviders(options: ModelProviderStoreOptions): ModelProviders {
+export function loadModelVendors(options: ModelVendorStoreOptions): ModelVendors {
   const refused = new Map<string, string[]>();
   const importModule = options.importModule ?? (entry => import(pathToFileURL(entry).href));
-  async function loadOne(record: InstalledModelProvider): Promise<VendorFactories> {
+  async function loadOne(record: InstalledModelVendor): Promise<VendorFactories> {
     let current: ReturnType<typeof packageInfo>;
     try { current = packageInfo(record.path); }
     catch { throw new Error(`${record.packageName} is unavailable; npm install ${record.packageName}, then barry adapter model add <package-directory>`); }
@@ -106,7 +106,7 @@ export function loadModelProviders(options: ModelProviderStoreOptions): ModelPro
     catch { throw new Error(`${record.packageName} could not load; reinstall with npm install ${record.packageName}`); }
     return factoriesOf(loaded, current);
   }
-  function installed(): InstalledModelProvider[] {
+  function installed(): InstalledModelVendor[] {
     if (!existsSync(options.file)) return [];
     const records = z.array(registration).parse(JSON.parse(readFileSync(options.file, "utf8")));
     const names = new Set<string>();
@@ -117,7 +117,7 @@ export function loadModelProviders(options: ModelProviderStoreOptions): ModelPro
     }
     return records;
   }
-  function save(records: InstalledModelProvider[]): void {
+  function save(records: InstalledModelVendor[]): void {
     mkdirSync(dirname(options.file), { recursive: true });
     const temp = `${options.file}.${randomUUID()}.tmp`;
     try {

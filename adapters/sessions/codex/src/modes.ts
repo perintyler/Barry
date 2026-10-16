@@ -3,12 +3,13 @@
  */
 import type { Mode, Requirements } from "@barry-rocks/sdk/adapters/harnesses";
 
-const VERIFIED_ON = "0.160.1";
+const VERIFIED_ON = "0.162.0";
 
 const LIVE_CHECK = "adapters/sessions/codex/src/live/codex-live.test.ts";
 
 export const CODEX_HOSTED: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: ["0.160.1", VERIFIED_ON], supportedVersions: [{ min: "0.160.1", max: VERIFIED_ON }] },
   guarantees: {
     capture: "total",
     delivery: "wake",
@@ -21,7 +22,7 @@ export const CODEX_HOSTED: Mode = {
   evidence: {
     check: `adapters/sessions/codex/src/hosted/app-server-session.test.ts; ${LIVE_CHECK}`,
     proves:
-      "a stream recorded from a real engine (__fixtures__/app-server-0.158.0.jsonl) — plain, shell-approval, MCP-approval, structured, interrupted, steered and failed turns — ends each turn with one done after a result carrying its usage, and every request the engine made gets an answer it accepts; steer and interrupt target the running turn by its id. Live on 0.160.1: the engine sends the identity's key and never an ambient one, a session without the key is refused before an engine starts, and a bogus key is refused by the real API rather than replaced by a login. Pinned 0.160.1 hosted-engine failure injections: missing, throwing and nonterminating policy scripts deny a forced native write through the launcher while an ordinary granted write executes. Codex itself permits vendor hook errors; a missing launcher, missing Node or outer deadline remains a guard gap",
+      "Local fake-provider hosted lifecycle, MCP/credential and native gate failure checks, and guest/instrumented TUI checks were repeated on 0.162.0. Real-API bogus-key evidence below remains from 0.160.1. A stream recorded from a real engine (__fixtures__/app-server-0.158.0.jsonl) — plain, shell-approval, MCP-approval, structured, interrupted, steered and failed turns — ends each turn with one done after a result carrying its usage, and every request the engine made gets an answer it accepts; steer and interrupt target the running turn by its id. Live on 0.160.1: the engine sends the identity's key and never an ambient one, a session without the key is refused before an engine starts, and a bogus key is refused by the real API rather than replaced by a login. Pinned 0.160.1 hosted-engine failure injections: missing, throwing and nonterminating policy scripts deny a forced native write through the launcher while an ordinary granted write executes. Codex itself permits vendor hook errors; a missing launcher, missing Node or outer deadline remains a guard gap",
   },
   egressSandbox: false,
 };
@@ -34,6 +35,7 @@ export const CODEX_HOSTED: Mode = {
  */
 export const CODEX_INSTRUMENTED: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: ["0.160.1", VERIFIED_ON], supportedVersions: [{ min: "0.160.1", max: VERIFIED_ON }] },
   attachesTo: "hosted",
   guarantees: {
     capture: "total",
@@ -60,6 +62,7 @@ export const CODEX_INSTRUMENTED: Mode = {
  */
 export const CODEX_GUEST: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: ["0.160.1", VERIFIED_ON], supportedVersions: [{ min: "0.160.1", max: VERIFIED_ON }] },
   guarantees: {
     capture: "post-hoc",
     delivery: "tool-call",
@@ -78,11 +81,12 @@ export const CODEX_GUEST: Mode = {
 };
 
 /** The version in `--version` output: its first capture group. Shared by doctor and the adapter. */
-export const VERSION_PATTERN = "(\\d+\\.\\d+\\.\\d+)";
+export const VERSION_PATTERN = "(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?)";
 
 export const CODEX_REQUIREMENTS: Requirements = {
   binary: {
     command: "codex",
+    overrideEnv: "CODEX_BIN",
     versionArgs: ["--version"],
     // `codex --version` prints e.g. "codex-cli 0.156.1".
     versionPattern: VERSION_PATTERN,
@@ -90,6 +94,6 @@ export const CODEX_REQUIREMENTS: Requirements = {
       darwin: "brew install codex",
       fallback: "npm install -g @openai/codex",
     },
-    pin: { version: VERIFIED_ON, enforcedBy: "package-manager install; never the self-updating shared daemon (R8)" },
+    recommendedVersion: VERIFIED_ON,
   },
 };

@@ -12,7 +12,7 @@ import { withStoreContext } from "@barry-rocks/sdk/internal/stores";
 
 import { callWorkflows } from "./client.js";
 import { createWorkflowServer, type IdentityGrant } from "./server.js";
-import { approveExecutionScope } from "@barry-rocks/sdk/bounds";
+import { approveWorkflowBounds, boundFingerprint } from "@barry-rocks/sdk/bounds";
 import { definitions, activities } from "./definitions.js";
 
 const cleanup: (() => void | Promise<void>)[] = [];
@@ -124,12 +124,13 @@ it("compiles the authored workflow schema into the SDK runtime catalog", () => {
 
 it("shows frozen and current run permissions without silently expanding the grant", async () => {
   let access: "read" | "write" = "read";
-  const resolve = async (job: { traits: string[]; identity?: string; harness?: string }) => approveExecutionScope({ identity: job.identity, harness: job.harness, traitNames: job.traits, traits: { documents: { name: "documents", namespaces: ["documents"], access: "readwrite" } }, tools: [{ namespace: "documents", toolName: "read", access }], boundByName: async () => undefined });
+  const resolve = async (job: { bags?: string[]; bounds?: string[]; identity?: string; harness?: string }) => approveWorkflowBounds({ identity: job.identity, harness: job.harness, bags: job.bags ?? [], bounds: job.bounds, tools: [{ namespace: "documents", toolName: "read", access }], boundByName: async () => undefined });
   const { call } = await service({ runAuthorization: resolve, currentRunScope: resolve });
-  const request = { id: "scoped", type: "echo", version: "1", input: { message: "hello" }, job: { traits: ["documents"] } };
+  const request = { id: "scoped", type: "echo", version: "1", input: { message: "hello" }, job: { bags: ["documents"] } };
   expect((await call("/api/runs", request)).status).toBe(201);
   const before = await (await call("/api/runs/scoped/permissions")).json();
   expect(before.effective.allowedToolIds).toEqual(["documents:read"]);
+  expect(before.policyView).toBe("identity-and-selected-bags; destination and live-attempt checks still required");
   access = "write";
   const after = await (await call("/api/runs/scoped/permissions")).json();
   expect(after.grant.scope.tools).toEqual({ "documents:read": "read" });
@@ -138,11 +139,61 @@ it("shows frozen and current run permissions without silently expanding the gran
   expect((await (await call("/api/runs/scoped/resources")).json()).containmentEvidence).toBe("not-observed");
 });
 
+it("verifies legacy v1 workflow_grants.evidence fingerprint and intersects with live bags and bounds ceiling", async () => {
+  const liveResolve = async () =>
+    approveWorkflowBounds({
+      identity: "alice",
+      bags: ["documents"],
+      bounds: ["documents:read"],
+      tools: [
+        { namespace: "documents", toolName: "read", access: "read" },
+        { namespace: "documents", toolName: "write", access: "write" },
+      ],
+      boundByName: async () => undefined,
+    });
+  const { path, call } = await service({ runAuthorization: liveResolve, currentRunScope: liveResolve });
+  expect((await call("/api/runs", { id: "legacy-v1-run", type: "echo", version: "1", input: { message: "v1" } })).status).toBe(201);
+
+  const v1ScopeEvidence = {
+    identity: "alice",
+    traits: ["documents:read"],
+    bound: { deniedAccess: ["write"] },
+    tools: { "documents:read": "read", "documents:write": "write" },
+  };
+  const v1Grant = {
+    version: 1,
+    revision: 1,
+    authorizer: "local-operator",
+    createdBy: "local-operator",
+    approvedAt: 1700000000000,
+    reason: "Run admitted",
+    scope: {
+      ...v1ScopeEvidence,
+      fingerprint: boundFingerprint(v1ScopeEvidence),
+    },
+    job: {
+      traits: ["documents:read"],
+      identity: "alice",
+      profile: "portable",
+    },
+  };
+  const db = new DatabaseSync(path);
+  cleanup.push(() => db.close());
+  db.prepare("INSERT INTO workflow_grants(run_id, revision, evidence) VALUES (?, 1, ?)").run("legacy-v1-run", JSON.stringify(v1Grant));
+  db.prepare("UPDATE workflow_runs SET grant_revision = 1 WHERE id = ?").run("legacy-v1-run");
+
+  const perms = await (await call("/api/runs/legacy-v1-run/permissions")).json();
+  expect(perms.currentPolicyAvailable).toBe(true);
+  expect(perms.grant.scope.bags).toEqual(["documents"]);
+  expect(perms.grant.scope.bounds).toEqual(["documents:read"]);
+  expect(perms.effective.allowedToolIds).toEqual(["documents:read"]);
+});
+
 it("enforces signed identity visibility, operation grants, payload permission and immediate revocation", async () => {
   const key = "test-engine-key-longer-than-thirty-two-bytes";
   let revoked = false, payloadRead = false;
   const { owner, call } = await service({ actorKey: key, grants: (): Record<string, IdentityGrant> => revoked ? {} : { alice: { types: ["echo"], operations: ["start", "list", "get"], payloadRead } } });
-  const sign = workflowActorSigner({ identity: "alice", traits: [], bound: null, allowedToolIds: ["workflows:start", "workflows:list", "workflows:get", "workflows:cancel"] }, key);
+  const sign = workflowActorSigner({ identity: "alice", bags: [], bound: null, allowedToolIds: ["workflows:start", "workflows:list", "workflows:get", "workflows:cancel"] }, key);
   const asAlice = (path: string, body?: unknown) => call(path, body, { Authorization: "Bearer test-secret", "X-Workflow-Actor": sign(path, body) });
   owner.start({ id: "operator", type: "echo", version: "1", input: { message: "operator-private" } });
   const request = { id: "alice", type: "echo", version: "1", input: { message: "alice-private" } };
@@ -175,7 +226,7 @@ it("awaits an asynchronous context signer before sending an authenticated workfl
   process.env.BARRY_SERVICE_REGISTRY = registry;
   try {
     writeServiceRegistry({ version: 2, generated: new Date().toISOString(), resources: { "workflows.runtime": { bag: "workflows", name: "runtime", kind: "service", url } } }, registry);
-    const sign = workflowActorSigner({ identity: "alice", traits: [], bound: null, allowedToolIds: ["workflows:list"] }, key);
+    const sign = workflowActorSigner({ identity: "alice", bags: [], bound: null, allowedToolIds: ["workflows:list"] }, key);
     const result = await withStoreContext({ identity: "alice", workflowActor: async (path, body) => Promise.resolve(sign(path, body)) }, () => callWorkflows("/api/v2/runs"));
     expect(result).toMatchObject({ items: [] });
   } finally {
@@ -194,7 +245,7 @@ it("refreshes actor verification keys and refuses missing or failed key readers 
     readActorKey: async () => { if (failure) throw new Error("private-backend-canary"); return selected; },
     grants: () => ({ alice: { types: ["echo"], operations: ["list"], payloadRead: false } }),
   });
-  const actor = (key: string) => workflowActorSigner({ identity: "alice", traits: [], bound: null, allowedToolIds: ["workflows:list"] }, key)("/api/v2/runs");
+  const actor = (key: string) => workflowActorSigner({ identity: "alice", bags: [], bound: null, allowedToolIds: ["workflows:list"] }, key)("/api/v2/runs");
   const request = (key: string) => call("/api/v2/runs", undefined, { Authorization: "Bearer test-secret", "X-Workflow-Actor": actor(key) });
   expect((await request(first)).status).toBe(200);
   selected = rotated;
@@ -219,4 +270,39 @@ it("sanitizes SQLite faults and degrades readiness without creating an authored 
   expect(owner.list()).toHaveLength(0);
   expect((await call("/ready")).status).toBe(503);
   expect((await call("/live")).status).toBe(200);
+});
+it("authenticates worker identity before awaiting the installed policy dispatcher", async () => {
+  const observed: string[] = []; let release!: () => void;
+  const { call } = await service({ workerDispatch: async worker => { observed.push(worker); await new Promise<void>(resolve => { release = resolve; }); return { authorized: worker }; } });
+  expect((await call("/api/worker", { request: { version: 3, operation: "hello", session: "session" } }, asWorker("barry_wk_invalid"))).status).toBe(401);
+  expect(observed).toEqual([]);
+  const response = call("/api/worker", { request: { version: 3, operation: "hello", session: "session", worker: "forged" } }, asWorker());
+  await expect.poll(() => observed.length).toBe(1); expect(observed).toEqual(["worker"]);
+  release(); expect(await (await response).json()).toEqual({ authorized: "worker" });
+});
+
+it("keeps a restored HTTP owner readable and gates new admissions behind a scoped, replayable activation", async () => {
+  const { pauseRestoredRuns } = await import("@barry-rocks/sdk/internal/workflows");
+  const f = await service();
+  await f.call("/api/runs", { id: "retained-before-restore", type: "echo", version: "1", input: { message: "retained" } });
+  const db = new DatabaseSync(f.path); try { pauseRestoredRuns(db, "2026-10-14T16:00:00.000Z"); } finally { db.close(); }
+  const state = await (await f.call("/api/v2/recovery")).json(), epoch = state.recovery.epoch;
+  expect(state.recovery.active).toBe(false); expect((await f.call("/api/runs/retained-before-restore")).status).toBe(200);
+  expect((await (await f.call("/health")).json())).toMatchObject({ ok: true, state: "recovery-paused", admissionPaused: true });
+  expect((await f.call("/ready")).status).toBe(503);
+  const fresh = { id: "lost-after-snapshot", type: "echo", version: "1", input: { message: "new" } };
+  expect((await (await f.call("/api/runs", fresh)).json()).code).toBe("RecoveryAdmissionPaused");
+  expect((await f.call("/api/v2/recovery", undefined, asWorker())).status).toBe(401);
+  expect((await f.call("/api/v2/recovery", undefined, { Authorization: "" })).status).toBe(401);
+  expect((await f.call("/api/v2/recovery", undefined, { Authorization: "Bearer test-secret", "x-workflow-actor": "forged" })).status).toBe(403);
+  const body = { request_id: "c7e6eb20-d9cf-4d76-8b5c-6b54a88931c0", expected_epoch: epoch, reason: "Reviewed surviving receipts and effects", residual_risk: "Historical unknown work remains unresolved", effect_paths_fenced: true, post_snapshot_work_reviewed: true };
+  expect((await f.call("/api/v2/recovery/activate", { ...body, actor: "forged" })).status).toBe(400);
+  expect((await f.call("/api/v2/recovery/activate", { ...body, effect_paths_fenced: false })).status).toBe(400);
+  const first = await f.call("/api/v2/recovery/activate", body); expect(first.status).toBe(200); const ack = await first.json();
+  expect(await (await f.call("/api/v2/recovery/activate", body)).json()).toEqual(ack);
+  expect((await f.call("/api/v2/recovery/activate", { ...body, residual_risk: "Changed intent" })).status).toBe(409);
+  expect((await (await f.call("/api/runs", fresh)).json()).code).toBe("RecoveryEpochRequired");
+  expect((await f.call("/api/runs", { ...fresh, id: `${epoch}:new`, recoveryEpoch: epoch })).status).toBe(201);
+  expect(f.owner.get("retained-before-restore").status).toBe("blocked");
+  const active = await (await f.call("/api/v2/recovery")).json(); expect(active.activation.decision).toMatchObject({ actor: "local-operator", reason: body.reason });
 });

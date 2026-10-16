@@ -1,4 +1,3 @@
-import type { ModeId } from "../ids.js";
 /**
  * The objects `Barry` hands out. Each is what a person would recognise:
  * an identity, a session, a tool it can call. None of them is a storage row,
@@ -11,9 +10,9 @@ import type { z } from "zod";
 import type { Bound } from "../bounds/types.js";
 import type { ApiWarning } from "../errors.js";
 import type { BarryEvent } from "../events/index.js";
-import type { IdentitySchema, TraitSchema, BagInfoSchema } from "../identities/types.js";
+import type { IdentitySchema, BagInfoSchema } from "../identities/types.js";
 import type { MessageSchema, Session } from "../sessions/types.js";
-import type { OneOffRecord } from "../schedules/types.js";
+import type { AtScheduleRecord } from "../schedules/types.js";
 import type { JobRunRecord } from "../jobs/types.js";
 import type { SecretReference } from "../identities/secrets.js";
 import type { IdentityBagConfiguration } from "../identities/bags.js";
@@ -25,14 +24,12 @@ export type { Session, BarryEvent, Bound };
 
 /** An identity: reusable configuration a session runs as. */
 export type Identity = z.infer<typeof IdentitySchema>;
-/** A trait: the grants an identity or a session can select. */
-export type Trait = z.infer<typeof TraitSchema>;
 /** One message in a session's transcript. */
 export type Message = z.infer<typeof MessageSchema>;
 /** A bag as the registry knows it. */
 export type Bag = z.infer<typeof BagInfoSchema>;
 /** An action scheduled to run once, later. */
-export type OneOff = OneOffRecord;
+export type AtSchedule = AtScheduleRecord;
 /** One run of a bag's job. */
 export type JobRun = JobRunRecord;
 /** A non-fatal condition reported beside a successful change. */
@@ -44,8 +41,11 @@ export type Updated<T> = T & { readonly warnings: readonly Warning[] };
 /** How an identity is named in a call: its name, or its row id. */
 export type IdentityReference = string | number;
 
+import type { ToolContext } from "../tools/define-tool.js";
+
 /** A tool a session can call. */
 export interface Tool {
+  id?: string;
   unavailable?: string;
   uncontrolled?: string;
   /** The tool's own name, as the harness calls it. */
@@ -59,6 +59,12 @@ export interface Tool {
   access: "read" | "write";
   /** JSON Schema of its input, when known. */
   input?: Record<string, unknown>;
+  /** Declared network capabilities for tool-level bound filtering. */
+  network?: string[];
+  /** Input schema map for path/parameter guard inspection. */
+  schema?: Readonly<Record<string, unknown>>;
+  /** In-process guarded tool handler when loaded directly. */
+  handler?: (params: Record<string, unknown>, context: ToolContext) => Promise<unknown>;
 }
 
 /** A skill a session has mounted. */
@@ -71,55 +77,12 @@ export interface Instruction {
   name: string;
 }
 
-/** Everything a session of an identity gets: one answer for every launch path. */
-export interface Grants {
-  /** The effective traits: the defaults this installation has, the identity's, and the session's own. */
-  traits: string[];
-  /** The bound every restriction merges into; null for none. */
-  bound: Bound | null;
-  /** The tool namespaces the traits grant; each reaches the session under its own prefix. */
-  namespaces: string[];
-  tools: Tool[];
-  skills: Skill[];
-  instructions: Instruction[];
-  /**
-   * Grants a session asked for that could not be honoured, with the reason —
-   * a default trait this installation lacks, say. A dropped grant was silently
-   * absent before (POL-18): the session's effective traits simply did not
-   * include it, and nothing said why. Surfacing it here lets `session show`
-   * and launch diagnostics report the gap rather than leaving the reader to
-   * notice an expected capability is missing. Omitted (not `[]`) when nothing
-   * was dropped, so an older consumer that never reads it is unaffected.
-   */
-  warnings?: readonly string[];
-}
-
-/** What a session or a caller selects on top of an identity. */
-export interface GrantSelection {
-  traits?: readonly string[];
-  harness?: string;
-  mode?: ModeId;
-  /** Named bounds, by name. */
-  bounds?: readonly string[];
-  /** Restrictions written inline. */
-  inlineBound?: Bound | null;
-  /** The installation's default traits; on unless a caller grants only what it names. */
-  defaults?: boolean;
-  /** The identity's own traits and bags; on unless a caller scopes to the session alone. */
-  identityTraits?: boolean;
-  /** Namespaces granted directly, beside the traits. */
-  namespaces?: readonly string[];
-  /** Tools granted directly, by name, beside the traits. */
-  tools?: readonly string[];
-}
-
 /** A change to an identity. A field that is present is changed; `null` clears it. */
 export interface IdentityUpdate {
   adapters?: Readonly<Record<string, AdapterSettings>> | null;
   displayName?: string | null;
   bags?: readonly string[] | null;
   bagConfigs?: Readonly<Record<string, IdentityBagConfiguration>> | null;
-  traits?: readonly string[] | null;
   bounds?: readonly string[] | null;
   statusNotify?: { tool: string; target?: string } | null;
   githubInstallationId?: number | null;
@@ -154,24 +117,26 @@ export interface SessionStart {
   systemPrompt?: string;
   repoPath?: string;
   name?: string;
-  traits?: readonly string[];
+  bags?: readonly string[];
   harness?: string;
   model?: string;
+  modelVendor?: string;
   modelProvider?: string;
-  bounds?: readonly string[];
-  inlineBound?: Bound | null;
+  bounds?: readonly (Bound | string)[];
+  bound?: Bound | null;
   useWorktree?: boolean;
 }
 
 /** A change to a session's own settings. */
 export interface SessionUpdate {
   name?: string;
-  traits?: readonly string[];
+  bags?: readonly string[];
   pinned?: boolean;
-  bounds?: readonly string[];
-  inlineBound?: Bound | null;
+  bounds?: readonly (Bound | string)[];
+  bound?: Bound | null;
   harness?: string;
   model?: string;
+  modelVendor?: string;
   modelProvider?: string;
 }
 
@@ -203,11 +168,17 @@ export interface Action {
   inputSchema?: Record<string, unknown>;
 }
 
+export interface ActionWorkReference {
+  workId: string; workflowId: string; owner: string; revision: number;
+  state: "queued" | "running" | "waiting" | "waiting-for-approval" | "stopping" | "needs-attention" | "completed" | "failed" | "cancelled";
+  current: boolean; stopProtocol?: "work-stop-v1"; url?: string;
+}
 /** One run of an action. */
 export interface ActionRun {
   id: string;
   action: string;
-  status: "running" | "succeeded" | "failed" | "cancelled" | "abandoned";
+  status: "running" | "succeeded" | "failed" | "cancelled" | "abandoned" | "queued" | "waiting" | "waiting-for-approval" | "stopping" | "needs-attention";
+  work?: ActionWorkReference;
   sessionId: string | null;
   startedAt: string;
   endedAt: string | null;
@@ -285,14 +256,14 @@ export interface EventInput {
 }
 
 /** An action to run once, later. */
-export interface OneOffInput {
+export interface AtScheduleInput {
   /** Total attempts when a run fails, 1 to 5. Default 1. */
   attempts?: number;
   action: string;
   inputs?: Record<string, unknown>;
   dueAt: string | Date;
   identity?: IdentityReference;
-  traits?: readonly string[];
+  bags?: readonly string[];
   bounds?: readonly string[];
   idempotencyKey?: string;
 }
@@ -323,9 +294,9 @@ export interface Scheduler {
   loadErrors: string[];
 }
 
-export interface OneOffQuery {
+export interface AtScheduleQuery {
   bag?: string;
-  status?: OneOff["status"];
+  status?: AtSchedule["status"];
   limit?: number;
 }
 

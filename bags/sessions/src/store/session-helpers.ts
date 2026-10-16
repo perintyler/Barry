@@ -55,16 +55,16 @@ function parseJsonArray(raw: unknown): string[] {
   return [];
 }
 
-function parseBound(raw: unknown): Record<string, unknown> | null {
+function parseBound(raw: unknown): SessionRecord["bound"] {
   if (!raw) return null;
   if (typeof raw === "string") {
     try {
-      return JSON.parse(raw) as Record<string, unknown>;
+      return JSON.parse(raw) as SessionRecord["bound"];
     } catch {
       return null;
     }
   }
-  if (typeof raw === "object") return raw as Record<string, unknown>;
+  if (typeof raw === "object") return raw as SessionRecord["bound"];
   return null;
 }
 
@@ -82,10 +82,9 @@ export function rowToSession(row: any): SessionRecord {
     status: (row.status ?? "pending") as SessionRecord["status"],
     system_prompt: row.system_prompt ?? null,
     summary: row.summary ?? null,
-    traits: parseJsonArray(row.traits),
+    bags: parseJsonArray(row.bags),
     bounds: parseJsonArray(row.bounds),
     bound: parseBound(row.bound),
-    bound_id: row.bound_id ?? null,
     metadata,
     created_at: row.created_at?.toISOString() ?? "",
     started_at: row.started_at?.toISOString() ?? null,
@@ -423,6 +422,7 @@ export function rowToWireMessage(
 ): Record<string, unknown> {
 
     const meta = row.metadata ?? {};
+    const messageIdentity=typeof row.dedupe_key==="string"?{dedupeKey:row.dedupe_key}:{};
     const wsType = (meta as Record<string, unknown>).ws_type as string | undefined;
     // Present when the row came from a subagent; lets a reloaded transcript
     // nest the same work the live stream nested.
@@ -446,6 +446,7 @@ export function rowToWireMessage(
       return {
         type: "tool_start",
         sessionId,
+        ...messageIdentity,
         name: row.name,
         input,
         result,
@@ -460,16 +461,17 @@ export function rowToWireMessage(
     const text = extractTextFromContent(row.content);
 
     if (wsType === "error") {
-      return { type: "error", sessionId, error: text, sequence: row.sequence, createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at };
+      return { type: "error", sessionId, ...messageIdentity, error: text, sequence: row.sequence, createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at };
     }
     if (wsType === "init") {
-      return { type: "init", sessionId, content: text, sequence: row.sequence, createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at };
+      return { type: "init", sessionId, ...messageIdentity, content: text, sequence: row.sequence, createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at };
     }
     if (wsType === "result") {
       const status = (meta as Record<string, unknown>).status as string | undefined;
       return {
         type: "result",
         sessionId,
+        ...messageIdentity,
         ...(status === "error" ? { error: text } : { result: text }),
         status,
         sequence: row.sequence,
@@ -481,6 +483,7 @@ export function rowToWireMessage(
       return {
         type: "summary",
         sessionId,
+        ...messageIdentity,
         content: text,
         taskStatus,
         sequence: row.sequence,
@@ -494,6 +497,7 @@ export function rowToWireMessage(
     return {
       type: "text",
       sessionId,
+      ...messageIdentity,
       content: text,
       role: row.role,
       ...(clientMessageId ? { clientMessageId } : {}),

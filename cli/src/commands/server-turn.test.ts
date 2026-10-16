@@ -12,7 +12,7 @@ import {
   SendMessageRequestSchema,
   UpdateSessionRequestSchema,
 } from "@barry-rocks/sdk/internal/sessions";
-import { attachToHostedSession, detachFromHostedSession, detachWhenGone, startServerTurn } from "../sessions/launch.js";
+import { attachToHostedSession, detachFromHostedSession, detachWhenGone, startServerTurn, postSessionMessage } from "../sessions/launch.js";
 
 
 function recordingApi(status: Record<string, number> = {}) {
@@ -30,6 +30,28 @@ function recordingApi(status: Record<string, number> = {}) {
 const TURN = { harness: "codex", model: "qwen3:4b", modelProvider: "ollama", prompt: "do it", repoPath: "/repo" };
 
 describe("startServerTurn", () => {
+  it("retries an uncertain send with the same client message id", async () => {
+    const bodies: string[] = [];
+    const request = vi.fn<typeof fetch>(async (_url, init) => {
+      bodies.push(String(init?.body));
+      if (bodies.length === 1) throw new TypeError("connection reset after admission");
+      return new Response("{}", { status: 200 });
+    });
+    await postSessionMessage("s1", { content: "hello" }, { base: "http://api.test", headers: {}, fetch: request });
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).toBe(bodies[1]);
+    expect(JSON.parse(bodies[0]).clientMessageId).toBeTruthy();
+  });
+  it("allows cold message admission to take longer than ten seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      const request = vi.fn<typeof fetch>(() => new Promise(resolve => setTimeout(() => resolve(new Response("{}")), 12_000)));
+      const response = postSessionMessage("s1", { content: "hello" }, { base: "http://api.test", headers: {}, fetch: request });
+      await vi.advanceTimersByTimeAsync(12_001);
+      expect((await response).ok).toBe(true);
+      expect(request).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
+  });
   it("records the harness and model on the session, then sends only the message", async () => {
     const { calls, api } = recordingApi();
 
@@ -74,6 +96,17 @@ describe("attaching a TUI to the hosted session", () => {
     expect(await attachToHostedSession("s1", { harness: "codex", model: "gpt-5.5" }, api)).toEqual(ATTACHMENT);
     expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(["PATCH /sessions/s1", "POST /sessions/s1/attach"]);
     expect(AttachRendererRequestSchema.parse(calls[1]?.body)).toEqual({ launcherPid: process.pid });
+  });
+  it("allows cold attachment preparation beyond five seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      const request = vi.fn<typeof fetch>(async (_url, init) => init?.method === "PATCH"
+        ? new Response("{}")
+        : new Promise<Response>(resolve => setTimeout(() => resolve(new Response(JSON.stringify(ATTACHMENT))), 6000)));
+      const attachment = attachToHostedSession("s1", { harness: "codex" }, { base: "http://api.test/api/v1", headers: {}, fetch: request });
+      await vi.advanceTimersByTimeAsync(6001);
+      expect(await attachment).toEqual(ATTACHMENT);
+    } finally { vi.useRealTimers(); }
   });
 
   it("does not attach when the session could not be told its harness, and says why it was refused", async () => {

@@ -2,11 +2,11 @@
 
 ## Context
 
-Launch configuration, mounted MCP servers, tool grants and model routing represent different decisions. CLI success messages also need authoritative persisted state and declared build output. Historical explanations obscured these current boundaries.
+Launch configuration, mounted MCP servers, bag/bound selections and model routing represent different decisions. CLI success messages also need authoritative persisted state and declared build output. Historical explanations obscured these current boundaries.
 
 ## Decision
 
-State the invariant beside each operation. Preserve complete original comments below. Resolve no capability grant from a mounted-server count; require explicit bounds to survive failed startup; re-read identity bags before confirming writes; report local-model reliability from model routing. Isolated uninstalls remove only owned service labels, and route publication refuses partial invalid plans.
+State the invariant beside each operation. Preserve complete original comments below. Resolve no capability selection from a mounted-server count; require explicit bounds to survive failed startup; re-read identity bags before confirming writes; report local-model reliability from model routing. Isolated uninstalls remove only owned service labels, and route publication refuses partial invalid plans.
 
 ## Consequences
 
@@ -29,7 +29,7 @@ The source is shorter without changing executable output or removing its decisio
  * they have "always-on only" asserts a security property the code does not
  * deliver: unchecking every trait, and `--none`, do not shrink this list.
  *
- * Under `bag_grant: session` (the default) that security property IS now
+ * Under `optional: true` bag selection (the default) that security property IS now
  * delivered for TOOLS: the server is still mounted, but its tools are filtered
  * out because no trait grants them. The label therefore has to separate the two
  * axes it used to conflate. Saying "from your barry's bags" alone would now

@@ -106,7 +106,7 @@ export function sessionOf(row: SessionRecord, liveProcess: ProcessRecord | null)
     identityId: row.identity_id,
     identitySource: IDENTITY_SOURCES.find((source) => source === metadata.barry_source) ?? null,
     status: statusOf(row),
-    traits: row.traits,
+    bags: row.bags,
     bounds: row.bounds,
     bound: row.bound,
     pinned: metadata.pinned === true,

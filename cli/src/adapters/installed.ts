@@ -10,16 +10,12 @@ export async function adapterStore(): Promise<AdapterStore> {
   if (store) return store;
   const { loadAdapters } = await import("@barry-rocks/sdk/internal/adapters");
   const { barryAdaptersPath } = await import("@barry-rocks/sdk/services");
-  const adapters = loadAdapters({ file: barryAdaptersPath(), registerBag: async (name, path, manifest) => {
+  const adapters = loadAdapters({ file: barryAdaptersPath(), registerBag: async (name, path) => {
     const { getBag, upsertBag } = await import("../bags/registration.js");
     const previous = await getBag(name);
     const source = previous?.source as { type?: string; path?: string } | undefined;
     if (source && (source.type !== "local" || source.path !== path)) throw new Error(`adapter bag ${name} conflicts with its existing registration`);
-    const { traits, bounds } = await import("@barry-rocks/identities-bag");
-    await traits.assertOwnership(Object.keys(manifest.traits).map((trait) => ({ name: trait, bag: name })));
-    await bounds.assertOwnership(Object.keys(manifest.bounds ?? {}).map((bound) => ({ name: bound, bag: name })));
     if (!previous) await upsertBag(name, { type: "local", path });
-    await traits.syncBags([name], { strict: true });
   } });
   store = { adapters };
   return store;

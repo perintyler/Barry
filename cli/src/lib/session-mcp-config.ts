@@ -2,15 +2,18 @@
  * The MCP servers an agent session connects to.
  *
  * Shared by `barry start` and `barry session run` so a one-shot run gets the
- * same servers an interactive session does. `barry session run` used to read a
- * `config.json` that nothing ever wrote, and so ran every prompt with no Barry
- * tools at all.
+ * same servers an interactive session does.
  */
 import { getServicePort } from "@barry-rocks/sdk/services";
 import { resolveSessionNamespaces } from "@barry-rocks/sdk/internal/sessions";
-import { traits } from "@barry-rocks/identities-bag";
+import { ALWAYS_ON_MCP_SERVERS } from "@barry-rocks/sdk/bags";
 import type { McpConfig } from "../config.js";
 import { generateMcpConfig } from "../mcp-config.js";
+
+/** Preserve session-derived tool prefixes while MCP discovery is unavailable. */
+export function guestSessionMcpConfig(namespaces: string[], sessionId: string): Promise<McpConfig> {
+  return sessionMcpConfig(namespaces, sessionId, namespaces);
+}
 
 export async function sessionMcpConfig(
   toolNames: Iterable<string>,
@@ -20,7 +23,7 @@ export async function sessionMcpConfig(
   const fullConfig = generateMcpConfig("http");
   const config: McpConfig = { mcpServers: {} };
 
-  for (const name of traits.alwaysOn) {
+  for (const name of ALWAYS_ON_MCP_SERVERS) {
     if (fullConfig.mcpServers[name]) {
       config.mcpServers[name] = { ...fullConfig.mcpServers[name] };
     }
@@ -34,7 +37,7 @@ export async function sessionMcpConfig(
     // Bag MCP servers are proxied through the barry server, not connected directly
   }
 
-  // Append sessionId to the barry server URL so server-side trait filtering works
+  // Append sessionId to the barry server URL so server-side bound filtering works
   if (sessionId) {
     const barry = config.mcpServers["barry"];
     const barryBaseUrl = barry?.url?.split("?")[0] ?? `http://127.0.0.1:${getServicePort("mcpBarry")}/mcp`;
@@ -49,8 +52,8 @@ export async function sessionMcpConfig(
     // processes.
     //
     // The list comes from the server, which knows the session's real tool set
-    // (traits + selected_namespaces + barry + bound). The caller's
-    // trait-derived list is only a fallback.
+    // (bags + selected_namespaces + barry + bound). The caller's
+    // bag-derived list is only a fallback.
     const resolvedNamespaces = await resolveSessionNamespaces(sessionId, {
       fallback: namespaces ? [...namespaces] : [],
     });

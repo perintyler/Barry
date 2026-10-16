@@ -75,7 +75,10 @@ export class Sessions {
   async send(id: string, content: string, options: { clientMessageId?: string } = {}, request: RequestOptions = {}): Promise<z.infer<typeof SendMessageResponseSchema>> {
     const body = { content, ...(options.clientMessageId ? { clientMessageId: options.clientMessageId } : {}) };
     const sent = await this.http.call(sessionsRoutes.sendMessage, { params: { sessionId: id }, body }, request);
-    return { ok: true, ...sent! };
+    if (sent?.ok===false && !("sessionId" in sent)) {
+      throw new BarryApiError(typeof sent.error==="string" ? sent.error : "Session admission unavailable",{status:503,code:typeof sent.code==="string" ? sent.code : "http_503",detail:sent});
+    }
+    return SendMessageResponseSchema.parse(Object.assign({ok:true},sent));
   }
 
   /** A page of messages, oldest first; after catches up, before reads older history. */

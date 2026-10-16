@@ -1,6 +1,6 @@
 /** Authoritative installed bag registration; mutations publish a read-only discovery snapshot.
  * Importing this module does not open its configuration store. Standalone bag operations
- * consume explicit catalogs or snapshots without importing registration.
+ * consume explicit bag lists or snapshots without importing registration.
  */
 import { writeFileSync, mkdirSync, renameSync, unlinkSync, existsSync } from "fs";
 import { randomUUID } from "crypto";
@@ -294,7 +294,7 @@ export function shippedRegistryEntries(found: BuiltinBags = discoverBuiltinBags(
  * Seed the registry with what the repo ships, and optionally with user bags.
  *
  * Resolves a bootstrap circularity: seeding a fresh database must collect
- * bag-derived traits via `loadAllBags()` — but with the registry IN the
+ * bag manifests via `loadAllBags()` — but with the registry IN the
  * database, that read returns nothing until the table is populated. So the
  * shipped bags must land first, read from the checkout itself (see
  * `shippedRegistryEntries`). `pnpm --dir sdk seed:bags`

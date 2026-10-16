@@ -9,7 +9,7 @@ import type { BarryClient } from "../client/platypus.js";
 import { BarryApiError } from "../client/errors.js";
 import { BarryError } from "./errors.js";
 import type { Caller, SubjectName, SubjectNamed } from "./subjects.js";
-import type { ActionCatalogEntry, ActionRun as ActionRunRecord } from "../client/actions.js";
+import type { ActionEntry, ActionRun as ActionRunRecord } from "../client/actions.js";
 import type { Bound } from "../bounds/types.js";
 import type { Action, ActionRun, Identity, IdentityReference, Page, Updated } from "./index.js";
 
@@ -52,7 +52,7 @@ function plain(bound: Bound | null | undefined): Record<string, unknown> | null 
   return bound ? Object.fromEntries(Object.entries(bound)) : bound;
 }
 
-function action(entry: ActionCatalogEntry): Action {
+function action(entry: ActionEntry): Action {
   const properties = entry.inputSchema?.properties;
   return {
     name: entry.name,
@@ -107,9 +107,6 @@ export function overHttp<N extends SubjectName>(client: BarryClient, name: N): S
         return { name: before?.name ?? String(ref), sessionsDeleted: 0, directory: null, nextDefault: removed.activeIdentity };
       },
       makeDefault: async (ref) => translated(async () => client.identities.setDefault(await identityReference(client, ref))),
-      traits: async (ref) => translated(async () => client.identities.traitsOf(await identityReference(client, ref))),
-      grants: () => notYet("An identity's grants"),
-      allTraits: () => translated(() => client.identities.traits()),
       bounds: () => translated(() => client.identities.bounds()),
       owner: () => notYet("The owner"),
       devices: async () => (await translated(() => client.devices.list())).map((device) => ({
@@ -139,33 +136,38 @@ export function overHttp<N extends SubjectName>(client: BarryClient, name: N): S
       },
       start: async (identity, input) => {
         if (!input.systemPrompt) throw new BarryError("invalid", "A session started over HTTP needs a systemPrompt");
+        const boundNames = input.bounds?.filter((b): b is string => typeof b === "string");
+        const modelProvider = input.modelVendor ?? input.modelProvider;
         const created = await translated(async () => client.sessions.create({
           systemPrompt: input.systemPrompt!,
           identityId: await identityId(client, identity),
           ...(input.prompt ? { prompt: input.prompt } : {}),
           ...(input.repoPath ? { repoPath: input.repoPath } : {}),
           ...(input.name ? { name: input.name } : {}),
-          ...(input.bounds !== undefined ? { bounds: [...input.bounds] } : {}),
-          ...(input.traits ? { traits: [...input.traits] } : {}),
+          ...(input.bags ? { bags: [...input.bags] } : {}),
+          ...(boundNames !== undefined ? { bounds: boundNames } : {}),
           ...(input.harness ? { provider: input.harness } : {}),
           ...(input.model ? { model: input.model } : {}),
-          ...(input.modelProvider ? { modelProvider: input.modelProvider } : {}),
-          ...(input.inlineBound !== undefined ? { bound: plain(input.inlineBound) } : {}),
+          ...(modelProvider ? { modelProvider } : {}),
+          ...(input.bound !== undefined ? { bound: plain(input.bound) } : {}),
           ...(input.useWorktree !== undefined ? { useWorktree: input.useWorktree } : {}),
         }));
         return created;
       },
-      update: (_identity, id, changes) => translated(() => client.sessions.update(id, {
-        ...(changes.name !== undefined ? { name: changes.name } : {}),
-        ...(changes.bounds !== undefined ? { bounds: [...changes.bounds] } : {}),
-        ...(changes.traits ? { traits: [...changes.traits] } : {}),
-        ...(changes.pinned !== undefined ? { pinned: changes.pinned } : {}),
-        ...(changes.inlineBound !== undefined ? { bound: plain(changes.inlineBound) } : {}),
-        ...(changes.harness ? { provider: changes.harness } : {}),
-        ...(changes.model ? { model: changes.model } : {}),
-        ...(changes.modelProvider ? { modelProvider: changes.modelProvider } : {}),
-      })),
-      grants: () => notYet("A session's grants"),
+      update: (_identity, id, changes) => {
+        const boundNames = changes.bounds?.filter((b): b is string => typeof b === "string");
+        const modelProvider = changes.modelVendor ?? changes.modelProvider;
+        return translated(() => client.sessions.update(id, {
+          ...(changes.name !== undefined ? { name: changes.name } : {}),
+          ...(changes.bags ? { bags: [...changes.bags] } : {}),
+          ...(boundNames !== undefined ? { bounds: boundNames } : {}),
+          ...(changes.pinned !== undefined ? { pinned: changes.pinned } : {}),
+          ...(changes.bound !== undefined ? { bound: plain(changes.bound) } : {}),
+          ...(changes.harness ? { provider: changes.harness } : {}),
+          ...(changes.model ? { model: changes.model } : {}),
+          ...(modelProvider ? { modelProvider } : {}),
+        }));
+      },
       messages: async (_identity, id, query, cursor) => {
         const newestFirst = query.before !== undefined || query.newestFirst === true;
         const bound = cursor === null ? (newestFirst ? query.before : query.after ?? -1) : Number(cursor);
@@ -236,17 +238,17 @@ export function overHttp<N extends SubjectName>(client: BarryClient, name: N): S
         return { status: page.scheduler.status, reason: page.scheduler.reason ?? null,
           heartbeatAt: page.scheduler.heartbeat_at, loadErrors: page.load_errors };
       },
-      oneOffs: (query) => translated(() => client.schedules.list(query)),
-      cancelOneOff: (id) => translated(async () => {
+      atSchedules: (query) => translated(() => client.schedules.list(query)),
+      cancelAtSchedule: (id) => translated(async () => {
         await client.schedules.cancel(id);
         const after = await client.schedules.get(id);
-        if (!after) throw new BarryError("not_found", `One-off not found: ${id}`);
+        if (!after) throw new BarryError("not_found", `Schedule not found: ${id}`);
         return after;
       }),
-      scheduleOnce: (input) => translated(() => client.schedules.schedule(input.dueAt, {
+      scheduleAt: (input) => translated(() => client.schedules.schedule(input.dueAt, {
         action: input.action, ...(input.inputs ? { inputs: input.inputs } : {}), ...(input.identity !== undefined ? { identity: String(input.identity) } : {}),
+        ...(input.bags ? { bags: [...input.bags] } : {}),
         ...(input.bounds !== undefined ? { bounds: [...input.bounds] } : {}),
-          ...(input.traits ? { traits: [...input.traits] } : {}), ...(input.bounds ? { bounds: [...input.bounds] } : {}),
         ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
         ...(input.attempts !== undefined ? { attempts: input.attempts } : {}),
       })),
@@ -255,7 +257,6 @@ export function overHttp<N extends SubjectName>(client: BarryClient, name: N): S
       name: "bags",
       list: () => translated(() => client.identities.bags()),
       tools: () => notYet("A bag's tools"),
-      extensions: () => notYet("A bag's extensions"),
       runJob: async (bag, job, inputs, options) => {
         if (options.identity !== undefined) notYet("Running a job as an identity");
         return (await translated(() => client.jobs.run(`${bag}:${job}`, inputs, {

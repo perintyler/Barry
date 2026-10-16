@@ -44,7 +44,6 @@ export function scaffoldBag(options: ScaffoldOptions): string {
   }
 
   manifest["mcp-servers"] = {};
-  manifest.traits = {};
   manifest.tools = [];
 
   // Write manifest, with a commented example for host binary dependencies

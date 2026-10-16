@@ -2,8 +2,8 @@
 
 How to give an agent a credential it can use without ever letting the model see
 it. Secrets in Barry live in an encrypted vault, are bound to an identity, and
-are resolved per turn: the agent's tools receive the resolved value, never the
-master password or the client credentials.
+are looked up for each turn, subject to the cache described below: the agent's
+tools receive the resolved value, never the master password or client credentials.
 
 This guide covers the everyday path. For the daemon's security boundary,
 provisioning a new machine, and backups, see the
@@ -163,6 +163,19 @@ and no vendor to appeal to. If backups are encrypted with
 unrecoverable dependency. Keep a copy of both off the machine. A backup you
 cannot decrypt is not a backup; verify one by actually decrypting an item from
 it (`<identity> vault restore <backup> --dry-run`), not by counting rows.
+
+## Rotation and cache freshness
+
+The sessions API caches resolved identity environments for up to five minutes;
+MCP caches them for up to 90 seconds. A mutation invalidates the cache in the
+process that handles it. Other processes can keep a rotated or removed value
+until their cache expires, and an already-running harness can retain the
+environment it received when it started.
+
+For immediate revocation, revoke the old credential with its provider, restart
+`sessions.api` and `mcp.server`, and start fresh sessions. Set
+`BARRY_IDENTITY_ENV_TTL_MS=0` in both service environments to disable caching.
+Changing it only in the launching shell does not change already-running services.
 
 ## Honest limits
 

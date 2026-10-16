@@ -9,7 +9,7 @@ scripts:
 
 services:
   identities:
-    description: Identity, trait and bound management — REST API
+    description: Identity and bound management — REST API
     entry: server/src/index.ts
     working-directory: .
     serves: http

@@ -21,7 +21,7 @@ describe("Antigravity Adapter", () => {
 
     const agyReq = adapter.requirements?.binary;
     expect(agyReq).toBeDefined();
-    expect(agyReq?.pin?.version).toBe(VERIFIED_ON);
+    expect(agyReq?.recommendedVersion).toBe("1.3.6");
     expect(new RegExp(agyReq.versionPattern).test(`agy ${VERIFIED_ON}`)).toBe(true);
   });
 
@@ -68,7 +68,7 @@ describe("Antigravity Adapter", () => {
   });
 
   it("declares native tools, offered models, and transcript support", () => {
-    expect(adapter.nativeTools.length).toBe(59);
+    expect(adapter.tools.length).toBe(59);
     expect(adapter.offeredModels?.length).toBeGreaterThan(0);
     expect(adapter.listModels).toBeTypeOf("function");
     expect(adapter.transcript).toBeDefined();

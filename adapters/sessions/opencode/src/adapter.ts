@@ -26,7 +26,7 @@ export default defineAdapter({
   offeredModels: OPENCODE_OFFERED_MODELS,
   requirements: OPENCODE_REQUIREMENTS,
   capabilities: OPENCODE_CAPABILITIES,
-  nativeTools: NATIVE_TOOLS,
+  tools: NATIVE_TOOLS,
   defaultMode: "hosted",
   modes: {
     hosted: {

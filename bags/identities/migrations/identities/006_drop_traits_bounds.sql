@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS traits;
+DROP TABLE IF EXISTS bounds;

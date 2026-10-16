@@ -1,5 +1,5 @@
-import { assertOwnedActionRun, filterOwnedRuns, runOwnerMetadata, runSecretScope, withRunPolicy } from "../resource-scope.js";
-import { currentScope } from "../scope.js";
+import { assertOwnedActionRun, filterOwnedRuns, runOwnerMetadata, runSecretTarget, withRunBounds } from "../resource-target.js";
+import { currentTarget } from "../target.js";
 /**
  * barry action — read recorded action runs and their deliverables.
  *
@@ -67,10 +67,11 @@ export async function actionShowCommand(
   // Metadata on stderr keeps stdout pipeable to a file.
   console.error(`${BOLD}${run.action}${RESET} ${DIM}${run.id}${RESET}`);
   console.error(
-    `${STATUS_ICON[run.status] ?? "●"} ${run.status}` +
+    `${STATUS_ICON[run.status] ?? "●"} ${run.workflow?.state ?? run.status}` +
       `${DIM} · started ${relativeTime(run.started_at)}` +
       `${run.completed_at ? ` · completed ${relativeTime(run.completed_at)}` : ""}${RESET}`,
   );
+  if (run.workflow) console.error(`${DIM}Background work: barry work show ${run.workflow.work_id}${RESET}`);
   if (run.summary) console.error(`${DIM}${run.summary}${RESET}`);
   if (run.validation_failures?.length) {
     console.error(`\x1b[31mChecks failed:${RESET} ${run.validation_failures.join("; ")}`);
@@ -81,7 +82,9 @@ export async function actionShowCommand(
     // Distinguish the two reasons there is nothing to show — "declared no
     // output" and "never finished" are different problems.
     console.error(
-      run.status === "started"
+      run.workflow
+        ? `${DIM}No current deliverable is available. Inspect Background work for progress or recovery.${RESET}`
+        : run.status === "started"
         ? `${DIM}This run never completed, so no deliverable was recorded.${RESET}`
         : `${DIM}This action declares no output. See the summary above.${RESET}`,
     );
@@ -143,7 +146,7 @@ export async function actionRunsCommand(options: {
     console.log(`  ${icon} ${BOLD}${run.action}${RESET}${hasOutput} ${DIM}${run.id}${RESET}`);
     const when = relativeTime(run.completed_at ?? run.started_at);
     console.log(`    ${DIM}${run.summary ?? "(no summary)"}${RESET}`);
-    console.log(`    ${DIM}${when}${RESET}`);
+    console.log(`    ${DIM}${run.workflow ? `${run.workflow.state} · ` : ""}${when}${RESET}`);
   }
   console.log(`\n${DIM}✎ = has a recorded deliverable · barry action show <id>${RESET}`);
 }
@@ -179,7 +182,7 @@ export function parseInputPairs(pairs: string[], json?: string): Record<string, 
  */
 export async function actionRunCommand(
   name: string,
-  options: { input?: string[]; inputsJson?: string; json?: boolean },
+  options: { input?: string[]; inputsJson?: string; bag?: string; bags?: string; bound?: string; bounds?: string; json?: boolean },
 ): Promise<void> {
   let inputs: Record<string, unknown>;
   try {
@@ -199,17 +202,28 @@ export async function actionRunCommand(
   }
 
   if (isScriptAction(action)) {
-    const { run } = await withRunPolicy(() => runScriptAction(action, { inputs, trigger: "cli", secretScope: runSecretScope(), metadata: runOwnerMetadata() }));
+    const { run } = await withRunBounds(() => runScriptAction(action, { inputs, trigger: "cli", secretScope: runSecretTarget(), metadata: runOwnerMetadata() }));
     printRunResult(run.status, run.summary, run.output, run.id, options.json ? run : undefined);
     return;
   }
 
+  const rawBags = (options.bag ?? options.bags)?.split(",").map((b) => b.trim()).filter(Boolean);
+  const rawBounds = (options.bound ?? options.bounds)?.split(",").map((b) => b.trim()).filter(Boolean);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (process.env.BARRY_SECRET) headers.Authorization = `Bearer ${process.env.BARRY_SECRET}`;
   const url = `http://localhost:${getServicePort("api")}/api/v1/actions/${encodeURIComponent(action.qualifiedName)}/run`;
   let response: Response;
   try {
-    response = await fetch(url, { method: "POST", headers, body: JSON.stringify({ inputs, ...(currentScope().kind === "identity" ? { identity: process.env.BARRY_IDENTITY } : {}) }) });
+    response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        inputs,
+        ...(currentTarget().kind === "identity" ? { identity: process.env.BARRY_IDENTITY } : {}),
+        ...(rawBags?.length ? { bags: rawBags } : {}),
+        ...(rawBounds?.length ? { bounds: rawBounds } : {}),
+      }),
+    });
   } catch (error) {
     console.error(`Could not reach the API to run an agent action: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;

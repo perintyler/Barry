@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { isFileDenied, isFileAllowed, isBashDenied } from "./bound-guards.js";
-import { BoundSchema, ALLOW_DOMAINS_NEEDS_SANDBOX } from "./types.js";
+import { BoundSchema } from "./types.js";
 
 const home = process.env.HOME ?? "/home/none";
 
@@ -146,26 +146,23 @@ describe("isFileDenied — leading **/", () => {
   });
 });
 
-describe("BoundSchema — network.allowDomains", () => {
-  // Only the egress sandbox can enforce an allowlist. Under the guards it was
-  // accepted, logged as inert at session start, and enforced nothing.
-  it("refuses an allowlist without enforce: sandbox", () => {
-    for (const network of [{ allowDomains: ["example.com"] }, { allowDomains: [] }, { allowDomains: ["example.com"], enforce: "guard" as const }]) {
-      const result = BoundSchema.safeParse({ network });
-      expect(result.success).toBe(false);
-      expect(result.error?.issues[0]?.message).toBe(ALLOW_DOMAINS_NEEDS_SANDBOX);
-    }
+describe("BoundSchema — network.{allow, deny, enforce}", () => {
+  it("accepts allow and deny rules with or without enforce: sandbox", () => {
+    expect(BoundSchema.safeParse({ network: { allow: ["example.com"] } }).success).toBe(true);
+    expect(BoundSchema.safeParse({ network: { allow: ["example.com"], enforce: "sandbox" } }).success).toBe(true);
+    expect(BoundSchema.safeParse({ network: { enforce: "sandbox" } }).success).toBe(true);
+    expect(BoundSchema.safeParse({ network: { deny: ["evil.test"] } }).success).toBe(true);
   });
 
-  it("accepts it with the sandbox, and a sandbox or deny list without it", () => {
-    expect(BoundSchema.safeParse({ network: { allowDomains: ["example.com"], enforce: "sandbox" } }).success).toBe(true);
-    expect(BoundSchema.safeParse({ network: { enforce: "sandbox" } }).success).toBe(true);
-    expect(BoundSchema.safeParse({ network: { domains: ["evil.test"] } }).success).toBe(true);
+  it("refuses retired legacy network keys", () => {
+    expect(BoundSchema.safeParse({ network: { allowDomains: ["example.com"] } }).success).toBe(false);
+    expect(BoundSchema.safeParse({ network: { domains: ["evil.test"] } }).success).toBe(false);
   });
 });
 
-it("validates named bounds without accepting misspelt rules", () => {
-  expect(BoundSchema.parse({ name: "quiet", description: "No shell", deniedTools: ["Bash"] })).toEqual({ name: "quiet", description: "No shell", deniedTools: ["Bash"] });
+it("validates named bounds without accepting misspelt or legacy rules", () => {
+  expect(BoundSchema.parse({ name: "quiet", description: "No shell", tools: { deny: ["*:Bash"] } })).toEqual({ name: "quiet", description: "No shell", tools: { deny: ["*:Bash"] } });
   expect(BoundSchema.safeParse({ name: "" }).success).toBe(false);
+  expect(BoundSchema.safeParse({ deniedTools: ["Bash"] }).success).toBe(false);
   expect(BoundSchema.safeParse({ deniedTool: ["Bash"] }).success).toBe(false);
 });

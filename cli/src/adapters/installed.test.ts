@@ -11,7 +11,7 @@ afterEach(() => {
   resetAdapterStore(); vi.unstubAllEnvs();
   if (home) rmSync(home, { recursive: true, force: true });
 });
-it("keeps a fresh installation empty even though every provider is available in this checkout", async () => {
+it("keeps a fresh installation empty even though every harness is available in this checkout", async () => {
   home = mkdtempSync(join(tmpdir(), "barry-explicit-adapters-"));
   vi.stubEnv("BARRY_HOME", home); resetAdapterStore();
   const { adapters } = await adapterStore();

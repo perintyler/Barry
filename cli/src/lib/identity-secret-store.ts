@@ -2,7 +2,7 @@
 
 import { KeychainProvider } from "@barry-rocks/sdk/internal/env";
 import type { SecretReference } from "@barry-rocks/sdk/internal/identities";
-import type { VaultSession, VaultAccount } from "@barry-rocks/sdk/internal/vault";
+import { configuredVaultEndpoint, type VaultSession, type VaultAccount } from "@barry-rocks/sdk/internal/vault";
 
 /**
  * A vault already logged into. Callers open it once, not once per secret.
@@ -13,11 +13,14 @@ export interface OpenVault {
 
 export async function storeVaultSecret(
   { vault }: OpenVault,
-  target: { vaultAccount: VaultAccount; identityName: string; force?: boolean },
+  target: { vaultAccount: VaultAccount; vaultName?: string; identityName: string; force?: boolean },
   key: string,
   value: string,
 ): Promise<SecretReference> {
   const existing = (await vault.searchItems(key)).find((item) => item.name === key);
+  if (existing && !target.force && target.vaultName && configuredVaultEndpoint(target.vaultName) !== undefined) {
+    throw new Error(`"${key}" already exists in an instance-configured vault. Other configured names may open the same account, so sharing cannot be established from its name. Re-run with --force to overwrite it explicitly.`);
+  }
   const { guardSharedOverwrite } = await import("./vault-sharing.js");
   await guardSharedOverwrite({
     vaultAccount: target.vaultAccount,

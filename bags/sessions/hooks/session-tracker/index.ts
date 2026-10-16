@@ -45,7 +45,7 @@ async function sessionStart(input: ReturnType<typeof normalizeHookInput>): Promi
       headers: apiHeaders(),
       body: JSON.stringify({
         sessionId: barrySessionId ?? input.session_id,
-        providerSessionId: input.session_id,
+        harnessSessionId: input.session_id,
         // BARRY_PROVIDER/BARRY_MODEL are set by `barry start` after it resolves
         // them; input.provider is the hook runner's own idea of the provider and
         // stays the fallback for sessions not launched through the CLI.

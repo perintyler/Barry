@@ -497,3 +497,9 @@ describe("starting a hosted opencode session", () => {
     expect(configText).not.toContain("or-key");
   });
 });
+
+import {describeSessionContract} from "@barry-rocks/sdk/testing";
+describeSessionContract("OpenCode serve",()=>{
+ const h=session("contract-session");let live:FakeServer;let number=0;
+ return {session:h.opencode,ready:async()=>{live=await h.server();number++;await vi.waitFor(()=>expect(live.of("prompt")).toHaveLength(number));},complete:()=>live.push({type:"session.execution.succeeded",data:{sessionID:"contract-session"}}),resourcesReleased:()=>h.servers.every(e=>e.stop.mock.calls.length>0)};
+},{describe,it});

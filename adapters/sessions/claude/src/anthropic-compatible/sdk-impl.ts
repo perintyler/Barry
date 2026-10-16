@@ -10,19 +10,19 @@ import { query as sdkQuery, type SettingSource } from "@anthropic-ai/claude-agen
 import { writeFileSync } from "node:fs";
 import type { Guarantees } from "@barry-rocks/sdk/adapters/harnesses";
 import type { JsonSchema } from "@barry-rocks/sdk/ids";
-import { perTurnSession, type EgressPolicy, type Session, type SessionConfig, type SessionEvent } from "@barry-rocks/sdk/sessions";
-import { processSDKMessage } from "./event-mapping.js";
+import { perTurnSession, type EgressSandbox, type Session, type SessionConfig, type SessionEvent } from "@barry-rocks/sdk/sessions";
+import { createSDKMessageMapper } from "./event-mapping.js";
 import { NONESSENTIAL_FEATURE_ENV_DEFAULTS, fillEnvDefaults } from "./env-defaults.js";
 import { toolGate } from "./tool-gate.js";
 import { allowedNative, disallowedTools } from "../native-tools.js";
 import { claudeModelId } from "../routing.js";
 import { buildSandboxSettings, type SdkSandboxSettings } from "../sandbox/sdk-sandbox.js";
 
-/** The Agent SDK's own sandbox settings for Barry's egress policy. */
-function sandboxFor(policy: EgressPolicy): SdkSandboxSettings | undefined {
+/** The Agent SDK's own sandbox settings for Barry's egress sandbox. */
+function sandboxFor(egress: EgressSandbox): SdkSandboxSettings | undefined {
   return buildSandboxSettings(
-    { enforce: "sandbox", allowDomains: policy.allowDomains },
-    policy.allowUnixSockets ? { allowUnixSockets: policy.allowUnixSockets } : {},
+    { enforce: "sandbox", allow: egress.allow ?? egress.allowDomains },
+    egress.allowUnixSockets ? { allowUnixSockets: egress.allowUnixSockets } : {},
   );
 }
 
@@ -63,6 +63,7 @@ export function buildSdkOptions(config: SessionConfig, extra?: Record<string, un
   const env: Record<string, string> = fillEnvDefaults(
     {
       ...sessionEnv,
+      ...(config.promptCacheTtl ? { CLAUDE_CODE_PROMPT_CACHE_TTL: config.promptCacheTtl } : {}),
       ...(endpoint ? { ANTHROPIC_BASE_URL: endpoint.baseUrl } : {}),
       ...(endpoint?.apiKey ? { ANTHROPIC_API_KEY: endpoint.apiKey } : {}),
       // The bundled CLI is pinned via the SDK version; never let it self-update.
@@ -70,6 +71,10 @@ export function buildSdkOptions(config: SessionConfig, extra?: Record<string, un
     },
     { ...NONESSENTIAL_FEATURE_ENV_DEFAULTS, ...loginLookupDefaults() },
   );
+  if ((env.BARRY_TOOL_INPUT_STREAMING ?? process.env.BARRY_TOOL_INPUT_STREAMING) === "1" && env.CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING === undefined) {
+    (env as Record<string, string | undefined>).CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING = "1";
+  }
+
 
   return {
     ...extra,
@@ -101,7 +106,7 @@ export function buildSdkOptions(config: SessionConfig, extra?: Record<string, un
     // predates the current ids and falls through to a legacy branch the API
     // rejects. NOT sent to a routed endpoint — those backends are not known
     // to accept the parameter.
-    ...(endpoint ? {} : { thinking: { type: "adaptive" as const } }),
+    ...(endpoint ? {} : { thinking: { type: "adaptive" as const, display: "summarized" as const }, ...(config.effort ? { effort: config.effort } : {}) }),
     ...(config.model ? { model: claudeModelId(config.model) } : {}),
     ...(config.pluginDirs?.length ? { plugins: config.pluginDirs.map((path) => ({ type: "local" as const, path })) } : {}),
     // Egress sandbox. The SDK runs the agent behind a proxy that filters
@@ -147,7 +152,8 @@ export function startClaudePerTurn(config: SessionConfig, guarantees: Guarantees
             abortController: abort,
           }),
         });
-        for await (const message of instance) yield* processSDKMessage(message);
+        const mapMessage = createSDKMessageMapper();
+        for await (const message of instance) yield* mapMessage(message);
       } catch (err) {
         yield { type: "error", error: err instanceof Error ? err.message : String(err) };
       } finally {
@@ -184,6 +190,7 @@ export async function* runOneShot(
       }),
     });
 
+    const mapMessage = createSDKMessageMapper();
     let consecutiveApiErrors = 0;
     for await (const message of instance) {
       if (message.type === "assistant") {
@@ -198,7 +205,7 @@ export async function* runOneShot(
           consecutiveApiErrors = 0;
         }
       }
-      yield* processSDKMessage(message);
+      yield* mapMessage(message);
     }
   } catch (err) {
     yield { type: "error", error: err instanceof Error ? err.message : String(err) };

@@ -9,6 +9,7 @@
 
 
 // Session metadata shape - stored as JSON in sessions.metadata
+import type { Bound } from "@barry-rocks/sdk";
 export interface SessionMetadata {
   working_directory?: string | null;
   git_branch?: string | null;
@@ -138,10 +139,9 @@ export interface SessionRecord {
   status: "pending" | "planning" | "running" | "completed" | "failed" | "cancelled";
   system_prompt: string | null;
   summary: string | null;
-  traits: string[];
+  bags: string[];
   bounds: string[];
-  bound: Record<string, unknown> | null;
-  bound_id: number | null;
+  bound: (Bound & Record<string, unknown>) | null;
   metadata: SessionMetadata;
   created_at: string;
   started_at: string | null;
@@ -225,6 +225,8 @@ export interface DeleteOlderThanResult {
 }
 
 export interface WsMessageInput {
+  /** Allocated by the resident owner before publishing. */
+  sequence?: number;
   type: string;
   content?: string;
   role?: "user" | "assistant" | "system";

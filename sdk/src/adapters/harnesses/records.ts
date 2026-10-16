@@ -1,8 +1,9 @@
+import { validVersionPolicy } from "./versions.js";
 import { z } from "zod";
 import { isAbsolute, relative } from "node:path";
 import { isHarnessId } from "../../ids.js";
 import type { BagManifest } from "../../bags/types.js";
-import { VendorCatalogSchema } from "../models/vendors/catalog.js";
+import { VendorModelsSchema } from "../models/vendors/models.js";
 import type { InstalledAdapter } from "./index.js";
 
 const nonempty = z.string().min(1);
@@ -17,15 +18,36 @@ const guarantees = z.strictObject({
   gating: z.enum(["per-call", "static", "hooks", "none"]),
   keepsVendorUi: z.boolean(), identity: z.enum(["inherent", "mcp-url", "hooks", "none"]),
 });
+const range = z.strictObject({ min: nonempty.optional(), max: nonempty.optional(), before: nonempty.optional() });
+const versions = z.strictObject({
+  recommendedVersion: nonempty,
+  testedVersions: z.array(nonempty),
+  supportedVersions: z.array(range),
+  incompatibleVersions: z.array(z.strictObject({ range, reason: nonempty })).optional(),
+}).refine(validVersionPolicy, "invalid version policy");
 const mode = z.strictObject({
   native: z.strictObject({
-    grantable: z.array(nonempty),
+    controllable: z.array(nonempty).optional(),
+    grantable: z.array(nonempty).optional(),
     inseparable: z.array(z.array(nonempty)).optional(),
     uncontrolled: z.record(nonempty, nonempty).optional(),
     operatorOverride: nonempty.optional(),
+  }).refine(n => Array.isArray(n.controllable) || Array.isArray(n.grantable), {
+    message: "native control requires controllable or grantable",
+  }).transform((n): import("./index.js").NativeControl => {
+    const out = { ...n } as import("./index.js").NativeControl;
+    if (out.controllable === undefined && out.grantable !== undefined) {
+      Object.defineProperty(out, "controllable", { value: out.grantable, enumerable: false });
+    }
+    if (out.grantable === undefined && out.controllable !== undefined) {
+      Object.defineProperty(out, "grantable", { value: out.controllable, enumerable: false });
+    }
+    return out;
   }).optional(),
   guarantees,
   verifiedOn: nonempty,
+  versions: versions.optional(),
+  build: z.enum(["binary", "bundled"]).optional(),
   evidence: z.strictObject({ check: nonempty, proves: nonempty }),
   egressSandbox: z.boolean(),
   approvalContinuation: z.enum(["durable", "live", "unsupported"]).optional(),
@@ -35,7 +57,7 @@ const mode = z.strictObject({
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const manifest = z.custom<BagManifest>(value => {
   if (!object(value) || typeof value.name !== "string" || !value.name || typeof value.description !== "string") return false;
-  if (!["mcpServers", "traits", "services", "apps", "schedules", "scripts"].every(key => object(value[key]))) return false;
+  if (!["mcpServers", "services", "apps", "schedules", "scripts"].every(key => object(value[key]))) return false;
   return ["tools", "dependencies"].every(key => Array.isArray(value[key]));
 }, "invalid normalized bag snapshot");
 
@@ -52,9 +74,11 @@ export const InstalledAdapterSchema = z.strictObject({
   requirements: z.strictObject({
     binary: z.strictObject({
       paths: z.array(absolutePath).optional(),
+      overrideEnv: nonempty.optional(),
       command: nonempty, versionArgs: z.array(nonempty).min(1), versionPattern: nonempty,
       install: z.strictObject({ darwin: nonempty.optional(), linux: nonempty.optional(), fallback: nonempty.optional() }),
-      pin: z.strictObject({ version: nonempty, enforcedBy: nonempty }),
+      recommendedVersion: nonempty.optional(),
+      pin: z.strictObject({ version: nonempty, enforcedBy: nonempty }).optional(),
     }),
     platforms: z.array(platform).optional(),
   }),
@@ -64,10 +88,10 @@ export const InstalledAdapterSchema = z.strictObject({
     skillsMount: z.enum(["plugin", "none"]), withoutKey: z.enum(["subscription-oauth", "unauthenticated"]),
     endpoint: z.enum(["configurable", "fixed"]),
   }),
-  nativeTools: z.array(nonempty).refine(values => new Set(values).size === values.length),
+  tools: z.array(nonempty).refine(values => new Set(values).size === values.length),
   defaultMode: modeId,
   modes: z.strictObject({ hosted: mode.nullable(), instrumented: mode.nullable(), guest: mode.nullable() }),
-  vendorCode: z.strictObject({ vendors: VendorCatalogSchema }).optional(),
+  vendorCode: z.strictObject({ vendors: VendorModelsSchema }).optional(),
   path: absolutePath,
   version: nonempty,
   installedAt: z.iso.datetime(),
@@ -94,6 +118,15 @@ export function parseInstalledAdapters(value: unknown): InstalledAdapter[] {
       if (vendors.has(vendor.id)) throw new Error(`vendor ${vendor.id} is claimed twice`);
       vendors.add(vendor.id);
     }
+  }
+  // Normalize older registrations in memory; a subsequent registration writes the new form.
+  for (const record of parsed) {
+    record.requirements.binary.recommendedVersion ??= record.requirements.binary.pin?.version;
+    delete record.requirements.binary.pin;
+    for (const mode of Object.values(record.modes)) if (mode) mode.versions ??= {
+      recommendedVersion: mode.verifiedOn, testedVersions: [mode.verifiedOn],
+      supportedVersions: [{ min: mode.verifiedOn, max: mode.verifiedOn }],
+    };
   }
   return parsed;
 }

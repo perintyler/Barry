@@ -13,7 +13,6 @@ function makeBag(requires: Array<BagRequirement & { target: string }>): Bag {
     skillsDirs: [],
     actionsDirs: [],
     instructionsDirs: [],
-    traits: [],
     mcpServers: {},
     tools: [],
     dependencies: [],

@@ -26,7 +26,8 @@ export function barryArchivesDir(): string;
 export function barryBackupsDir(): string;
 
 /** Explicitly selected model adapter packages for this installation. */
-export declare function barryModelProvidersPath(): string;
+export declare function barryVendorAdaptersPath(): string;
+export declare function barryModelVendorsPath(): string;
 
 export declare function barryReleasesDir(): string;
 export declare function barryCurrentDir(): string;

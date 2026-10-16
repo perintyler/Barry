@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { approveExecutionScope } from "../bounds/execution-scope.js";
-import { authorizeRun } from "./grants.js";
+import { approveWorkflowBounds } from "../bounds/workflow-bounds.js";
+import { authorizeRun } from "./approvals.js";
 import { dispatchWorkerRequest } from "./protocol.js";
 import { WorkflowOwner } from "./workflow-owner.js";
 import type { WorkflowDefinition } from "./types.js";
@@ -33,7 +33,7 @@ it("dispatches a step only to the workers its nodes bound allows, by worker name
 it("keeps a run's work off the workers its granted bound denies, with \"local\" naming the owner", async () => {
   const workflows = owner();
   const job = { identity: "reviewer", traits: [] };
-  const scope = await approveExecutionScope({ identity: job.identity, traitNames: [], traits: {}, tools: [], boundByName: async () => undefined, bounds: [{ nodes: { deny: ["mac", "local"] } }] });
+  const scope = await approveWorkflowBounds({ identity: job.identity, bags: [], tools: [], boundByName: async () => undefined, bounds: [{ nodes: { deny: ["mac", "local"] } }] });
   workflows.start({ id: "run", type: "open", version: "1", input: null, job }, "author", undefined, await authorizeRun(job, "author", async () => scope));
   expect(workflows.claim("w-mac")).toBeNull();
   expect(workflows.claim("owner")).toBeNull();
@@ -51,6 +51,18 @@ it("refuses an advertised activity outside the worker's owner-authoritative job 
   workflows.start({ id: "run", type: "open", version: "1", input: null });
   expect(workflows.claim("scoped")).toBeNull();
   expect(workflows.eligibility("run", -1, true).items[0].reason).toBe("WORKER_JOB_SCOPE_EXCLUDED");
+});
+
+it.each([false, true])("trusted shared-node workers retain local allow and deny bounds (denied=%s)", async denied => {
+  const root = mkdtempSync(join(tmpdir(), "workflow-shared-node-"));
+  const workflows = new WorkflowOwner({ id: "owner", path: join(root, "workflows.db"), definitions, workerNode: worker => worker === "common" ? "owner" : worker });
+  cleanup.push(() => { workflows.close(); rmSync(root, { recursive: true, force: true }); });
+  workflows.advertise("common", { types: ["echo"], capacity: 1 });
+  const job = { identity: "reviewer", traits: [] };
+  const scope = await approveWorkflowBounds({ identity: job.identity, traitNames: [], traits: {}, tools: [], boundByName: async () => undefined, bounds: [{ nodes: denied ? { deny: ["local"] } : { allow: ["local"] } }] });
+  workflows.start({ id: "run", type: "open", version: "1", input: null, job }, "author", undefined, await authorizeRun(job, "author", async () => scope));
+  const task = workflows.claim("common");
+  if (denied) expect(task).toBeNull(); else expect(task?.runId).toBe("run");
 });
 
 it("revalidates worker scope on recovered claims, heartbeats and completion", () => {

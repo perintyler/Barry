@@ -1,50 +1,50 @@
 import { describe, expect, it } from "vitest";
 import {
   clampCursor,
+  itemAtCursor,
   jumpCursor,
   moveCursor,
-  partitionTraits,
-  traitAtCursor,
+  partitionItems,
   type Cursor,
 } from "../src/prompts/picker-navigation.js";
 
 /**
  * These cover what a user of `barry start` can actually hit: walking the cursor
- * off either end, selecting the last remaining trait, and resuming a session
- * whose traits no longer all exist. Each one is a state the picker can reach by
+ * off either end, selecting the last remaining item, and resuming a session
+ * whose items no longer all exist. Each one is a state the picker can reach by
  * pressing keys, not an internal invariant.
  */
 
-const trait = (name: string) => ({ name, description: `${name} does things` });
-const TRAITS = [trait("actions"), trait("git"), trait("memory"), trait("vault")];
+const item = (name: string) => ({ name, description: `${name} does things` });
+const ITEMS = [item("actions"), item("git"), item("memory"), item("vault")];
 
-describe("partitionTraits", () => {
-  it("keeps selected traits out of the list so nothing renders twice", () => {
-    const { region, list } = partitionTraits(TRAITS, ["git"]);
+describe("partitionItems", () => {
+  it("keeps selected items out of the list so nothing renders twice", () => {
+    const { region, list } = partitionItems(ITEMS, ["git"]);
 
     expect(region.map((t) => t.name)).toEqual(["git"]);
     expect(list.map((t) => t.name)).toEqual(["actions", "memory", "vault"]);
   });
 
-  it("orders the region by selection, not by the underlying trait order", () => {
-    // `vault` sorts last in TRAITS but was picked first, so it must render
+  it("orders the region by selection, not by the underlying item order", () => {
+    // `vault` sorts last in ITEMS but was picked first, so it must render
     // first: the region is a record of what the user did, and re-sorting it
     // would shuffle the block under them on every pick.
-    const { region } = partitionTraits(TRAITS, ["vault", "actions"]);
+    const { region } = partitionItems(ITEMS, ["vault", "actions"]);
 
     expect(region.map((t) => t.name)).toEqual(["vault", "actions"]);
   });
 
-  it("drops resumed traits that no longer exist", () => {
-    // A trait can be removed between sessions. A stale name must not render as
+  it("drops resumed items that no longer exist", () => {
+    // An item can be removed between sessions. A stale name must not render as
     // a row the user can see but never act on.
-    const { region } = partitionTraits(TRAITS, ["git", "deleted-since"]);
+    const { region } = partitionItems(ITEMS, ["git", "deleted-since"]);
 
     expect(region.map((t) => t.name)).toEqual(["git"]);
   });
 
   it("empties the list once everything is selected", () => {
-    const { region, list } = partitionTraits(TRAITS, TRAITS.map((t) => t.name));
+    const { region, list } = partitionItems(ITEMS, ITEMS.map((t) => t.name));
 
     expect(region).toHaveLength(4);
     expect(list).toEqual([]);
@@ -107,11 +107,11 @@ describe("jumpCursor", () => {
     expect(jumpCursor(-1, 0, 3)).toEqual({ zone: "list", index: 0 });
   });
 
-  it("goes to the last trait in the list", () => {
+  it("goes to the last item in the list", () => {
     expect(jumpCursor(1, 2, 3)).toEqual({ zone: "list", index: 2 });
   });
 
-  it("goes to the last selected trait when the filter empties the list", () => {
+  it("goes to the last selected item when the filter empties the list", () => {
     // Reachable by typing a query that matches nothing while holding picks:
     // the bottom of the column is then the region's last row.
     expect(jumpCursor(1, 2, 0)).toEqual({ zone: "region", index: 1 });
@@ -167,18 +167,18 @@ describe("clampCursor", () => {
   });
 });
 
-describe("traitAtCursor", () => {
+describe("itemAtCursor", () => {
   const region = ["git", "memory"];
   const list = ["actions", "vault"];
 
   it("reads from the zone the cursor is in", () => {
-    expect(traitAtCursor({ zone: "region", index: 1 }, region, list)).toBe("memory");
-    expect(traitAtCursor({ zone: "list", index: 0 }, region, list)).toBe("actions");
+    expect(itemAtCursor({ zone: "region", index: 1 }, region, list)).toBe("memory");
+    expect(itemAtCursor({ zone: "list", index: 0 }, region, list)).toBe("actions");
   });
 
   it("returns null rather than a stale name when the zone is empty", () => {
     // Guards the Space handler: toggling nothing must be a no-op, not a crash
     // or a toggle of whatever used to be there.
-    expect(traitAtCursor({ zone: "list", index: 0 }, region, [])).toBeNull();
+    expect(itemAtCursor({ zone: "list", index: 0 }, region, [])).toBeNull();
   });
 });

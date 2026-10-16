@@ -162,13 +162,13 @@ function filesUnder(dir: string): Record<string, string> {
   return Object.fromEntries(Object.entries(out).sort(([a], [b]) => a.localeCompare(b)));
 }
 
-/** The new plan in the recorded shape: `harnessSessionId` was `providerSessionId`, and guarantees are new. */
+/** The new plan in the recorded shape: `harnessSessionId` was `harnessSessionId`, and guarantees are new. */
 function asRecorded(plan: LaunchPlan): Record<string, unknown> {
   const { harnessSessionId, guarantees: _guarantees, inbox: _inbox, discoverHarnessSessionId, ...rest } = plan;
   return {
     kind: "cli",
     ...rest,
-    ...(harnessSessionId ? { providerSessionId: harnessSessionId } : {}),
+    ...(harnessSessionId ? { harnessSessionId: harnessSessionId } : {}),
     ...(discoverHarnessSessionId ? { discoversConversation: true } : {}),
   };
 }
@@ -257,7 +257,7 @@ describe.each(GUEST_ADAPTERS)("%s guest mode", (id) => {
   const cases = [...COMMON, ...(SPECIFIC[id] ?? [])];
 
   // GOLDEN_UPDATE=<adapter id> re-records that adapter's file instead of checking it.
-  const updating = process.env.GOLDEN_UPDATE === id;
+  const updating = process.env.GOLDEN_UPDATE === id || process.env.GOLDEN_UPDATE === "all";
   it.runIf(updating)("re-records the golden file", async () => {
     const plans = [];
     for (const [index, c] of cases.entries()) plans.push(await planFor(id, c, index));

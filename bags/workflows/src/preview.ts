@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { ActivityWorker, WorkflowOwner, ProcessExecutor, inspectArtifact, connectOwnerV2, dispatchWorkerRequest } from "@barry-rocks/sdk/internal/workflows";
 import { listenOnAssignedPort } from "@barry-rocks/sdk/services";
 import { createWorkflowServer } from "./server.js";
-import { approveExecutionScope } from "@barry-rocks/sdk/bounds";
+import { approveWorkflowBounds } from "@barry-rocks/sdk/bounds";
 
 const directory = mkdtempSync(join(tmpdir(), "barry-workflows-preview-"));
 const artifactPath = fileURLToPath(new URL("./builtin-artifact.mjs", import.meta.url));
@@ -19,7 +19,7 @@ owner.start({ id: "scheduled-follow-up", type: "echo", version: "1", input: { me
 owner.start({ id: "invalid-input", type: "echo", version: "1", input: {} });
 owner.start({ id: "cancelled-example", type: "echo", version: "1", input: { message: "unused", waitForSignal: true } });
 owner.cancel("cancelled-example");
-const previewAuthorization = async (job: { traits: string[]; identity?: string; harness?: string }) => approveExecutionScope({ identity: job.identity, harness: job.harness, traitNames: job.traits, traits: {}, tools: [], boundByName: async () => undefined });
+const previewAuthorization = async (job: { bags?: string[]; bounds?: string[]; traits?: string[]; identity?: string; harness?: string }) => approveWorkflowBounds({ identity: job.identity, harness: job.harness, bags: job.bags ?? job.traits ?? [], bounds: job.bounds, tools: [], boundByName: async () => undefined });
 const server = createWorkflowServer({ owner, secret: "local-preview", authenticateWorker: () => null, runAuthorization: previewAuthorization, currentRunScope: previewAuthorization });
 await listenOnAssignedPort(server, { PORT: "0" });
 process.stdout.write(`Workflows preview: http://127.0.0.1:${(server.address() as { port: number }).port}\nSign-in secret: local-preview\nScratch database: ${directory}\n`);

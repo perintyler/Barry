@@ -113,7 +113,7 @@ ws.on('open', () => {
     prompt: 'Read the file at sdk/adapters/agents/src/session.ts, then summarize it in 2-3 sentences. Do not make any changes.',
     repoPath: process.env.HOME + '/repos/barry',
     name: 'Streaming Merge Test (auto-cleanup)',
-    traits: [],
+    bags: [],
     profileId: 2,
   }));
 });

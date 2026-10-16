@@ -387,4 +387,101 @@ describe("Pi with routed endpoint", () => {
     expect(model?.baseUrl).toBe("http://127.0.0.1:8080/v1");
     expect(model?.api).toBe("openai-completions");
   }, 15000);
+
+  it("records UsageEvidenceV1 through usageSink/usageReconcilePort and redacts secrets on prompt failure", async () => {
+    const { DEFAULT_PI_IMPLEMENTATION_VERSION, createDefaultExecutionBinding } = await import("../inference-bounds.js");
+    const { createInMemoryUsageSink } = await import("../inference-usage.js");
+    const { createInMemoryUsageReconcilePort } = await import("../inference-reconciliation.js");
+    const sink = createInMemoryUsageSink();
+    const reconcilePort = createInMemoryUsageReconcilePort();
+    const faults: unknown[] = [];
+
+    const { fake } = createFakeAgentSession({
+      onPrompt: async (_text, emit) => {
+        emit({
+          type: "message_end",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "Partial before error" }],
+            usage: { input: 33 }, // partial usage (missing output)
+          },
+        });
+        throw new Error("429 Rate limit for key sk-ant-api03-SECRET999888");
+      },
+    });
+
+    const session = new PiHostedSession(
+      {
+        sessionId: "hosted-inference-test",
+        cwd: "/tmp",
+        model: "anthropic/claude-sonnet-5",
+        env: { ANTHROPIC_API_KEY: "sk-test" },
+        mcpServers: {},
+      },
+      {
+        guarantees: PI_HOSTED.guarantees,
+        createSession: async () => fake,
+        inferencePolicy: {
+          version: 1,
+          binding: createDefaultExecutionBinding(),
+          session_id: "hosted-inference-test",
+          turn_id: "turn-hosted-1",
+          segment_id: "seg-hosted-1",
+          accepted_profile_digest: "d".repeat(64),
+          endpoint_ref: "endpoint://anthropic",
+          provider_protocol: "anthropic-messages",
+          implementation_version: DEFAULT_PI_IMPLEMENTATION_VERSION,
+          model: "claude-sonnet-5",
+          deadline: 4_102_444_800_000,
+          max_calls: null,
+          max_input_tokens: null,
+          max_output_tokens: 512,
+          max_cost: null,
+          fallback_policy: "none",
+          accounting_policy: "reconciled",
+        },
+        usageSink: sink,
+        usageReconcilePort: reconcilePort,
+        onFault: (f) => {
+          faults.push(f);
+        },
+      },
+    );
+
+    await session.deliver("Trigger partial usage then error");
+    const events: SessionEvent[] = [];
+    for await (const ev of session.events()) {
+      events.push(ev);
+      if (ev.type === "done") break;
+    }
+
+    // Partial usage is recorded in sink and reconcilePort, not fabricated as 0 in done.usage
+    expect(sink.records).toHaveLength(1);
+    expect(sink.records[0]!.evidence).toMatchObject({
+      status: "partial",
+      input_tokens: 33,
+      output_tokens: null,
+    });
+    const doneEv = events.find((e) => e.type === "done");
+    expect(doneEv).toMatchObject({ type: "done" });
+    expect((doneEv as { usage?: unknown }).usage).toBeUndefined();
+
+    // Error event must have redacted the secret API key
+    const errorEv = events.find((e) => e.type === "error") as { error?: string } | undefined;
+    expect(errorEv?.error).toBeDefined();
+    expect(errorEv?.error).not.toContain("sk-ant-api03-SECRET999888");
+    expect(faults).toHaveLength(1);
+
+    await session.close();
+  });
 });
+
+import {describeSessionContract} from "@barry-rocks/sdk/testing";
+describeSessionContract("Pi SDK",()=>{
+ let complete:()=>void=()=>{};let disposed=false;
+ const {fake}=createFakeAgentSession({onPrompt:async(_text,emit)=>{await new Promise<void>(resolve=>{complete=()=>{emit({type:"message_end",message:{role:"assistant",content:[{type:"text",text:"answer"}]}});resolve();};});}});
+ const dispose=fake.dispose;fake.dispose=()=>{disposed=true;dispose();};
+ const session=new PiHostedSession({sessionId:"contract",cwd:"/tmp",env:{},mcpServers:{}},{guarantees:PI_HOSTED.guarantees,createSession:async()=>fake});
+ return {session,ready:async()=>{await vi.waitFor(()=>expect(session.status()).toBe("active"));},complete:async()=>{complete();await Promise.resolve();},resourcesReleased:()=>disposed};
+},{describe,it});
+

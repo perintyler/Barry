@@ -25,7 +25,7 @@ import { serve } from "@barry-rocks/sdk/services/http";
  */
 
 import { ActionRuns } from "@barry-rocks/actions-bag";
-import { cancelOneOff, getOneOff } from "@barry-rocks/schedules-bag";
+import { cancelAtSchedule, getAtSchedule } from "@barry-rocks/schedules-bag";
 import { createLogger } from "@barry-rocks/sdk/logging";
 import { Router } from "express";
 import { parseRequestBody, sendProblem } from "../http.js";
@@ -53,8 +53,8 @@ routes.route(jobsRoutes.startJobRun, async (req, res) => {
       const refused = accepted.refused;
       return "body" in refused ? res.status(refused.status).json(refused.body) : sendProblem(req, res, refused.status, refused.title, refused.detail);
     }
-    const oneOff = await awaitJobRun(accepted.oneOff.id, body.waitS);
-    return res.status(accepted.created ? 201 : 200).json({ run: await serializeJobRun(oneOff ?? accepted.oneOff) });
+    const schedule = await awaitJobRun(accepted.schedule.id, body.waitS);
+    return res.status(accepted.created ? 201 : 200).json({ run: await serializeJobRun(schedule ?? accepted.schedule) });
   } catch (error) {
     log.error("jobs.run_error", { job: ref, error: error instanceof Error ? error.message : String(error) });
     return sendProblem(req, res, 503, "Job store unavailable", error instanceof Error ? error.message : String(error));
@@ -63,17 +63,17 @@ routes.route(jobsRoutes.startJobRun, async (req, res) => {
 
 routes.route(jobsRoutes.getJobRun, async (req, res) => {
   const raw = Number(req.query.waitS ?? req.query.wait_s);
-  const oneOff = await awaitJobRun(req.params.id, Number.isFinite(raw) && raw > 0 ? Math.min(raw, 600) : undefined);
-  if (!oneOff?.job) return sendProblem(req, res, 404, "Unknown job run", req.params.id);
-  return res.json({ run: await serializeJobRun(oneOff) });
+  const schedule = await awaitJobRun(req.params.id, Number.isFinite(raw) && raw > 0 ? Math.min(raw, 600) : undefined);
+  if (!schedule?.job) return sendProblem(req, res, 404, "Unknown job run", req.params.id);
+  return res.json({ run: await serializeJobRun(schedule) });
 });
 
 routes.route(jobsRoutes.cancelJobRun, async (req, res) => {
-  const found = getOneOff(req.params.id);
+  const found = getAtSchedule(req.params.id);
   if (!found?.job) return sendProblem(req, res, 404, "Unknown job run", req.params.id);
-  // A code job's process group is killed by cancelOneOff; an action job's
+  // A code job's process group is killed by cancelAtSchedule; an action job's
   // agent runs here, in the API, and is stopped here.
-  const result = cancelOneOff(req.params.id);
+  const result = cancelAtSchedule(req.params.id);
   if (!result) return sendProblem(req, res, 404, "Unknown job run", req.params.id);
   if (result.cancelRequested) {
     for (const run of await ActionRuns.list({ schedule_id: found.id, active: true })) await stopDetachedRun(run.id, "cancelled");

@@ -1,4 +1,4 @@
-/** Sweep runs from the actions bag only when the sessions subject proves their session ended; absence or age alone is insufficient; see docs/decisions/0012-credentials-action-runs-and-traits.md. */
+/** Sweep runs from the actions bag only when the sessions subject proves their session ended; absence or age alone is insufficient; see docs/decisions/0012-credentials-action-runs-and-identity-bags.md. */
 import { Barry } from "@barry-rocks/sdk";
 import { sessionIdentity } from "@barry-rocks/sdk/stores";
 import { abandonActionRuns, listStartedActionRunsWithSession } from "./action-runs.js";

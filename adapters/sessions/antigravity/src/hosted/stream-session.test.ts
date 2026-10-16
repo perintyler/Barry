@@ -159,3 +159,11 @@ it("never forwards raw policy overrides from a direct hosted constructor", async
     expect(vi.mocked(spawn).mock.calls.at(-1)?.[1]).not.toContain("--fixture-raw-policy-override");
   } finally { await session.close(); }
 });
+
+import {describeSessionContract} from "@barry-rocks/sdk/testing";
+describeSessionContract("Antigravity stream",()=>{
+ const processes:ReturnType<typeof createFakeProcess>[]=[];
+ vi.mocked(spawn).mockImplementation(()=>{const p=createFakeProcess();processes.push(p);return p;});
+ const session=new AntigravityStreamSession({sessionId:"contract",cwd:"/tmp",env:{GEMINI_API_KEY:"test"},mcpServers:{}},{guarantees:ANTIGRAVITY_HOSTED.guarantees});
+ return {session,ready:async()=>{await vi.waitFor(()=>expect(session.status()).toBe("active"));},complete:()=>{processes.at(-1)?.stdout.write(JSON.stringify({event:"result",result:{status:"SUCCESS",response:"answer",num_turns:1}})+"\n");},resourcesReleased:()=>processes.every(p=>p.killed)};
+},{describe,it});

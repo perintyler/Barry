@@ -95,14 +95,14 @@ vi.mock("@barry-rocks/sdk/internal/env", async (importOriginal) => ({
 }));
 
 /** Builds a vault db with one real account and one real encrypted item. */
-function makeRealVaultDb(
+async function makeRealVaultDb(
   path: string,
   opts: { email?: string; masterPassword?: string; itemPassword?: string } = {},
-): { kdfSalt: string } {
+): Promise<{ kdfSalt: string }> {
   const email = opts.email ?? EMAIL;
   const masterPassword = opts.masterPassword ?? MASTER_PASSWORD;
   const kdfSalt = generateKdfSalt();
-  const { masterPasswordHash, encKey, macKey } = deriveKeys(masterPassword, email, kdfSalt);
+  const { masterPasswordHash, encKey, macKey } = await deriveKeys(masterPassword, email, kdfSalt);
   const symKey = generateSymmetricKey();
   const encryptedKey = encryptSymmetricKey(symKey, encKey, macKey);
   const itemEncKey = symKey.subarray(0, 32);
@@ -207,7 +207,7 @@ describe("vaultRestoreCommand — identify", () => {
 describe("vaultRestoreCommand — verification (real crypto)", () => {
   it("dry-run passes for a genuinely valid, correctly-decryptable snapshot", async () => {
     const snapshotPath = join(sourceDir, "vault.db");
-    makeRealVaultDb(snapshotPath);
+    await makeRealVaultDb(snapshotPath);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     const { vaultRestoreCommand } = await load();
@@ -227,7 +227,7 @@ describe("vaultRestoreCommand — verification (real crypto)", () => {
   // integrity_check and row counts cannot catch this — only a real decrypt can.
   it("fails when the master password is wrong, even though the file is structurally perfect", async () => {
     const snapshotPath = join(sourceDir, "vault.db");
-    makeRealVaultDb(snapshotPath, { masterPassword: "the-wrong-password" });
+    await makeRealVaultDb(snapshotPath, { masterPassword: "the-wrong-password" });
     keychainValue.current = MASTER_PASSWORD; // what we'll actually try to decrypt with
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -247,7 +247,7 @@ describe("vaultRestoreCommand — verification (real crypto)", () => {
   // for  in this snapshot" no matter how good the backup was.
   it("verifies a NAMED-vault identity, finding its email in Keychain", async () => {
     const snapshotPath = join(sourceDir, "vault.db");
-    makeRealVaultDb(snapshotPath);
+    await makeRealVaultDb(snapshotPath);
     identityRow.current = { id: 5, name: "bgoode", metadata: { vault: "bgoode" } };
     keychainValue.email = EMAIL;
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -266,7 +266,7 @@ describe("vaultRestoreCommand — verification (real crypto)", () => {
 
   it("names the missing Keychain email for a named vault instead of an empty account", async () => {
     const snapshotPath = join(sourceDir, "vault.db");
-    makeRealVaultDb(snapshotPath);
+    await makeRealVaultDb(snapshotPath);
     keychainValue.email = null;
     identityRow.current = { id: 5, name: "bgoode", metadata: { vault: "bgoode" } };
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -282,7 +282,7 @@ describe("vaultRestoreCommand — verification (real crypto)", () => {
 
   it("fails when no account in the snapshot matches the identity's vault email", async () => {
     const snapshotPath = join(sourceDir, "vault.db");
-    makeRealVaultDb(snapshotPath, { email: "someone-else@example.com" });
+    await makeRealVaultDb(snapshotPath, { email: "someone-else@example.com" });
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const { vaultRestoreCommand } = await load();
@@ -326,7 +326,7 @@ describe("vaultRestoreCommand — verification (real crypto)", () => {
 describe("vaultRestoreCommand — staleness", () => {
   it("always prints the age, even for a fresh snapshot with no threshold concern", async () => {
     const snapshotPath = join(sourceDir, "vault.db");
-    makeRealVaultDb(snapshotPath);
+    await makeRealVaultDb(snapshotPath);
     writeFileSync(
       join(sourceDir, "vault.db.meta.json"),
       JSON.stringify({ timestamp: new Date().toISOString(), accounts: 1, items: 1, encrypted: false, tables: ["accounts", "items"] }),
@@ -343,7 +343,7 @@ describe("vaultRestoreCommand — staleness", () => {
 
   it("refuses a snapshot older than 30 days without --accept-stale", async () => {
     const snapshotPath = join(sourceDir, "vault.db");
-    makeRealVaultDb(snapshotPath);
+    await makeRealVaultDb(snapshotPath);
     const old = new Date(Date.now() - 45 * 86_400_000).toISOString();
     writeFileSync(
       join(sourceDir, "vault.db.meta.json"),
@@ -362,7 +362,7 @@ describe("vaultRestoreCommand — staleness", () => {
 
   it("accepts an old snapshot when --accept-stale is passed", async () => {
     const snapshotPath = join(sourceDir, "vault.db");
-    makeRealVaultDb(snapshotPath);
+    await makeRealVaultDb(snapshotPath);
     const old = new Date(Date.now() - 45 * 86_400_000).toISOString();
     writeFileSync(
       join(sourceDir, "vault.db.meta.json"),
@@ -379,7 +379,7 @@ describe("vaultRestoreCommand — staleness", () => {
 describe("vaultRestoreCommand — refuses without --force", () => {
   it("verifies successfully but does not touch the daemon without --force", async () => {
     const snapshotPath = join(sourceDir, "vault.db");
-    makeRealVaultDb(snapshotPath);
+    await makeRealVaultDb(snapshotPath);
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const { vaultRestoreCommand } = await load();
@@ -396,7 +396,7 @@ describe("vaultRestoreCommand — refuses without --force", () => {
 describe("vaultRestoreCommand — stop/start ordering", () => {
   it("requires the installation credential before stopping or installing", async () => {
     const snapshotPath = join(sourceDir, "vault.db");
-    makeRealVaultDb(snapshotPath);
+    await makeRealVaultDb(snapshotPath);
     process.env.VAULT_BACKUP_SECRET = "unrelated-shell-secret";
     installation.mockRejectedValue(new Error("private-backend-details"));
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -422,7 +422,7 @@ describe("vaultRestoreCommand — stop/start ordering", () => {
   // corruption hazard.
   it("stops the daemon before attempting to install, and starts it again after", async () => {
     const snapshotPath = join(sourceDir, "vault.db");
-    makeRealVaultDb(snapshotPath);
+    await makeRealVaultDb(snapshotPath);
 
     const order: string[] = [];
     launchctl.stopDaemonService.mockImplementation(() => {
@@ -473,7 +473,7 @@ it("selects the observed managed plist, falling back to the legacy daemon", asyn
 
 it("refuses a source alias to the live vault before any SQLite probe, maintenance or stop", async () => {
   const live = process.env.VAULT_DB_PATH!;
-  makeRealVaultDb(live);
+  await makeRealVaultDb(live);
   const alias = join(sourceDir, "alias.db"); symlinkSync(live, alias);
   const before = readFileSync(live);
   const pragma = vi.spyOn(Database.prototype, "pragma");
@@ -490,7 +490,7 @@ it("refuses a source alias to the live vault before any SQLite probe, maintenanc
 });
 
 it("rejects a WAL-backed source without opening or modifying any original component", async () => {
-  const source = join(sourceDir, "vault.db"); makeRealVaultDb(source);
+  const source = join(sourceDir, "vault.db"); await makeRealVaultDb(source);
   const writer = new Database(source); writer.exec("PRAGMA journal_mode=WAL; UPDATE items SET name='uncheckpointed';");
   const paths = [source, `${source}-wal`, `${source}-shm`], before = paths.map(path => readFileSync(path));
   const pragma = vi.spyOn(Database.prototype, "pragma"), error = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -503,7 +503,7 @@ it("rejects a WAL-backed source without opening or modifying any original compon
 });
 
 it("verifies a sealed plaintext snapshot using only its owned copy on dry run", async () => {
-  const source = join(sourceDir, "vault.db"); makeRealVaultDb(source);
+  const source = join(sourceDir, "vault.db"); await makeRealVaultDb(source);
   const before = readFileSync(source);
   const { vaultRestoreCommand } = await load(); await vaultRestoreCommand(source, { name: "bgoode", dryRun: true });
   expect(readFileSync(source)).toEqual(before); expect(existsSync(`${source}-wal`)).toBe(false); expect(existsSync(`${source}-shm`)).toBe(false);

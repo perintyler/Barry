@@ -1,6 +1,23 @@
-import { parseTraits, parseBounds, requiredNames } from "@barry-rocks/sdk/internal/identities";
+import {
+  parseBounds,
+  requiredNames,
+  serializeEntries,
+  parseIdentityBags,
+  serializeIdentityBags,
+  type IdentityBags,
+  type IdentityEntries,
+  adaptersFromRetired,
+  defaultHarness,
+  FALLBACK_HARNESS,
+  RETIRED_IDENTITY_KEYS,
+  parseVaultName,
+  mergeSecretBindings,
+  type SecretBindings,
+  type IdentityAdapters,
+  type RetiredIdentityKeys,
+} from "@barry-rocks/sdk/internal/identities";
 import { CliError, isCliError } from "../lib/cli-error.js";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { execSync } from "node:child_process";
@@ -9,14 +26,18 @@ import { Barry, isBarryError, type Identity, type IdentityUpdate, type Updated }
 import {
   bounds,
   identityRecords,
-  traits,
+  resolveBags,
   type IdentityRecord,
-  type TraitInfo,
 } from "@barry-rocks/identities-bag";
-import { adaptersFromRetired, defaultHarness, FALLBACK_HARNESS, RETIRED_IDENTITY_KEYS, parseVaultName, mergeSecretBindings, type SecretBindings, type IdentityAdapters, type RetiredIdentityKeys } from "@barry-rocks/sdk/internal/identities";
 import { getCurrentUser } from "../lib/current-user.js";
 import { printWarnings } from "../lib/warnings.js";
 import { listBags, upsertBag } from "../bags/registration.js";
+import {
+  hasLegacyBoundKeys,
+  migrateIdentityYamlObject,
+  SHIPPED_GLOBAL_BOUND_NAMES,
+  type TraitRowSummary,
+} from "./doctor-migration.js";
 
 /** The configurable root for everything Barry clones, defaulting to ~/repos. */
 function reposRoot(): string {
@@ -25,17 +46,16 @@ function reposRoot(): string {
 
 const DEFAULT_CONFIG_DIR_NAME = "my-barry-config";
 
-
 interface ExportedBarry extends RetiredIdentityKeys {
   name: string;
-  bags?: string[];
+  bags?: IdentityBags;
   /** @deprecated Use bags — kept for backward compat with old exports */
   packs?: string[];
-  traits?: string[];
-  bounds?: string[];
-  bound?: string;
+  traits?: unknown[];
+  bounds?: IdentityEntries;
+  bound?: string | Record<string, unknown>;
   /** Legacy spelling, still read on import. */
-  scope?: string;
+  scope?: string | Record<string, unknown>;
   adapters?: IdentityAdapters;
   secrets?: SecretBindings;
   vault?: string;
@@ -47,70 +67,47 @@ interface ExportedConfig {
   identities: ExportedBarry[];
 }
 
-interface ExportedTrait {
+interface LegacyExportedTrait {
   name: string;
-  description: string | null;
-  access: string;
-  tools: string[];
-  /**
-   * A trait's grants, under either spelling. Both are live: a shipped trait
-   * (the builtin collection's `traits:`) writes `bags:`, while an exported
-   * `traits.yaml` writes `namespaces:`. Read them through
-   * `readImportedTraitGrants` rather than reaching for either key directly — a
-   * file using the other spelling otherwise imports as no grants at all.
-   */
+  description?: string | null;
+  access?: string;
+  tools?: string[];
   bags?: string[];
   namespaces?: string[];
   skills?: string[];
-  /**
-   * Instruction names the trait points at. Carried because `upsertTrait`
-   * ERASES an omitted column: an import that left this out wiped every
-   * imported trait's instructions.
-   */
   instructions?: string[];
-  bound?: unknown;
-  /**
-   * Named bounds the trait carries. Carried because a trait exported without
-   * them imports onto a fresh machine UNRESTRICTED — the same widening that
-   * cost `read` its `readonly` bound.
-   */
+  bound?: Record<string, unknown>;
   boundNames?: string[];
-  /** Legacy spelling, still read on import. */
-  scope?: unknown;
+  scope?: Record<string, unknown>;
 }
 
-interface ExportedBound {
+interface LegacyExportedBound {
   name: string;
-  description: string | null;
-  bound: Record<string, unknown>;
+  description?: string | null;
+  bound?: Record<string, unknown>;
+  scope?: Record<string, unknown>;
 }
 
-/**
- * What Barry ships, or a thrown error — never an empty answer.
- *
- * The shipped list is the only thing separating "the user wrote this" from
- * "Barry ships this". An empty list reclassifies every shipped trait or bound
- * as user-authored: export writes them into the user's config, and a later
- * import upserts them back as if authored there.
- */
 function resolveConfigDir(dir?: string): string {
   return dir ?? process.env.BARRY_CONFIG_DIR ?? join(reposRoot(), DEFAULT_CONFIG_DIR_NAME);
 }
 
-
 async function barryToExport(barry: IdentityRecord): Promise<ExportedBarry> {
-  identityRecords.config(barry);
+  const resolved = identityRecords.config(barry);
   const meta = barry.metadata;
   const exported: ExportedBarry = { name: barry.name };
 
-  if (meta.bags && meta.bags.length > 0) exported.bags = meta.bags;
-  if (meta.traits && meta.traits.length > 0) exported.traits = requiredNames(parseTraits(meta.traits));
+  if (meta.bags && meta.bags.length > 0) {
+    exported.bags = serializeIdentityBags(meta.bags, meta.bag_configs ?? {});
+  }
 
-  exported.bounds = requiredNames(parseBounds(meta.bounds));
+  exported.bounds = serializeEntries(parseBounds(meta.bounds));
 
-  exported.adapters = identityRecords.config(barry).adapters;
+  exported.adapters = resolved.adapters;
 
-  if (meta.secrets && Object.keys(meta.secrets).length) exported.secrets = mergeSecretBindings({}, meta.secrets);
+  if (meta.secrets && Object.keys(meta.secrets).length) {
+    exported.secrets = mergeSecretBindings({}, meta.secrets);
+  }
 
   // Full vault config (connection refs, no actual secrets)
   if (meta.vault) {
@@ -118,112 +115,6 @@ async function barryToExport(barry: IdentityRecord): Promise<ExportedBarry> {
   }
 
   return exported;
-}
-
-/** Composites Barry shipped before every trait became a bag's. */
-const RETIRED_SHIPPED_TRAITS = new Set(["read", "all", "no-native-tools"]);
-
-/** Identify user-defined traits: every trait no bag defines. */
-async function exportUserTraits(configDir: string): Promise<number> {
-  const dbTraits = await traits.list();
-
-  // Export user traits only: exclude bag definitions and retired shipped composites.
-  // See docs/decisions/0041-command-classification-and-completion.md.
-  const bagTraitNames = new Set<string>();
-  try {
-    const { loadAllBags } = await import("@barry-rocks/sdk/internal/bags");
-    const { getAllTraits } = await import("@barry-rocks/sdk/internal/bags");
-    const bags = await loadAllBags();
-    for (const bag of bags) {
-      for (const trait of getAllTraits(bag)) {
-        bagTraitNames.add(trait.name);
-      }
-    }
-  } catch {
-    // @barry-rocks/sdk/bags may not be available
-  }
-
-  const userTraits: ExportedTrait[] = [];
-
-  for (const trait of dbTraits) {
-    if (RETIRED_SHIPPED_TRAITS.has(trait.name) || bagTraitNames.has(trait.name)) continue;
-
-    userTraits.push(traitToExport(trait));
-  }
-
-  if (userTraits.length > 0) {
-    writeFileSync(join(configDir, "traits.yaml"), yamlStringify(userTraits), "utf-8");
-  } else {
-    writeFileSync(join(configDir, "traits.yaml"), "# No user-defined traits\n", "utf-8");
-  }
-
-  return userTraits.length;
-}
-
-/**
- * A trait's grants from an exported file, under whichever spelling it uses.
- *
- * Two real files disagree: traits a manifest declares write `bags:`,
- * while a `traits.yaml` written by `config export` uses `namespaces:`. Reading
- * only one spelling imports the trait with an EMPTY grant list — a silent
- * narrowing rather than a fail-open, because `filter-tools.ts` does
- * `if (!traitAccess) continue`, so a trait granting nothing yields zero tools.
- * The symptom ("my tools vanished") is loud, but the import reports success, so
- * nothing points back here.
- *
- * `bags` wins when both are present — it is the current spelling, matching how
- * `bound ?? scope` prefers the current key below. An explicit `bags: []` is
- * therefore the answer rather than an absence: falling through to a stale
- * `namespaces:` would resurrect grants the author deliberately removed. A
- * non-array under either key yields `[]` rather than a guess, since guessing
- * wrong is exactly the silent narrowing this exists to prevent.
- */
-export function readImportedTraitGrants(trait: {
-  bags?: unknown;
-  namespaces?: unknown;
-}): string[] {
-  if (Array.isArray(trait.bags)) return trait.bags as string[];
-  if (Array.isArray(trait.namespaces)) return trait.namespaces as string[];
-  return [];
-}
-
-function traitToExport(trait: TraitInfo): ExportedTrait {
-  const exported: ExportedTrait = {
-    name: trait.name,
-    description: trait.description,
-    access: trait.access,
-    tools: trait.tools,
-    namespaces: trait.namespaces,
-  };
-  if (trait.skills.length > 0) exported.skills = trait.skills;
-  if (trait.instructions.length > 0) exported.instructions = trait.instructions;
-  if (Object.keys(trait.bound).length > 0) exported.bound = trait.bound;
-  if (trait.boundNames.length > 0) exported.boundNames = trait.boundNames;
-  return exported;
-}
-
-// A missing shipped-bound catalog must fail rather than reclassify every builtin as user-authored.
-// Rationale: docs/decisions/0009-runtime-and-fixture-invariants.md#note-005
-async function exportUserBounds(configDir: string): Promise<number> {
-  const dbBounds = await bounds.stored();
-
-  const builtinNames = new Set(bounds.shipped().map(bound => bound.name));
-
-  const userBounds: ExportedBound[] = dbBounds
-    .filter((s) => !builtinNames.has(s.name) && !s.bag)
-    .map((s) => ({
-      name: s.name,
-      description: s.description,
-      bound: s.bound as Record<string, unknown>,
-    }));
-
-  if (userBounds.length > 0) {
-    writeFileSync(join(configDir, "bounds.yaml"), yamlStringify(userBounds), "utf-8");
-  } else {
-    writeFileSync(join(configDir, "bounds.yaml"), "# No user-defined bounds\n", "utf-8");
-  }
-
-  return userBounds.length;
 }
 
 /**
@@ -281,12 +172,6 @@ export async function configExportCommand(options: { dir?: string; plaintext?: b
     writeFileSync(join(configDir, "identities.yaml"), yamlStringify(config), "utf-8");
     console.log(`  identities.yaml — ${exportedIdentities.length} barry${exportedIdentities.length !== 1 ? "s" : ""}`);
 
-    const traitCount = await exportUserTraits(configDir);
-    console.log(`  traits.yaml — ${traitCount} user-defined trait${traitCount !== 1 ? "s" : ""}`);
-
-    const boundCount = await exportUserBounds(configDir);
-    console.log(`  bounds.yaml — ${boundCount} user-defined bound${boundCount !== 1 ? "s" : ""}`);
-
     const userSettings = user.settings ?? {};
     const settings: Record<string, unknown> = {};
     if (userSettings.defaultBarry) settings.defaultBarry = userSettings.defaultBarry;
@@ -303,7 +188,7 @@ export async function configExportCommand(options: { dir?: string; plaintext?: b
     // 0600 and say so, so an export never silently lands world-readable.
     if (!options.plaintext) {
       const { chmodSync } = await import("node:fs");
-      for (const file of ["identities.yaml", "traits.yaml", "bounds.yaml", "settings.yaml", "bags.yaml"]) {
+      for (const file of ["identities.yaml", "settings.yaml", "bags.yaml"]) {
         const target = join(configDir, file);
         if (existsSync(target)) chmodSync(target, 0o600);
       }
@@ -318,6 +203,73 @@ export async function configExportCommand(options: { dir?: string; plaintext?: b
   }
 }
 
+function readLegacyTraitsMap(configDir: string): Map<string, TraitRowSummary> {
+  const map = new Map<string, TraitRowSummary>();
+  const traitsPath = join(configDir, "traits.yaml");
+  if (!existsSync(traitsPath)) return map;
+  const importedTraits = yamlParse(readFileSync(traitsPath, "utf-8")) as LegacyExportedTrait[] | null;
+  if (!Array.isArray(importedTraits)) return map;
+  for (const trait of importedTraits) {
+    if (!trait || typeof trait.name !== "string") continue;
+    const namespaces = Array.isArray(trait.bags)
+      ? trait.bags
+      : Array.isArray(trait.namespaces)
+        ? trait.namespaces
+        : [];
+    const boundObject = trait.bound ?? trait.scope;
+    map.set(trait.name, {
+      name: trait.name,
+      access: trait.access === "read" ? "read" : "readwrite",
+      namespaces,
+      boundNames: Array.isArray(trait.boundNames) ? trait.boundNames : [],
+      bound: boundObject && typeof boundObject === "object" && Object.keys(boundObject).length > 0 ? boundObject : null,
+    });
+  }
+  return map;
+}
+
+function readLegacyCustomBounds(configDir: string): Array<{ name: string; description?: string | null; bound: Record<string, unknown> }> {
+  const boundsPath = [join(configDir, "bounds.yaml"), join(configDir, "scopes.yaml")]
+    .find((candidate) => existsSync(candidate));
+  if (!boundsPath) return [];
+  const importedBounds = yamlParse(readFileSync(boundsPath, "utf-8")) as LegacyExportedBound[] | null;
+  if (!Array.isArray(importedBounds)) return [];
+  const shipped = new Set<string>(SHIPPED_GLOBAL_BOUND_NAMES);
+  const out: Array<{ name: string; description?: string | null; bound: Record<string, unknown> }> = [];
+  for (const bound of importedBounds) {
+    if (!bound || typeof bound.name !== "string" || shipped.has(bound.name)) continue;
+    const rawBound = bound.bound ?? bound.scope ?? {};
+    out.push({
+      name: bound.name,
+      description: bound.description ?? null,
+      bound: rawBound && typeof rawBound === "object" ? rawBound : {},
+    });
+  }
+  return out;
+}
+
+const LEGACY_GRANT_KEY = ["bag", "grant"].join("_");
+
+function needsLegacyIdentityMigration(
+  exported: ExportedBarry,
+  customBoundsCount: number,
+): boolean {
+  if (customBoundsCount > 0) return true;
+  if (Object.hasOwn(exported, "traits") || Object.hasOwn(exported, LEGACY_GRANT_KEY)) return true;
+  const boundObject = exported.bound ?? exported.scope;
+  if (boundObject && typeof boundObject === "object") return true;
+  if (Array.isArray(exported.bounds)) {
+    for (const entry of exported.bounds) {
+      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+        if (hasLegacyBoundKeys(entry)) return true;
+        for (const val of Object.values(entry)) {
+          if (hasLegacyBoundKeys(val)) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 
 /**
  * Import Barry configuration from the config repo.
@@ -330,63 +282,9 @@ export async function configImportCommand(options: { dir?: string } = {}): Promi
     }
 
     // Refused before anything is written when no owner is bound.
-    await getCurrentUser();
+    const user = await getCurrentUser();
 
-    // Import order: traits → bounds → identities → settings
-    // (identities may reference bounds by name)
-
-    const traitsPath = join(configDir, "traits.yaml");
-    if (existsSync(traitsPath)) {
-      const raw = readFileSync(traitsPath, "utf-8");
-      const importedTraits = yamlParse(raw) as ExportedTrait[] | null;
-      if (Array.isArray(importedTraits) && importedTraits.length > 0) {
-        for (const trait of importedTraits) {
-          await traits.upsert({
-            name: trait.name,
-            description: trait.description,
-            namespaces: readImportedTraitGrants(trait),
-            access: trait.access === "readwrite" ? "readwrite" : "read",
-            tools: trait.tools ?? [],
-            skills: trait.skills ?? [],
-            // Passed only when the file states them. upsertTrait treats an
-            // unstated boundNames as "leave the row's alone" and an unstated
-            // instructions as "erase"; an older export states neither.
-            ...(trait.instructions ? { instructions: trait.instructions } : {}),
-            ...(trait.boundNames ? { boundNames: trait.boundNames } : {}),
-            bound: trait.bound ?? trait.scope ?? {},
-          });
-        }
-        console.log(`Imported ${importedTraits.length} trait${importedTraits.length !== 1 ? "s" : ""}`);
-      }
-    }
-
-    // 2. Import bounds.
-    //
-    // Reads bounds.yaml, falling back to a pre-rename scopes.yaml -- and each
-    // entry's body under either `bound:` or the legacy `scope:`. Permanent,
-    // not a migration window: this file is in the user's own config repo,
-    // which nothing here converts. Reading only the new names would import
-    // ZERO bounds from an unconverted config and report success, leaving every
-    // restriction the user had written silently absent.
-    const boundsPath = [join(configDir, "bounds.yaml"), join(configDir, "scopes.yaml")]
-      .find((candidate) => existsSync(candidate));
-    if (boundsPath) {
-      const raw = readFileSync(boundsPath, "utf-8");
-      const importedBounds = yamlParse(raw) as Array<ExportedBound & { scope?: Record<string, unknown> }> | null;
-      if (Array.isArray(importedBounds) && importedBounds.length > 0) {
-        for (const bound of importedBounds) {
-          await bounds.upsert({
-            name: bound.name,
-            description: bound.description,
-            bound: bound.bound ?? bound.scope ?? {},
-          });
-        }
-        console.log(`Imported ${importedBounds.length} bound${importedBounds.length !== 1 ? "s" : ""}`);
-      }
-    }
-
-    // 3. Restore the bag registry.
-    // Must precede barry import: a barry's bag list is resolved against
+    // 1. Restore the bag registry first: an identity's bag list is resolved against
     // this registry, and on a fresh machine none of those bags are known yet.
     const bagsPath = join(configDir, "bags.yaml");
     if (existsSync(bagsPath)) {
@@ -398,6 +296,9 @@ export async function configImportCommand(options: { dir?: string } = {}): Promi
       }
       console.log(`Registered ${Object.keys(entries).length} bag${Object.keys(entries).length === 1 ? "" : "s"} from bags.yaml`);
     }
+
+    const legacyTraitsMap = readLegacyTraitsMap(configDir);
+    const legacyCustomBounds = readLegacyCustomBounds(configDir);
 
     const identitiesPath = join(configDir, "identities.yaml");
     if (existsSync(identitiesPath)) {
@@ -419,12 +320,42 @@ export async function configImportCommand(options: { dir?: string } = {}): Promi
       }
 
       const builtin = identityRecords.builtinDirectory();
-      for (const exported of config.identities as ExportedBarry[]) {
-        if (builtin && identityRecords.directory({ name: exported.name }) === builtin) {
-          console.warn(`  Skipped "${exported.name}": the base identity Barry ships is not imported`);
+      const settingsPath = join(configDir, "settings.yaml");
+      const importedSettings = existsSync(settingsPath)
+        ? (yamlParse(readFileSync(settingsPath, "utf-8")) as Record<string, unknown> | null)
+        : null;
+      const defaultIdentityName =
+        typeof importedSettings?.defaultBarry === "string"
+          ? importedSettings.defaultBarry
+          : typeof user.settings?.defaultBarry === "string"
+            ? user.settings.defaultBarry
+            : (config.identities as ExportedBarry[])[0]?.name;
+
+      for (const rawExported of config.identities as ExportedBarry[]) {
+        if (builtin && identityRecords.directory({ name: rawExported.name }) === builtin) {
+          console.warn(`  Skipped "${rawExported.name}": the base identity Barry ships is not imported`);
           continue;
         }
-        const { update, skipped, warned } = await importedUpdate(exported);
+        const customForThisIdentity =
+          rawExported.name === defaultIdentityName ? legacyCustomBounds : [];
+        let exported = rawExported;
+        if (needsLegacyIdentityMigration(rawExported, customForThisIdentity.length)) {
+          const doc: Record<string, unknown> = { ...(rawExported as unknown as Record<string, unknown>) };
+          if (typeof doc.bound === "string" || typeof doc.scope === "string") {
+            const boundName = (doc.bound ?? doc.scope) as string;
+            doc.bounds = Array.isArray(doc.bounds) ? [...doc.bounds, boundName] : [boundName];
+            delete doc.bound;
+            delete doc.scope;
+          }
+          const migrated = migrateIdentityYamlObject(doc, {
+            identityName: rawExported.name,
+            traitsTableMap: legacyTraitsMap,
+            customBoundsToAdd: customForThisIdentity,
+          });
+          exported = migrated.updated as unknown as ExportedBarry;
+        }
+
+        const { update, fullBounds, skipped, warned } = await importedUpdate(exported);
         if (skipped.length > 0) {
           console.warn(`  Skipped for "${exported.name}" (no such identity setting): ${skipped.join(", ")}`);
         }
@@ -440,6 +371,15 @@ export async function configImportCommand(options: { dir?: string } = {}): Promi
         } catch (error) {
           if (!isBarryError(error)) throw error;
           throw new Error(`"${exported.name}": ${error.message}${error.hint ? `\n  ${error.hint}` : ""}`);
+        }
+        if (fullBounds && written.directory) {
+          const yamlPath = join(written.directory, "identity.yaml");
+          const currentYaml = (yamlParse(readFileSync(yamlPath, "utf-8")) ?? {}) as Record<string, unknown>;
+          currentYaml.bounds = fullBounds;
+          const tmpPath = `${yamlPath}.tmp`;
+          writeFileSync(tmpPath, yamlStringify(currentYaml), "utf-8");
+          renameSync(tmpPath, yamlPath);
+          await identityRecords.sync(written.directory, { actorId: user.id });
         }
         // The operation syncs the same bags again; their warnings were printed above.
         printWarnings(written.warnings.filter((w) => !warned.has(w.message)));
@@ -471,17 +411,15 @@ export async function configImportCommand(options: { dir?: string } = {}): Promi
         console.log(`Set active barry to "${settings.defaultBarry}"`);
       }
     }
-
   } catch (error: unknown) {
     if (isCliError(error)) throw error;
     throw new CliError(`Error: ${error instanceof Error ? error.message : String(error)}`, 1);
   }
 }
 
-
 /** The settings `ExportedBarry` names, each mapped to its `IdentityUpdate` field below. */
 const MAPPED_KEYS = new Set([
-  "name", "bags", "packs", "traits", "bound", "scope",
+  "name", "bags", "packs", "traits", "bounds", "bound", "scope",
   "adapters", "secrets", "vault",
 ]);
 
@@ -489,7 +427,6 @@ const MAPPED_KEYS = new Set([
 const PASSED_KEYS: Readonly<Record<string, keyof IdentityUpdate>> = {
   display_name: "displayName",
   bag_configs: "bagConfigs",
-  bounds: "bounds",
   status_notify: "statusNotify",
   aliases: "aliases",
 };
@@ -497,36 +434,43 @@ const PASSED_KEYS: Readonly<Record<string, keyof IdentityUpdate>> = {
 /**
  * An exported identity as the update the identities operations take.
  *
- * Best-effort, as a config restore has always been: an unknown bag or trait,
- * or a bound this machine lacks, warns and is left out rather than aborting
- * the whole restore. Any other `identity.yaml` key is passed on (hand-edited
- * files carry them), and reported as skipped when there is no such key,
- * rather than silently dropped.
+ * Best-effort, as a config restore has always been: an unknown bag or a bound
+ * this machine lacks warns and is left out rather than aborting the whole
+ * restore. Any other `identity.yaml` key is passed on (hand-edited files carry
+ * them), and reported as skipped when there is no such key, rather than
+ * silently dropped.
  */
-async function importedUpdate(exported: ExportedBarry): Promise<{ update: IdentityUpdate; skipped: string[]; warned: Set<string> }> {
+async function importedUpdate(exported: ExportedBarry): Promise<{
+  update: IdentityUpdate;
+  fullBounds: IdentityEntries | undefined;
+  skipped: string[];
+  warned: Set<string>;
+}> {
   const update: IdentityUpdate = {};
+  let fullBounds: IdentityEntries | undefined;
   const skipped: string[] = [];
   const warned = new Set<string>();
 
-  const importedBags = exported.bags ?? exported.packs;
-  if (importedBags && importedBags.length > 0) {
-    const bagResult = await traits.syncBags(importedBags);
-    update.bags = bagResult.bags;
-    for (const w of bagResult.warnings) {
-      console.warn(`  Warning: ${w.message}${w.hint ? ` — ${w.hint}` : ""}`);
-      warned.add(w.message);
+  const rawBags = exported.bags ?? exported.packs;
+  if (rawBags !== undefined) {
+    const parsed = parseIdentityBags(rawBags);
+    if (parsed.bags.length > 0) {
+      const bagResult = await resolveBags(parsed.bags);
+      update.bags = bagResult.bags;
+      const kept = new Set(bagResult.bags);
+      const bagConfigs = Object.fromEntries(
+        Object.entries(parsed.bag_configs).filter(([name]) => kept.has(name)),
+      );
+      if (Object.keys(bagConfigs).length > 0) {
+        update.bagConfigs = bagConfigs;
+      }
+      for (const w of bagResult.warnings) {
+        console.warn(`  Warning: ${w.message}${w.hint ? ` — ${w.hint}` : ""}`);
+        warned.add(w.message);
+      }
     }
   }
-  if (exported.traits && exported.traits.length > 0) {
-    // Read after the bag sync above, which registers the traits its bags declare.
-    const knownTraits = new Set((await traits.list()).map((trait) => trait.name));
-    const unknown = exported.traits.filter((trait) => !knownTraits.has(trait));
-    if (unknown.length > 0) console.warn(`  Warning: trait${unknown.length === 1 ? "" : "s"} ${unknown.map((t) => `"${t}"`).join(", ")} not found for barry "${exported.name}"`);
-    // Left unset rather than emptied when none is known: an empty list would
-    // clear the traits an existing identity already has.
-    const known = exported.traits.filter((trait) => knownTraits.has(trait));
-    if (known.length > 0) update.traits = known;
-  }
+
   if (exported.adapters) update.adapters = exported.adapters;
   else if (RETIRED_IDENTITY_KEYS.some(key => Object.hasOwn(exported, key))) {
     const { adapterStore } = await import("../adapters/installed.js");
@@ -546,8 +490,25 @@ async function importedUpdate(exported: ExportedBarry): Promise<{ update: Identi
   }
 
   const exportedBoundName = exported.bound ?? exported.scope;
-  if (exported.bounds) update.bounds = exported.bounds;
-  else if (typeof exportedBoundName === "string") update.bounds = [exportedBoundName];
+  if (exported.bounds) {
+    const parsedBounds = parseBounds(exported.bounds);
+    const availableBounds = new Set((await bounds.list()).map((entry) => entry.name));
+    const validEntries = parsedBounds.filter((entry) => {
+      if (entry.bound) return true;
+      if (availableBounds.has(entry.name)) return true;
+      console.warn(`  Warning: bound "${entry.name}" not found for barry "${exported.name}"`);
+      return false;
+    });
+    const hasInlineOrOptional = validEntries.some((entry) => Boolean(entry.bound) || entry.optional);
+    if (hasInlineOrOptional) {
+      fullBounds = serializeEntries(validEntries);
+    } else {
+      update.bounds = requiredNames(validEntries);
+    }
+  } else if (typeof exportedBoundName === "string") {
+    update.bounds = [exportedBoundName];
+  }
+
   if (exported.secrets) {
     const bindings = mergeSecretBindings({}, exported.secrets);
     update.secrets = Object.fromEntries(Object.entries(bindings).map(([name, binding]) => [name, binding.reference]));
@@ -562,7 +523,7 @@ async function importedUpdate(exported: ExportedBarry): Promise<{ update: Identi
     else skipped.push(key);
   }
   // Validated by the operation, which refuses a malformed value with its reason.
-  return { update: Object.assign(update, passed), skipped, warned };
+  return { update: Object.assign(update, passed), fullBounds, skipped, warned };
 }
 
 /**

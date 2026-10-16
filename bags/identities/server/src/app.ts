@@ -1,5 +1,5 @@
 /**
- * The identities service: identity, trait and bound management.
+ * The identities service: identity and bound management.
  *
  * Split out of bags/sessions/api, which had grown to carry both session lifecycle and
  * identity administration — two surfaces with different shapes of traffic and
@@ -18,9 +18,6 @@ import { boundsRouter } from "../../src/bounds.js";
 import { createDeviceRouter, deviceErrors } from "../../src/device-routes.js";
 import { createIdentitiesRouter } from "../../src/identities.js";
 import { identityRequestAuthorization } from "../../src/request-authorization.js";
-import { traitsRouter } from "../../src/traits.js";
-
-
 
 export function identitiesApi() {
   const app = express();
@@ -50,7 +47,6 @@ export function identitiesApi() {
   // here, at the composition root, so the identities bag does not depend on it.
   const identityRoutes = createIdentitiesRouter();
   apiV1.use("/identities", identityRoutes);
-  apiV1.use("/traits", traitsRouter);
   apiV1.use("/bounds", boundsRouter);
 
   apiV1.use((req, res) => {
@@ -65,5 +61,5 @@ export function identitiesApi() {
   app.use("/api/v1", apiV1);
   app.use(createErrorLogger("barry-identities"));
 
-  return { app, routes: [devices, identityRoutes, traitsRouter, boundsRouter].flatMap(router => servedRoutes(router)) };
+  return { app, routes: [devices, identityRoutes, boundsRouter].flatMap(router => servedRoutes(router)) };
 }

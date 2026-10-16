@@ -44,6 +44,34 @@ export function migrateStore(
   store: string,
 ): MigrationResult {
   for (const migration of migrations) assertTransactionSafe(migration);
+  // A fully stamped store needs no writer lock. Keep the validation and the
+  // version read in one read transaction so another process cannot migrate
+  // between them; WAL readers continue while an unrelated writer is busy.
+  const history = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'").get();
+  if (history) {
+    db.exec("BEGIN");
+    try {
+      const version = (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
+      const columns = db.prepare("PRAGMA table_info(schema_migrations)").all() as { name: string }[];
+      if (version === migrations.length && columns.some(column => column.name === "checksum")) {
+        const applied = db.prepare("SELECT version, name, checksum FROM schema_migrations ORDER BY version").all() as { version: number; name: string; checksum: string | null }[];
+        if (applied.length === migrations.length && applied.every(entry => entry.checksum)) {
+          applied.forEach((entry, index) => {
+            if (entry.version !== index + 1) throw new Error(`${store}: migration history has missing versions`);
+            const expected = migrations[index];
+            if (entry.name.replace(/\.sql$/, "") !== expected.name.replace(/\.sql$/, "")) throw new Error(`${store}: applied migration ${entry.version} was renamed`);
+            if (entry.checksum !== createHash("sha256").update(expected.sql, "utf8").digest("hex")) throw new Error(`${store}: applied migration ${entry.name} checksum mismatch`);
+          });
+          db.exec("COMMIT");
+          return { from: version, to: version };
+        }
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch { /* Preserve the validation error. */ }
+      throw error;
+    }
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,

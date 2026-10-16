@@ -1,4 +1,4 @@
-/** Every session mode requires the identity's declared API key and never stores or redirects vendor credentials; see docs/decisions/0012-credentials-action-runs-and-traits.md. */
+/** Every session mode requires the identity's declared API key and never stores or redirects vendor credentials; see docs/decisions/0012-credentials-action-runs-and-identity-bags.md. */
 
 export type ClaudeCredential =
   /** An API key, from the identity's environment. The only answer. */
@@ -17,7 +17,7 @@ export interface ResolveCredentialInput {
   env: Record<string, string | undefined>;
 }
 
-/** Resolve the declared API key or refuse rather than authenticating through an undeclared subscription or login; see docs/decisions/0012-credentials-action-runs-and-traits.md. */
+/** Resolve the declared API key or refuse rather than authenticating through an undeclared subscription or login; see docs/decisions/0012-credentials-action-runs-and-identity-bags.md. */
 export function resolveClaudeCredential(input: ResolveCredentialInput): ClaudeCredential {
   const apiKey = input.env.ANTHROPIC_API_KEY;
   if (apiKey) return { kind: "api-key", envVar: "ANTHROPIC_API_KEY" };

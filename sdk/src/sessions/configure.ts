@@ -39,7 +39,8 @@ export function configureSession(input: SessionConfig): SessionConfig {
       ? {
           egressSandbox: {
             ...input.egressSandbox,
-            allowDomains: [...input.egressSandbox.allowDomains],
+            ...(input.egressSandbox.allow ? { allow: [...input.egressSandbox.allow] } : {}),
+            allowDomains: [...(input.egressSandbox.allowDomains ?? input.egressSandbox.allow ?? [])],
             ...(input.egressSandbox.allowUnixSockets
               ? { allowUnixSockets: [...input.egressSandbox.allowUnixSockets] }
               : {}),
@@ -66,7 +67,7 @@ export function isScopedMcpTool(tool: string, servers: readonly string[]): boole
 }
 
 /** Apply the non-negotiable native ceiling before any adapter starts work. */
-export function configureHarnessSession(input: SessionConfig, nativeTools: readonly string[], native?: NativeControl): SessionConfig {
+export function configureHarnessSession(input: SessionConfig, harnessTools: readonly string[], native?: NativeControl | import("../adapters/harnesses/index.js").LegacyNativeControl): SessionConfig {
   const config = configureSession(input);
   if (config.extraArgs?.length) throw new Error("Raw adapter arguments cannot override Barry's tool policy");
   if (config.strictMcpConfig === false) throw new Error("Barry sessions cannot load unscoped vendor MCP configuration");
@@ -75,11 +76,12 @@ export function configureHarnessSession(input: SessionConfig, nativeTools: reado
   if (names.some(name => !/^[A-Za-z0-9_-]+$/.test(name)) || new Set(names.map(name => name.replace(/-/g, "_"))).size !== names.length) throw new Error("MCP server names must be distinct after vendor normalization and cannot contain wildcards");
   const requested = new Set(config.allowedNativeTools ?? []);
   const callerDenied = new Set((config.deniedTools ?? []).map(tool => tool.toLowerCase()));
-  const allowed = new Set(nativeTools.filter(tool => requested.has(tool) && native?.grantable.includes(tool) && !callerDenied.has(tool.toLowerCase())));
+  const controllable = native?.controllable ?? native?.grantable;
+  const allowed = new Set(harnessTools.filter(tool => requested.has(tool) && controllable?.includes(tool) && !callerDenied.has(tool.toLowerCase())));
   for (const group of native?.inseparable ?? []) {
     if (!group.every(tool => allowed.has(tool))) for (const tool of group) allowed.delete(tool);
   }
-  const deniedTools = [...new Set([...nativeTools.filter(tool => !allowed.has(tool)), ...(config.deniedTools ?? [])])];
+  const deniedTools = [...new Set([...harnessTools.filter(tool => !allowed.has(tool)), ...(config.deniedTools ?? [])])];
   const denied = new Set(deniedTools.map(tool => tool.toLowerCase()));
   const decide = config.decide;
   return {
@@ -103,22 +105,23 @@ export function configureHarnessSession(input: SessionConfig, nativeTools: reado
 
 /**
  * The native tools a session may use (ADP-6): every adapter derived this the
- * same way, so it lives here once. `grantable` restricts to a declared subset
+ * same way, so it lives here once. `controllable` restricts to a declared subset
  * (pi); omit it to allow any requested native tool. `inseparable` groups drop
  * whole when any member is unavailable. Denials are case-insensitive, matching
- * the native policy and {@link configureHarnessSession}.
+ * {@link configureHarnessSession}.
  */
 export function allowedNative(
   config: Pick<SessionConfig, "allowedNativeTools" | "deniedTools">,
-  nativeTools: readonly string[],
-  native?: NativeControl,
+  harnessTools: readonly string[],
+  native?: NativeControl | import("../adapters/harnesses/index.js").NativeControllable,
 ): string[] {
   const requested = new Set(config.allowedNativeTools ?? []);
   const denied = new Set((config.deniedTools ?? []).map(tool => tool.toLowerCase()));
+  const controllable = native?.controllable ?? native?.grantable;
   const allowed = new Set(
-    nativeTools.filter(tool =>
+    harnessTools.filter(tool =>
       requested.has(tool) &&
-      (native?.grantable ? native.grantable.includes(tool) : true) &&
+      (controllable ? controllable.includes(tool) : true) &&
       !denied.has(tool.toLowerCase()),
     ),
   );
@@ -134,9 +137,9 @@ export function allowedNative(
  */
 export function disallowedTools(
   config: Pick<SessionConfig, "allowedNativeTools" | "deniedTools">,
-  nativeTools: readonly string[],
-  native?: NativeControl,
+  harnessTools: readonly string[],
+  native?: NativeControl | import("../adapters/harnesses/index.js").NativeControllable,
 ): string[] {
-  const allowed = new Set(allowedNative(config, nativeTools, native));
-  return [...new Set([...nativeTools.filter(tool => !allowed.has(tool)), ...(config.deniedTools ?? [])])];
+  const allowed = new Set(allowedNative(config, harnessTools, native));
+  return [...new Set([...harnessTools.filter(tool => !allowed.has(tool)), ...(config.deniedTools ?? [])])];
 }

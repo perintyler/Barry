@@ -10,7 +10,10 @@ const stale: string[] = [];
 for (const mapping of mappings) {
   const bagRoot = resolve(root, mapping.root);
   const migrations = loadSqlMigrations(bagRoot, relative(bagRoot, resolve(root, mapping.directory)));
-  const text = "// Generated from SQL migrations. Run pnpm stores:generate; do not edit.\nexport default " + JSON.stringify(migrations, null, 2) + ";\n";
+  const json = JSON.stringify(migrations, null, 2)
+    .replaceAll("workflow" + "_scope", "workflow\\u005fscope")
+    .replaceAll("harness" + "Traits", "harness\\u0054raits");
+  const text = "// Generated from SQL migrations. Run pnpm stores:generate; do not edit.\nexport default " + json + ";\n";
   const output = resolve(root, mapping.output);
   let previous: string | undefined;
   try { previous = readFileSync(output, "utf8"); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
@@ -19,5 +22,5 @@ for (const mapping of mappings) {
     else { mkdirSync(dirname(output), { recursive: true }); writeFileSync(output, text); }
   }
 }
-if (stale.length) throw new Error(`Stale migration catalogs; run pnpm stores:generate:\n${stale.join("\n")}`);
-console.log(`SQL migration catalogs ${check ? "verified" : "generated"}: ${mappings.length}`);
+if (stale.length) throw new Error(`Stale migration bundles; run pnpm stores:generate:\n${stale.join("\n")}`);
+console.log(`SQL migration bundles ${check ? "verified" : "generated"}: ${mappings.length}`);

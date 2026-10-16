@@ -49,13 +49,13 @@ import { getServiceUrl } from "@barry-rocks/sdk/services";
  * Warn — never block — when an action's declared requirements look unmet.
  *
  * Requirements are ADVISORY by design. Barry's MCP layer is the real
- * enforcement: tools a session's traits don't grant are never registered, so an
+ * enforcement: tools a session's bags and bounds don't allow are never registered, so an
  * action naming one simply cannot invoke it. Checking here too would be a second
  * authorization path that drifts from the first. What this buys is an early,
  * accurate warning instead of a failure partway through the procedure.
  *
  * `availableTools` is the session's actual registered tool list, so the check
- * reflects what the agent can really call rather than re-deriving traits.
+ * reflects what the agent can really call rather than re-deriving bags and bounds.
  */
 /**
  * The tools an action's prose will have the agent call: what the author
@@ -83,7 +83,7 @@ export function buildRequirementWarnings(
     if (missing.length > 0) {
       warnings.push(
         `This action calls ${missing.join(", ")}, which this session cannot invoke. ` +
-          `It will still run — you may need a trait that grants those tools.`,
+          `It will still run — you may need to pack the bag or adjust the bound for those tools.`,
       );
     }
   }
@@ -828,7 +828,7 @@ Call this with the run_id returned by begin_action once you have carried out the
     // Resolving to the same variable the inline path uses keeps the
     // truth-table and validation below on ONE shape — two near-identical
     // contracts would drift.
-    output = await resolveOutputSource(output, output_file);
+
 
     // Look the run up so the action's declared checks can be found. An unknown
     // id must error, not quietly succeed — otherwise completion is
@@ -837,6 +837,8 @@ Call this with the run_id returned by begin_action once you have carried out the
     if (!existing) {
       throw new Error(`No action run with id "${run_id}". It may have been created in another session.`);
     }
+    if (existing.workflow) throw new Error(`Run "${run_id}" is owned by workflow ${existing.workflow.work_id}; inspect or reconcile it through Work instead of completing it here.`);
+    output = await resolveOutputSource(output, output_file);
     if (existing.process) {
       // Barry closed this run when its process exited; an agent's verdict
       // would overwrite the one the exit code gave.
@@ -1046,6 +1048,8 @@ For a run started with run_action, this also stops the agent doing it. If that a
       );
     }
 
+    if (existing.workflow) throw new Error(`Run "${run_id}" is owned by workflow ${existing.workflow.work_id}; request Stop through Work and wait for confirmed cessation.`);
+
     // A run that already closed is not cancellable, and saying so beats
     // silently reporting success: the caller believes it stopped something.
     if (existing.status !== "started") {
@@ -1167,11 +1171,17 @@ Pass \`wait_s\` to stop waiting after that many seconds: a run still going then 
         "Seconds to wait for the result before returning the run as `started` to poll " +
           "with check_action_run. Bounds this call, not the run. Omit to block to the end.",
       ),
-    traits: z
+    bags: z
       .array(z.string().min(1))
       .optional()
       .describe(
-        "Run with just these of this session's traits. Narrows access; cannot widen it.",
+        "Run with just these of this session's packed bags. Narrows access; cannot widen it.",
+      ),
+    bounds: z
+      .array(z.string().min(1))
+      .optional()
+      .describe(
+        "Additional named bounds (e.g. `<bag>:read`) to intersect onto this run.",
       ),
     cwd: z
       .string()
@@ -1182,7 +1192,7 @@ Pass \`wait_s\` to stop waiting after that many seconds: a run still going then 
           "Defaults to where this session was working when it created the action.",
       ),
   },
-  handler: async ({ action, inputs, timeout_s, wait_s, traits, cwd }, context) => {
+  handler: async ({ action, inputs, timeout_s, wait_s, bags, bounds, cwd }, context) => {
     // One-level nesting, enforced at the tool rather than trusted to the
     // prompt trailer: a spawned run carries executor metadata, so a
     // run_action call from inside one is a loop forming — the failure mode
@@ -1221,7 +1231,8 @@ Pass \`wait_s\` to stop waiting after that many seconds: a run still going then 
         ...(wait_s ? { wait_s } : {}),
         ...(identityId ? { identity_id: identityId } : {}),
         ...(self ? { caller_session_id: self } : {}),
-        ...(traits ? { traits } : {}),
+        ...(bags ? { bags } : {}),
+        ...(bounds ? { bounds } : {}),
         ...(cwd ? { cwd } : {}),
       },
       // A little over whichever bound the RESPONSE is due at, not the run's:
@@ -1319,6 +1330,7 @@ Use it to poll a run that run_action returned as \`started\` (which happens when
     if (run.status === "started") {
       return {
         run_id: run.id,
+        ...(run.workflow ? { workflow: run.workflow } : {}),
         action: run.action,
         status: run.status,
         started_at: run.started_at.toISOString(),
@@ -1333,6 +1345,7 @@ Use it to poll a run that run_action returned as \`started\` (which happens when
 
     return {
       run_id: run.id,
+      ...(run.workflow ? { workflow: run.workflow } : {}),
       action: run.action,
       status: run.status,
       started_at: run.started_at.toISOString(),

@@ -1,11 +1,15 @@
+import {btuiSupportsPendingSend} from "./btui-version.js";
+import { apiRequest } from "../sessions/api-request.js";
+import { queueStaleBagBuild } from "../lib/bag-maintenance.js";
+import { mark, report, reportServerTiming, timingEnabled } from "../lib/timing.js";
 import { spawn, exec, execFile, type ChildProcess } from "node:child_process";
 import { accessSync, constants, rmSync } from "node:fs";
 import { join } from "node:path";
 import WebSocket from "ws";
 import { getServicePort } from "@barry-rocks/sdk/services";
-import { startServerTurn, type SessionApi } from "../sessions/launch.js";
+import { recordHarness, startServerTurn, postSessionMessage, type SessionApi } from "../sessions/launch.js";
 import { runHostedTerminal, type SessionUpdate } from "../commands/hosted-terminal.js";
-import { cliName } from "../scope.js";
+import { cliName } from "../target.js";
 
 /** Pluggable UI renderers supported by Barry CLI. */
 export type UiRenderer = "btui" | "web" | "app" | "raw" | "none";
@@ -55,6 +59,7 @@ export type UiSpawnFn = (
 /** Options for launchSessionUi. */
 export interface LaunchUiOptions extends UiResolveOptions {
   renderer?: UiRenderer;
+  supportsPendingSend?:()=>Promise<boolean>;
   selectedIdentity?: UiResolveIdentity | null;
   apiPort?: number;
   apiBase?: string;
@@ -67,6 +72,7 @@ export interface LaunchUiOptions extends UiResolveOptions {
   openApp?: (url: string) => Promise<void> | void;
   cleanupTmpDirs?: (dirs?: string[]) => void;
   printResumeHint?: (sessionId: string) => void;
+  recordHarness?: typeof recordHarness;
   startTurn?: (
     sessionId: string,
     params: Record<string, unknown>,
@@ -259,12 +265,41 @@ async function sendPromptTurn(
   }, api);
 }
 
+/** Observe server timing only while the native terminal this process owns is open. */
+function watchNativeTimings(sessionId: string, api: SessionApi): () => void {
+  if (!timingEnabled) return () => {};
+  const url = new URL(api.base);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.pathname = "/api/v1/ws";
+  const socket = new WebSocket(url, { headers: api.headers });
+  let retry: ReturnType<typeof setInterval> | undefined;
+  let firstPartial=true;
+  const subscribe = () => { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "subscribe", sessionId })); };
+  socket.on("open", () => { subscribe(); retry = setInterval(subscribe, 250); retry.unref(); });
+  socket.on("message", data => {
+    try {
+      const update = JSON.parse(String(data)) as SessionUpdate;
+      if (update.status !== "inactive" && update.type === "subscribed" && retry) clearInterval(retry);
+      if (update.type==="status" && update.status==="starting") firstPartial=true;
+      if (update.type==="partial" && firstPartial) { firstPartial=false;mark("turn:first_partial"); report("turn:first_partial"); }
+      reportServerTiming(update.metadata?.timing);
+    } catch { /* The observer does not own session delivery. */ }
+  });
+  socket.on("error", () => { if (retry) clearInterval(retry); });
+  return () => { if (retry) clearInterval(retry); socket.close(); };
+}
+
 function socketUpdates(socket: WebSocket): AsyncIterable<SessionUpdate> {
   const queued: SessionUpdate[] = [];
   let wake: (() => void) | null = null;
+  let firstPartial=true;
   socket.on("message", (data) => {
     try {
-      queued.push(JSON.parse(String(data)) as SessionUpdate);
+      const update = JSON.parse(String(data)) as SessionUpdate;
+      if (update.type==="status" && update.status==="starting") firstPartial=true;
+      if (update.type==="partial" && firstPartial) { firstPartial=false;mark("turn:first_partial"); report("turn:first_partial"); }
+      reportServerTiming(update.metadata?.timing);
+      queued.push(update);
     } catch {
       return;
     }
@@ -334,18 +369,17 @@ async function defaultRunRawTerminal(
           if (!refused) subscribe();
           return refused;
         }
-        const sent = await fetch(`${base}/sessions/${sessionId}/message`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ content }),
-        });
+        const sent = await postSessionMessage(sessionId, { content }, { base, headers });
+        reportServerTiming(sent.headers.get("X-Barry-Timing"));
         if (sent.ok) return null;
         const body = (await sent.json().catch(() => ({}))) as { error?: string; detail?: string };
         return body.error ?? body.detail ?? `HTTP ${sent.status}`;
       },
       interrupt: async () => {
-        await fetch(`${base}/sessions/${sessionId}/interrupt`, { method: "POST", headers });
+        const response=await apiRequest(fetch, `${base}/sessions/${sessionId}/interrupt`, { method: "POST", headers },15_000);
+        return response.json();
       },
+      stop:async()=>{await apiRequest(fetch,`${base}/sessions/${sessionId}/stop`,{method:"POST",headers});},
     },
     updates,
     { ...(ctx.prompt ? { prompt: ctx.prompt } : {}), once: ctx.once },
@@ -364,7 +398,7 @@ async function defaultRunRawTerminal(
     const onInterrupt = () => {
       void terminal.interrupt().then((interrupted) => {
         if (!interrupted) leave(130);
-      });
+      }).catch(error=>process.stderr.write(`Could not interrupt or stop: ${error instanceof Error?error.message:String(error)}\n`));
     };
 
     if (lines) lines.on("SIGINT", onInterrupt);
@@ -395,6 +429,7 @@ export async function launchSessionUi(
     options.renderer ??
     resolveUiRenderer(options, options.selectedIdentity, options.probe);
 
+  mark("ui:resolve");
   const cleanup = options.cleanupTmpDirs ?? defaultCleanupTmpDirs;
   const printHint = options.printResumeHint ?? defaultPrintResumeHint;
   const outLog = options.stdout ? (s: string) => options.stdout!.write(s + "\n") : console.log;
@@ -467,24 +502,32 @@ export async function launchSessionUi(
     }
 
     case "btui": {
-      if (ctx.prompt) {
-        const refused = await sendPromptTurn(ctx, options, api);
-        if (refused) {
-          errLog(`Could not start turn: ${refused}`);
-          cleanup(ctx.tmpDirs);
-          exit(1);
-          return { renderer: "btui", exitCode: 1 };
+      const pendingSend=!!ctx.prompt && await (options.supportsPendingSend??(options.spawn?async()=>true:()=>btuiSupportsPendingSend(options.env)))();
+      if(ctx.prompt && !pendingSend){
+        const refused=await sendPromptTurn(ctx,options,api);
+        if(refused){errLog(`Could not start turn: ${refused}`);cleanup(ctx.tmpDirs);exit(1);return {renderer:"btui",exitCode:1};}
+      }
+      if (ctx.prompt && pendingSend) {
+        const recorded=await (options.recordHarness??recordHarness)(sessionId,{harness:ctx.harness??"hosted",model:ctx.model,modelProvider:ctx.modelProvider},api);
+        if (!recorded.ok) {
+          errLog(`Could not select harness: ${await recorded.text()}`);cleanup(ctx.tmpDirs);exit(1);
+          return {renderer:"btui",exitCode:1};
         }
       }
+      // The native client displays the user line before it submits the turn.
 
+      const stopTimings = options.spawn ? () => {} : watchNativeTimings(sessionId, api);
       const spawnFn = options.spawn ?? spawn;
       let child: UiSpawnChild;
       try {
+        mark("ui:spawn");
+        report("ui:spawn");
         child = spawnFn("btui", [sessionId], {
           stdio: "inherit",
-          env: options.env ?? process.env,
+          env: { ...(options.env ?? process.env), ...(pendingSend ? { BTUI_SEND: ctx.prompt, BTUI_REPO_PATH: ctx.repoPath ?? process.cwd() } : {}) },
         });
       } catch (err) {
+        stopTimings();
         const msg = err instanceof Error ? err.message : String(err);
         errLog(`Could not launch btui (${msg}); falling back to basic terminal.`);
         return await launchRawFallback(ctx, options);
@@ -495,10 +538,11 @@ export async function launchSessionUi(
           errLog(`btui launch failed (${err.message}); falling back to basic terminal.`);
           resolve(false);
         });
-        child.once("spawn", () => resolve(true));
+        child.once("spawn", () => { if (!options.spawn) queueStaleBagBuild(); resolve(true); });
       });
 
       if (!spawnSuccess) {
+        stopTimings();
         return await launchRawFallback(ctx, options);
       }
 
@@ -515,14 +559,15 @@ export async function launchSessionUi(
         process.on("SIGINT", onSignal);
         process.on("SIGTERM", onSignal);
 
-        child.on("close", () => {
+        child.on("close", (code) => {
           process.off("SIGINT", onSignal);
           process.off("SIGTERM", onSignal);
-          // Graceful detachment: user exits btui, session remains hosted in background.
-          resolve(0);
+          // Explicit hard stop propagates its conventional interrupt exit code.
+          resolve(code===130?130:0);
         });
       });
 
+      stopTimings();
       cleanup(ctx.tmpDirs);
       printHint(sessionId);
       exit(exitCode);

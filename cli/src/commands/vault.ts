@@ -2,7 +2,7 @@ import { Barry } from "@barry-rocks/sdk";
 import { CliError, isCliError } from "../lib/cli-error.js";
 import { parseVaultName } from "@barry-rocks/sdk/internal/identities";
 import type { IdentityRecord } from "@barry-rocks/identities-bag";
-import { VaultClient, openVault, vaultAccountFor, type VaultAccount, type VaultSession } from "@barry-rocks/sdk/internal/vault";
+import { VaultClient, openVault, vaultAccountFor, configuredVaultEndpoint, type VaultAccount, type VaultSession } from "@barry-rocks/sdk/internal/vault";
 import { maskSecret, KeychainProvider } from "@barry-rocks/sdk/internal/env";
 import { getCurrentUser, getActiveIdentity } from "../lib/current-user.js";
 import { printWarnings } from "../lib/warnings.js";
@@ -31,8 +31,10 @@ async function getIdentityWithVault(identityName?: string, vaultName?: string) {
 
   if (vaultName) {
     let vaultConfig: VaultAccount;
+    let vaultRef: string;
     try {
-      vaultConfig = vaultAccountFor(vaultName);
+      vaultRef = parseVaultName(vaultName);
+      vaultConfig = vaultAccountFor(vaultRef);
     } catch (err) {
       if (isCliError(err)) throw err;
       throw new CliError(`Error: could not resolve vault "${vaultName}" — ${err instanceof Error ? err.message : String(err)}`, 1);
@@ -40,7 +42,7 @@ async function getIdentityWithVault(identityName?: string, vaultName?: string) {
     // No identity is involved when addressing a vault directly. Callers that
     // need one for a per-identity concern must handle its absence rather than
     // being handed a stand-in that quietly stands for the wrong thing.
-    return { barry: null as IdentityRecord | null, vaultConfig };
+    return { barry: null as IdentityRecord | null, vaultConfig, vaultRef };
   }
 
   if (!identityName) {
@@ -59,7 +61,8 @@ async function getIdentityWithVault(identityName?: string, vaultName?: string) {
     throw new CliError(`Error: Barry "${identityName}" does not have vault configured` + "\n" + `Provision one:  ${identityName} vault provision --email <email>`, 1);
   }
 
-  return { barry, vaultConfig: vaultAccountFor(parseVaultName(ref)) };
+  const vaultRef = parseVaultName(ref);
+  return { barry, vaultConfig: vaultAccountFor(vaultRef), vaultRef };
 }
 
 /**
@@ -91,13 +94,17 @@ export async function vaultAddCommand(
     // `barry env set` and `identity secret set` use.
     const { readSecretValue } = await import("../lib/read-secret.js");
     const value = secret ?? (await readSecretValue(key));
-    const { barry, vaultConfig } = await getIdentityWithVault(identityName, options.vault);
-    const vault = await openVault(vaultConfig);
+    const { barry, vaultConfig, vaultRef } = await getIdentityWithVault(identityName, options.vault);
+    const vault = await openVault(vaultRef);
 
     const existing = await vault.searchItems(key);
     const exactMatch = existing.find((i) => i.name === key);
 
     if (exactMatch) {
+      if (!options.force && configuredVaultEndpoint(vaultRef) !== undefined) {
+        await vault.close();
+        throw new CliError(`Error: "${key}" already exists in an instance-configured vault. Other configured names may open the same account, so sharing cannot be established from its name. Re-run with --force to overwrite it explicitly.`, 1);
+      }
       // Overwriting in a PRIVATE vault is the point of the command and stays
       // silent. Overwriting in a shared one replaces a value another identity
       // resolves at session start, and the damage does not show up here — it
@@ -126,8 +133,8 @@ export async function vaultAddCommand(
 
 export async function vaultListCommand(identityName: string | undefined, options: { vault?: string } = {}): Promise<void> {
   try {
-    const { vaultConfig } = await getIdentityWithVault(identityName, options.vault);
-    const vault = await openVault(vaultConfig);
+    const { vaultRef } = await getIdentityWithVault(identityName, options.vault);
+    const vault = await openVault(vaultRef);
     const items = await vault.listItems();
 
     if (items.length === 0) {
@@ -147,8 +154,8 @@ export async function vaultListCommand(identityName: string | undefined, options
 
 export async function vaultGetCommand(identityName: string | undefined, key: string, options: { vault?: string } = {}): Promise<void> {
   try {
-    const { vaultConfig } = await getIdentityWithVault(identityName, options.vault);
-    const vault = await openVault(vaultConfig);
+    const { vaultRef } = await getIdentityWithVault(identityName, options.vault);
+    const vault = await openVault(vaultRef);
     const item = await vault.getItem(key);
 
     console.log(`${key}:`);
@@ -164,8 +171,8 @@ export async function vaultGetCommand(identityName: string | undefined, key: str
 
 export async function vaultStatusCommand(identityName: string | undefined, options: { vault?: string } = {}): Promise<void> {
   try {
-    const { vaultConfig } = await getIdentityWithVault(identityName, options.vault);
-    const client = new VaultClient(vaultConfig.serverUrl);
+    const { vaultConfig, vaultRef } = await getIdentityWithVault(identityName, options.vault);
+    const client = new VaultClient(configuredVaultEndpoint(vaultRef) ?? vaultConfig.serverUrl);
     let vault: VaultSession | undefined;
     const status = await client.status();
 
@@ -176,12 +183,14 @@ export async function vaultStatusCommand(identityName: string | undefined, optio
 
     if (status.connected) {
       try {
-        vault = await openVault(vaultConfig);
+        vault = await openVault(vaultRef);
         const items = await vault.listItems();
         console.log(`  Authenticated: yes`);
         console.log(`  Items: ${items.length}`);
       } catch (err: unknown) {
         console.log(`  Authenticated: no (${err instanceof Error ? err.message : String(err)})`);
+      } finally {
+        await vault?.close();
       }
     }
   } catch (error: unknown) {
@@ -197,9 +206,12 @@ export async function vaultRemoveCommand(
   options: { force?: boolean } = {},
 ): Promise<void> {
   try {
-    const { barry: maybeBarry0, vaultConfig } = await getIdentityWithVault(identityName);
+    const { barry: maybeBarry0, vaultConfig, vaultRef } = await getIdentityWithVault(identityName);
     const barry = requireIdentity(maybeBarry0, "vault remove");
-    const vault = await openVault(vaultConfig);
+    if (!options.force && configuredVaultEndpoint(vaultRef) !== undefined) {
+      throw new CliError("Error: Other configured vault names may open this account, so its references cannot be established from its name. Re-run with --force to delete the item explicitly.", 1);
+    }
+    const vault = await openVault(vaultRef);
 
     const matches = await vault.searchItems(key);
     const item = matches.find((i) => i.name === key);
@@ -289,7 +301,11 @@ export async function vaultProvisionCommand(
     const { identity: barry } = await identityCommands.requireIdentity(identityName);
 
     const existingRef = (barry.metadata as { vault?: unknown } | null)?.vault;
-    const existing = existingRef ? vaultAccountFor(parseVaultName(existingRef)) : undefined;
+    const existingName = existingRef ? parseVaultName(existingRef) : undefined;
+    if (configuredVaultEndpoint(barry.name.trim()) !== undefined || existingName && configuredVaultEndpoint(existingName) !== undefined) {
+      throw new CliError("Error: Instance-configured vault accounts cannot be provisioned into the legacy Keychain. Configure the account bootstrap in vault-accounts.yaml, then assign its name; --force does not replace it.", 1);
+    }
+    const existing = existingName ? vaultAccountFor(existingName) : undefined;
     if (existing && !options.force) {
       throw new CliError(`Error: Barry "${barry.name}" already has a vault (${existing.email})` + "\n" + "" + "\n" + "  Re-provisioning mints new credentials, and every secret stored under" + "\n" + "  the current account becomes unreachable. Export them first:" + "\n" + `    barry vault export --name ${barry.name} --out secrets.json` + "\n" + `  Then replace it:  ${barry.name} vault provision --email ${email} --force`, 1);
     }
@@ -331,9 +347,9 @@ export async function vaultExportCommand(
     const { writeFileSync } = await import("node:fs");
     const path = await import("node:path");
 
-    const { barry: maybeBarry1, vaultConfig } = await getIdentityWithVault(identityName);
+    const { barry: maybeBarry1, vaultRef } = await getIdentityWithVault(identityName);
     const barry = requireIdentity(maybeBarry1, "vault export");
-    const vault = await openVault(vaultConfig);
+    const vault = await openVault(vaultRef);
 
     const summaries = await vault.listItems();
     const items = [];
@@ -384,9 +400,9 @@ export async function vaultImportCommand(
     const { readFileSync } = await import("node:fs");
     const path = await import("node:path");
 
-    const { barry: maybeBarry2, vaultConfig } = await getIdentityWithVault(identityName);
+    const { barry: maybeBarry2, vaultRef } = await getIdentityWithVault(identityName);
     const barry = requireIdentity(maybeBarry2, "vault import");
-    const vault = await openVault(vaultConfig);
+    const vault = await openVault(vaultRef);
 
     const source = path.resolve(filePath);
     const parsed = JSON.parse(readFileSync(source, "utf8")) as {
@@ -443,8 +459,9 @@ export async function vaultImportCommand(
  * collisions are reported BEFORE the assignment rather than discovered later
  * as one identity overwriting another's credential.
  *
- * Stores the account email in Keychain beside the credentials, because a named
- * vault carries no email of its own and deriveKeys salts with it — see
+ * Legacy accounts store their email in Keychain beside the credentials;
+ * instance-configured accounts authenticate through their declared bootstrap
+ * without changing Keychain. The email salts deriveKeys — see
  * the account email read at login (see vaultEmail in @barry-rocks/sdk/vault/account). Without this the assignment would
  * look fine and fail at login as a MAC error.
  */
@@ -459,26 +476,41 @@ export async function vaultAssignCommand(
       throw new CliError("Error: No identity specified and no active identity is set" + "\n" + "  barry vault assign <vault> --identity <name>", 1);
     }
 
-    const kc = new KeychainProvider({ service: "barry" });
+    vaultName = parseVaultName(vaultName);
+    const identityCommands = await import("./identity.js");
+    const { identity: barry, dir } = await identityCommands.requireIdentity(identityName);
+    const configured = configuredVaultEndpoint(vaultName) !== undefined;
+    if (configured) {
+      // Verify the selected configured account before writing the identity's
+      // reference. Its bootstrap belongs to the instance, never Keychain.
+      const selected = await openVault(vaultName);
+      try {
+        if (options.email && options.email.trim().toLowerCase() !== selected.email.trim().toLowerCase()) {
+          throw new CliError("Error: --email differs from the configured vault account. Update its declared bootstrap explicitly; assignment does not rewrite credentials.", 1);
+        }
+      } finally { await selected.close(); }
+    } else {
+      const kc = new KeychainProvider({ service: "barry" });
 
-    // The credentials must already exist: assign POINTS AT a vault, it does not
-    // create one. Writing the reference first and discovering the vault is
-    // absent at session start is the failure this check exists to prevent.
-    const clientId = await kc.get("", `vault-${vaultName}-client-id`);
-    if (!clientId) {
-      throw new CliError(`Error: no vault named "${vaultName}" (keychain barry/vault-${vaultName}-client-id is empty).` + "\n" + `  Provision one first:  ${identityName} vault provision --email <email>`, 1);
-    }
-
-    // Needed for key derivation, and not derivable from the name.
-    const emailAccount = `vault-${vaultName}-email`;
-    const storedEmail = await kc.get("", emailAccount);
-    if (!storedEmail) {
-      if (!options.email) {
-        throw new CliError(`Error: vault "${vaultName}" has no stored account email, and none was given.` + "\n" + `  The email salts key derivation, so a missing one fails at login as a` + "\n" + `  decryption error rather than a lookup miss. Supply it once:` + "\n" + `` + "\n" + `    barry vault assign ${vaultName} --identity ${identityName} --email <address>`, 1);
+      // The credentials must already exist: assign POINTS AT a vault, it does not
+      // create one. Writing the reference first and discovering the vault is
+      // absent at session start is the failure this check exists to prevent.
+      const clientId = await kc.get("", `vault-${vaultName}-client-id`);
+      if (!clientId) {
+        throw new CliError(`Error: no vault named "${vaultName}" (keychain barry/vault-${vaultName}-client-id is empty).` + "\n" + `  Provision one first:  ${identityName} vault provision --email <email>`, 1);
       }
-      await kc.set(emailAccount, options.email.toLowerCase());
-    } else if (options.email && options.email.toLowerCase() !== storedEmail) {
-      throw new CliError(`Error: vault "${vaultName}" is registered to ${storedEmail}, not ${options.email}.` + "\n" + `  Refusing to repoint it — that would silently open a different account.`, 1);
+
+      // Needed for key derivation, and not derivable from the name.
+      const emailAccount = `vault-${vaultName}-email`;
+      const storedEmail = await kc.get("", emailAccount);
+      if (!storedEmail) {
+        if (!options.email) {
+          throw new CliError(`Error: vault "${vaultName}" has no stored account email, and none was given.` + "\n" + `  The email salts key derivation, so a missing one fails at login as a` + "\n" + `  decryption error rather than a lookup miss. Supply it once:` + "\n" + `` + "\n" + `    barry vault assign ${vaultName} --identity ${identityName} --email <address>`, 1);
+        }
+        await kc.set(emailAccount, options.email.toLowerCase());
+      } else if (options.email && options.email.toLowerCase() !== storedEmail) {
+        throw new CliError(`Error: vault "${vaultName}" is registered to ${storedEmail}, not ${options.email}.` + "\n" + `  Refusing to repoint it — that would silently open a different account.`, 1);
+      }
     }
 
     let target: VaultAccount;
@@ -494,9 +526,6 @@ export async function vaultAssignCommand(
     const { identitiesSharingVault } = await import("../lib/vault-sharing.js");
     const coUsers = await identitiesSharingVault(target, { excludeIdentity: identityName });
 
-    const identityCommands = await import("./identity.js");
-    const { identity: barry, dir } = await identityCommands.requireIdentity(identityName);
-
     const previousRef = (barry.metadata as { vault?: unknown } | null)?.vault;
     if (previousRef) {
       console.log(`Replacing this identity's existing vault config.`);
@@ -505,6 +534,7 @@ export async function vaultAssignCommand(
     printWarnings((await Barry.identity(barry.name).update({ vault: vaultName })).warnings);
 
     console.log(`Assigned vault "${vaultName}" to ${identityName}${dir ? ` (${dir}/identity.yaml)` : ""}`);
+    if (configured) console.log("  Other configured vault names may open this same account. Its items are shared across every alias; the name alone does not establish isolation.");
 
     if (coUsers.length > 0) {
       console.log(``);

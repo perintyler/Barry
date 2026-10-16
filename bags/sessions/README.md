@@ -91,7 +91,7 @@ The wait is a long poll that only peeks — draining there would make the wait i
 |---|---|
 | `list` | Name, prompt, summary, and explicit date/directory/branch filters |
 | `search` | ID, directory, branch, remote, directive, name, tags, summary |
-| `search_messages` | User and assistant message content ([sessions/search](extensions/search/README.md)) |
+| `search_messages` | User and assistant message content ([session-vector-search](../session-vector-search/README.md)) |
 
 A session whose name and summary omit a topic may still be found in its messages. Provider conversation IDs map back to Barry session IDs through `get(provider_session_id: ...)`; supply either that ID or the Barry ID, not both.
 
@@ -103,7 +103,7 @@ The recurring run scans a bounded recent window. Older sessions need the explici
 
 Sessions are accessible to external applications (macOS, iOS, Web, and ACP clients) via the versioned **App Protocol v1** over WebSocket and HTTP.
 The protocol covers:
-- **Protocol negotiation & handshake**: versioned `subscribed` frame advertising capabilities (`streaming`, `gating`, `listener`, `attachments`).
+- **Protocol negotiation & handshake**: versioned `subscribed` frame advertising capabilities (`streaming`, `thinking`, `gating`, `listener`, `attachments`).
 - **Interactive tool-call gating**: the compatibility WebSocket projects v2 interrupts as `permission_request`, and `ruling` resolves those same durable interrupts. Set session metadata `review_policy: {mode: "review_required"}` to opt in; compatibility turns otherwise use automatic policy. Interactive turns get a persisted 60-second deadline unless an explicit `expiresAt` is supplied, and expiry denies the pending batch, including after downtime. Approvals cannot override current session bounds.
 - **File attachments**: upload via `POST /sessions/:id/attachments`, storage under `<app-support>/attachments/`, and bounded session workspace materialization.
 - **Delivery guarantees**: `register_listener` with `client` listener kind for wake guarantees.
@@ -120,6 +120,7 @@ The subscribed handshake contains the capability fields listed below.
 | Kind | Name | Purpose |
 | --- | --- | --- |
 | client | `subscribe` | Subscribe to a session and negotiate protocol version. |
+| client | `activity` | Renew the attached session’s idle process lease. |
 | client | `unsubscribe` | Stop the session subscription. |
 | client | `message` | Submit a compatibility turn. |
 | client | `start` | Start a hosted session. |
@@ -131,6 +132,8 @@ The subscribed handshake contains the capability fields listed below.
 | client | `register_listener` | Register delivery guarantees for a client listener. |
 | client | `ruling` | Resolve a durable pending tool-call interrupt. |
 | capability | `streaming` | Session event streaming support. |
+| capability | `activity` | Client idle-process lease renewal support. |
+| capability | `thinking` | Provider-exposed summarized thinking deltas; ephemeral and never stored. |
 | capability | `gating` | Per-call approval support for this hosted mode. |
 | capability | `listener` | Client delivery-listener support. |
 | capability | `attachments` | Attachment support. |
@@ -148,3 +151,29 @@ secrets:
 ```
 
 Store its value in the private `barryEnvPath()` file, or declare a Keychain/vault reference using the same installation secret contract. The value does not belong in the service manifest. `MAILGUN_MAX_AGE_SECONDS` remains non-secret service configuration, defaults to 300, and must be a positive integer.
+
+### Thinking and effort
+
+`thinking` frames carry `{ type: "thinking", sessionId, content, parentToolUseId? }`.
+They contain the provider's exposed thinking summaries, never hidden reasoning or signatures.
+A subscriber receives the current thinking buffer before partial answer text; thinking is not transcript history.
+Unknown frame kinds must be ignored. `BARRY_TOOL_INPUT_STREAMING=1` additionally enables
+`tool_input_delta` frames with `toolUseId` and JSON input deltas.
+
+The default model effort is unchanged. Set `adapters.claude-code.effort` on an identity
+with `barry identity adapters set claude-code --effort high` (also accepts `low`, `medium`,
+`xhigh`, and `max`). Children inherit it unless overridden. A session can PATCH
+`{ "metadata": { "effort": "high" } }`; null restores its inherited setting.
+The override applies when the harness is reopened. Routed model endpoints do not receive
+Claude-specific thinking or effort parameters.
+
+Hosted clients may call `barry session interrupt <id-or-prefix>` to finish the current turn while keeping
+the session reusable, or `barry session stop <id-or-prefix>` to force cancellation and end the session.
+The interrupt response includes `status: interrupted|forced|none` and a message. Stop may include
+`recordingPending: true`; accepted transcript rows continue recording after the resident is released.
+
+Live frames and session listings may include `lastEventAt` (ISO timestamp or null). A forced turn sends
+`status: waiting` with `metadata.code: turn_forced`. Exceptional sequence repair sends
+`delivery_update.metadata: { code: sequence_reassigned, oldSequence, newSequence, dedupeKey }`.
+Durable rows carry the same optional `dedupeKey`; clients should deduplicate corrected replay by it.
+Older clients can show a duplicate after repair rather than lose the accepted message.

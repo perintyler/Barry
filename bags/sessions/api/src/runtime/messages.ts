@@ -2,6 +2,7 @@
 // Moved verbatim as free functions taking the runtime instance (`rt`);
 // the SessionRuntime class delegates to these. Pure move + rewire.
 import {SessionRuntime, log} from "../session-runtime.js";
+import { assertInteractiveDestination } from "../workflow-session-ownership.js";
 import type { ActiveSession, SessionTurnOutcome } from "../session-runtime.js";
 import {buildSessionHistoryContext} from "../db.js";
 import {type AuthPrincipal} from "@barry-rocks/sdk/internal/auth";
@@ -76,11 +77,12 @@ export async function rt_materializeAndFormatAttachments(rt: SessionRuntime,
 export async function rt_sendMessage(rt: SessionRuntime, 
     sessionId: string,
     content: string,
-    options: { clientMessageId?: string; reuseClientMessageRow?: boolean; attachmentIds?: string[] } = {},
+    options: { ingressAt?: number; clientMessageId?: string; reuseClientMessageRow?: boolean; userMessageSequence?: number; initialHistoryContext?: string; attachmentIds?: string[] } = {},
     principal?: AuthPrincipal,
   ): Promise<void> {
     if (principal) await authorizeSessionExecution(principal, { sessionId });
     if (rt.executionGuard?.(sessionId)) throw new Error("Session has an active durable turn; queue later work explicitly");
+    rt.assertPersistenceAdmission(sessionId);
     await rt.enqueueMessage(sessionId, content, options, false);
   }
 
@@ -95,28 +97,15 @@ export async function rt_sendMessageAndWait(rt: SessionRuntime, sessionId: strin
 export async function rt_enqueueMessage(rt: SessionRuntime, 
     sessionId: string,
     content: string,
-    options: { clientMessageId?: string; reuseClientMessageRow?: boolean; attachmentIds?: string[]; workflowTurnId?: string },
+    options: { ingressAt?: number; clientMessageId?: string; reuseClientMessageRow?: boolean; userMessageSequence?: number; initialHistoryContext?: string; attachmentIds?: string[]; workflowTurnId?: string },
     waitForTurn: boolean,
   ): Promise<SessionTurnOutcome | undefined> {
+    assertInteractiveDestination(sessionId);
+    rt.assertPersistenceAdmission(sessionId);
     const activeSession = rt.activeSessions.get(sessionId);
     if (!activeSession) {
       throw new Error(`Session ${sessionId} not found in active sessions`);
     }
-
-    rt.broadcastToSession(sessionId, {
-      type: "text",
-      sessionId,
-      content,
-      role: "user",
-      metadata: {
-        source: "api_message",
-        delivery: "accepted",
-        ...(options.clientMessageId ? { clientMessageId: options.clientMessageId } : {}),
-        ...(options.workflowTurnId ? { workflowTurnId: options.workflowTurnId } : {}),
-        ...(options.attachmentIds?.length ? { attachmentIds: options.attachmentIds } : {}),
-      },
-      reuseClientMessageRow: options.reuseClientMessageRow,
-    });
 
     // Reset buffer and failure counter (user explicitly sending = intentional retry)
     activeSession.outputBuffer = "";
@@ -130,25 +119,52 @@ export async function rt_enqueueMessage(rt: SessionRuntime,
       }
     }
 
-    if (activeSession.session && activeSession.session.harnessSessionId) {
+    // Snapshot history before publishing this turn's user row. A warm-opened
+    // handle already owns its conversation even before init exposes its ID.
+    let historyContext = options.initialHistoryContext ?? "";
+    if (options.initialHistoryContext === undefined && !activeSession.sessionId && activeSession.lastSequence >= 0 && !activeSession.pendingTurns && !activeSession.abortController) {
+      const durable=await rt.flushPersistence(sessionId);
+      historyContext=await buildSessionHistoryContext(sessionId);
+      if (!durable) {
+        historyContext += "\n<recording-delayed>Uncommitted conversation events:\n" + rt.pendingPersistence(sessionId).map(frame=>JSON.stringify(frame)).join("\n") + "\n</recording-delayed>";
+      }
+    }
+    if (activeSession.pendingTurns || activeSession.abortController) historyContext="";
+    rt.broadcastToSession(sessionId, {
+      type: "text",
+      sessionId,
+      content,
+      role: "user",
+      metadata: {
+        source: "api_message",
+        delivery: "accepted",
+        ...(options.clientMessageId ? { clientMessageId: options.clientMessageId } : {}),
+        ...(options.workflowTurnId ? { workflowTurnId: options.workflowTurnId } : {}),
+        ...(options.attachmentIds?.length ? { attachmentIds: options.attachmentIds } : {}),
+      },
+      reuseClientMessageRow: options.reuseClientMessageRow,
+      ...(options.userMessageSequence!==undefined ? {sequence:options.userMessageSequence} : {}),
+    });
+
+    if (!historyContext && (activeSession.session || activeSession.sessionId || activeSession.warming)) {
       // Resume the existing session — it has full conversation context
       log.info("sdk.send_to_session", { sessionId, sdkSessionId: activeSession.sessionId });
-      const turn = rt.runSession(activeSession, effectiveContent, activeSession.mcpServers);
+      const turn = rt.runSession(activeSession, effectiveContent, activeSession.mcpServers, options.ingressAt);
       if (waitForTurn) return turn;
       void turn;
     } else {
       // No session yet (cold start) — prepend history context
       log.info("sdk.send_cold_start", { sessionId });
-      const historyContext = await buildSessionHistoryContext(sessionId);
 
-      const promptParts = [
+
+      const promptParts = historyContext ? [
         historyContext,
         `<new-message>`,
         effectiveContent,
         `</new-message>`,
-      ].filter(Boolean).join("\n");
+      ].filter(Boolean).join("\n") : effectiveContent;
 
-      const turn = rt.runSession(activeSession, promptParts, activeSession.mcpServers);
+      const turn = rt.runSession(activeSession, promptParts, activeSession.mcpServers, options.ingressAt);
       if (waitForTurn) return turn;
       void turn;
     }

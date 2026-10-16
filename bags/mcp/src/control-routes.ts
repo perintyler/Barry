@@ -6,9 +6,9 @@
  */
 import express from "express";
 import type { Logger } from "@barry-rocks/sdk/logging";
-import { collectToolMeta } from "@barry-rocks/sdk/internal/tools";
+import { collectToolDefinitions } from "@barry-rocks/sdk/internal/tools";
 import { getSession } from "@barry-rocks/sessions-bag/client";
-import { makeBagReachFilter } from "./bag-status-scope.js";
+import { makeBagReachFilter } from "./bag-status.js";
 import {
   connectBagProxy,
   enrichProxiedTools,
@@ -37,8 +37,8 @@ export function registerControlRoutes(deps: ControlRoutesDeps): void {
    * Namespaces a session actually resolves to.
    *
    * Config builders (CLI + API) call this to decide which `/mcp/ns/<ns>` entries
-   * to write. They must not derive the list from traits alone: the real tool set
-   * also depends on `metadata.selected_namespaces`, the barry, and scope
+   * to write. They must not derive the list from session bags alone: the real tool set
+   * also depends on `metadata.selected_namespaces`, the barry, and bound
    * filtering — deriving it client-side under-reports and silently collapses
    * tools back onto the `barry` prefix.
    */
@@ -76,8 +76,8 @@ export function registerControlRoutes(deps: ControlRoutesDeps): void {
    *
    * The pool is process-wide, so an unscoped answer lists bags no particular
    * session can reach. `?sessionId=` narrows every list to the namespaces that
-   * session actually resolves to — the same grant `/session-namespaces` reports,
-   * because installing a bag is not granting it (see session-bound.ts).
+   * session actually resolves to — the same set `/session-namespaces` reports,
+   * because installing a bag is not packing it (see session-bound.ts).
    *
    * Scoping is best-effort by design: if the session cannot be resolved, this
    * returns the unscoped pool with `scoped: false` rather than an empty result.
@@ -85,10 +85,10 @@ export function registerControlRoutes(deps: ControlRoutesDeps): void {
    *
    * Membership is checked three ways, because no single view covers every bag.
    * A bag is kept if the session's tools name it, if its namespace appears on
-   * those tools, OR if the session's traits requested that namespace. The third
+   * those tools, OR if the session's active bags requested that namespace. The third
    * is load-bearing: an unauthorized or failed bag serves no tools at all, so a
    * purely tool-derived filter drops exactly the bags worth reporting — which is
-   * how scoped `needsAuth` once came back empty for a session whose sole trait
+   * how scoped `needsAuth` once came back empty for a session whose sole packed bag
    * named an unauthorized bag.
    */
   app.get("/bag-status", async (req, res) => {
@@ -114,9 +114,9 @@ export function registerControlRoutes(deps: ControlRoutesDeps): void {
     }
 
     try {
-      // An unknown session id must not resolve to an empty grant and be
+      // An unknown session id must not resolve to an empty tool set and be
       // reported as a narrowed all-clear: resolveSessionTools tolerates a
-      // missing row (it returns the default grant rather than throwing), so
+      // missing row (it returns the default tool set rather than throwing), so
       // without this check a typo'd or expired id answered `scoped: true,
       // needsAuth: []` — the most confident possible way to say nothing is
       // wrong about a session that does not exist.
@@ -139,19 +139,19 @@ export function registerControlRoutes(deps: ControlRoutesDeps): void {
       // nothing and reported a narrowed all-clear for every `<service>-mcp`
       // bag. The proxied tools carry both, which is the only authoritative
       // pairing available here.
-      const grantedBags = new Set<string>();
+      const activeBags = new Set<string>();
       for (const t of result.sessionProxiedTools)
-        if (t.bag) grantedBags.add(t.bag);
+        if (t.bag) activeBags.add(t.bag);
 
       // Local (non-proxied) tools have no bag, so fall back to namespace
       // identity for registry entries whose key IS their namespace.
-      const grantedNamespaces = new Set<string>();
+      const activeNamespaces = new Set<string>();
       for (const t of result.sessionTools)
-        if (t.namespace) grantedNamespaces.add(t.namespace);
+        if (t.namespace) activeNamespaces.add(t.namespace);
 
       const reaches = makeBagReachFilter({
-        bags: grantedBags,
-        namespaces: grantedNamespaces,
+        bags: activeBags,
+        namespaces: activeNamespaces,
         requested: result.requestedNamespaces,
       });
       const keep = (names: string[]) => names.filter(reaches);
@@ -198,7 +198,7 @@ export function registerControlRoutes(deps: ControlRoutesDeps): void {
         return;
       }
 
-      const registry = await collectToolMeta();
+      const registry = await collectToolDefinitions();
       const newTools = enrichProxiedTools(
         [proxy],
         registry,

@@ -1,6 +1,6 @@
 import type { Guarantees } from "@barry-rocks/sdk/adapters/harnesses";
 import type { TokenUsage } from "@barry-rocks/sdk/adapters/models";
-import { EventQueue } from "@barry-rocks/sdk/sessions";
+import { withDeadline, EventQueue } from "@barry-rocks/sdk/sessions";
 import type {
   DeliveryOptions,
   DeliveryReceipt,
@@ -12,11 +12,37 @@ import type {
 } from "@barry-rocks/sdk/sessions";
 import { declaredKeyFor, requireDeclaredKey } from "../credentials.js";
 import { piEventOf, sumUsage } from "../event-mapping.js";
+import {
+  type InferenceFaultV1,
+  classifyInferenceFault,
+  redactSensitiveText,
+} from "../inference-fault.js";
+import {
+  type ExecutionAccessV1,
+  type InferencePolicyV1,
+  InferencePolicyViolationError,
+  type ProviderLimitCapabilitiesV1,
+  authorizeExecutionAccessOnline,
+  createDefaultExecutionBinding,
+  evaluateInferencePolicyPreSend,
+  validateInferencePolicy,
+} from "../inference-bounds.js";
+import {
+  UsageAccountingCoordinator,
+  type UsageReconcilePortV1,
+} from "../inference-reconciliation.js";
+import {
+  type UsageSinkV1,
+  buildUsageEvidence,
+} from "../inference-usage.js";
 import { toPiMcpConfigs } from "../mcp-config.js";
 import { ModelRefused, piModel } from "../model-id.js";
 import { createPiToolGate } from "./tool-gate.js";
 import { allowedNative, disallowedTools } from "../native-tools.js";
 import { VERIFIED_ON } from "../modes.js";
+
+import type { PiInferenceRuntimeOptions } from "../adapter.js";
+export type { PiInferenceRuntimeOptions } from "../adapter.js";
 
 /** Minimal duck-typed surface of the Pi AgentSession needed by Barry. */
 export interface AgentSessionLike {
@@ -30,11 +56,90 @@ export interface AgentSessionLike {
   bindExtensions?(params?: unknown): Promise<void>;
 }
 
-export interface PiHostedOptions {
+export interface PiHostedOptions extends PiInferenceRuntimeOptions {
   guarantees: Guarantees;
   releaseAfterMs?: number;
   /** Test hook or mock session factory. */
   createSession?: (config: SessionConfig) => Promise<AgentSessionLike>;
+}
+
+function resolveEndpointProtocolAndVerifyPolicy(
+  config: SessionConfig,
+  parsedModel: { provider: string; model: string },
+  inferencePolicy?: InferencePolicyV1,
+  providerCapabilities?: ProviderLimitCapabilitiesV1,
+  executionAccess?: ExecutionAccessV1,
+  allowAuthorizedCostEstimate?: boolean,
+): {
+  policy?: InferencePolicyV1;
+  apiType: "anthropic-messages" | "openai-completions";
+} {
+  const urlIndicatesAnthropic = Boolean(
+    config.endpoint &&
+      (config.endpoint.baseUrl.includes("/anthropic") ||
+        config.endpoint.baseUrl.includes("/messages")),
+  );
+
+  if (!inferencePolicy) {
+    return {
+      apiType:
+        urlIndicatesAnthropic || parsedModel.provider === "anthropic"
+          ? "anthropic-messages"
+          : "openai-completions",
+    };
+  }
+
+  const policy = validateInferencePolicy(inferencePolicy);
+  const fullModelId = `${parsedModel.provider}/${parsedModel.model}`;
+  if (
+    policy.model !== parsedModel.model &&
+    policy.model !== fullModelId
+  ) {
+    throw new InferencePolicyViolationError(
+      "endpoint_mismatch",
+      `Session model "${fullModelId}" does not match InferencePolicyV1 model "${policy.model}"`,
+    );
+  }
+
+  if (config.endpoint) {
+    if (
+      policy.provider_protocol === "openai-completions" &&
+      urlIndicatesAnthropic
+    ) {
+      throw new InferencePolicyViolationError(
+        "endpoint_mismatch",
+        `Endpoint URL conflicts with policy provider_protocol "${policy.provider_protocol}"`,
+      );
+    }
+    if (
+      policy.provider_protocol === "anthropic-messages" &&
+      config.endpoint.baseUrl.includes("/chat/completions")
+    ) {
+      throw new InferencePolicyViolationError(
+        "endpoint_mismatch",
+        `Endpoint URL conflicts with policy provider_protocol "${policy.provider_protocol}"`,
+      );
+    }
+  }
+
+  const apiType: "anthropic-messages" | "openai-completions" =
+    policy.provider_protocol === "anthropic-messages"
+      ? "anthropic-messages"
+      : "openai-completions";
+
+  evaluateInferencePolicyPreSend({
+    policy,
+    capabilities: providerCapabilities,
+    endpoint: {
+      protocol: policy.provider_protocol,
+      model: policy.model,
+    },
+    access: executionAccess,
+    callIndex: 1,
+    allowAuthorizedCostEstimate,
+  });
+
+  return { policy, apiType };
 }
 
 export class PiHostedSession implements Session {
@@ -59,6 +164,9 @@ export class PiHostedSession implements Session {
   private currentTurnUsage?: TokenUsage;
   private currentTurnError?: string;
   private unsubscribe: (() => void) | null = null;
+  private accountingCoordinator: UsageAccountingCoordinator;
+  private usageSequence = 0;
+  private pendingUsagePromises: Promise<unknown>[] = [];
 
   constructor(
     private readonly config: SessionConfig,
@@ -67,6 +175,11 @@ export class PiHostedSession implements Session {
     this.id = config.sessionId;
     this.guarantees = options.guarantees;
     this.harnessSessionIdVal = config.resume?.harnessSessionId ?? null;
+    this.accountingCoordinator = new UsageAccountingCoordinator({
+      sink: options.usageSink,
+      reconcilePort: options.usageReconcilePort,
+      policy: options.inferencePolicy ?? null,
+    });
   }
 
   get harnessSessionId(): string | null {
@@ -90,12 +203,28 @@ export class PiHostedSession implements Session {
   private async initialize(): Promise<void> {
     const config = this.harnessSessionIdVal ? { ...this.config, resume: { harnessSessionId: this.harnessSessionIdVal } } : this.config;
     if (this.options.createSession) {
+      if (this.options.inferencePolicy) {
+        const modelName = config.model ?? "anthropic/claude-sonnet-5";
+        const parsedModel = piModel(modelName);
+        const { policy } = resolveEndpointProtocolAndVerifyPolicy(
+          config,
+          parsedModel,
+          this.options.inferencePolicy,
+          this.options.providerCapabilities,
+          this.options.executionAccess,
+          this.options.allowAuthorizedCostEstimate,
+        );
+        if (policy && this.options.executionAccess) {
+          await authorizeExecutionAccessOnline(policy, this.options.executionAccess);
+        }
+      }
       this.sessionInstance = await this.options.createSession(config);
     } else {
       this.sessionInstance = await this.createRealAgentSession(config);
     }
 
     if (this.closed) { await this.disposeSession(); throw new Error("Session is closed"); }
+    if(this.closed){await this.disposeSession();return;}
     this.harnessSessionIdVal = this.sessionInstance.sessionId;
 
     this.unsubscribe = this.sessionInstance.subscribe((rawEvent) => {
@@ -106,9 +235,39 @@ export class PiHostedSession implements Session {
       if (signals.usage) {
         this.currentTurnUsage = sumUsage(this.currentTurnUsage, signals.usage);
       }
+      if (
+        signals.usageSnapshot &&
+        (this.options.inferencePolicy ||
+          this.options.usageSink ||
+          this.options.usageReconcilePort)
+      ) {
+        const policy = this.options.inferencePolicy;
+        const binding = policy?.binding ?? createDefaultExecutionBinding();
+        const seq = ++this.usageSequence;
+        const modelCallId =
+          this.options.modelCallId ??
+          (policy ? `${policy.segment_id}:call-${this.turnNumber || 1}` : `call-${this.turnNumber || 1}`);
+        const isFinalKnown = signals.usageSnapshot.status === "known" && !signals.error;
+        const evidence = buildUsageEvidence({
+          binding,
+          session_id: policy?.session_id ?? this.id,
+          turn_id: policy?.turn_id ?? `turn-${this.turnNumber || 1}`,
+          segment_id: policy?.segment_id ?? `seg-${this.turnNumber || 1}`,
+          model_call_id: modelCallId,
+          sequence: seq,
+          observation_kind: isFinalKnown ? "final" : "snapshot",
+          snapshot: signals.usageSnapshot,
+          final: isFinalKnown,
+        });
+        const p = this.accountingCoordinator
+          .recordAndReconcile(evidence, { reconcileNow: true })
+          .catch(() => undefined);
+        this.pendingUsagePromises.push(p);
+      }
       if (signals.error) {
-        this.currentTurnError = signals.error;
-        this.eventQueue.push({ type: "error", error: signals.error });
+        const sanitizedError = redactSensitiveText(signals.error);
+        this.currentTurnError = sanitizedError;
+        this.eventQueue.push({ type: "error", error: sanitizedError });
       }
     });
 
@@ -121,125 +280,17 @@ export class PiHostedSession implements Session {
   }
 
   private async createRealAgentSession(config: SessionConfig): Promise<AgentSessionLike> {
-    const {
-      createAgentSession,
-      createMcpExtension,
-      DefaultResourceLoader,
-      getAgentDir,
-      ModelRuntime,
-      SessionManager,
-      SettingsManager,
-    } = await import("@earendil-works/pi-coding-agent");
-    const { InMemoryCredentialStore } = await import("@earendil-works/pi-ai");
-
-    const modelName = config.model ?? "anthropic/claude-sonnet-5";
-    const parsedModel = piModel(modelName);
-    if (!config.endpoint) {
-      requireDeclaredKey(parsedModel, config.env);
-    }
-
-    // In-memory credentials isolated from the user's ~/.pi/agent/auth.json
-    const credentials = new InMemoryCredentialStore();
-    const modelRuntime = await ModelRuntime.create({
-      credentials,
-      modelsPath: null,
+    return createPiAgentSession(config, {
+      inferencePolicy: this.options.inferencePolicy,
+      providerCapabilities: this.options.providerCapabilities,
+      usageSink: this.options.usageSink,
+      usageReconcilePort: this.options.usageReconcilePort,
+      executionAccess: this.options.executionAccess,
+      modelCallId: this.options.modelCallId,
+      allowAuthorizedCostEstimate: this.options.allowAuthorizedCostEstimate,
+      onFault: this.options.onFault,
+      customFetch: this.options.customFetch,
     });
-
-    if (config.endpoint) {
-      const isAnthropic = config.endpoint.baseUrl.includes("/anthropic") || config.endpoint.baseUrl.includes("/messages");
-      const apiType = isAnthropic ? "anthropic-messages" : "openai-completions";
-      modelRuntime.registerProvider(parsedModel.provider, {
-        baseUrl: config.endpoint.baseUrl,
-        api: apiType,
-        apiKey: config.endpoint.apiKey,
-        models: [
-          {
-            id: parsedModel.model,
-            name: parsedModel.model,
-            reasoning: false,
-            input: ["text"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 128_000,
-            maxTokens: 4096,
-          },
-        ],
-      });
-      if (config.endpoint.apiKey) {
-        await modelRuntime.setRuntimeApiKey(parsedModel.provider, config.endpoint.apiKey);
-      }
-    } else {
-      // Populate runtime API keys from config.env
-      const providerKey = declaredKeyFor(parsedModel.provider, config.env);
-      if (providerKey) {
-        await modelRuntime.setRuntimeApiKey(parsedModel.provider, providerKey);
-      }
-    }
-
-    const modelObj = modelRuntime.getModel(parsedModel.provider, parsedModel.model);
-    if (!modelObj) {
-      throw new ModelRefused(
-        `pi catalog does not know model "${parsedModel.provider}/${parsedModel.model}"`,
-      );
-    }
-
-    let sessionManager: ReturnType<typeof SessionManager.create>;
-    if (config.resume?.harnessSessionId) {
-      const existing = SessionManager.findById(config.cwd, config.resume.harnessSessionId);
-      if (existing) {
-        sessionManager = SessionManager.open(existing);
-      } else {
-        throw new Error(`Pi conversation ${config.resume.harnessSessionId} was not found in ${config.cwd}`);
-      }
-    } else {
-      sessionManager = SessionManager.create(config.cwd);
-    }
-
-    const extensionFactories: import("@earendil-works/pi-coding-agent").ExtensionFactory[] = [];
-
-    extensionFactories.push(createPiToolGate(config));
-
-    if (config.mcpServers && Object.keys(config.mcpServers).length > 0) {
-      const piMcpConfigs = toPiMcpConfigs(config.mcpServers);
-      extensionFactories.push(createMcpExtension({ loadConfig: () => ({ servers: [], errors: [], autoEnableCodemode: false }) }));
-      extensionFactories.push((pi) => {
-        for (const [name, srv] of Object.entries(piMcpConfigs)) {
-          pi.registerMcpServer(name, srv);
-        }
-      });
-    }
-
-    const settingsManager = SettingsManager.inMemory({ packages: [], extensions: [], skills: [] });
-    const resourceLoader = new DefaultResourceLoader({
-      settingsManager,
-      noExtensions: true,
-      noSkills: true,
-      noPromptTemplates: true,
-      noThemes: true,
-      cwd: config.cwd,
-      agentDir: getAgentDir(),
-      additionalSkillPaths: config.pluginDirs ? [...config.pluginDirs] : [],
-      appendSystemPrompt: config.systemPrompt ? [config.systemPrompt] : undefined,
-      extensionFactories,
-    });
-    await resourceLoader.reload();
-
-    const { session } = await createAgentSession({
-      settingsManager,
-      noTools: "builtin",
-      cwd: config.cwd,
-      modelRuntime,
-      model: modelObj,
-      sessionManager,
-      resourceLoader,
-      excludeTools: disallowedTools(config),
-    });
-
-    if (session.bindExtensions) {
-      await session.bindExtensions({});
-    }
-
-    if (allowedNative(config).length) session.setActiveToolsByName([...session.getActiveToolNames(), ...allowedNative(config)]);
-    return session;
   }
 
   async deliver(content: string, options?: DeliveryOptions): Promise<DeliveryReceipt> {
@@ -274,15 +325,30 @@ export class PiHostedSession implements Session {
 
   private async runTurn(content: string): Promise<void> {
     const currentTurn = ++this.turnNumber;
+    this.usageSequence = 0;
+    this.pendingUsagePromises = [];
     try {
       if (!this.sessionInstance) throw new Error("Session instance missing");
       await this.sessionInstance.prompt(content);
     } catch (err) {
       if (this.turnNumber === currentTurn && this.turnOpen) {
-        this.currentTurnError = err instanceof Error ? err.message : String(err);
+        const fault = classifyInferenceFault({
+          error: err,
+          requestPhase: "after_headers",
+          admissionCertainty: "acknowledged",
+        });
+        await this.options.onFault?.(fault);
+        const sanitized = this.options.inferencePolicy
+          ? fault.public_message
+          : redactSensitiveText(err instanceof Error ? err.message : String(err));
+        this.currentTurnError = sanitized;
         this.eventQueue.push({ type: "error", error: this.currentTurnError });
       }
     } finally {
+      if (this.pendingUsagePromises.length > 0) {
+        await Promise.allSettled(this.pendingUsagePromises);
+        this.pendingUsagePromises = [];
+      }
       if (this.turnNumber === currentTurn && this.turnOpen) {
         this.turnOpen = false;
         this.eventQueue.push({
@@ -296,10 +362,11 @@ export class PiHostedSession implements Session {
 
   async interrupt(): Promise<void> {
     if (this.sessionState !== "active" || !this.turnOpen) return;
+    const number=this.turnNumber;
     if (this.sessionInstance) {
       await this.sessionInstance.abort();
     }
-    if (this.turnOpen) {
+    if (this.turnOpen && this.turnNumber===number) {
       this.turnOpen = false;
       this.eventQueue.push({
         type: "done",
@@ -359,19 +426,21 @@ export class PiHostedSession implements Session {
     this.sessionInstance = null;
     if (!session) return;
     // Pi's dispose removes listeners; MCP teardown needs the shutdown event first.
-    try { await session.extensionRunner?.emit({ type: "session_shutdown", reason: "quit" }); }
+    try { await withDeadline(Promise.resolve(session.extensionRunner?.emit({ type: "session_shutdown", reason: "quit" })),1000); }
     finally { session.dispose(); }
   }
 
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    if(this.turnOpen){this.turnOpen=false;this.turnNumber++;this.eventQueue.push({type:"done"});}
+    void this.sessionInstance?.abort().catch(()=>{});
     this.clearReleaseTimer();
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
     }
-    if (this.initializing) await this.initializing.catch(() => undefined);
+    if (this.initializing) void this.initializing.then(()=>this.disposeSession()).catch(()=>undefined);
     await this.disposeSession();
     this.eventQueue.end();
   }
@@ -385,7 +454,11 @@ export async function startPiHosted(
   await session.init();
   return session;
 }
-export async function createPiAgentSession(config: SessionConfig, options: { durable?: boolean } = {}): Promise<import("@earendil-works/pi-coding-agent").AgentSession> {
+
+export async function createPiAgentSession(
+  config: SessionConfig,
+  options: { durable?: boolean } & PiInferenceRuntimeOptions = {},
+): Promise<import("@earendil-works/pi-coding-agent").AgentSession> {
   const {
     createAgentSession,
     createMcpExtension,
@@ -399,7 +472,18 @@ export async function createPiAgentSession(config: SessionConfig, options: { dur
 
   const modelName = config.model ?? "anthropic/claude-sonnet-5";
   const parsedModel = piModel(modelName);
-  requireDeclaredKey(parsedModel, config.env);
+  const { policy, apiType } = resolveEndpointProtocolAndVerifyPolicy(
+    config,
+    parsedModel,
+    options.inferencePolicy,
+    options.providerCapabilities,
+    options.executionAccess,
+    options.allowAuthorizedCostEstimate,
+  );
+  if (policy && options.executionAccess) {
+    await authorizeExecutionAccessOnline(policy, options.executionAccess);
+  }
+  if (!config.endpoint) requireDeclaredKey(parsedModel, config.env);
 
   // In-memory credentials isolated from the user's ~/.pi/agent/auth.json
   const credentials = new InMemoryCredentialStore();
@@ -408,17 +492,73 @@ export async function createPiAgentSession(config: SessionConfig, options: { dur
     modelsPath: null,
   });
 
-  // Populate runtime API keys from config.env
-  const providerKey = declaredKeyFor(parsedModel.provider, config.env);
-  if (providerKey) {
-    await modelRuntime.setRuntimeApiKey(parsedModel.provider, providerKey);
+  if (config.endpoint) {
+    // Match hosted sessions: the explicitly routed endpoint declares its model
+    // and credential, independently of the provider's public catalog/key.
+    const rates = policy?.price_schedule?.rates;
+    const cost = rates
+      ? {
+          input: rates.input_per_million,
+          output: rates.output_per_million,
+          cacheRead: rates.cache_read_per_million ?? 0,
+          cacheWrite: rates.cache_write_per_million ?? 0,
+        }
+      : { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    const maxTokens = policy?.max_output_tokens ?? 4096;
+    modelRuntime.registerProvider(parsedModel.provider, {
+      baseUrl: config.endpoint.baseUrl,
+      api: apiType,
+      apiKey: config.endpoint.apiKey,
+      models: [
+        {
+          id: parsedModel.model,
+          name: parsedModel.model,
+          reasoning: false,
+          input: ["text"],
+          cost,
+          contextWindow: 128_000,
+          maxTokens,
+          ...(apiType === "openai-completions"
+            ? {
+                compat: {
+                  supportsDeveloperRole: false,
+                  supportsReasoningEffort: false,
+                  supportsUsageInStreaming: true,
+                  maxTokensField: "max_tokens" as const,
+                },
+              }
+            : {}),
+        },
+      ],
+    });
+    if (config.endpoint.apiKey) await modelRuntime.setRuntimeApiKey(parsedModel.provider, config.endpoint.apiKey);
+  } else {
+    const providerKey = declaredKeyFor(parsedModel.provider, config.env);
+    if (providerKey) await modelRuntime.setRuntimeApiKey(parsedModel.provider, providerKey);
   }
 
-  const modelObj = modelRuntime.getModel(parsedModel.provider, parsedModel.model);
+  let modelObj = modelRuntime.getModel(parsedModel.provider, parsedModel.model);
   if (!modelObj) {
     throw new ModelRefused(
       `pi catalog does not know model "${parsedModel.provider}/${parsedModel.model}"`,
     );
+  }
+  if (policy) {
+    if (policy.max_output_tokens !== null) {
+      modelObj = { ...modelObj, maxTokens: policy.max_output_tokens };
+    }
+    if (policy.price_schedule) {
+      const r = policy.price_schedule.rates;
+      modelObj = {
+        ...modelObj,
+        cost: {
+          input: r.input_per_million,
+          output: r.output_per_million,
+          cacheRead: r.cache_read_per_million ?? 0,
+          cacheWrite: r.cache_write_per_million ?? 0,
+        },
+      };
+    }
   }
 
   // Session persistence / resume
@@ -453,7 +593,25 @@ export async function createPiAgentSession(config: SessionConfig, options: { dur
     });
   }
 
-  const settingsManager = SettingsManager.inMemory({ packages: [], extensions: [], skills: [] });
+  const settingsManager = SettingsManager.inMemory({
+    packages: [],
+    extensions: [],
+    skills: [],
+    ...(options.durable || policy
+      ? {
+          compaction: { enabled: false },
+          cacheWarming: "off" as const,
+          retry: {
+            enabled: false,
+            maxRetries: 0,
+            provider: {
+              maxRetries: 0,
+              maxRetryDelayMs: 1,
+            },
+          },
+        }
+      : {}),
+  });
   const resourceLoader = new DefaultResourceLoader({
     settingsManager,
     noExtensions: true,

@@ -14,16 +14,16 @@ vi.mock("@barry-rocks/sdk/internal/actions", async (importOriginal) => ({
   findAction: vi.fn(async (_bags: unknown, ref: string) => (ref === "ops:triage" ? { qualifiedName: ref, context: "none", prompt: "p", inputSchema: { type: "object", properties: { failure: { type: "string" } } } } : null)),
 }));
 vi.mock("./actions.js", () => ({ stopDetachedRun: vi.fn(async () => true) }));
-vi.mock("./caller-grant.js", () => ({
-  resolveCallerGrant: vi.fn(),
-  callerScriptContext: vi.fn(),
+vi.mock("./caller-bounds.js", () => ({
+  resolveCallerBounds: vi.fn(),
+  callerScriptBound: vi.fn(),
   permitsRawProcess: vi.fn(),
 }));
 
 import { jobsRouter } from "./jobs.js";
-import { callerScriptContext, permitsRawProcess, resolveCallerGrant } from "./caller-grant.js";
+import { callerScriptBound, permitsRawProcess, resolveCallerBounds } from "./caller-bounds.js";
 import { setDb, closeDb } from "@barry-rocks/schedules-bag";
-import { claimOne, finishAttempt, getOneOff } from "@barry-rocks/schedules-bag";
+import { claimOne, finishAttempt, getAtSchedule } from "@barry-rocks/schedules-bag";
 import { setDb as setActionsDb, closeDb as closeActionsDb } from "@barry-rocks/actions-bag";
 import { ActionRuns } from "@barry-rocks/actions-bag";
 
@@ -69,8 +69,8 @@ beforeEach(() => {
   setDb(new Database(":memory:"));
   setActionsDb(new Database(":memory:"));
   bags = [{ name: "ops", jobs: Object.entries(manifest.jobs ?? {}).map(([name, job]) => ({ ...job, name, dir: "/bags/ops" })) }];
-  vi.mocked(resolveCallerGrant).mockResolvedValue({ session: { id: "sess-1" }, traits: [], narrowed: false } as never);
-  vi.mocked(callerScriptContext).mockResolvedValue({} as never);
+  vi.mocked(resolveCallerBounds).mockResolvedValue({ session: { id: "sess-1" }, bags: [], bounds: [], bound: null, narrowed: false } as never);
+  vi.mocked(callerScriptBound).mockResolvedValue({} as never);
   vi.mocked(permitsRawProcess).mockReturnValue(true);
 });
 
@@ -84,7 +84,7 @@ describe("POST /jobs/:ref/runs", () => {
     expect(first.status).toBe(201);
     const { run } = (await first.json()) as { run: { id: string; status: string; job: string; key: string } };
     expect(run).toMatchObject({ job: "ops:greet", status: "pending", key: "k1" });
-    expect(getOneOff(run.id)).toMatchObject({ job: "ops:greet", action: null, timeoutS: 120, inputs: { name: "barry" } });
+    expect(getAtSchedule(run.id)).toMatchObject({ job: "ops:greet", action: null, timeoutS: 120, inputs: { name: "barry" } });
 
     const again = await start("ops:greet", { inputs: { name: "barry" }, key: "k1" });
     expect(again.status).toBe(200);
@@ -125,7 +125,7 @@ describe("POST /jobs/:ref/runs", () => {
     });
 
     it("refuses an unknown or nested caller as the executor would", async () => {
-      vi.mocked(resolveCallerGrant).mockResolvedValue({ status: 404, body: { error: "unknown_caller_session" } });
+      vi.mocked(resolveCallerBounds).mockResolvedValue({ status: 404, body: { error: "unknown_caller_session" } });
       const res = await start("ops:greet", { callerSessionId: "nobody" });
       expect(res.status).toBe(404);
       expect(await res.json()).toEqual({ error: "unknown_caller_session" });
@@ -144,7 +144,7 @@ describe("GET /jobs/runs/:id and cancel", () => {
       process: { exit_code: 0, duration_ms: 5, log_path: null },
       output: { type: "json", value: JSON.stringify({ greeting: "hello barry" }) },
     });
-    finishAttempt({ oneOffId: run.id, attemptId: claim.attemptId, outcome: "succeeded", runId: actionRun.id });
+    finishAttempt({ scheduleId: run.id, attemptId: claim.attemptId, outcome: "succeeded", runId: actionRun.id });
 
     const res = await fetch(`${baseUrl}/jobs/runs/${run.id}?waitS=1`);
     expect(res.status).toBe(200);

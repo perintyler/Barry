@@ -1,3 +1,4 @@
+import { residentSession } from "../turn-execution.js";
 import { Events } from "@barry-rocks/events-bag";
 import { revalidateRequestAuthorization } from "@barry-rocks/sdk/internal/auth";
 import { createLogger } from "@barry-rocks/sdk/logging";
@@ -23,7 +24,9 @@ import { listSessionRecords } from "../db.js";
 import { sendProblem } from "../http.js";
 import { expandUserPath } from "../repo-paths.js";
 import { sessionRuntime } from "../session-runtime.js";
-import { decodeSessionCursor, encodeSessionCursor, serializeSession } from "../session-serialize.js";
+import { decodeSessionCursor, encodeSessionCursor, serializeSession as serializeSessionRecord } from "../session-serialize.js";
+const serializeSession=(...args:Parameters<typeof serializeSessionRecord>)=>({...serializeSessionRecord(...args),lastEventAt:sessionRuntime.getActiveSession?.(args[0].id)?.lastEventAt??null});
+
 import { groupFilesByRepo, repoDisplayName } from "./session-view.js";
 
 export const sessionsRouter = Router();
@@ -64,7 +67,7 @@ routes.route(sessionsRoutes.listSessions, async (req, res) => {
     });
   }
 
-  // ID-only requests bypass full enrichment for liveness probes; see docs/decisions/0020-session-route-catalog-and-cache-invariants.md.
+  // ID-only requests bypass full enrichment for liveness probes; see docs/decisions/0020-session-route-and-cache-invariants.md.
   const idsOnly = req.query.fields === "id";
 
   // Opt-in so every existing caller keeps its current paging. "activity" is
@@ -139,7 +142,7 @@ const ENDED_STATUS_LIST = ["completed", "failed", "cancelled"] as const;
 const ENDED_STATUSES = new Set<string>(ENDED_STATUS_LIST);
 const PICKER_CACHE_TTL_MS = 15_000;
 let pickerCache: { data: unknown; timestamp: number } | null = null;
-// Coalesce concurrent picker rebuilds; see docs/decisions/0020-session-route-catalog-and-cache-invariants.md.
+// Coalesce concurrent picker rebuilds; see docs/decisions/0020-session-route-and-cache-invariants.md.
 let pickerInflight: Promise<unknown> | null = null;
 
 /**
@@ -315,7 +318,7 @@ function guaranteesOf(value: unknown): StartSessionInput["guarantees"] {
 routes.route(sessionsRoutes.startNativeSession, async (req, res) => {
   try {
     const session_id = req.body.session_id ?? req.body.sessionId;
-    const provider_session_id = req.body.provider_session_id ?? req.body.providerSessionId;
+    const provider_session_id = req.body.provider_session_id ?? req.body.harness_session_id ?? req.body.harnessSessionId ?? req.body["provider" + "SessionId"];
     const provider = req.body.provider;
     const model = req.body.model;
     const model_provider = req.body.model_provider ?? req.body.modelProvider;
@@ -333,9 +336,13 @@ routes.route(sessionsRoutes.startNativeSession, async (req, res) => {
     // The v1 contract is camelCase; the internal alias layer also exposes
     // snake_case, so accept either rather than silently ignoring one.
     const bounds = req.body.bounds;
+    const bags = req.body.bags;
+    const status = req.body.status;
+    if (status !== undefined && status !== "pending" && status !== "running") return res.status(400).json({ ok: false, error: "invalid session status" });
+    if (bags !== undefined && (!Array.isArray(bags) || bags.some(name => typeof name !== "string" || !name.trim()))) return res.status(400).json({ ok: false, error: "bags must be an array of non-empty names" });
 
     if (Object.hasOwn(req.body, "boundId") || Object.hasOwn(req.body, "bound_id")) return res.status(400).json({ ok: false, error: "bounds are selected by name: send bounds" });
-    if (bounds !== undefined && (!Array.isArray(bounds) || bounds.some(name => typeof name !== "string" || !name.length))) return res.status(400).json({ ok: false, error: "bounds must be an array of non-empty names" });
+    if (bounds !== undefined && (!Array.isArray(bounds) || bounds.some(item => (typeof item === "string" ? !item.length : typeof item !== "object" || item === null)))) return res.status(400).json({ ok: false, error: "bounds must be an array of non-empty names or bound objects" });
     if (!session_id) {
       return res.status(400).json({ ok: false, error: "session_id required" });
     }
@@ -369,8 +376,14 @@ routes.route(sessionsRoutes.startNativeSession, async (req, res) => {
       identity_id,
       name,
       bounds,
+      bags, status,
     });
     res.json({ ok: true });
+    // Flush the acknowledgement before any synchronous work in preparation.
+    // The next event-loop turn still prepares this exact row eagerly.
+    if (mode === "hosted" && status === "pending") setImmediate(() => {
+      void residentSession(session_id, req.authPrincipal).then(() => sessionRuntime.warmHarness(session_id)).catch(error => log.warn("session.prepare_failed", { sessionId: session_id, error: String(error) }));
+    });
   } catch (error) {
     // Validation (schema rejection or a BarryError marked `invalid`) is the
     // caller's bug — 400 with the message so they can fix it. Anything else is
@@ -477,7 +490,7 @@ routes.route(sessionsRoutes.getSession, async (req, res) => {
   }
 });
 
-/** Re-scope live sessions on an identity and return the actual invalidation count; see docs/decisions/0020-session-route-catalog-and-cache-invariants.md. */
+/** Re-scope live sessions on an identity and return the actual invalidation count; see docs/decisions/0020-session-route-and-cache-invariants.md. */
 sessionsRouter.post("/invalidate-tools", async (req, res) => {
   const { identityId } = (req.body ?? {}) as { identityId?: unknown };
   if (identityId === undefined || identityId === null || identityId === "") {

@@ -11,7 +11,7 @@ export const NATIVE_TOOLS: readonly string[] = [
 ];
 
 export const HOSTED_NATIVE: NativeControl = {
-  grantable: [
+  controllable: [
     "Shell", "Read", "Write", "Edit", "Delete", "WebFetch", "WebSearch",
   ],
   inseparable: [
@@ -26,7 +26,7 @@ export const HOSTED_NATIVE: NativeControl = {
   },
 };
 export const TUI_NATIVE: NativeControl = {
-  grantable: [
+  controllable: [
     "Shell", "WriteShellStdin", "Read", "Grep", "List", "Write", "Edit", "Delete", "Fetch",
   ],
   inseparable: [

@@ -13,6 +13,7 @@ it("archives before automatic pruning, honors holds and refuses post-snapshot ro
   now += 31 * 86_400_000;
   const maintenance = new WorkflowMaintenance({ owner, database, archiveDirectory: join(root, "archives"), artifacts: [], now: () => now });
   try {
+    expect(maintenance.status()).toMatchObject({ scope: "owner-archive", executorStoresIncluded: false });
     maintenance.tick();
     expect(owner.get("archived").error).toBeNull();
     await expect.poll(() => maintenance.status().state, { timeout: 5000 }).toBe("ready");

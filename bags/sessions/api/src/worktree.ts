@@ -33,8 +33,8 @@ export async function createWorktree(absRepoPath: string, sessionId: string): Pr
  *
  * A worktree is its own git root, so identity resolution stops inside it and
  * never sees the parent's binding. Without this a session in a fresh worktree
- * silently falls back to the global identity — running with the wrong bags,
- * traits and scope while looking normal.
+ * silently falls back to the global identity — running with the wrong bags
+ * and bounds while looking normal.
  *
  * Best-effort: a missing binding is the common case, and a failure to copy one
  * must not cost the user their worktree.

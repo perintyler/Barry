@@ -12,7 +12,7 @@ protected receipt. Ordinary CI runs the shared fixture as part of the SDK suite.
 # Use the Node that .node-version names (26.9 or newer).
 export LC_ALL=C LANG=C
 pnpm install --frozen-lockfile
-pnpm --dir cli exec vitest run test/acceptance/identity-policy.test.ts
+pnpm --dir cli exec vitest run test/acceptance/identity-bounds.test.ts
 pnpm --dir sdk exec vitest run --maxWorkers=2
 node --import tsx cli/scripts/acceptance/verify-services.ts run /private/tmp/barry-acceptance-services
 node --import tsx cli/scripts/acceptance/verify-app.ts /private/tmp/barry-acceptance-app
@@ -190,7 +190,7 @@ The driver uses the first artifact's own `verify-nodes.ts --seed` migration/row-
 
 Previous artifacts require their published `<tarball>.sha256` sidecar; any candidate sidecar present is also verified. With no `--previous`, the candidate bootstrap records `previousEvidence: false` and pending upgrade/rollback evidence. User services are deliberately disabled, so `healthCertified` remains `false` even if strict doctor passes. Named strict-doctor system failures remain explicit in the receipt. A passing data matrix does not imply privileged service acceptance. Attach the matrix receipt and snapshots alongside the separate macOS system-service acceptance evidence.
 
-Store evidence retains raw file and table hashes alongside logical comparison hashes. The only normalization, scoped to `node/identities/identities.db`, treats null `traits.metadata.harnessTraits` and `nativeTools` as absent, matching the trait reader. Every other store and value is compared exactly under an unchanged migration catalog. A changed catalog still requires every retained table and its prior row count; incompatible transformations need an explicit reviewed mapping before certification.
+Store evidence retains raw file and table hashes alongside logical comparison hashes. Every store and value is compared exactly under an unchanged migration registry. A changed registry still requires every retained table and its prior row count; incompatible transformations need an explicit reviewed mapping before certification.
 
 ### Privileged artifact health gate
 

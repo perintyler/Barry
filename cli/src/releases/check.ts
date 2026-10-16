@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -19,9 +19,12 @@ export function checkReleaseDirectory(root: string, probe: Probe): string[] {
   for (const file of ["bin/barry", "runtime/bin/node"]) check(file, () => {
     if (!(statSync(join(root, file)).mode & 0o111)) throw new Error("must be executable");
   });
+  for (const file of ["cli/dist/barry.js", "cli/dist/identity.js", "cli/dist/barry-hook.js", "cli/dist/build.json"]) check(file, () => { statSync(join(root, file)); });
   // buildRelease probes before writing metadata; validate it whenever present.
   if (existsSync(join(root, "release.json"))) check("release.json", () => {
     const release = readRelease(root)!;
+    const bundle = JSON.parse(readFileSync(join(root, "cli/dist/build.json"), "utf8")) as { commit?: string };
+    if (bundle.commit !== release.commit) throw new Error("CLI bundle commit differs from release metadata");
     if (!isDeepStrictEqual(release.node, probe.node)) throw new Error("runtime differs from release metadata");
     if (!isDeepStrictEqual(release.stores, probe.stores)) throw new Error("stores catalog differs from shipped migrations");
   });
@@ -39,6 +42,8 @@ export function checkReleaseDirectory(root: string, probe: Probe): string[] {
       const options = { cwd: root, env: releaseEnvironment(root, home, true), encoding: "utf8" as const, timeout: 30_000 };
       const direct = execFileSync(join(root, "runtime/bin/node"), [join(root, "cli/bin/barry.js"), "--version"], options).trim();
       if (direct !== release.version) throw new Error("cli/bin/barry.js --version differs from release.json");
+      const timed = spawnSync(join(root, "runtime/bin/node"), [join(root, "cli/bin/barry.js"), "--version"], { ...options, env: { ...options.env, BARRY_TIMING: "1" } });
+      if (timed.status !== 0 || !timed.stderr.includes("entry: bundle")) throw new Error("CLI did not use its bundled entry");
       const wrapped = execFileSync(join(root, "bin/barry"), ["--version"], options).trim();
       if (wrapped !== release.version) throw new Error("bin/barry --version differs from release.json");
     } finally { rmSync(home, { recursive: true, force: true }); }
@@ -98,6 +103,16 @@ export async function checkRelease(tarball: string): Promise<void> {
     const probe = runProbe(root, join(scratch, "probe-home"));
     if (!isDeepStrictEqual(probe.node, release.node) || !isDeepStrictEqual(probe.stores, release.stores)) throw new Error("probe metadata differs from release.json");
     console.log(`probe: ok (${Object.keys(probe.stores).length} stores)`);
+    const versionTimes: number[] = [];
+    for (let index = 0; index < 5; index++) {
+      const start = performance.now();
+      if (barry("--version").trim() !== release.version) throw new Error("barry --version differs from release.json");
+      versionTimes.push(performance.now() - start);
+    }
+    versionTimes.sort((a, b) => a - b);
+    console.log(`CLI version median: ${versionTimes[2].toFixed(1)}ms`);
+    if (versionTimes[2] > 1000) throw new Error("CLI version median exceeds 1 second");
+    if (versionTimes[2] > 400) console.warn("CLI version median exceeds 400ms");
     const times: number[] = [];
     for (let index = 0; index < 5; index++) {
       const start = performance.now();

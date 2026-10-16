@@ -53,7 +53,7 @@ describe("barry hook — recording a foreign session", () => {
     expect(code).toBe(0);
     expect(recorded).toHaveLength(1);
     expect(recorded[0].vendor).toBe("cursor");
-    expect(recorded[0].providerSessionId).toBe("conv-123");
+    expect(recorded[0].harnessSessionId).toBe("conv-123");
     expect(recorded[0].event).toBe("postToolUse");
   });
 
@@ -63,7 +63,7 @@ describe("barry hook — recording a foreign session", () => {
     await runHook(deps, "claude");
 
     expect(recorded[0].vendor).toBe("claude");
-    expect(recorded[0].providerSessionId).toBe("sess-abc");
+    expect(recorded[0].harnessSessionId).toBe("sess-abc");
   });
 
   /**
@@ -96,7 +96,7 @@ describe("barry hook — recording a foreign session", () => {
     expect(code).toBe(0);
     expect(recorded).toHaveLength(1);
     expect(recorded[0].vendor).toBe("antigravity");
-    expect(recorded[0].providerSessionId).toBe("agy-conv-1");
+    expect(recorded[0].harnessSessionId).toBe("agy-conv-1");
     expect(recorded[0].event).toBe("PreInvocation");
   });
 

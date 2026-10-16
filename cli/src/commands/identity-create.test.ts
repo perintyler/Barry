@@ -48,8 +48,8 @@ describe("nameIdentity", () => {
  * bag registry snapshot for the identity's bag list to be checked against.
  * Creating an identity writes its row, so two instances must not share one
  * store. The registry names none of the base identity's bags, so the new
- * identity's row is written without loading and building every one of them
- * for their traits, which is not what these tests are about.
+ * identity's row is written without loading and building every one of them,
+ * which is not what these tests are about.
  */
 function freshInstance(): void {
   closeIdentitiesStore();

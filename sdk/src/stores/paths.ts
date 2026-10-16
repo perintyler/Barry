@@ -49,7 +49,20 @@ export class AmbiguousSessionLocation extends Error {
   }
 }
 
+const sessionLocations = new Map<string, { identity: string | undefined; expires: number }>();
+export function forgetSessionIdentity(sessionId?: string): void { if (sessionId === undefined) sessionLocations.clear(); else sessionLocations.delete(sessionId); }
 export function sessionIdentity(sessionId: string): string | undefined {
+  const cached = sessionLocations.get(sessionId);
+  if (cached && cached.expires > Date.now()) {
+    sessionLocations.delete(sessionId); sessionLocations.set(sessionId, cached);
+    return cached.identity;
+  }
+  const result = resolveSessionIdentity(sessionId);
+  if (sessionLocations.size >= 10_000) sessionLocations.delete(sessionLocations.keys().next().value!);
+  sessionLocations.set(sessionId, { identity: result, expires: result === undefined ? Date.now() + 2000 : Infinity });
+  return result;
+}
+function resolveSessionIdentity(sessionId: string): string | undefined {
   if (!existsSync(join(barryStoresDir(), "active.json"))) return undefined;
   const deadline = performance.now() + 5000;
   const root = activeStoreRoot();

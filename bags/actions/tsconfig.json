@@ -5,7 +5,8 @@
     "src/**/*.ts",
     "server/src/**/*.ts",
     "scripts/**/*.ts",
-    "actions/**/*.ts"
+    "actions/**/*.ts",
+    "server/browser/**/*.ts"
   ],
   "exclude": [
     "node_modules",

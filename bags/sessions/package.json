@@ -31,7 +31,10 @@
     "./store/sessions-types": "./src/store/sessions-types.ts",
     "./store/workflow-turns": "./src/store/workflow-turns.ts",
     "./attachments": "./src/attachments/attachments-store.ts",
-    "./renderer/acp-server": "./src/renderer/acp-server.ts"
+    "./renderer/acp-server": "./src/renderer/acp-server.ts",
+    "./store/workflow-destinations": "./src/store/workflow-destinations.ts",
+    "./store/workflow-ownership": "./src/store/workflow-ownership.ts",
+    "./store/threaded-persist": "./src/store/threaded-persist.ts"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "1.5.0",

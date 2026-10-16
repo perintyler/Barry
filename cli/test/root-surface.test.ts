@@ -102,8 +102,8 @@ import { run, stripAnsi } from "./run-cli.js";
 // WORKING-group identity-scope commands, not system commands, so they are
 // filtered out of this system-scoped COMMAND_REGISTRY and do not affect the
 // budget.
-const ROOT_BUDGET = 45;
-import { isSystemCommand } from "../src/scope.js";
+const ROOT_BUDGET = 44;
+import { isSystemCommand } from "../src/target.js";
 const COMMAND_REGISTRY = ALL_COMMAND_REGISTRY.filter(command => isSystemCommand(command.name));
 
 /**

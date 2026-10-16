@@ -7,14 +7,17 @@
  * what its identity allows.
  */
 import type { AuthPrincipal, DevicePrincipal } from "../auth/principal.js";
+import type { ToolDescriptor } from "../bounds/types.js";
 import type { SessionEvent } from "./api.js";
 import type {
   Action,
   ActionRun,
   ActionRunQuery,
+  AtSchedule,
+  AtScheduleInput,
+  AtScheduleQuery,
   Schedule,
   Scheduler,
-  OneOffQuery,
   Bag,
   BarryEvent,
   Change,
@@ -22,8 +25,6 @@ import type {
   Device,
   EventInput,
   EventQuery,
-  Grants,
-  GrantSelection,
   Identity,
   IdentityCreate,
   IdentityReference,
@@ -33,8 +34,6 @@ import type {
   Message,
   MessageQuery,
   Bound,
-  OneOff,
-  OneOffInput,
   Owner,
   Service,
   Session,
@@ -42,7 +41,6 @@ import type {
   SessionStart,
   SessionUpdate,
   Tool,
-  Trait,
   Updated,
 } from "./types.js";
 
@@ -83,13 +81,28 @@ export interface Identities {
   update(ref: IdentityReference, changes: IdentityUpdate, caller: Caller): Promise<Updated<Identity>>;
   remove(ref: IdentityReference, caller: Caller): Promise<IdentityRemoval>;
   makeDefault(ref: IdentityReference, caller: Caller): Promise<void>;
-  /** The traits the identity carries, inherited ones included. */
-  traits(ref: IdentityReference, caller: Caller): Promise<Trait[]>;
-  /** What a session of the identity (or of none, for `null`) is granted. */
-  grants(ref: IdentityReference | null, selection: GrantSelection, caller: Caller): Promise<Grants>;
-  /** Every trait and named bound this installation has. */
-  allTraits(caller: Caller): Promise<Trait[]>;
-  bounds(caller: Caller): Promise<Bound[]>;
+  /** The bags this identity packs. */
+  bags?(ref: IdentityReference, caller: Caller): Promise<Bag[]>;
+  /** The bounds this identity carries, or every named bound when ref is omitted. */
+  bounds(caller: Caller, ref?: IdentityReference): Promise<Bound[]>;
+  /** The resolved bound for an identity plus any additional bounds. */
+  bound?(ref: IdentityReference | null, bounds: readonly (Bound | string)[] | undefined, caller: Caller): Promise<Bound | null>;
+  /** The resolved tools for an identity given bags and bounds (or a pinned bound). */
+  tools?(
+    ref: IdentityReference | null,
+    selection: {
+      bags?: readonly (Bag | string)[];
+      bounds?: Bound | readonly (Bound | string)[];
+      harness?: string;
+      mode?: string;
+      defaults?: boolean;
+      identityDefaults?: boolean;
+    },
+    caller: Caller,
+    servedTools?: readonly ToolDescriptor[],
+  ): Promise<Tool[]>;
+  /** Every bag and bound an identity could select in the session picker. */
+  selectable?(ref: IdentityReference | null, caller: Caller): Promise<{ bags: string[]; bounds: Bound[] }>;
   owner(caller: Caller): Promise<Owner>;
   devices(caller: Caller): Promise<Device[]>;
   revokeDevice(id: string, caller: Caller): Promise<void>;
@@ -101,7 +114,13 @@ export interface Sessions {
   get(identity: IdentityReference, id: string, caller: Caller): Promise<Session>;
   start(identity: IdentityReference, input: SessionStart, caller: Caller): Promise<Session>;
   update(identity: IdentityReference, id: string, changes: SessionUpdate, caller: Caller): Promise<Session>;
-  grants(identity: IdentityReference, id: string, caller: Caller): Promise<Grants>;
+  bags?(identity: IdentityReference, id: string, caller: Caller): Promise<Bag[]>;
+  bounds?(identity: IdentityReference, id: string, caller: Caller): Promise<(Bound | string)[]>;
+  bound?(identity: IdentityReference, id: string, caller: Caller): Promise<Bound | null>;
+  tools?(identity: IdentityReference, id: string, caller: Caller): Promise<Tool[]>;
+  skills?(identity: IdentityReference, id: string, caller: Caller): Promise<import("./types.js").Skill[]>;
+  instructions?(identity: IdentityReference, id: string, caller: Caller): Promise<import("./types.js").Instruction[]>;
+  actions?(identity: IdentityReference, id: string, caller: Caller): Promise<Action[]>;
   messages(identity: IdentityReference, id: string, query: MessageQuery, cursor: string | null, caller: Caller): Promise<Page<Message>>;
   message(identity: IdentityReference, id: string, sequence: number, caller: Caller): Promise<Message>;
   listening(identity: IdentityReference, id: string, caller: Caller): Promise<boolean>;
@@ -132,16 +151,20 @@ export interface Schedules {
   readonly name: "schedules";
   list(caller: Caller): Promise<Schedule[]>;
   scheduler(caller: Caller): Promise<Scheduler>;
-  oneOffs(query: OneOffQuery, caller: Caller): Promise<OneOff[]>;
-  scheduleOnce(input: OneOffInput, caller: Caller): Promise<OneOff>;
-  cancelOneOff(id: string, caller: Caller): Promise<OneOff>;
+  atSchedules?(query: AtScheduleQuery, caller: Caller): Promise<AtSchedule[]>;
+  scheduleAt?(input: AtScheduleInput, caller: Caller): Promise<AtSchedule>;
+  cancelAtSchedule?(id: string, caller: Caller): Promise<AtSchedule>;
 }
 
 export interface Bags {
   readonly name: "bags";
   list(caller: Caller): Promise<Bag[]>;
+  get?(bag: string, caller: Caller): Promise<Bag>;
   tools(bag: string, caller: Caller): Promise<Tool[]>;
-  extensions(bag: string, caller: Caller): Promise<string[]>;
+  bounds?(bag: string, caller: Caller): Promise<Bound[]>;
+  skills?(bag: string, caller: Caller): Promise<import("./types.js").Skill[]>;
+  instructions?(bag: string, caller: Caller): Promise<import("./types.js").Instruction[]>;
+  actions?(bag: string, caller: Caller): Promise<Action[]>;
   runJob(bag: string, job: string, inputs: Record<string, unknown>, options: { key?: string; identity?: IdentityReference }, caller: Caller): Promise<JobRun>;
 }
 

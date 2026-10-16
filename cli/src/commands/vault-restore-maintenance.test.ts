@@ -28,7 +28,10 @@ function fixture(): VaultMaintenanceRequest {
   return { action: "prepare", database, snapshot, nonce: "11111111-1111-4111-8111-111111111111", driver };
 }
 async function writer(database: string) {
-  const script = `import Database from ${JSON.stringify(driver)};const db=new Database(process.argv[1]);db.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE items(value TEXT); INSERT INTO items VALUES('wal-only');");process.stdout.write('ready\\n');setInterval(()=>db.prepare("SELECT * FROM items").get(),1000);`;
+  // Prime the WAL read mark after the commit, before byte snapshots. Otherwise
+  // the first periodic read changes shm bytes 100..119 a second after "ready".
+  // https://www.sqlite.org/walformat.html (WAL-index read marks).
+  const script = `import Database from ${JSON.stringify(driver)};const db=new Database(process.argv[1]);db.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE items(value TEXT); INSERT INTO items VALUES('wal-only');");db.prepare("SELECT * FROM items").get();process.stdout.write('ready\\n');setInterval(()=>db.prepare("SELECT * FROM items").get(),1000);`;
   const child = spawn(process.execPath, ["--input-type=module", "-e", script, database], { stdio: ["ignore", "pipe", "pipe"] }); children.push(child);
   let stderr = ""; child.stderr.on("data", value => { stderr += value; });
   await Promise.race([once(child.stdout, "data"), once(child, "exit").then(() => { throw new Error(stderr); })]);

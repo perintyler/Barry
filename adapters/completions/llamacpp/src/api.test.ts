@@ -47,8 +47,9 @@ describe("usageOf", () => {
     });
   });
 
-  it("returns empty object when usage is absent", () => {
+  it("returns empty object when usage is absent or partial (does not fabricate 0)", () => {
     expect(usageOf({})).toEqual({});
+    expect(usageOf({ usage: { prompt_tokens: 15 } })).toEqual({});
   });
 });
 

@@ -11,7 +11,7 @@ import { parseManifest } from "@barry-rocks/sdk/bags";
 import { StoreRegistry, loadDeclaredStores, storePath, loadSqlMigrations, validateSnapshot, createBackup, installSnapshot } from "@barry-rocks/sdk/internal/stores";
 import { withArtifactStore, openLocalArtifactStore } from "../index.js";
 import { createArtifactCreator } from "../create.js";
-import { createSqliteArtifactRepository, sealArtifactGeneration } from "./catalog.js";
+import { createSqliteArtifactRepository, sealArtifactGeneration } from "./index-store.js";
 import { createLocalArtifactBlobs } from "./blobs.js";
 
 const directories: string[] = [];
@@ -25,7 +25,7 @@ it("serializes sealing against a native writer in another process", async () => 
   try {
     createSqliteArtifactRepository(database, "alice");
     const generation = (database.prepare("SELECT token FROM artifact_storage_generation").get() as { token: string }).token;
-    const module = new URL("../../dist/local/catalog.js", import.meta.url).href;
+    const module = new URL("../../dist/local/index-store.js", import.meta.url).href;
     const script = `import Database from 'better-sqlite3'; import {sealArtifactGeneration} from ${JSON.stringify(module)};
       const db = new Database(process.argv[1],{timeout:100});
       try { sealArtifactGeneration(db,'alice',process.argv[2],'2026-10-03T20:00:00.000Z'); }

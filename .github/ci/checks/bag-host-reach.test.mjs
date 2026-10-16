@@ -51,16 +51,16 @@ test("bag sources are listed where ripgrep is not installed", () => {
   }
 });
 
-test("the search extension may reach the embeddings library, and nothing else may", () => {
+test("the session-vector-search bag may reach the embeddings and sessions libraries, and nothing else may", () => {
   const map = new Map(packages);
   map.set("@barry-rocks/embeddings-bag", { dir: "bags/embeddings" });
   map.set("@barry-rocks/sessions-bag", { dir: "bags/sessions" });
-  map.set("@barry-rocks/search-bag", { dir: "bags/sessions/extensions/search" });
+  map.set("@barry-rocks/session-vector-search-bag", { dir: "bags/session-vector-search" });
   const source = 'import { embedOne } from "@barry-rocks/embeddings-bag/embed";';
-  assert.deepEqual(scan(source, "bags/sessions/extensions/search/src/tools.ts", map), []);
-  // Only from the extension: its parent and other bags still fail.
+  assert.deepEqual(scan(source, "bags/session-vector-search/src/tools.ts", map), []);
+  // Only from session-vector-search: other bags still fail.
   assert.equal(scan(source, "bags/sessions/src/tools.ts", map).length, 1);
   assert.equal(scan(source, "bags/actions/src/tools.ts", map).length, 1);
-  // Only to embeddings: the extension reaching any other bag still fails.
-  assert.equal(scan('import { events } from "@barry-rocks/events-bag";', "bags/sessions/extensions/search/src/tools.ts", map).length, 1);
+  // Only to embeddings/sessions: reaching any other bag still fails.
+  assert.equal(scan('import { events } from "@barry-rocks/events-bag";', "bags/session-vector-search/src/tools.ts", map).length, 1);
 });

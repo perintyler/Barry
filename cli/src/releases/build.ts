@@ -149,7 +149,7 @@ async function buildRelease(ref: string, out: string, checkout?: ReturnType<type
     const pnpm = (args: string[], extra: NodeJS.ProcessEnv = {}) => { console.log(`pnpm ${args.join(" ")}`); return run("/usr/bin/sandbox-exec", ["-p", '(version 1)(allow default)(deny network-outbound (remote ip "*:*"))(allow network-outbound (remote ip "localhost:*"))', "pnpm", ...args], root, { ...env, ...extra }); };
     try {
       pnpm(["install", "--frozen-lockfile", "--offline"]);
-      pnpm(["build:packages"]);
+      pnpm(["build:packages"], { BARRY_BUILD_COMMIT: commit });
       pnpm(["--filter", "@barry-rocks/vault-bag", "build"]);
       pnpm(["stores:check"]);
       if (kit) {

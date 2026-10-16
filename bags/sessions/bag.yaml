@@ -142,33 +142,33 @@ jobs:
 schedules:
   watch-session:
     every: 1m
-    traits: [ bash, sessions ]
+    bags: [ bash, sessions ]
     job: watch-session
 
   bookkeeping:
     every: 15m
-    traits: [ bash, sessions ]
+    bags: [ bash, sessions ]
     job: bookkeeping
 
   summarize-sessions:
     every: 15m
-    traits: [ bash, sessions ]
+    bags: [ bash, sessions ]
     job: summarize-sessions
 
   disk-retention:
     cron: "30 4 * * *"
-    traits: [ bash, sessions ]
+    bags: [ bash, sessions ]
     job: disk-retention
 
   reaper:
     every: 5m
-    traits: [ bash, sessions ]
+    bags: [ bash, sessions ]
     enabled: true
     job: reaper
 
   app-watchdog:
     every: 1m
-    traits: [ bash, sessions ]
+    bags: [ bash, sessions ]
     enabled: true
     job: app-watchdog
 
@@ -189,6 +189,10 @@ services:
       - BARRY_MAX_RESIDENT_SESSIONS=10
       - BARRY_MAX_CONCURRENT_TURNS=10
       - BARRY_MAX_QUEUED_TURNS=100
+      - BARRY_WORKFLOW_DELEGATION_KEYS=
+      - BARRY_WORKFLOW_AGENT_PROFILES=
+      - BARRY_WORKFLOW_SESSIONS_WORKER=
+      - BARRY_WORKFLOW_RUNTIME_REGISTRATION=
 
 stores:
   sessions:
@@ -204,4 +208,4 @@ bounds:
   no-files:
     description: Touch no files at all; what a job needs to run on another machine
     bound:
-      files: { allowOnly: [] }
+      files: { allow: [] }

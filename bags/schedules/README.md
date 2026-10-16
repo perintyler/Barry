@@ -85,6 +85,46 @@ API alerts when the heartbeat is more than a minute old, and again when it
 recovers. `barry schedule list` shows the same status. A scheduler that never
 started reads as down, not as quiet.
 
+## Durable occurrences (prepared, off by default)
+
+The scheduler service does not use this yet. A `Scheduler` composed with an
+occurrence ledger (`SchedulerDeps.occurrences`) records every due occurrence
+in `schedules.db` before anything runs, and dispatches only what it recorded:
+
+- **Identity.** An occurrence is its schedule plus its nominal slot in UTC
+  (`<bag>/<name>@<slot ISO>`), never the dispatch time. Login occurrences are
+  `@login:<event>` and manual ones `@manual:<id>`. The timezone, trigger,
+  catch-up/overlap policy, schedule context (identity, traits, bounds), payload,
+  admission key, request id and executor generation are stored with it and
+  never change afterwards.
+- **No lost slots.** The occurrence and its dispatch intent commit in the same
+  transaction that advances `next_fire_at`. A scheduler that dies in between
+  dispatches the occurrence after restart, once.
+- **Calendar rules are unchanged.** Nonexistent spring-forward slots are
+  skipped. A sleep is one catch-up occurrence (`catch_up: once`) that records how
+  many slots it covers, or one `missed` record (`none`). Skipped and coalesced
+  `queue` slots are recorded too, so a restart still owes the queued re-run.
+- **After possible admission, observe; never replace.** An occurrence is
+  delivered to the generation it was recorded with. On `work.v2`, a lost reply
+  or a dead dispatcher means the original key is looked up and, if not found,
+  the identical submission is redelivered. The owner deduplicates it. A legacy
+  job's one-off is keyed by the occurrence, so recovery finds it rather than
+  making a second one. A legacy script or agent occurrence that may have started
+  is left `unknown` for a human and is never run again.
+- **Authority is injected.** Work admission (`WorkProducerAdmission`) takes the
+  service principal, issuer and transport from its composition. It refuses an
+  authority that changes the occurrence's origin, drops its identity or
+  selected traits, or is not a service principal, and does so before anything
+  is sent.
+- **Notifications are separate.** A failure streak produces one grouped notice,
+  and its recovery produces one more. A notice that cannot be delivered is
+  retried as a notice; the work is never rerun.
+
+Accepted occurrences hand their outcome, retries and stop to the Work owner.
+Overlap for accepted Work runs, completion projection and service wiring are
+not done yet. Until they are, a ledger-composed scheduler is for disposable
+fixtures only.
+
 ## One-offs
 
 A one-off runs an action once, later: "check again in ten minutes", or a

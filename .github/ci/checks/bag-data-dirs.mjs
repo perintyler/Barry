@@ -11,7 +11,7 @@
  * every bag (sdk/, adapters/) names no bag at all; the supervisor passes each
  * service its own directory by variable.
  *
- * Two exceptions, named here with their reason. Each must still make a
+ * Named exceptions are listed here with their reason. Each must still make a
  * cross-bag call, or it fails as an exception that excuses nothing.
  *
  * Usage: node checks/bag-data-dirs.mjs [file...]
@@ -36,6 +36,14 @@ const EXCEPTIONS = new Map([
     "bags/sessions/api/src/telemetry.ts",
     "the sessions API records model usage into telemetry's usage.db as it happens",
   ],
+  [
+    "bags/sessions/api/src/workflow-work-worker.ts",
+    "the provisioned sessions worker verifies the shared local workflows artifact root and reads retained work agents read-only from the workflows owner store",
+  ],
+  [
+    "cli/src/commands/work.ts",
+    "the CLI operator work submission command stores its local operator delegation issuer ledger under bagDataDir(\"cli\")",
+  ],
 ]);
 
 /** The name in the nearest bag.yaml at or above `file`'s directory, or null outside every bag. */
@@ -53,7 +61,7 @@ function owningBag(file) {
     const manifest = join(dir, "bag.yaml");
     if (existsSync(manifest)) {
       const bag = parse(readFileSync(manifest, "utf8"));
-      const name = bag?.extends ? `${bag.extends}/${bag.name}` : bag?.name ?? null;
+      const name = bag?.name ?? null;
       for (const d of visited) ownerCache.set(d, name);
       return name;
     }

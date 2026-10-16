@@ -116,11 +116,10 @@ function rowToEvent(row: EventRow): EventRecord {
 
 const COLUMNS = `id, seq, type, session_id, source, title, body, severity, data, metadata, delivered_via, read_at, created_at`;
 
-export async function createEvent(input: CreateEventInput): Promise<EventRecord> {
-  const db = getDb();
-  const row: EventRow = {
+function newEventRow(input: CreateEventInput): EventRow {
+  return {
     id: generateEventId(),
-    // Filled inside the transaction below, where reading the max and writing
+    // Filled inside the insert transaction, where reading the max and writing
     // the row cannot interleave with another writer.
     seq: 0,
     type: input.type,
@@ -135,20 +134,22 @@ export async function createEvent(input: CreateEventInput): Promise<EventRecord>
     read_at: null,
     created_at: new Date().toISOString(),
   };
+}
 
-  const insert = db.transaction(() => {
-    const max = db.prepare("SELECT coalesce(max(seq), 0) AS seq FROM events").get() as {
-      seq: number;
-    };
-    row.seq = max.seq + 1;
-    db.prepare(
-      `INSERT INTO events (${COLUMNS}) VALUES (@id, @seq, @type, @session_id, @source, @title, @body, @severity, @data, @metadata, @delivered_via, @read_at, @created_at)`,
-    ).run(row);
-  });
-  insert();
+/** Assign the next seq and insert. Call inside a write transaction. */
+function insertEventRow(row: EventRow): void {
+  const db = getDb();
+  const max = db.prepare("SELECT coalesce(max(seq), 0) AS seq FROM events").get() as {
+    seq: number;
+  };
+  row.seq = max.seq + 1;
+  db.prepare(
+    `INSERT INTO events (${COLUMNS}) VALUES (@id, @seq, @type, @session_id, @source, @title, @body, @severity, @data, @metadata, @delivered_via, @read_at, @created_at)`,
+  ).run(row);
+}
 
-  const event = rowToEvent(row);
-
+/** What follows a committed insert: the realtime announce and the bag hooks. */
+function afterInsert(event: EventRecord): void {
   // Not awaited: the row is durable and the caller should not wait on a
   // notification. The result IS inspected, though — a `void` here would make a
   // missing BARRY_SECRET or a stopped API indistinguishable from a quiet feed,
@@ -180,8 +181,42 @@ export async function createEvent(input: CreateEventInput): Promise<EventRecord>
       data: event.data,
     },
   });
+}
 
+export async function createEvent(input: CreateEventInput): Promise<EventRecord> {
+  const row = newEventRow(input);
+  getDb().transaction(() => insertEventRow(row))();
+  const event = rowToEvent(row);
+  afterInsert(event);
   return event;
+}
+
+/**
+ * Create an event at most once per `sourceKey` (P4.4 preparation). A producer
+ * that may emit the same logical event again — it crashed after emitting and
+ * before saving its own watermark — passes a key naming that event; a repeat
+ * returns the original row and fires nothing. The key and the row commit
+ * together, so there is no window in which one exists without the other.
+ */
+export async function createEventOnce(input: CreateEventInput, sourceKey: string): Promise<{ event: EventRecord; created: boolean }> {
+  if (!sourceKey || Buffer.byteLength(sourceKey, "utf8") > 500) throw new Error("an event source key is 1-500 bytes");
+  const db = getDb();
+  const row = newEventRow(input);
+  const existingId = db.transaction(() => {
+    const existing = db.prepare("SELECT event_id FROM work_producer_event_source WHERE source_key = ?").get(sourceKey) as { event_id: string } | undefined;
+    if (existing) return existing.event_id;
+    insertEventRow(row);
+    db.prepare("INSERT INTO work_producer_event_source (source_key, event_id, created_at) VALUES (?, ?, ?)").run(sourceKey, row.id, row.created_at);
+    return null;
+  }).immediate();
+  if (existingId) {
+    const event = await getEvent(existingId);
+    if (!event) throw new Error(`event ${existingId} for source key ${sourceKey} is gone`);
+    return { event, created: false };
+  }
+  const event = rowToEvent(row);
+  afterInsert(event);
+  return { event, created: true };
 }
 
 export async function getEvent(id: string): Promise<EventRecord | undefined> {

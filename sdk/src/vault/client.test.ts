@@ -274,17 +274,24 @@ describe("every client failure carries a kind a caller can switch on", () => {
  * so a client using the wrong email fails exactly the way it does in
  * production — a genuine MAC failure, not a simulated one.
  */
-function fakeDaemon(
+async function fakeDaemon(
   account: { email: string; password: string; salt: string | null },
-  opts: { saltStatus?: number } = {},
+  opts: { saltStatus?: number; lostLogout?: boolean } = {},
 ) {
-  const { encKey, macKey } = deriveKeys(account.password, account.email, account.salt);
+  const { encKey, macKey } = await deriveKeys(account.password, account.email, account.salt);
   const encryptedKey = encryptSymmetricKey(generateSymmetricKey(), encKey, macKey);
   const payload = Buffer.from(JSON.stringify({ sub: "acct-1" })).toString("base64url");
   const paths: string[] = [];
+  const logoutHeaders: Array<string | undefined> = [];
   const server = startServer((req, res) => {
     paths.push(req.url ?? "");
     res.setHeader("content-type", "application/json");
+    if (req.url === "/api/auth/logout") {
+      logoutHeaders.push(req.headers.authorization);
+      if (opts.lostLogout) { req.socket.destroy(); return; }
+      res.end("{}");
+      return;
+    }
     if (req.url === "/api/auth/salt") {
       res.statusCode = opts.saltStatus ?? 200;
       res.end(JSON.stringify(res.statusCode === 200 ? { salt: account.salt } : { error: "boom" }));
@@ -294,7 +301,7 @@ function fakeDaemon(
     // never looks at the email.
     res.end(JSON.stringify({ token: `h.${payload}.s`, encryptedKey }));
   });
-  return { server, paths };
+  return { server, paths, logoutHeaders, token: `h.${payload}.s` };
 }
 
 describe("login failures name their real cause instead of looking like a corrupt vault", () => {
@@ -302,7 +309,7 @@ describe("login failures name their real cause instead of looking like a corrupt
 
   it("logs in with the right email and password (the control: the fake daemon is sound)", async () => {
     const socketPath = join(dir, "vault.sock");
-    const { server } = fakeDaemon(account);
+    const { server } = await fakeDaemon(account);
     await listenOnSocket(server, socketPath);
     const session = await new VaultClient(`unix://${socketPath}`).loginWithApiKey("id", "secret", account.password, account.email);
     expect(session.accountId).toBe("acct-1");
@@ -314,7 +321,7 @@ describe("login failures name their real cause instead of looking like a corrupt
     // The api-key route never checks the email, so this LOGIN succeeds; only
     // unwrapping the key can notice. Assert on that error, not on the login.
     const socketPath = join(dir, "vault.sock");
-    const { server, paths } = fakeDaemon(account);
+    const { server, paths } = await fakeDaemon(account);
     await listenOnSocket(server, socketPath);
     const err = await new VaultClient(`unix://${socketPath}`)
       .loginWithApiKey("id", "secret", account.password, "typo@example.com")
@@ -327,9 +334,25 @@ describe("login failures name their real cause instead of looking like a corrupt
     await close(server);
   });
 
+  it.each([false, true])("revokes an issued token after local unwrap failure, preserving the error when logout is lost (%s)", async lostLogout => {
+    const socketPath = join(dir, "vault.sock");
+    const { server, paths, logoutHeaders, token } = await fakeDaemon(account, { lostLogout });
+    await listenOnSocket(server, socketPath);
+    try {
+      const err = await new VaultClient(`unix://${socketPath}`)
+        .loginWithApiKey("id", "secret", "incorrect-password", account.email)
+        .catch((error: unknown) => error);
+      expect(err).toBeInstanceOf(VaultError);
+      expect((err as VaultError).kind).toBe("decrypt");
+      expect(paths).toEqual(["/api/auth/salt", "/api/auth/api-key", "/api/auth/logout"]);
+      expect(logoutHeaders).toEqual([`Bearer ${token}`]);
+      expect((err as Error).message).not.toContain(token);
+    } finally { await close(server); }
+  });
+
   it("a failed salt lookup stops the login instead of guessing the legacy salt", async () => {
     const socketPath = join(dir, "vault.sock");
-    const { server, paths } = fakeDaemon(account, { saltStatus: 500 });
+    const { server, paths } = await fakeDaemon(account, { saltStatus: 500 });
     await listenOnSocket(server, socketPath);
     const err = await new VaultClient(`unix://${socketPath}`)
       .loginWithApiKey("id", "secret", account.password, account.email)
@@ -342,7 +365,7 @@ describe("login failures name their real cause instead of looking like a corrupt
 
   it("a legacy account (200 with salt: null) still logs in on the email-only salt", async () => {
     const socketPath = join(dir, "vault.sock");
-    const { server } = fakeDaemon({ ...account, salt: null });
+    const { server } = await fakeDaemon({ ...account, salt: null });
     await listenOnSocket(server, socketPath);
     const session = await new VaultClient(`unix://${socketPath}`).loginWithApiKey("id", "secret", account.password, account.email);
     expect(session.accountId).toBe("acct-1");
@@ -414,4 +437,31 @@ describe("VaultClient refuses to send credentials to an untrusted URL", () => {
     expect((await new VaultClient(`http://127.0.0.1:${port}`).status()).connected).toBe(true);
     await close(server);
   });
+});
+
+
+it("lists once across concurrent secret reads and invalidates after a write", async () => {
+  let lists = 0;
+  const auth = { accountId: "fixture", token: "fixture-token", encKey: Buffer.alloc(32, 1), macKey: Buffer.alloc(32, 2) };
+  let client: VaultClient;
+  const server = startServer((req, res) => {
+    res.setHeader("content-type", "application/json");
+    if (req.url === "/api/items" && req.method === "GET") {
+      lists++;
+      return res.end(JSON.stringify({ items: [{ id: "one", name: client.encryptField("KEY", auth), type: 1 }] }));
+    }
+    if (req.method === "GET") return res.end(JSON.stringify({ id: "one", name: client.encryptField("KEY", auth), password: client.encryptField("value", auth), username: null, uri: null, notes: null }));
+    res.end("{}");
+  });
+  const port = await listenOnPort(server);
+  client = new VaultClient(`http://127.0.0.1:${port}`);
+  try {
+    expect((await client.getItemById(auth, "one")).password).toBe("value");
+    expect(lists).toBe(0);
+    expect((await Promise.all([client.getItem(auth, "KEY"), client.getItem(auth, "KEY")])).map(item => item.password)).toEqual(["value", "value"]);
+    expect(lists).toBe(1);
+    await client.updateItem(auth, "one", { password: "new" });
+    await client.getItem(auth, "KEY");
+    expect(lists).toBe(2);
+  } finally { await close(server); }
 });

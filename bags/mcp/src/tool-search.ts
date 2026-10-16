@@ -50,10 +50,10 @@ function matchesTerm(tool: DeferredToolEntry, term: string): boolean {
  * Names are matched both bare (`status`) and qualified
  * (`mcp__sessions__status`), because the agent sees the qualified form in a
  * tools list but tool definitions carry the bare one. Order follows the query,
- * not the catalog, so the caller gets what they asked for first.
+ * not the deferred list, so the caller gets what they asked for first.
  */
 function selectByName(
-  catalog: DeferredToolEntry[],
+  deferredTools: DeferredToolEntry[],
   spec: string,
   maxResults: number,
 ): DeferredToolEntry[] {
@@ -63,7 +63,7 @@ function selectByName(
 
   for (const want of wanted) {
     if (picked.length >= maxResults) break;
-    for (const tool of catalog) {
+    for (const tool of deferredTools) {
       if (picked.length >= maxResults) break;
       if (seen.has(tool)) continue;
       const bare = tool.name.toLowerCase();
@@ -80,7 +80,7 @@ function selectByName(
 
 /** Parse select:a,b as exact selection and +term as required matching before scoring bare terms by namespace, name, and description weights; see docs/decisions/0013-session-store-and-mcp-admission.md. */
 export function searchDeferredTools(
-  catalog: DeferredToolEntry[],
+  deferredTools: DeferredToolEntry[],
   query: string,
   maxResults: number = 5,
 ): DeferredToolEntry[] {
@@ -88,7 +88,7 @@ export function searchDeferredTools(
   if (trimmed.length === 0) return [];
 
   if (trimmed.toLowerCase().startsWith("select:")) {
-    return selectByName(catalog, trimmed.slice("select:".length), maxResults);
+    return selectByName(deferredTools, trimmed.slice("select:".length), maxResults);
   }
 
   const allTerms = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
@@ -102,7 +102,7 @@ export function searchDeferredTools(
   // is required, they also score, so results stay ordered by relevance.
   const terms = optional.length > 0 ? optional : required;
 
-  const scored = catalog
+  const scored = deferredTools
     .filter((tool) => required.every((term) => matchesTerm(tool, term)))
     .map((tool) => {
       const name = tool.name.toLowerCase();

@@ -34,19 +34,17 @@ describe("builtin registration by directory", () => {
   it("registers every folder with a bag.yaml, including nested bags, by its manifest's name", () => {
     inBags("alpha", "name: alpha\ndescription: a\n");
     inBags("outer", "name: outer\ndescription: o\n");
-    inBags("outer/extensions/inner", "name: inner\nextends: outer\ndescription: nested\n");
-    expect(discoverBuiltinBags(bags).local).toEqual({ alpha: "alpha", outer: "outer", "outer/inner": join("outer", "extensions", "inner") });
+    inBags("outer/inner", "name: inner\ndescription: nested\n");
+    expect(discoverBuiltinBags(bags).local).toEqual({ alpha: "alpha", outer: "outer", inner: join("outer", "inner") });
   });
 
   it.each([
-    ["outer/extensions/inner", "name: inner\ndescription: nested\n"],
-    ["outer/extensions/inner", "name: inner\nextends: other\ndescription: nested\n"],
-    ["inner", "name: inner\nextends: outer\ndescription: nested\n"],
-    ["outer/extensions/wrong", "name: inner\nextends: outer\ndescription: nested\n"],
-  ])("refuses an extension location mismatch at %s", (path, manifest) => {
+    ["outer/extensions/inner", "name: inner\ndescription: nested\n", /extensions/],
+    ["inner", "name: inner\nextends: outer\ndescription: nested\n", /extends/],
+  ])("refuses retired extensions folder or extends key at %s", (path, manifest, pattern) => {
     inBags("outer", "name: outer\ndescription: o\n");
     inBags(path, manifest);
-    expect(() => discoverBuiltinBags(bags)).toThrow(/extensions/);
+    expect(() => discoverBuiltinBags(bags)).toThrow(pattern);
   });
 
   it("never enters dependencies, build output, or test fixtures", () => {
@@ -69,22 +67,15 @@ describe("builtin registration by directory", () => {
 });
 
 describe("baseIdentitySelection", () => {
-  it("reads the base identity's bags and traits, by name, beside bags/", () => {
+  it("reads the base identity's bags and bounds, by name, beside bags/", () => {
     const bags = join(dir, "bags");
     mkdirSync(bags);
-    writeFileSync(join(dir, "identity.yaml"), "name: barry\nbags: [actions, sessions]\ntraits:\n  - bash\n  - review: { optional: true }\n");
-    expect(baseIdentitySelection(bags)).toEqual({ bags: ["actions", "sessions"], traits: ["bash"] });
-  });
-
-  it("includes the base identity's extensions", () => {
-    const bags = join(dir, "bags");
-    mkdirSync(bags);
-    writeFileSync(join(dir, "identity.yaml"), "bags:\n  - sessions: { extensions: [search] }\n");
-    expect(baseIdentitySelection(bags).bags).toEqual(["sessions", "sessions/search"]);
+    writeFileSync(join(dir, "identity.yaml"), "name: barry\nbags: [actions, sessions]\nbounds:\n  - safe\n  - readonly: { optional: true }\n");
+    expect(baseIdentitySelection(bags)).toEqual({ bags: ["actions", "sessions"], bounds: ["safe"] });
   });
 
   it("is empty without a builtin directory", () => {
-    expect(baseIdentitySelection(null)).toEqual({ bags: [], traits: [] });
+    expect(baseIdentitySelection(null)).toEqual({ bags: [], bounds: [] });
   });
 });
 

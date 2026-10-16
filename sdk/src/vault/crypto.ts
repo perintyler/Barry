@@ -9,10 +9,12 @@ export interface DerivedKeys {
   masterPasswordHash: string;
 }
 
-export function deriveKeys(masterPassword: string, email: string, kdfSalt?: string | null): DerivedKeys {
+export async function deriveKeys(masterPassword: string, email: string, kdfSalt?: string | null): Promise<DerivedKeys> {
   // Use random salt if available, fall back to email for legacy accounts
   const salt = kdfSalt ? `${email.toLowerCase()}:${kdfSalt}` : email.toLowerCase();
-  const masterKey = crypto.pbkdf2Sync(masterPassword, salt, KDF_ITERATIONS, 32, "sha256");
+  const masterKey = await new Promise<Buffer>((resolve, reject) => {
+    crypto.pbkdf2(masterPassword, salt, KDF_ITERATIONS, 32, "sha256", (error, key) => error ? reject(error) : resolve(key));
+  });
   const encKey = Buffer.from(crypto.hkdfSync("sha256", masterKey, "", Buffer.from("enc"), 32));
   const macKey = Buffer.from(crypto.hkdfSync("sha256", masterKey, "", Buffer.from("mac"), 32));
   const masterPasswordHash = crypto.pbkdf2Sync(masterKey, masterPassword, 1, 32, "sha256").toString("base64");

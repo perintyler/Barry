@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHostingPolicy } from "@barry-rocks/sdk/services";
+import { parseHostingConfig } from "@barry-rocks/sdk/services";
 import { resolveHosting, type HostedService, type HostingProvider } from "./resolve.js";
 
 const svc = (key: string, port: number, extra: Partial<HostedService> = {}): HostedService => {
@@ -53,7 +53,7 @@ tunnels:
 `;
 
 function resolve(yaml: string, services = SERVICES, providers = PROVIDERS) {
-  return resolveHosting(parseHostingPolicy(yaml), services, providers);
+  return resolveHosting(parseHostingConfig(yaml), services, providers);
 }
 
 describe("resolving the hosting policy", () => {

@@ -46,11 +46,11 @@ describe("original review file-bound regressions", () => {
     await expect(invoke("Read", { file_path: join(root, ".SSH/key") }, { files: { deny: ["~/.ssh/**"] } })).rejects.toThrow("Access denied");
   });
   it("checks the normalized allow candidate without rejecting its tilde spelling", async () => {
-    await expect(invoke("Read", { file_path: "~/allowed/file" }, { files: { allowOnly: [join(root, "allowed/**")] } })).resolves.toBe("called");
+    await expect(invoke("Read", { file_path: "~/allowed/file" }, { files: { allow: [join(root, "allowed/**")] } })).resolves.toBe("called");
   });
   it("anchors a relative allowed root at cwd", async () => {
     vi.spyOn(process, "cwd").mockReturnValue(root);
-    await expect(invoke("Read", { file_path: "/usr/local/allowed/foreign" }, { files: { allowOnly: ["allowed/**"] } })).rejects.toThrow("Access denied");
+    await expect(invoke("Read", { file_path: "/usr/local/allowed/foreign" }, { files: { allow: ["allowed/**"] } })).rejects.toThrow("Access denied");
   });
   it("checks a default search root and unanchored denied subtree", async () => {
     vi.spyOn(process, "cwd").mockReturnValue(root);
@@ -60,8 +60,8 @@ describe("original review file-bound regressions", () => {
     await expect(invoke("Bash", { command: "cat .env" }, { files: { deny: ["*.env"] } })).rejects.toThrow("Access denied");
   });
   it("refuses ambiguous relative allow roots at schema validation", () => {
-    expect(BoundSchema.safeParse({ files: { allowOnly: ["src/**"] } }).success).toBe(false);
-    expect(BoundSchema.safeParse({ files: { allowOnly: [join(root, "allowed/**")] } }).success).toBe(true);
+    expect(BoundSchema.safeParse({ files: { allow: ["src/**"] } }).success).toBe(false);
+    expect(BoundSchema.safeParse({ files: { allow: [join(root, "allowed/**")] } }).success).toBe(true);
   });
   it.each(["printf x > ~/.ssh/key", "cat < ~/.ssh/key", "bash -c 'printf x >> ~/.ssh/key'"])("guards file redirection %s", async command => {
     await expect(invoke("Bash", { command }, { files: { deny: ["~/.ssh/**"] } })).rejects.toThrow("Access denied");

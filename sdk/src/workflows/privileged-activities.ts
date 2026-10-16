@@ -1,10 +1,10 @@
 import type { WorkflowOwner } from "./workflow-owner.js";
 import { ActivityFailure, type Activity, type Json } from "./types.js";
-import type { ScopedToolInvoker } from "../tools/scoped-invocation.js";
+import type { BoundedToolInvoker } from "../tools/bounded-invocation.js";
 import { workflowSessionId, type WorkflowSessionTurns } from "../sessions/workflow-turns.js";
 
 /** Trusted typed adapters are supplied explicitly; application bundles get no Barry credentials. */
-export function toolActivity(options: { owner: WorkflowOwner; worker: string; node: string; tool: string; invoker: ScopedToolInvoker }): Activity {
+export function toolActivity(options: { owner: WorkflowOwner; worker: string; node: string; tool: string; invoker: BoundedToolInvoker }): Activity {
   return async (input, task) => {
     if (task.signal.aborted || !task.grantRevision) throw new ActivityFailure("Run authority is unavailable", "GrantRequired");
     const check = () => { options.owner.effectAuthority(options.worker, task.token, task.grantRevision!); };

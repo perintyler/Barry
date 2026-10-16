@@ -9,13 +9,25 @@
 
 import { createHash } from "node:crypto";
 import { oauthHelperLaunch } from "./oauth-launch.js";
+import { createOAuthFetch } from "./oauth-fetch.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { CallToolRequestSchema, type CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  type CallToolResult,
+} from "@modelcontextprotocol/sdk/types.js";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ToolMeta } from "@barry-rocks/sdk/bounds";
+import {
+  guardToolCall,
+  narrowInputSchemaForBound,
+  qualifyToolId,
+  type Bound,
+  type ToolDescriptor,
+} from "@barry-rocks/sdk/bounds";
+import { installationRegistry } from "@barry-rocks/sdk/internal/nodes";
 import { hasOAuthTokens, getOAuthAccessToken, refreshOAuthToken } from "@barry-rocks/sdk/internal/vault";
 import { noSseFetch } from "@barry-rocks/sdk/internal/mcp";
 import { isBinaryOnPath } from "@barry-rocks/sdk/internal/bags";
@@ -168,7 +180,7 @@ export interface ConnectedBagProxy {
   toolsMeta?: BagToolMetaEntry[];
 }
 
-/** Enriched proxied tool with namespace/access metadata for trait filtering */
+/** Enriched proxied tool with namespace/access metadata for bound filtering */
 export interface FilterableProxiedTool extends ProxiedTool {
   namespace: string;
   access: "read" | "write";
@@ -176,6 +188,12 @@ export interface FilterableProxiedTool extends ProxiedTool {
   deferred?: boolean;
   /** Reference to the client for forwarding calls */
   proxy: ConnectedBagProxy;
+  /** Optional session bound attached for runtime guard enforcement and schema narrowing. */
+  bound?: Bound | null;
+  /** Optional pre-bound guard callback invoked before forwarding a call. */
+  guard?: (args: Record<string, unknown>) => Promise<void> | void;
+  /** Set when an active bag replaced this tool in-place via `implements:`. */
+  replaced?: boolean;
 }
 
 /**
@@ -183,13 +201,13 @@ export interface FilterableProxiedTool extends ProxiedTool {
  *
  * Resolution order per tool:
  * 1. barry://tools-meta from the bag (self-describing bags via startBagServer)
- * 2. Tool metadata collected from bag registry (collectToolMeta)
+ * 2. Tool metadata collected from bag registry (collectToolDefinitions)
  * 3. MCP annotations: readOnlyHint → "read", else "write"
  * 4. Default: bag name as namespace, "write" as access (conservative)
  */
 export function enrichProxiedTools(
   proxies: ConnectedBagProxy[],
-  registry: ToolMeta[],
+  registry: ToolDescriptor[],
   deferredBags?: Set<string>,
 ): FilterableProxiedTool[] {
   const registryByName = new Map(registry.map((t) => [t.toolName, t]));
@@ -220,9 +238,9 @@ export function enrichProxiedTools(
 }
 
 /**
- * Convert enriched proxied tools to ToolMeta for trait filtering.
+ * Convert enriched proxied tools to ToolDescriptor for bound filtering.
  */
-export function proxiedToolsToMeta(tools: FilterableProxiedTool[]): ToolMeta[] {
+export function proxiedToolsToMeta(tools: FilterableProxiedTool[]): ToolDescriptor[] {
   return tools.map((t) => ({
     toolName: t.name,
     namespace: t.namespace,
@@ -232,11 +250,7 @@ export function proxiedToolsToMeta(tools: FilterableProxiedTool[]): ToolMeta[] {
 }
 
 /**
- * Patch a McpServer to dispatch tools/call to proxied tools.
- *
- * Only overrides CallToolRequestSchema — the ListToolsRequestSchema handler
- * is owned by createServer() in index.ts so that deferral filtering is applied
- * in a single place regardless of whether proxied tools exist.
+ * Patch a McpServer to dispatch tools/call (and default tools/list) to proxied tools.
  *
  * When a pool is provided, tool call errors are checked for auth failures.
  * On auth error, the bag is marked as authExpired and subsequent calls
@@ -263,22 +277,21 @@ export function patchServerWithProxiedTools(
      */
     barrySessionId?: string;
     /**
+     * Session Bound (or getter returning the live Bound) enforced on proxied
+     * `tools/call` and used to narrow `inputSchema` in `tools/list`.
+     */
+    bound?: Bound | null | (() => Bound | null | undefined);
+    /**
+     * Qualified `<namespace>:<name>` tool IDs replaced in-place by an active
+     * bag's `implements: { tools: [...] }` declaration. Replaced proxied tools
+     * are omitted from `tools/list` and bypassed in `tools/call` so the
+     * in-process replacement handles the call instead of being shadowed.
+     */
+    replacedToolIds?: ReadonlySet<string> | readonly string[];
+    /** Override node ID for `bound.nodes` checks (defaults to installation ID). */
+    nodeId?: string;
+    /**
      * Called once per proxied tool call, with its outcome.
-     *
-     * Proxied bags never pass through `registerTools`, which is where native
-     * tools get their `onToolCall` instrumentation. So every remote bag --
-     * notion, figma, mobile-mcp, the vantage servers -- produced NO tool
-     * telemetry at all. They have no local process, no log file of their own
-     * and no jobs.db row, so all three of Barry's universal telemetry streams
-     * miss them.
-     *
-     * That is backwards from where the risk sits. A remote bag depends on a
-     * network, a vendor's uptime, a token that expires and a rate limit someone
-     * else controls -- the most likely thing to fail, and the least observable.
-     * A vantage-docs outage looked identical to nobody calling it.
-     *
-     * This is the one boundary every proxied call crosses, and both facts are
-     * already here: elapsed time, and whether the result carried `isError`.
      */
     onToolCall?: (call: { name: string; durationMs: number; ok: boolean; error?: string }) => void;
   },
@@ -288,6 +301,47 @@ export function patchServerWithProxiedTools(
   const server = mcpServer.server;
   const registeredTools = getRegisteredTools(mcpServer);
   const barrySessionId = opts?.barrySessionId;
+  const replacedSet = new Set<string>(
+    opts?.replacedToolIds ? [...opts.replacedToolIds] : [],
+  );
+  const resolveBound = (): Bound | null | undefined =>
+    typeof opts?.bound === "function" ? opts.bound() : opts?.bound;
+  const isReplaced = (pt: FilterableProxiedTool): boolean =>
+    pt.replaced === true ||
+    replacedSet.has(qualifyToolId(pt.namespace, pt.name)) ||
+    replacedSet.has(pt.name);
+
+  server.setRequestHandler(ListToolsRequestSchema, () => {
+    const activeBound = resolveBound();
+    return {
+      tools: [
+        ...Object.entries(registeredTools)
+          .filter(([, tool]) => tool.enabled !== false)
+          .map(([name, tool]) => ({
+            name,
+            description: tool.description ?? "",
+            inputSchema: narrowInputSchemaForBound(
+              zodSchemaToJson(tool.inputSchema, name),
+              name,
+              activeBound,
+            ),
+            annotations: tool.annotations,
+          })),
+        ...proxiedTools
+          .filter((pt) => !isReplaced(pt))
+          .map((pt) => ({
+            name: pt.name,
+            description: pt.description,
+            inputSchema: narrowInputSchemaForBound(
+              pt.inputSchema,
+              qualifyToolId(pt.namespace, pt.name),
+              activeBound ?? pt.bound,
+            ),
+            annotations: pt.annotations,
+          })),
+      ],
+    };
+  });
 
   // Override tools/call to dispatch to proxied tools.
   //
@@ -311,12 +365,6 @@ export function patchServerWithProxiedTools(
     // message stays queued and is retried on the session's next call.
     if (!("content" in result) || !Array.isArray(result.content)) return result;
     const notes = queued.map((p: PromptRecord) => queuedPromptNote(p)).join("\n");
-    // Built as a fresh object, not a spread of result: result's type is
-    // the full CallToolResult union (including the legacy { toolResult }
-    // shape ruled out above), and spreading a union produces a shape the
-    // checker cannot match back to any single member. The runtime guard
-    // above already proved a real content array exists, so it is copied
-    // explicitly instead.
     const isError = "isError" in result ? result.isError : undefined;
     return {
       isError,
@@ -329,7 +377,7 @@ export function patchServerWithProxiedTools(
 
   async function handleToolCall(request: { params: { name: string; arguments?: Record<string, unknown> } }, extra: unknown): Promise<CallToolResult> {
     const { name, arguments: args } = request.params;
-    const proxied = proxiedTools.find((t) => t.name === name);
+    const proxied = proxiedTools.find((t) => t.name === name && !isReplaced(t));
 
     if (proxied) {
       if (pool?.authExpired[proxied.bag]) {
@@ -341,23 +389,48 @@ export function patchServerWithProxiedTools(
         };
       }
 
-        // Monotonic: `Date.now()` is wall clock, and wall clock advances while
-        // the host sleeps. A call straddling a lid-close would report the sleep
-        // as its own duration -- the defect that once put a 17.8-minute reading
-        // into a 4-second probe.
-        const startedAt = performance.now();
-        const report = (ok: boolean, error?: string) => {
-          // Never let instrumentation break the call it measures: a throw here
-          // turns a working tool into a failing one, which is worse than the
-          // missing telemetry it exists to fix.
-          try {
-            opts?.onToolCall?.({ name, durationMs: performance.now() - startedAt, ok, error });
-          } catch {
-            /* reporting is best-effort */
-          }
-        };
+      // Monotonic: `Date.now()` is wall clock, and wall clock advances while
+      // the host sleeps. A call straddling a lid-close would report the sleep
+      // as its own duration -- the defect that once put a 17.8-minute reading
+      // into a 4-second probe.
+      const startedAt = performance.now();
+      const report = (ok: boolean, error?: string) => {
+        try {
+          opts?.onToolCall?.({ name, durationMs: performance.now() - startedAt, ok, error });
+        } catch {
+          /* reporting is best-effort */
+        }
+      };
 
       try {
+        if (proxied.guard) {
+          await proxied.guard(args ?? {});
+        }
+        const activeBound = resolveBound() ?? proxied.bound ?? null;
+        if (activeBound) {
+          let fallbackNodeId: string | undefined;
+          if (!opts?.nodeId) {
+            try {
+              fallbackNodeId = installationRegistry().id;
+            } catch {
+              fallbackNodeId = undefined;
+            }
+          }
+          await guardToolCall(
+            {
+              id: qualifyToolId(proxied.namespace, proxied.name),
+              name: proxied.name,
+              namespace: proxied.namespace,
+            },
+            args ?? {},
+            activeBound,
+            {
+              enforceConfigProtection: true,
+              nodeId: opts?.nodeId ?? fallbackNodeId,
+            },
+          );
+        }
+
         // Prefer the pool's current shared entry for this tool: sessions opened
         // before a re-auth hold stale (disconnected) proxy refs, and the pool
         // has the fresh connection after bag_auth recovery.
@@ -669,8 +742,7 @@ async function connectBagProxyInner(
           const oauthClient = new Client({ name: `barry-proxy-${config.name}`, version: "1.0.0" });
           clients.push(oauthClient);
           await oauthClient.connect(new StreamableHTTPClientTransport(new URL(config.url), {
-            requestInit: { headers: { Authorization: `Bearer ${token}` } },
-            fetch: noSseFetch,
+            fetch: createOAuthFetch(config.url),
           }));
           log.info("bag_proxy.oauth_direct", { bag: config.name });
           return discoverTools(config.name, oauthClient);
@@ -862,7 +934,7 @@ export class BagConnectionPool {
   deferredBagNames: Set<string> = new Set();
 
   private connections = new Map<string, PoolEntry>();
-  private registry: ToolMeta[];
+  private registry: ToolDescriptor[];
   /** In-flight cached connects keyed by `bagName:credentialHash` — concurrent session inits share one attempt */
   private pendingConnects = new Map<string, Promise<FilterableProxiedTool[] | null>>();
   /** In-flight uncached retry connects (shared bags) keyed the same way */
@@ -885,7 +957,7 @@ export class BagConnectionPool {
    */
   private connectedAt = new Map<string, number>();
 
-  constructor(registry: ToolMeta[]) {
+  constructor(registry: ToolDescriptor[]) {
     this.registry = registry;
   }
 
@@ -1033,15 +1105,11 @@ export class BagConnectionPool {
   ): Promise<FilterableProxiedTool[]> {
     const sessionTools: FilterableProxiedTool[] = [...this.shared];
 
-    for (const bagName of neededBags) {
+    const connected = await mapWithConcurrency(neededBags, 4, async bagName => {
       const config = this.deferredConfigs[bagName];
-      if (!config) continue;
-
-      const tools = await this.getOrConnect(config, resolvedEnv, sessionId);
-      if (tools) {
-        sessionTools.push(...tools);
-      }
-    }
+      return config ? this.getOrConnect(config, resolvedEnv, sessionId) : null;
+    });
+    for (const tools of connected) if (tools) sessionTools.push(...tools);
 
     return sessionTools;
   }

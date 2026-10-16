@@ -45,7 +45,6 @@ function discoveredBag(name: string, toolName: string): Bag {
     skillsDirs: [],
     actionsDirs: [],
     instructionsDirs: [],
-    traits: [],
     mcpServers: {},
     tools: [toolMeta(toolName)],
     dependencies: [],
@@ -111,7 +110,7 @@ describe("remote resource discovery injection", () => {
   });
 
   // The failure this guards is silent by nature: with no discoverer the bag
-  // still loads, just without its skills and traits. A remote bag missing its
+  // still loads, just without its skills and bounds. A remote bag missing its
   // resources looks exactly like one that declares none, so the warning is the
   // only signal — assert on it, not merely on the fallback shape.
   it("falls back to registry tools AND warns when no discoverer is installed", async () => {

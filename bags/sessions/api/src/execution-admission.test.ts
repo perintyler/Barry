@@ -125,7 +125,7 @@ describe("TurnSemaphore", () => {
     expect(sem.running()).toBe(0);
 
     // Prove no over-release happened: exactly one more acquire should now
-    // be immediately grantable, and a second concurrent one should queue.
+    // be immediately acquired, and a second concurrent one should queue.
     const a = await sem.acquire();
     expect(sem.running()).toBe(1);
     let bGranted = false;

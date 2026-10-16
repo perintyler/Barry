@@ -65,10 +65,9 @@ interface Row {
   status: "pending" | "planning" | "running" | "completed" | "failed" | "cancelled";
   system_prompt: string | null;
   summary: string | null;
-  traits: string[];
+  bags: string[];
   bound: Record<string, unknown> | null;
   bounds: string[];
-  bound_id: number | null;
   metadata: Record<string, unknown>;
   created_at: string;
   started_at: string | null;
@@ -90,9 +89,9 @@ const FULL_ROW: Row = {
   status: "running",
   system_prompt: "a prompt",
   summary: "a summary",
-  traits: ["alpha", "beta"],
+  bags: ["alpha", "beta"],
   bound: { kind: "repo", value: "barry" },
-  bounds: [], bound_id: null,
+  bounds: [],
   // `github_pr_number` is stored as a JSON NUMBER deliberately: json_extract
   // returns it as a number, not text, so this is the shape that catches a
   // missing CAST.
@@ -120,7 +119,7 @@ const SPARSE_ROW: Row = {
   status: "completed",
   system_prompt: null,
   summary: null,
-  traits: [] as string[],
+  bags: [] as string[],
   bound: null,
   metadata: {},
   started_at: null,
@@ -142,9 +141,9 @@ const EXPECTED_FULL: SessionRecord = {
   status: "running",
   system_prompt: "a prompt",
   summary: "a summary",
-  traits: ["alpha", "beta"],
+  bags: ["alpha", "beta"],
   bound: { kind: "repo", value: "barry" },
-  bounds: [], bound_id: null,
+  bounds: [],
   metadata: {
     name: "Full Row",
     github_repo: "perintyler/barry",
@@ -171,9 +170,9 @@ const EXPECTED_SPARSE: SessionRecord = {
   status: "completed",
   system_prompt: null,
   summary: null,
-  traits: [],
+  bags: [],
   bound: null,
-  bounds: [], bound_id: null,
+  bounds: [],
   metadata: {},
   created_at: "2026-09-22T05:00:00.000Z",
   started_at: null,
@@ -205,7 +204,7 @@ function writeSqlite(row: Row): void {
     .prepare(
       `INSERT INTO sessions (
         id, user_id, agent_token, identity_id, active, state, status,
-        system_prompt, summary, traits, bound, bound_id, metadata,
+        system_prompt, summary, bags, bounds, bound, metadata,
         created_at, started_at, completed_at, ended_at, last_message_at, message_count
       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
@@ -213,8 +212,9 @@ function writeSqlite(row: Row): void {
       row.id, row.user_id, row.agent_token, row.identity_id,
       // The encoding differences the store actually has on disk.
       row.active ? 1 : 0, row.state, row.status, row.system_prompt, row.summary,
-      JSON.stringify(row.traits), row.bound === null ? null : JSON.stringify(row.bound),
-      row.bound_id, JSON.stringify(row.metadata),
+      JSON.stringify(row.bags), JSON.stringify(row.bounds),
+      row.bound === null ? null : JSON.stringify(row.bound),
+      JSON.stringify(row.metadata),
       row.created_at, row.started_at, row.completed_at, row.ended_at,
       row.last_message_at, row.message_count,
     );
@@ -272,7 +272,7 @@ describe("getSession", () => {
 
   it("parses JSON columns stored as text", () => {
     const record = getSessionSqlite(FULL);
-    expect(record?.traits).toEqual(["alpha", "beta"]);
+    expect(record?.bags).toEqual(["alpha", "beta"]);
     expect(record?.bound).toEqual({ kind: "repo", value: "barry" });
     expect(record?.metadata.name).toBe("Full Row");
   });

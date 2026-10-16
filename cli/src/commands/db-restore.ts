@@ -157,7 +157,8 @@ export async function dbRestoreCommand(source: string, options: DbRestoreOptions
   if (dataStores.length) {
     console.log("  not restored, kept outside the store generation (RESTORE.md says how to put one back):");
     for (const name of dataStores) {
-      const [bag, file] = name.split("/");
+      const [bag, ...path] = name.split("/");
+      const file = path.join("/");
       const nodeStore = join(prepared.directory, "node", bag, file);
       let destination = join(barryAppSupportDir(), "data", bag, file);
       if (existsSync(nodeStore)) {

@@ -9,9 +9,11 @@ import type { StoreBinding } from "../stores/bindings.js";
 import type {
   Action,
   ActionRun,
+  AtSchedule,
+  AtScheduleInput,
+  AtScheduleQuery,
   Schedule,
   Scheduler,
-  OneOffQuery,
   Bag,
   BarryEvent,
   Change,
@@ -19,8 +21,6 @@ import type {
   Device,
   EventInput,
   EventQuery,
-  Grants,
-  GrantSelection,
   Identity,
   IdentityCreate,
   IdentityReference,
@@ -31,8 +31,6 @@ import type {
   Message,
   MessageQuery,
   Bound,
-  OneOff,
-  OneOffInput,
   Owner,
   Service,
   Session,
@@ -41,9 +39,10 @@ import type {
   SessionUpdate,
   Skill,
   Tool,
-  Trait,
   Updated,
 } from "./types.js";
+
+import type { BagLike, BagToolInput, IdentityLike } from "./resolve.js";
 
 /**
  * Many of something. Iterate it to go through every item, fetching pages as
@@ -54,16 +53,72 @@ export interface Collection<T> extends AsyncIterable<T>, PromiseLike<T[]> {}
 
 /** What you can ask Barry: one Barry, as one caller. */
 export interface Barry {
+  /**
+   * Return the tools for `(identity, bags, boundsOrPinnedBound)` — already filtered by
+   * the resolved bound, with `implements` replacements applied, store context bound
+   * to `identity`, and each tool's `handler` wrapped with runtime guards.
+   *
+   * - When `bounds` is an array `(Bound | string)[]` or omitted: resolves
+   *   `Barry.bound(identity, bounds)` (merging `identity.bounds` + `bounds`).
+   * - When a single already-resolved `Bound` object is passed (e.g. `session.bound`
+   *   pinned at session start): uses that pinned `Bound` directly WITHOUT re-reading
+   *   live `identity.bounds` from disk, preserving snapshot semantics (§7.1.4).
+   */
+  tools<T extends BagToolInput = Tool>(
+    identity: IdentityLike | null | undefined,
+    bags: readonly (Bag | BagLike | T)[],
+    bounds?: Bound | readonly (Bound | string)[],
+    availableBounds?: ReadonlyMap<string, Bound> | Readonly<Record<string, Bound>>,
+  ): (Tool & T)[];
+  tools(
+    identity: IdentityReference | null | undefined,
+    bags?: readonly (Bag | string)[],
+    bounds?: Bound | readonly (Bound | string)[],
+  ): Promise<Tool[]>;
+
+  /**
+   * Fold the identity's non-optional bounds and the given bounds (including
+   * `<bag>:read` shorthands) into a single resolved `Bound`.
+   */
+  bound(
+    identity: IdentityLike | null | undefined,
+    bounds?: readonly (Bound | string)[],
+    availableBounds?: ReadonlyMap<string, Bound> | Readonly<Record<string, Bound>>,
+  ): Bound;
+  bound(
+    identity: IdentityReference | null | undefined,
+    bounds?: readonly (Bound | string)[],
+  ): Promise<Bound | null>;
+
+  /** Return the skills provided by the identity's bags + the given bags. */
+  skills(identity: IdentityLike | null | undefined, bags: readonly (Bag | BagLike)[]): Skill[];
+  skills(
+    identity: IdentityReference | null | undefined,
+    bags?: readonly (Bag | string)[],
+  ): Promise<Skill[]>;
+
+  /** Return the instructions provided by the identity's bags + the given bags. */
+  instructions(
+    identity: IdentityLike | null | undefined,
+    bags: readonly (Bag | BagLike)[],
+  ): Instruction[];
+  instructions(
+    identity: IdentityReference | null | undefined,
+    bags?: readonly (Bag | string)[],
+  ): Promise<Instruction[]>;
+
   identities(): Collection<Identity>;
   identity(ref: IdentityReference): IdentityHandle;
   createIdentity(input: IdentityCreate): Promise<Updated<Identity>>;
-  traits(): Promise<Trait[]>;
-  bounds(): Promise<Bound[]>;
-  /** What a session of no identity is granted, given what it selects (a schedule that names only traits). */
-  grants(selection?: GrantSelection): Promise<Grants>;
+  bounds(identity?: IdentityReference): Promise<Bound[]>;
   bags(): Promise<Bag[]>;
   bag(name: string): BagHandle;
   actions(): Promise<Action[]>;
+  actions(identity: IdentityLike | null | undefined, bags: readonly (Bag | BagLike)[]): Action[];
+  actions(
+    identity: IdentityReference | null | undefined,
+    bags: readonly (Bag | string)[],
+  ): Promise<Action[]>;
   action(name: string): ActionHandle;
   events(query?: EventQuery): Collection<BarryEvent>;
   recordEvent(input: EventInput): Promise<BarryEvent>;
@@ -72,9 +127,9 @@ export interface Barry {
   schedules(): Promise<Schedule[]>;
   scheduler(): Promise<Scheduler>;
   schedule(id: string): ScheduleHandle;
-  oneOff(id: string): OneOffHandle;
-  oneOffs(query?: OneOffQuery): Promise<OneOff[]>;
-  scheduleOnce(input: OneOffInput): Promise<OneOff>;
+  atSchedule(id: string): AtScheduleHandle;
+  atSchedules(query?: AtScheduleQuery): Promise<AtSchedule[]>;
+  scheduleAt(input: AtScheduleInput): Promise<AtSchedule>;
   services(): Promise<Service[]>;
   service(key: string): ServiceHandle;
   devices(): Promise<Device[]>;
@@ -90,12 +145,21 @@ export interface IdentityHandle {
   remove(): Promise<IdentityRemoval>;
   /** Make it the one unqualified commands act as. */
   makeDefault(): Promise<void>;
-  /** The traits it carries, inherited ones included. */
-  traits(): Promise<Trait[]>;
-  /** What a session of it would be granted, given what the session selects on top. */
-  grants(selection?: GrantSelection): Promise<Grants>;
+  /** The bags it packs. */
+  bags(): Promise<Bag[]>;
+  /** The bounds it carries. */
+  bounds(): Promise<Bound[]>;
+  /** The resolved bound for this identity plus any additional bounds. */
+  bound(bounds?: readonly (Bound | string)[]): Promise<Bound | null>;
   /** The tools a session of it would start with. */
-  tools(selection?: GrantSelection): Promise<Tool[]>;
+  tools(selection?: {
+    bags?: readonly (Bag | string)[];
+    bounds?: Bound | readonly (Bound | string)[];
+    harness?: string;
+    mode?: string;
+    defaults?: boolean;
+    identityDefaults?: boolean;
+  }): Promise<Tool[]>;
   sessions(query?: SessionQuery): Collection<Session>;
   session(id: string): SessionHandle;
   /** Start a session as this identity. */
@@ -107,8 +171,8 @@ export interface SessionHandle {
   readonly identity: IdentityHandle;
   get(): Promise<Session>;
   update(changes: SessionUpdate): Promise<Session>;
-  /** Everything the session is granted, in one call. */
-  grants(): Promise<Grants>;
+  bags(): Promise<Bag[]>;
+  bounds(): Promise<(Bound | string)[]>;
   tools(): Promise<Tool[]>;
   skills(): Promise<Skill[]>;
   instructions(): Promise<Instruction[]>;
@@ -137,10 +201,14 @@ export type SessionEvent =
 
 export interface BagHandle {
   readonly name: string;
+  get(): Promise<Bag>;
   /** This bag's store, from code running inside Barry (a tool, a job, a script). */
   store(name?: string): StoreBinding;
   tools(): Promise<Tool[]>;
-  extensions(): Promise<string[]>;
+  bounds(): Promise<Bound[]>;
+  skills(): Promise<Skill[]>;
+  instructions(): Promise<Instruction[]>;
+  actions(): Promise<Action[]>;
   job(name: string): JobHandle;
 }
 
@@ -174,7 +242,7 @@ export interface ScheduleHandle {
   runs(): Promise<ActionRun[]>;
 }
 
-export interface OneOffHandle {
+export interface AtScheduleHandle {
   readonly id: string;
-  cancel(): Promise<OneOff>;
+  cancel(): Promise<AtSchedule>;
 }

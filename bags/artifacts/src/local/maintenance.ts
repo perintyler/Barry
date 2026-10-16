@@ -3,7 +3,7 @@ import { lstatSync } from "node:fs";
 import { resolve } from "node:path";
 import { ArtifactContentSchema, ArtifactError, ArtifactIdSchema, TimestampSchema } from "../types.js";
 import type { ArtifactBlob } from "../blobs.js";
-import { createSqliteArtifactRepository } from "./catalog.js";
+import { createSqliteArtifactRepository } from "./index-store.js";
 import type { LocalArtifactBlobs } from "./blobs.js";
 
 const hashSchema = ArtifactContentSchema.unwrap().shape.sha256;

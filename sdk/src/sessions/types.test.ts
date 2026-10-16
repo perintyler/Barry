@@ -58,10 +58,10 @@ describe("Session schemas", () => {
 
   // Omitted PATCH fields must not acquire create-schema defaults.
   // Rationale: docs/decisions/0032-sdk-contract-regression-history.md.
-  it("leaves traits untouched when a session update omits them", () => {
+  it("leaves bags untouched when a session update omits them", () => {
     const parsed = UpdateSessionRequestSchema.parse({ pinned: true });
-    expect("traits" in parsed).toBe(false);
-    expect(parsed.traits).toBeUndefined();
+    expect("bags" in parsed).toBe(false);
+    expect(parsed.bags).toBeUndefined();
   });
 
   it("rejects fields that cannot be applied by a session update", () => {
@@ -69,14 +69,17 @@ describe("Session schemas", () => {
     expect(UpdateSessionRequestSchema.safeParse({ useWorktree: true }).success).toBe(false);
   });
 
-  it("still lets a session update clear traits explicitly", () => {
-    expect(UpdateSessionRequestSchema.parse({ traits: [] }).traits).toEqual([]);
-    expect(UpdateSessionRequestSchema.parse({ traits: ["browser"] }).traits).toEqual(["browser"]);
+  it("lets a session update clear bags explicitly", () => {
+    expect(UpdateSessionRequestSchema.parse({ bags: [] }).bags).toEqual([]);
+    expect(UpdateSessionRequestSchema.parse({ bags: ["browser"] }).bags).toEqual(["browser"]);
   });
 
-  // The default belongs on create: a new session naming no traits gets none.
-  it("still defaults traits to empty when creating a session", () => {
-    expect(CreateSessionRequestSchema.parse({ systemPrompt: "hi" }).traits).toEqual([]);
+  it("accepts bags and bounds when creating a session", () => {
+    expect(CreateSessionRequestSchema.parse({ systemPrompt: "hi" }).bags).toBeUndefined();
+    expect(CreateSessionRequestSchema.parse({ systemPrompt: "hi", bags: ["git"], bounds: ["readonly"] })).toMatchObject({
+      bags: ["git"],
+      bounds: ["readonly"],
+    });
   });
 
   it("validates explicit review policy without accepting unknown modes", () => {

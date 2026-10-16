@@ -129,7 +129,7 @@ describe("checkAdapter", () => {
     const adapter = testAdapter({
       requirements: { ...base.requirements, binary: { ...base.requirements.binary, versionPattern: "v(\\d+)" } },
     });
-    expect(checkAdapter(adapter).problems.join("\n")).toMatch(/versionPattern .* found nothing, not the pin/);
+    expect(checkAdapter(adapter).problems.join("\n")).toMatch(/versionPattern .* found nothing, not the recommendation/);
   });
 
   it("reports a malformed adapter instead of throwing", () => {
@@ -152,7 +152,7 @@ it.each(["", "   ", 17])("refuses an invalid experimental reason %s", experiment
 });
 
 it("checks native controls against the inventory and each other", () => {
-  const check = (native: NonNullable<LaunchMode["native"]>) => checkAdapter(testAdapter({ nativeTools: ["Read", "Write"], modes: { hosted: null, instrumented: null, guest: { ...guest, native } } })).problems.join("\n");
+  const check = (native: NonNullable<LaunchMode["native"]>) => checkAdapter(testAdapter({ tools: ["Read", "Write"], modes: { hosted: null, instrumented: null, guest: { ...guest, native } } })).problems.join("\n");
   expect(check({ grantable: ["Read"] })).toBe("");
   expect(check({ grantable: ["typo"] })).toMatch(/outside its inventory/);
   expect(check({ grantable: ["Read"], uncontrolled: { Read: "no switch" } })).toMatch(/both grantable and uncontrolled/);

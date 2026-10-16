@@ -14,6 +14,7 @@ it("an unbuilt checkout gives one actionable line before loading SDK modules", (
     writeFileSync(join(root, "pnpm-workspace.yaml"), "packages: [cli, sdk]\n");
     writeFileSync(join(root, "package.json"), '{"type":"module"}\n');
     copyFileSync(fileURLToPath(new URL("../bin/barry.js", import.meta.url)), join(root, "cli/bin/barry.js"));
+    copyFileSync(fileURLToPath(new URL("../bin/entry.js", import.meta.url)), join(root, "cli/bin/entry.js"));
     writeFileSync(join(root, "cli/src/index.ts"), 'import "../../sdk/dist/index.js";\n');
     const result = spawnSync(process.execPath, [join(root, "cli/bin/barry.js"), "--help"], { encoding: "utf8", env: { PATH: process.env.PATH, HOME: root, TMPDIR: root } });
     expect(result.status).toBe(2);

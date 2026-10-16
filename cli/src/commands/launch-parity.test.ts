@@ -57,7 +57,7 @@ type Variant = Partial<BuildLaunchConfigInput>;
 const COMMON: Record<string, Variant> = {
   default: {},
   "one-shot": { prompt: "do it" },
-  "resume by id": { resume: { providerSessionId: "prior-conversation" } },
+  "resume by id": { resume: { harnessSessionId: "prior-conversation" } },
   "resume last": { resume: { last: true } },
   "resume picker": { resume: { picker: true } },
   relax: { relax: true },
@@ -72,7 +72,7 @@ const SPECIFIC: Record<string, Record<string, Variant>> = {
     "catalog-routed model": { model: "glm-5.2" },
     "routed to z.ai": { model: "glm-5.2", modelProvider: "zai" },
     "routed to ollama": { model: "qwen3:4b", modelProvider: "ollama", baseURL: "http://10.0.0.5:11434" },
-    // Not in any catalog, so only the explicit provider can route it.
+    // Not in any curated model list, so only the explicit vendor can route it.
     "custom model routed to ollama": { model: "my-custom:7b", modelProvider: "ollama" },
   },
   codex: {
@@ -108,7 +108,7 @@ function inputFor(harness: string, name: string, variant: Variant): BuildLaunchC
     extraArgs: [],
     deniedTools: [],
     skillsDirs: [],
-    traitSkillDirs: [],
+    bagSkillDirs: [],
     slashCommandActions: [],
     tmpDirs: [],
     ...variant,
@@ -177,7 +177,7 @@ async function viaAdapter(harness: string, input: BuildLaunchConfigInput): Promi
       plan: {
         kind: "cli",
         ...rest,
-        ...(harnessSessionId ? { providerSessionId: harnessSessionId } : {}),
+        ...(harnessSessionId ? { harnessSessionId: harnessSessionId } : {}),
         ...(discoverHarnessSessionId ? { discoversConversation: true } : {}),
       },
       written: writtenHome(plan),
@@ -216,30 +216,40 @@ describe.each(GUEST_HARNESSES)("barry start on %s", (harness) => {
   });
 });
 
-
-it("carries real trait grants and bounds through the CLI's TUI launch config", async () => {
+it("carries real bag grants and bounds through the CLI's TUI launch config", async () => {
   const { Barry } = await import("@barry-rocks/sdk");
   const { identities } = await import("@barry-rocks/identities-bag");
-  const { resolveNativePolicy } = await import("@barry-rocks/sdk/bounds");
+  const { resolveNativeTools } = await import("@barry-rocks/sdk/bounds");
   const { parseManifest } = await import("@barry-rocks/sdk/bags");
   const { adapters } = await adapterStore();
   await adapters.add(new URL("../../../adapters/sessions/pi/", import.meta.url).pathname);
   await adapters.add(new URL("../../../adapters/sessions/cursor/", import.meta.url).pathname);
   Barry.use(identities);
   try {
-    const record = adapters.installed().find(record => record.id === "claude-code")!;
+    const record = adapters.installed().find((item) => item.id === "claude-code")!;
     const adapter = await harnessAdapter("claude-code");
     const bash = parseManifest(new URL("../../../bags/bash/", import.meta.url).pathname)!;
-    for (const [traits, inlineBound, expected] of [
-      [["native-file-reads"], null, ["Read", "Glob", "Grep"]],
-      [["native-network"], { network: { actions: ["all"] } }, []],
-      [["native-shell"], bash.bounds!["bash:no-bash"].bound, []],
+    const noBashRaw = bash.bounds!["no-bash"] ?? bash.bounds!["bash:no-bash"];
+    const noBashBound =
+      noBashRaw && typeof noBashRaw === "object" && "bound" in noBashRaw && noBashRaw.bound
+        ? noBashRaw.bound
+        : noBashRaw;
+
+    for (const [boundInputs, expected] of [
+      [[{ tools: { deny: ["*:Bash", "*:Write", "*:Edit", "*:NotebookEdit", "*:WebFetch", "*:WebSearch"] } }], ["Read", "Glob", "Grep"]],
+      [[{ tools: { deny: ["*:Bash", "*:Read", "*:Write", "*:Edit", "*:NotebookEdit", "*:Glob", "*:Grep"] }, network: { deny: ["all"] } }], []],
+      [[{ tools: { deny: ["*:Read", "*:Write", "*:Edit", "*:NotebookEdit", "*:Glob", "*:Grep", "*:WebFetch", "*:WebSearch"] } }, noBashBound!], []],
     ] as const) {
-      const granted = await Barry.grants({ harness: record.id, mode: "guest", defaults: false, traits: [...traits], inlineBound });
-      const native = resolveNativePolicy(granted, record, "guest");
+      const bound = await Barry.bound(null, [...boundInputs]);
+      const native = resolveNativeTools(bound, [], record, "guest");
       expect(native.allowed).toEqual(expected);
-      const config = buildSessionConfig({ ...inputFor("claude", "native-grants", {}), harness: adapter, vendors: VENDORS,
-        mcpServers: SERVERS, allowedNativeTools: native.allowed, deniedTools: native.denied,
+      const config = buildSessionConfig({
+        ...inputFor("claude", "native-grants", {}),
+        harness: adapter,
+        vendors: VENDORS,
+        mcpServers: SERVERS,
+        allowedNativeTools: native.allowed,
+        deniedTools: native.denied,
       });
       const plan = await adapter.modes.guest!.plan(config);
       try {
@@ -249,12 +259,11 @@ it("carries real trait grants and bounds through the CLI's TUI launch config", a
         for (const directory of plan.tmpDirs) rmSync(directory, { recursive: true, force: true });
       }
     }
-    const cursor = adapters.installed().find(record => record.id === "cursor")!;
-    const cursorGrants = await Barry.grants({ harness: "cursor", mode: "hosted", defaults: false, inlineBound: { files: { deny: [".env"] } } });
-    expect(resolveNativePolicy(cursorGrants, cursor, "hosted").conflicts).toHaveProperty("Grep");
-    const piGrants = await Barry.grants({ harness: "pi", mode: "hosted", defaults: false, traits: ["native-network"] });
-    expect(piGrants.traits).not.toContain("native-network");
-    expect(piGrants.tools).toEqual([]);
+    const cursor = adapters.installed().find((item) => item.id === "cursor")!;
+    const cursorBound = await Barry.bound(null, [{ files: { deny: [".env"] } }]);
+    expect(resolveNativeTools(cursorBound, [], cursor, "hosted").conflicts).toHaveProperty("Grep");
+    const piTools = await Barry.tools(null, [], []);
+    expect(piTools).toEqual([]);
   } finally {
     Barry.reset();
   }

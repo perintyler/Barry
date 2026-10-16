@@ -1,63 +1,74 @@
+import { ensureBarry } from "../lib/barry-init.js";
+import { recallSelection, rememberSelection } from "../sessions/session-selections.js";
+import { cliBuild, ensureApiCurrent } from "../sessions/api-skew.js";
+import { lazy } from "../lib/lazy.js";
+import { checkKnownCommand } from "./known-commands.js";
+export { checkKnownCommand, setKnownCommands } from "./known-commands.js";
+import { queueStaleBagBuild } from "../lib/bag-maintenance.js";
+import { prepareSession, supportsCreateBags, type SessionPreparation } from "../sessions/prepare.js";
+import { installedHarnesses } from "../lib/harness-flags.js";
+import { ensureModelsInstalled, modelVendorsForRouting } from "../lib/models-install.js";
+import { mark, span, begin, report } from "../lib/timing.js";
 import { spawn } from "child_process";
 import { CliError, isCliError } from "../lib/cli-error.js";
-import { adapterPreflightNotices } from "./doctor.js";
+const adapterPreflightNotices = lazy(() => import("./doctor.js"), module => module.adapterPreflightNotices);
 import { join, basename } from "path";
 import { rmSync } from "fs";
-import { input, confirm } from "@inquirer/prompts";
-import { ExitPromptError, CancelPromptError } from "@inquirer/core";
+const input = lazy(() => import("@inquirer/prompts"), module => module.input);
+const confirm = lazy(() => import("@inquirer/prompts"), module => module.confirm);
+function isPromptCancellation(error: unknown): boolean { return error instanceof Error && ["ExitPromptError", "CancelPromptError"].includes(error.name); }
 import { PATHS, McpConfig } from "../config.js";
-import { generateMcpConfig, checkSseHealth } from "../mcp-config.js";
-import { baseIdentitySelection, loadBags, expandCompositionFromSnapshot, loadBagRegistrySnapshot, mergeBags, loadRegistry, isBuiltinBag } from "@barry-rocks/sdk/internal/bags";
-import { sessionMcpConfig } from "../lib/session-mcp-config.js";
-import { traitPicker, type TraitPickerResult } from "../prompts/trait-picker.js";
+const checkSseHealth = lazy(() => import("../mcp-config.js"), module => module.checkSseHealth);
+import { baseIdentitySelection, loadBags, loadBagSync, expandCompositionSync, loadBagRegistrySnapshot, mergeBags, loadRegistry, isBuiltinBag } from "@barry-rocks/sdk/internal/bags";
+import { ALWAYS_ON_MCP_SERVERS, type Bag } from "@barry-rocks/sdk/bags";
+import { guestSessionMcpConfig } from "../lib/session-mcp-config.js";
+const sessionPicker = lazy(() => import("../prompts/session-picker.js"), module => module.sessionPicker);
 import type { Bound } from "@barry-rocks/sdk/bounds";
-import { bagAuthCommand } from "./bag.js";
+import { EMPTY_BOUND_SUMMARY, summarizeBound } from "../lib/bound-summary.js";
+const bagAuthCommand = lazy(() => import("./bag.js"), module => module.bagAuthCommand);
 import { getCurrentUser } from "../lib/current-user.js";
 import type { LaunchPlan, LaunchMode } from "@barry-rocks/sdk/adapters/harnesses";
 import { NotSupportedInMode, type SessionConfig } from "@barry-rocks/sdk/sessions";
 
-import { isIdentityCommand, cliName } from "../scope.js";
+import { cliName, currentTarget } from "../target.js";
 import { resolveLaunchMode, platformWarning, isRefusal, type ModeResolution } from "./launch-mode.js";
 import { findInstalled, type InstalledAdapter } from "@barry-rocks/sdk/adapters/harnesses";
 import { attachToHostedSession, buildSessionConfig, composeSystemPrompt, detachFromHostedSession, detachWhenGone, discoverConversation, runChildSession, thisCliCommand, type ResumeRequest } from "../sessions/launch.js";
-import { resolveGrants, buildMcpConfig, preCreateSession as preCreateSessionStep, buildLaunchEnv, launchProvenanceEnv } from "../sessions/launch-context.js";
+import { resolveSessionNativeTools, buildMcpConfig, preCreateSession as preCreateSessionStep, buildLaunchEnv, launchProvenanceEnv } from "../sessions/launch-context.js";
 import { buildMergedSettings } from "../lib/settings.js";
-import { Barry, type GrantSelection, type Grants } from "@barry-rocks/sdk";
-import { identityRecords, traits } from "@barry-rocks/identities-bag";
-import { generateId } from "@barry-rocks/sdk/ids";
+import { Barry, type Instruction, type Skill, type Tool } from "@barry-rocks/sdk";
+import { identityRecords, bounds as boundsStore } from "@barry-rocks/identities-bag";
 import { readProcessStartTime } from "@barry-rocks/sessions-bag/process-liveness";
 import {
   getSession,
   getSessionMessages,
 } from "@barry-rocks/sessions-bag/client";
 
-import { getServicePort, getServiceUrl } from "@barry-rocks/sdk/services";
+import { getServiceUrl } from "@barry-rocks/sdk/services";
 import { identityEnvironment, assertSessionCredentials, requiredCredentials, declaredCredentialEnvs, type Environment, checkBagCredentials } from "@barry-rocks/sdk/internal/env";
 
-
-// This file is imported eagerly at the top of
-// cli/src/index.ts, so any import here that loads an agent SDK runs on EVERY
-// CLI invocation, including --version/--help. None of the specifiers below
-// do: `sdk-adapters-agents` has no vendor SDK at all, and the two adapter
-// subpaths are SDK-free MODULES inside packages that do depend on one — the
-// subpath is what makes the difference.
-import { adapterSettings, defaultHarness, FALLBACK_HARNESS, type IdentityAdapters } from "@barry-rocks/sdk/internal/identities";
+import {
+  adapterSettings,
+  defaultHarness,
+  FALLBACK_HARNESS,
+  optionalIdentityBags,
+  optionalNames,
+  requiredIdentityBags,
+  requiredNames,
+  type IdentityAdapters,
+} from "@barry-rocks/sdk/internal/identities";
 import type { Vendor, Check } from "@barry-rocks/sdk/adapters/models";
-import type { HarnessId as CatalogProvider, ModeId } from "@barry-rocks/sdk/ids";
+import type { HarnessId, ModeId } from "@barry-rocks/sdk/ids";
 import { installedModels, isOfferedModel, routeModel, suggestOfferedModels, type Models, type RoutingHarness } from "@barry-rocks/sdk/adapters/models";
-
-
-
 
 import { getBagsNeedingAuth, filterBagsNeedingAuthForSession } from "@barry-rocks/sdk/internal/vault";
 
 import { resolveSessionNamespaces } from "@barry-rocks/sdk/internal/sessions";
 import { resolveSkillDirs, listAllActions, selectSlashCommandActions } from "@barry-rocks/sdk/internal/actions";
-import { listAllInstructions, buildInstructionsIndex, buildTraitInstructionPointer } from "@barry-rocks/sdk/internal/instructions";
+import { listAllInstructions, buildInstructionsIndex, buildBagInstructionPointer } from "@barry-rocks/sdk/internal/instructions";
 
 import type { ActionMeta } from "@barry-rocks/sdk/internal/actions";
 import type { MergedBagConfig } from "@barry-rocks/sdk/internal/bags";
-import type { Bag } from "@barry-rocks/sdk/bags";
 
 function apiHeaders(): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -67,188 +78,255 @@ function apiHeaders(): Record<string, string> {
   return headers;
 }
 
-
-
-let knownCommands: string[] = [];
-export function setKnownCommands(commands: string[]): void {
-  knownCommands = commands;
-}
-
-/** Traits granted by --all and --read, including explicit resume selection. */
-export async function allPackedTraits(bags: string[]): Promise<string[]> {
-  const synced = await traits.syncBags(bags, { strict: true });
-  const unavailable = synced.warnings.filter(warning => warning.kind === "bag-load-failed" || warning.kind === "unregistered-subbag");
-  if (synced.timedOut || unavailable.length > 0) {
-    throw new Error(`Cannot grant every packed bag: ${unavailable.map(warning => warning.message).join("; ") || "bag loading timed out"}`);
+/** Bags selected by --all and --read, including explicit resume selection. */
+export async function allSelectableBags(bags: string[]): Promise<string[]> {
+  const composed = expandCompositionSync(bags);
+  const snapshot = await loadBagRegistrySnapshot();
+  const missing = composed.filter((name) => !snapshot.byName.has(name));
+  if (missing.length > 0) {
+    throw new Error(`Cannot load every packed bag: ${missing.join(", ")}`);
   }
-  const available = new Set((await traits.installed(synced.composedBags)).map(trait => trait.name));
-  return (await import("@barry-rocks/sdk/internal/traits")).bagTraits(bags).filter(name => available.has(name));
+  return composed;
 }
 
 /**
- * How a no-traits-selected server list should be described to the user.
- *
- * The banner used to hardcode "(always-on only)" on every empty-selection
- * branch. That was true before the namespace split: the config really was just
- * `ALWAYS_ON_SERVERS`. It is not true now. `generateMcpConfig("http")` writes a
- * single server (`barry`), so the always-on seed contributes ONE key, and every
- * other entry is a namespace granted by the identity's own bags — which the
- * capability picker does not control. Telling someone who selected nothing that
- * they have "always-on only" asserts a security property the code does not
- * deliver: unchecking every trait, and `--none`, do not shrink this list.
- *
- * Under `bag_grant: session` (the default) that security property IS now
- * delivered for TOOLS: the server is still mounted, but its tools are filtered
- * out because no trait grants them. The label therefore has to separate the two
- * axes it used to conflate. Saying "from your barry's bags" alone would now
- * overclaim in the opposite direction — implying a grant that was withheld —
- * which is the same defect with the sign flipped.
- *
- * Derived from the config rather than hardcoded, so it cannot drift from the
- * list it labels the way the fixed string did.
+ * How a no-extra-bags-selected server list should be described to the user.
  */
-export function describeUnselectedServers(
-  config: McpConfig,
-  bagGrant: "session" | "identity" = "session",
-): string {
-  const alwaysOn = Object.keys(config.mcpServers).filter((name) => traits.alwaysOn.includes(name));
-  const identityGranted = Object.keys(config.mcpServers).length - alwaysOn.length;
-  if (identityGranted === 0) return "no traits selected — always-on only";
-  return bagGrant === "identity"
-    ? `no traits selected — ${alwaysOn.length} always-on + ${identityGranted} from your barry's bags`
-    : `no traits selected — ${alwaysOn.length} always-on + ${identityGranted} mounted but ungranted (bag_grant: session)`;
+export function describeUnselectedServers(config: McpConfig): string {
+  const alwaysOn = Object.keys(config.mcpServers).filter((name) =>
+    (ALWAYS_ON_MCP_SERVERS as readonly string[]).includes(name),
+  );
+  const identityPacked = Object.keys(config.mcpServers).length - alwaysOn.length;
+  if (identityPacked === 0) return "no bags selected — always-on only";
+  return `no extra bags selected — ${alwaysOn.length} always-on + ${identityPacked} from your barry's bags`;
 }
 
-/** What the capability picker offers, once builtins are filtered out. */
+export interface OfferedBagInput {
+  name: string;
+  description?: string | null;
+  tools?: string[];
+  hint?: string;
+  required?: boolean;
+  optional?: boolean;
+  boundNames?: string[];
+  bound?: Bound;
+}
+
+/** What the session picker offers once builtin bags are filtered out. */
 export interface OfferedCapabilities {
-  traits: Array<{ name: string; description: string; boundHint?: string }>;
-  /** Builtin traits withheld — 0 when `showBuiltin` is set. */
-  hiddenTraitCount: number;
+  bags: Array<{ name: string; description: string; hint?: string; boundHint?: string; required?: boolean }>;
+  bounds: Array<{ name: string; description: string; hint?: string; required?: boolean }>;
+  /** Builtin bags withheld — 0 when `showBuiltin` is set. */
+  hiddenBagCount: number;
 }
 
 /**
- * Short marker naming a trait's restrictions for the picker.
- *
- * Deliberately just the bound names (plus a generic word for inline rules):
- * the picker is a one-line-per-trait list, and the full denial summary belongs
- * in `barry trait list`. The point here is only that a restricted trait must
- * not look identical to an unrestricted one.
- */
-function boundHint(trait: { boundNames?: string[]; bound?: Bound }): string | undefined {
-  const names = [...(trait.boundNames ?? [])];
-  if (trait.bound && Object.keys(trait.bound).length > 0) names.push("bounded");
-  return names.length > 0 ? names.join(", ") : undefined;
-}
-
-/**
- * Decide what the picker offers.
+ * Decide what the session picker offers.
  *
  * Split out from `pickCapabilities` so the filtering can be tested without a
  * TTY: the reveal path (`--show-builtin`) is one boolean away from the hide
- * path, and inverting it silently would put ~10 builtin traits back in front
- * of the user, or — far worse — hide a user's own bags.
- *
- * Traits only: the picker no longer offers individual tools or bare namespaces
- * (see the note on `TraitPickerResult`). Per-tool selection lives in
- * BarrySessions, which reaches it through the session contract rather than
- * through this prompt.
- *
- * `isBuiltin` is injected rather than imported so tests can describe a bag set
- * without touching the real registry.
+ * path, and inverting it silently would put builtin bags in front of the user,
+ * or — far worse — hide a user's own bags.
  */
 export function offeredCapabilities(
-  allTraits: Array<{
-    name: string;
-    bag: string | null;
-    description: string | null;
-    tools: string[];
-    namespaces: string[];
-    // Optional so existing callers and fixtures stay valid: these are carried
-    // through for display only, and a caller that has no bound data should not
-    // be forced to invent it.
-    boundNames?: string[];
-    bound?: Bound;
-  }>,
+  allBags: readonly OfferedBagInput[],
   showBuiltin: boolean,
   isBuiltin: (bag: string) => boolean = isBuiltinBag,
+  allBounds: readonly (Bound & { name?: string; description?: string | null; hint?: string; required?: boolean })[] = [],
 ): OfferedCapabilities {
-  // Builtin bags are Barry's own plumbing, and the ones a session needs are
-  // already reachable without being picked: their namespaces arrive through
-  // DEFAULT_TRAITS (`sessions` absorbs actions/changes/events, `coding` covers
-  // system/filesystem/git, and instructions is granted
-  // directly). Offering them again as choices made the picker mostly noise —
-  // ~25 bags deep before the first bag the user actually installed.
-  // `--show-builtin` brings them back.
-  //
-  // Hiding a builtin whose namespace NO default trait covers would strand it:
-  // filterTools fails closed, so it would be unreachable with nothing in the
-  // UI saying so. session-bound.test.ts guards that for the always-on set.
-  //
-  // A trait with no `bag` is user-authored or a cross-bag composite (`all`,
-  // `read`, `coding`); those are never builtin and always offered.
-  const traits = showBuiltin ? allTraits : allTraits.filter((t) => !t.bag || !isBuiltin(t.bag));
+  const bags = showBuiltin ? [...allBags] : allBags.filter((b) => !isBuiltin(b.name));
+  const namedBounds = allBounds.filter(
+    (b): b is Bound & { name: string; description?: string | null; hint?: string; required?: boolean } =>
+      typeof b.name === "string" && b.name.length > 0,
+  );
+  return {
+    bags: bags.map((b) => {
+      const boundHint =
+        b.boundNames && b.boundNames.length > 0
+          ? b.boundNames.join(", ")
+          : b.bound && summarizeBound(b.bound) !== EMPTY_BOUND_SUMMARY
+            ? "bounded"
+            : undefined;
+      return {
+        name: b.name,
+        description: b.description ?? (b.tools && b.tools.length > 0 ? b.tools.join(", ") : ""),
+        ...(b.hint ? { hint: b.hint } : {}),
+        ...(boundHint ? { boundHint } : {}),
+        ...(b.required ? { required: true } : {}),
+      };
+    }),
+    bounds: namedBounds.map((b) => {
+      const summary = summarizeBound(b);
+      const hint = b.hint ?? (b.description && summary !== EMPTY_BOUND_SUMMARY ? summary : undefined);
+      return {
+        name: b.name,
+        description: b.description ?? summary,
+        ...(hint ? { hint } : {}),
+        ...(b.required ? { required: true } : {}),
+      };
+    }),
+    hiddenBagCount: allBags.length - bags.length,
+  };
+}
+
+export interface SessionPickerCandidatesInput {
+  requiredBags: readonly string[];
+  optionalBags?: readonly string[];
+  installedBags: readonly Bag[];
+  requiredBounds?: readonly string[];
+  optionalBounds?: readonly string[];
+  globalBounds?: readonly Bound[];
+  identityBounds?: readonly (Bound & { name?: string; description?: string | null })[];
+  identityName?: string;
+  showBuiltin?: boolean;
+  isBuiltin?: (bag: string) => boolean;
+}
+
+export function buildSessionPickerCandidates(input: SessionPickerCandidatesInput) {
+  const reqBagSet = new Set(input.requiredBags);
+  const optBags = input.optionalBags ?? [];
+  const optBagSet = new Set(optBags);
+  const installedByName = new Map(input.installedBags.map((bag) => [bag.name, bag]));
+  const isBuiltin = input.isBuiltin ?? isBuiltinBag;
+
+  const candidateBagNames = [
+    ...new Set([...optBags, ...input.installedBags.map((bag) => bag.name)]),
+  ].filter((name) => !reqBagSet.has(name));
+
+  const bagInputs: OfferedBagInput[] = candidateBagNames.map((name) => {
+    const bag = installedByName.get(name);
+    const optionalHint = optBagSet.has(name)
+      ? input.identityName
+        ? `optional on ${input.identityName}`
+        : "optional"
+      : undefined;
+    return {
+      name,
+      description: bag?.manifest?.description ?? bag?.description ?? null,
+      tools: bag?.tools?.map((t) => t.toolName) ?? [],
+      ...(optionalHint ? { hint: optionalHint } : {}),
+    };
+  });
+
+  const step1 = offeredCapabilities(bagInputs, Boolean(input.showBuiltin), isBuiltin);
+  const reqBoundSet = new Set(input.requiredBounds ?? []);
+  const optBoundSet = new Set(input.optionalBounds ?? []);
+
+  const resolveBounds = (pickedBags: readonly string[]) => {
+    const activeBags = new Set([...reqBagSet, ...pickedBags]);
+    const candidateBounds: Array<Bound & { name: string; description?: string | null; hint?: string }> = [];
+    const seen = new Set<string>();
+
+    for (const bound of input.globalBounds ?? []) {
+      if (!bound.name || reqBoundSet.has(bound.name) || seen.has(bound.name)) continue;
+      seen.add(bound.name);
+      candidateBounds.push({ ...bound, name: bound.name });
+    }
+
+    for (const bound of input.identityBounds ?? []) {
+      if (!bound.name || reqBoundSet.has(bound.name) || seen.has(bound.name)) continue;
+      seen.add(bound.name);
+      const optionalHint = optBoundSet.has(bound.name)
+        ? input.identityName
+          ? `optional on ${input.identityName}`
+          : "optional"
+        : undefined;
+      candidateBounds.push({
+        ...bound,
+        name: bound.name,
+        ...(optionalHint ? { hint: optionalHint } : {}),
+      });
+    }
+
+    for (const bagName of activeBags) {
+      const bag = installedByName.get(bagName);
+      for (const [boundKey, def] of Object.entries(bag?.manifest?.bounds ?? {})) {
+        const qualifiedName = boundKey.includes(":") ? boundKey : `${bagName}:${boundKey}`;
+        if (reqBoundSet.has(qualifiedName) || reqBoundSet.has(boundKey) || seen.has(qualifiedName)) {
+          continue;
+        }
+        seen.add(qualifiedName);
+        candidateBounds.push({
+          ...def.bound,
+          name: qualifiedName,
+          ...(def.description ? { description: def.description } : {}),
+        });
+      }
+    }
+
+    return offeredCapabilities([], true, isBuiltin, candidateBounds).bounds;
+  };
 
   return {
-    traits: traits.map((t) => ({
-      name: t.name,
-      description: t.description ?? t.tools.join(", "),
-      // A separate field, never folded into `description`: the picker filters
-      // on name and description, so concatenating would quietly change what
-      // typing matches. Names only, not the resolved denials — the picker
-      // renders one line per trait with no width budget.
-      ...(boundHint(t) ? { boundHint: boundHint(t) } : {}),
-    })),
-    hiddenTraitCount: allTraits.length - traits.length,
+    bags: step1.bags,
+    hiddenBagCount: step1.hiddenBagCount,
+    resolveBounds,
   };
 }
 
 /**
- * Capabilities offered by the interactive picker, scoped to the bags this
- * barry actually holds.
- *
- * `Traits.list()` is a bare `SELECT *` on an append-only table (`ensureTraits`
- * never deletes), so it accumulates a row for every bag ever synced on this
- * machine — including bags renamed by the pack->bag migration, uninstalled
- * since, or belonging to a different barry. Offering those meant picking a
- * trait that resolves to zero tools at runtime, with nothing in the UI saying
- * so. `Traits.listInstalled` keeps rows whose `bag` is null (user-authored and
- * cross-bag composites like `all`/`read`/`coding`, which have no single owner)
- * and drops the rest.
- *
- * The API's `GET /traits` has filtered this way for a while; this brings the
- * CLI in line with it. It scopes tighter than the API does — to this barry's
- * own bags rather than every registered one — because the picker's whole job
- * is to offer what *this* session can actually use.
+ * Capabilities offered by the interactive session picker, scoped to the bags
+ * and bounds this identity holds.
  */
 async function pickCapabilities(
-  installedBags: string[],
-  selectedTraits?: string[],
-  showAll = false,
+  requiredBags: string[],
+  previous?: { bags?: string[]; bounds?: string[] },
+  showBuiltin = false,
   header?: SessionHeader,
   identityId?: number | null,
-): Promise<TraitPickerResult> {
-  const allTraits = await traits.installed(installedBags);
-  if (identityId) for (const trait of await Barry.identity(identityId).traits()) {
-    if (!trait.optional || allTraits.some(existing => existing.name === trait.name)) continue;
-    allTraits.push({ ...trait, description: trait.description ?? null, namespaces: trait.namespaces ?? [], tools: trait.tools ?? [], skills: trait.skills ?? [], instructions: trait.instructions ?? [], bound: trait.bound ?? {}, boundNames: trait.boundNames ?? [], access: trait.access ?? "read", bag: trait.bag ?? null });
-  }
+): Promise<{ bags: string[]; bounds?: string[] }> {
+  const snapshot = await loadBagRegistrySnapshot().catch(() => ({ bags: [] as Bag[], byName: new Map<string, Bag>() }));
+  const identityRecord = identityId ? await identityRecords.row(identityId).catch(() => undefined) : undefined;
+  const identityConfig = identityRecord ? identityRecords.config(identityRecord) : undefined;
+  const reqIdentityBags = identityConfig
+    ? requiredIdentityBags(identityConfig.bags, identityConfig.bag_configs)
+    : [];
+  const optBags = identityConfig
+    ? optionalIdentityBags(identityConfig.bags, identityConfig.bag_configs)
+    : [];
+  const allRequiredBags = [...new Set([...requiredBags, ...reqIdentityBags])];
+  const reqBagSet = new Set(allRequiredBags);
+  const reqBounds = identityConfig ? requiredNames(identityConfig.bounds) : [];
+  const optBounds = identityConfig ? optionalNames(identityConfig.bounds) : [];
+  const reqBoundSet = new Set(reqBounds);
+  const identityInlineBounds = (identityConfig?.bounds ?? []).flatMap((entry) =>
+    entry.bound ? [{ ...entry.bound, name: entry.name }] : [],
+  );
 
-  const offered = offeredCapabilities(allTraits, showAll);
-  const { hiddenTraitCount } = offered;
-
-  const result = await traitPicker({
-    ...(header ? { header } : {}),
-    // Name the real flag: `--all` is a different thing (it skips the picker
-    // outright), so pointing at it here sent users somewhere they did not mean
-    // to go.
-    message: hiddenTraitCount > 0
-      ? `Select capabilities (${hiddenTraitCount} builtin hidden — --show-builtin to show)`
-      : "Select capabilities",
-    traits: offered.traits,
-    ...(selectedTraits && selectedTraits.length > 0 ? { selectedTraits } : {}),
+  const candidates = buildSessionPickerCandidates({
+    requiredBags: allRequiredBags,
+    optionalBags: optBags,
+    installedBags: snapshot.bags,
+    requiredBounds: reqBounds,
+    optionalBounds: optBounds,
+    globalBounds: boundsStore.shipped(),
+    identityBounds: identityInlineBounds,
+    identityName: identityRecord?.name,
+    showBuiltin,
+    isBuiltin: isBuiltinBag,
   });
 
-  return result;
+  const selectedItems =
+    previous?.bags !== undefined
+      ? previous.bags.filter((name) => !reqBagSet.has(name))
+      : optBags.filter((name) => !reqBagSet.has(name));
+  const selectedBounds =
+    previous?.bounds !== undefined
+      ? previous.bounds.filter((name) => !reqBoundSet.has(name))
+      : [];
+
+  const result = await sessionPicker({
+    ...(header ? { header } : {}),
+    message: candidates.hiddenBagCount > 0
+      ? `Select bags (${candidates.hiddenBagCount} builtin hidden — --show-builtin to show)`
+      : "Select bags",
+    items: candidates.bags,
+    resolveBounds: candidates.resolveBounds,
+    ...(selectedItems.length > 0 ? { selectedItems } : {}),
+    ...(selectedBounds.length > 0 ? { selectedBounds } : {}),
+  });
+
+  return { bags: result.items, bounds: result.bounds };
 }
 
 /**
@@ -267,18 +345,22 @@ function printResumeHint(sessionId: string): void {
 interface SessionHeader {
   identity?: string;
   bags?: string;
+  bounds?: string;
+  identityBounds?: string;
   sessionId?: string;
 }
 
 /**
- * The same banner for the paths that never draw the picker — `--traits`,
+ * The same banner for the paths that never draw the picker — `--bag`,
  * `--all`, `--prompt`, a non-TTY fallback. Without it those sessions would
  * print no session ID until exit, which is exactly when it is too late to
  * copy one.
  */
-function printSessionHeader(header: SessionHeader): void {
+export function printSessionHeader(header: SessionHeader): void {
   if (header.identity) console.log(`  Identity: ${header.identity}`);
   if (header.bags) console.log(`  Bags: ${header.bags}`);
+  if (header.bounds) console.log(`  Bounds: ${header.bounds}`);
+  if (header.identityBounds) console.log(`  Identity bounds: ${header.identityBounds}`);
   if (header.sessionId) console.log(`  Session: ${header.sessionId}`);
   // Decision 28: guards catch ordinary mistakes, not a determined adversary —
   // only a supported sandbox enforces against one. Said plainly here so a guard
@@ -287,86 +369,119 @@ function printSessionHeader(header: SessionHeader): void {
 }
 
 /**
- * Write the session's traits before anything asks the server what the session
- * can do.
- *
- * Order matters and is the whole point. Building the MCP config queries
- * `/session-namespaces`, and the MCP server caches that resolution per session.
- * Writing the traits afterwards meant the first query resolved a trait-less
- * session and the agent inherited the stale answer — `--traits notion` produced
- * a session with no notion tools. The server now re-resolves when a session's
- * traits change, so this is no longer a correctness bug, but resolving twice
- * per start is pure waste: the first pass is always discarded.
- *
- * Best-effort by design. A session that cannot record its traits should still
- * start — the agent just gets the default grant — so this warns and returns
- * rather than throwing.
+ * Write the session's bags and bounds before anything asks the server what the
+ * session can do.
  */
-async function persistSessionTraits(sessionId: string, traits: string[]): Promise<void> {
+async function persistSessionSelection(
+  sessionId: string,
+  selection: { bags: string[]; bounds?: string[] },
+): Promise<void> {
   try {
-    const resp = await fetch(`http://localhost:${getServicePort("api")}/api/v1/sessions/${sessionId}`, {
-      method: "PATCH",
-      headers: apiHeaders(),
-      body: JSON.stringify({ traits }),
-    });
+    const resp = await span("session:selection-persisted", () =>
+      fetch(`${getServiceUrl("api")}/api/v1/sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: apiHeaders(),
+        body: JSON.stringify({
+          bags: selection.bags,
+          ...(selection.bounds ? { bounds: selection.bounds } : {}),
+        }),
+        signal: AbortSignal.timeout(3000),
+      }),
+    );
     if (!resp.ok) {
-      console.warn(`Warning: Could not save traits — HTTP ${resp.status}`);
+      console.warn(`Warning: Could not save session selection — HTTP ${resp.status}`);
     }
   } catch (err) {
-    console.warn(`Warning: Could not save traits — ${err instanceof Error ? err.message : err}`);
+    console.warn(`Warning: Could not save session selection — ${err instanceof Error ? err.message : err}`);
   }
 }
 
-/** What a session of this identity (none: a session with no identity) is granted, given what it selects. */
-function grantsOf(identityId: number | null, selection: GrantSelection): Promise<Grants> {
-  return identityId ? Barry.identity(identityId).grants(selection) : Barry.grants(selection);
+export interface SessionResolution {
+  bound: Bound | null;
+  tools: Tool[];
+  skills: Skill[];
+  instructions: Instruction[];
+  namespaces: string[];
+}
+
+async function resolveSessionCapabilities(
+  identityId: number | null,
+  selection: {
+    bags: string[];
+    bounds: string[];
+    harness: string;
+    mode: ModeId;
+    identityBagNames: string[];
+  },
+): Promise<SessionResolution> {
+  const [bound, tools, skills, instructions] = await Promise.all([
+    identityId !== null
+      ? Barry.identity(identityId).bound(selection.bounds)
+      : Barry.bound(null, selection.bounds),
+    identityId !== null
+      ? Barry.identity(identityId).tools({
+          bags: selection.bags,
+          bounds: selection.bounds,
+          harness: selection.harness,
+          mode: selection.mode,
+        })
+      : Barry.tools(null, selection.bags, selection.bounds),
+    Barry.skills(identityId ?? undefined, selection.bags),
+    Barry.instructions(identityId ?? undefined, selection.bags),
+  ]);
+  const namespaces = new Set<string>([...selection.identityBagNames, ...selection.bags]);
+  for (const tool of tools) {
+    if (tool.bag !== null && tool.namespace) {
+      namespaces.add(tool.namespace);
+    }
+  }
+  return { bound, tools, skills, instructions, namespaces: [...namespaces] };
 }
 
 /**
- * Resolve granted namespaces for pre-flight auth checks.
+ * Resolve active session bag namespaces for pre-flight auth checks.
  *
- * Compares against the session's granted namespaces (traits, identity-level
- * grants, and active tools) rather than currently active tools alone —
- * an unauthorized bag has no active tools yet, so comparing against active
- * tools alone would drop unauthorized bags that were legitimately granted.
+ * Compares against the session's active bags and resolved tools rather than
+ * currently active MCP server tools alone — an unauthorized bag has no active
+ * tools yet, so comparing against active tools alone would drop unauthorized
+ * bags that were selected for the session.
  */
-export async function resolveGrantedNamespacesForSession(params: {
+export async function resolveSessionBagNamespaces(params: {
   sessionId?: string;
   identityId: number | null;
-  sessionTraits: string[];
+  sessionBags: string[];
   isAll?: boolean;
   harness?: string;
+  bounds?: string[];
+  mode?: ModeId;
+  resolved?: Pick<SessionResolution, "namespaces">;
 }): Promise<string[] | undefined> {
   if (params.isAll) return undefined;
 
-  const granted = await grantsOf(params.identityId, {
-    traits: params.sessionTraits,
-    ...(params.harness ? { harness: params.harness } : {}),
-  });
-  const namespaces = new Set<string>(granted.namespaces);
+  const namespaces = new Set<string>(params.sessionBags);
+  if (params.resolved) {
+    for (const ns of params.resolved.namespaces) namespaces.add(ns);
+  } else if (params.identityId !== null || params.sessionBags.length > 0) {
+    const selection = {
+      bags: params.sessionBags,
+      ...(params.harness ? { harness: params.harness } : {}),
+      ...(params.bounds ? { bounds: params.bounds } : {}),
+      ...(params.mode ? { mode: params.mode } : {}),
+    };
+    const tools =
+      params.identityId !== null
+        ? await Barry.identity(params.identityId).tools(selection)
+        : await Barry.tools(null, params.sessionBags, params.bounds);
+    for (const tool of tools) {
+      if (tool.bag !== null && tool.namespace) {
+        namespaces.add(tool.namespace);
+      }
+    }
+  }
   if (params.sessionId) {
     for (const active of await resolveSessionNamespaces(params.sessionId)) namespaces.add(active);
   }
   return [...namespaces];
-}
-
-/**
- * The MCP config a session starts with, from what its identity and the traits
- * it selected grant: the barry aggregate plus one endpoint per granted
- * namespace, so a tool keeps its namespace's prefix instead of collapsing onto
- * mcp__barry__*. Records the selected traits on the session first: every
- * branch that picks traits builds a config from them at once, and the two must
- * not be separated (see `persistSessionTraits`).
- */
-async function grantedMcpConfig(
-  identityId: number | null,
-  traitNames: string[],
-  sessionId?: string,
-  harness?: string,
-): Promise<McpConfig> {
-  if (sessionId) await persistSessionTraits(sessionId, traitNames);
-  const { namespaces } = await grantsOf(identityId, { traits: traitNames, ...(harness ? { harness } : {}) });
-  return await sessionMcpConfig(namespaces, sessionId, namespaces);
 }
 
 /**
@@ -450,16 +565,6 @@ export interface ModelSelection {
 /**
  * Which model, served by which model provider, a CLI session runs on: `-m`,
  * then the identity's entry for this harness, then the provider's default.
- *
- * The provider is chosen EXPLICITLY when anything names one (a flag, or the
- * vendor of the identity's `vendor/model` ref) and only inferred from the
- * curated catalog otherwise. Inference alone is what let `--ollama -m
- * my-custom:7b` lose its route: the custom id is in no catalog, so it went to
- * Anthropic. The provider's default model is the LAST fallback; placing it
- * earlier silently replaced an identity's chosen Ollama model.
- *
- * Throws on conflicting provider flags or a harness/provider pair the harness
- * cannot speak, before any session exists.
  */
 export function resolveModelSelection(
   options: StartOptions,
@@ -490,12 +595,6 @@ export function resolveModelSelection(
 
 /**
  * The preflight lines for an Ollama-routed session, one per outcome.
- *
- * Never throws and never blocks: a failed check is reported, and the session
- * launches anyway. Always returns the tool-call line — success included — so a
- * skipped check is distinguishable from a passed one. The size warning is
- * independent of the probe, because tool-call failure in small models is
- * intermittent and a pass does not predict the next turn.
  */
 export async function ollamaPreflightNotices(
   model: string,
@@ -509,7 +608,6 @@ export async function ollamaPreflightNotices(
     ]);
   const notices: string[] = [];
   for (const check of checks) {
-    // The size warning is a sentence of its own, printed as written.
     if (check.name === "size") {
       if (check.status !== "ok") notices.push(check.observed);
     } else if (check.name === "tool call" || check.status === "failed") {
@@ -540,16 +638,15 @@ export async function llamacppPreflightNotices(
 
 export interface StartOptions {
   harness?: string;
-  traits?: string;
+  bag?: string;
+  bags?: string;
+  last?: boolean;
   /** Named bound to restrict the session (see `barry bound list`). */
   bound?: string;
+  bounds?: string;
   all?: boolean;
   /**
-   * Show builtin bags in the overview line and the capability picker.
-   *
-   * Distinct from `--all`, which skips the picker altogether: this one changes
-   * what the picker OFFERS. Builtins are hidden by default because every one of
-   * them is already granted via DEFAULT_TRAITS, so picking them is a no-op.
+   * Show builtin bags in the overview line and the session picker.
    */
   showBuiltin?: boolean;
   read?: boolean;
@@ -558,6 +655,7 @@ export interface StartOptions {
   none?: boolean;
   ui?: string;
   noUi?: boolean;
+  apiRestart?: boolean;
   /** Identity alias for --name; whichever is set wins at identity resolution. */
   barry?: string;
   transport?: "http" | "sse" | "stdio";
@@ -565,6 +663,7 @@ export interface StartOptions {
   quickStart?: boolean;
   fullBranding?: boolean;
   healthCheck?: boolean;
+  rebuildBags?: boolean;
   zai?: boolean;
   ollama?: boolean;
   llamacpp?: boolean;
@@ -572,9 +671,7 @@ export interface StartOptions {
   /**
    * `--mode`. Left as a plain string: validating it against the ADAPTER's
    * declared modes (not against the ModeId union) is what produces a refusal
-   * naming what that adapter can actually do. A typed field here would reject
-   * "hosted" for an adapter that does not support it with a generic parse
-   * error instead.
+   * naming what that adapter can actually do.
    */
   mode?: string;
   prompt?: string;
@@ -585,15 +682,10 @@ export interface StartOptions {
   sessionName?: string;
   // Internal: set by resumeCommand to reuse an existing session
   _resumeSessionId?: string;
-  _resumeTraits?: string[];
+  _resumeBags?: string[];
   _resumeBounds?: string[];
   /**
-   * Internal: what resumeCommand asked to resume, provider-agnostic.
-   *
-   * Was three codex-shaped booleans (`_codexResume`, `_codexResumeLast`,
-   * `_codexResumeSessionId`) that every other provider had to work around by
-   * passing raw flags through argv instead. The adapters translate this into
-   * each vendor's own spelling.
+   * Internal: what resumeCommand asked to resume, harness-agnostic.
    */
   _resume?: ResumeRequest;
 }
@@ -603,53 +695,32 @@ interface ResolvedIdentity {
   configuration: import("@barry-rocks/sdk/internal/identities").ResolvedIdentityConfig;
   bags: string[];
   adapters: IdentityAdapters;
-  /**
-   * Named bound the identity applies when the session does not name one with
-   * `--bound`. This is how an identity stays bounded by default; without it the
-   * restriction would depend on remembering a flag every time.
-   */
-  /**
-   * Whether this identity's packed bags grant their tools to every session.
-   * Non-optional so a caller cannot forget it and silently get the wording for
-   * the wrong mode; the loader always resolves it.
-   */
-  bagGrant: "session" | "identity";
 }
 
 /**
  * Resolve inherited configuration and record use on the leaf identity.
  */
-async function resolveIdentity(identityName: string): Promise<ResolvedIdentity> {
-  // Directory first, as resolution found it. A session records its identity's
-  // row, so an identity with none (its record then carries a hash of its name)
-  // is as absent here as it always was.
-  const found = await identityRecords.find(identityName).catch(() => undefined);
-  const identity = found && (await identityRecords.row(found.record.id)) ? found.record : undefined;
+async function resolveIdentity(identityName: string, selected?: Parameters<typeof identityRecords.config>[0]): Promise<ResolvedIdentity> {
+  const found = selected ? undefined : await identityRecords.find(identityName).catch(() => undefined);
+  const candidate = selected ?? found?.record;
+  const identity = candidate && (await identityRecords.row(candidate.id)) ? candidate : undefined;
   if (!identity) {
     throw new Error(`Barry "${identityName}" not found`);
   }
 
-  await identityRecords.touch(identity.id);
+  void identityRecords.touch(identity.id).catch(() => {});
 
   const meta = identityRecords.config(identity);
   const bags = meta?.bags ?? [];
-  // Mirrors resolveIdentityConfig: anything but the explicit opt-in reads as
-  // "session", so a typo fails toward NOT granting.
-  const bagGrant: "session" | "identity" = meta?.bag_grant === "identity" ? "identity" : "session";
 
-  // The name is already printed at resolution time, together with *why* this
-  // identity was chosen — repeating it bare here said less, twice.
-  return { id: identity.id, configuration: meta, bags, adapters: meta.adapters, bagGrant };
+  return { id: identity.id, configuration: meta, bags, adapters: meta.adapters };
 }
 
 /**
  * Suggest pinning an identity to this repo — but only where that is actionable.
- *
- * Silent with a single identity (nothing to choose between) and silent when the
- * repo is already pinned. Best-effort: a tip must never be why a session fails
- * to start.
  */
 async function maybeSuggestLocalIdentity(): Promise<void> {
+  if (!process.stdout.isTTY) return;
   try {
     const names = new Set((await identityRecords.list()).map((entry) => entry.record.name));
 
@@ -661,24 +732,8 @@ async function maybeSuggestLocalIdentity(): Promise<void> {
   }
 }
 
-function levenshtein(a: string, b: string): number {
-  const m = a.length, n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-    }
-  }
-  return dp[m][n];
-}
-
 /**
- * Everything the provider launchers need after the shared setup completes.
- * Populated by resolveLaunchContext, consumed by the launch* functions.
+ * Everything the harness launchers need after the shared setup completes.
  */
 interface LaunchContext {
   sessionId: string;
@@ -689,10 +744,10 @@ interface LaunchContext {
   /** What `mcpConfigPath` holds, for a harness that takes the servers directly. */
   mcpServers: McpConfig["mcpServers"];
   bagConfig: MergedBagConfig | null;
-  /** Skill directories granted by the session's + barry's traits (trait.skills → bag registry) */
-  traitSkillDirs: string[];
+  /** Skill directories provided by the session's selected bags. */
+  bagSkillDirs: string[];
   /**
-   * Instruction index + trait pointers, appended to the system prompt.
+   * Instruction index + bag pointers, appended to the system prompt.
    * Empty when this session can reach no on-demand instructions.
    */
   instructionPrompt: string;
@@ -700,12 +755,12 @@ interface LaunchContext {
   slashCommandActions: ActionMeta[];
   claudeArgs: string[];
   directive: string | null;
-  /** Effective model: --model flag > identity adapter model. undefined = provider decides. */
+  /** Resolved model: --model flag > identity adapter model. undefined = harness decides. */
   model?: string;
   modelProvider?: string;
   /** Whether this is an interactive (non --prompt) session. */
   interactive: boolean;
-  /** Native inventory less allowed trait grants, plus explicit denials. */
+  /** Native inventory withheld by the session's bound or mode. */
   deniedTools: string[];
   allowedNativeTools: string[];
 
@@ -726,17 +781,6 @@ function cleanupTmpDirs(tmpDirs: string[]): void {
  */
 async function promptSessionName(sessionId: string): Promise<void> {
   try {
-    // Check if the session had at least 1 user message and 1 assistant message.
-    //
-    // Through the seam. This was a raw `db.selectFrom("messages")` GROUP BY
-    // against the old server database, and migration 041 dropped that table —
-    // so the whole
-    // function has been throwing since, swallowed by the `try` below, and the
-    // name prompt silently stopped appearing.
-    //
-    // A page rather than a GROUP BY: the seam has no aggregate surface, and
-    // the question is only "did both roles speak at least once", which the
-    // first handful of messages answers.
     const page = await getSessionMessages(sessionId, { limit: 50 });
     const roles = new Set(
       page.messages
@@ -751,9 +795,7 @@ async function promptSessionName(sessionId: string): Promise<void> {
     const name = await input({ message: "Session name (enter to skip):" });
     const trimmed = name.trim();
     if (trimmed) {
-      // Through the API, not the DB: the CLI's one write path (Stage 2 of the
-      // session-storage extraction — control-plane writes converge on HTTP).
-      await fetch(`http://localhost:${getServicePort("api")}/api/v1/sessions/${sessionId}`, {
+      await fetch(`${getServiceUrl("api")}/api/v1/sessions/${sessionId}`, {
         method: "PATCH",
         headers: apiHeaders(),
         body: JSON.stringify({ name: trimmed }),
@@ -764,18 +806,6 @@ async function promptSessionName(sessionId: string): Promise<void> {
   }
 }
 
-/**
- * Tell the API which OS process is running this session, so liveness can be a
- * fact rather than an inference.
- *
- * The session row is created before the child is spawned, so this is a second
- * write and cannot ride on `/sessions/start`. Sent through the API rather than
- * the DB, matching promptSessionName above — the CLI's one write path.
- *
- * pid and start time travel together: on their own a pid is not evidence,
- * because the OS reuses pids and a recycled one would make a dead session look
- * alive.
- */
 interface ProcessIdentityReport {
   command?: string;
   processName?: string;
@@ -789,7 +819,7 @@ async function reportSessionPid(
   identity?: ProcessIdentityReport,
 ): Promise<void> {
   try {
-    await fetch(`http://localhost:${getServicePort("api")}/api/v1/sessions/${sessionId}`, {
+    await fetch(`${getServiceUrl("api")}/api/v1/sessions/${sessionId}`, {
       method: "PATCH",
       headers: apiHeaders(),
       body: JSON.stringify({
@@ -803,16 +833,12 @@ async function reportSessionPid(
       signal: AbortSignal.timeout(2000),
     });
   } catch {
-    // Never block or fail the session over bookkeeping. A missed write leaves
-    // the session with no pid, which the reaper reads as "unknown" and leaves
-    // to the existing idle sweep — the pre-existing behaviour, not a new risk.
+    // Never block or fail the session over bookkeeping.
   }
 }
 
 /**
  * Wire the shared teardown + signal handling onto a spawned child.
- * On close: run the optional onClose hook, await endSession, clean up temp dirs, then exit with the child's code.
- * On SIGINT/SIGTERM: clean up temp dirs, kill the child, and exit — so Ctrl+C no longer leaks temp dirs.
  */
 function attachChildLifecycle(
   child: ReturnType<typeof spawn>,
@@ -820,16 +846,11 @@ function attachChildLifecycle(
   onClose?: () => void | Promise<void>,
   identity?: ProcessIdentityReport,
 ): void {
-  // Every provider launcher funnels through here, so recording the pid once
-  // covers claude, codex, cursor and opencode.
+  queueStaleBagBuild();
   if (child.pid) void reportSessionPid(ctx.sessionId, child.pid, identity);
 
   child.on("close", async (code) => {
     await onClose?.();
-    // Do NOT clear pid! Stale PID is safe under pid-reuse guard, and keeps the
-    // evidence that lets the reaper prove death within 5 minutes.
-    // Instead, await endSession close-write with a 2s timeout (and retry once)
-    // before process.exit.
     await endSession(ctx.sessionId);
     if (ctx.interactive && !ctx.sessionName) {
       const session = await getSession(ctx.sessionId);
@@ -851,19 +872,13 @@ function attachChildLifecycle(
   process.on("SIGTERM", onSignal);
 }
 
-
-
-
-
 /**
  * A hosted launch: the session runs in Barry's API, and this terminal renders
  * it — lines typed become turns, Ctrl-C ends the running turn, leaving ends
  * only the terminal. `once` is the one-shot (`-p`): one turn, then exit.
- *
- * Also where a harness whose own one-shot is not a TUI launch runs its `-p`.
  */
 async function runHostedLaunch(
-  ctx: LaunchContext,
+  ctx: Pick<LaunchContext, "sessionId" | "model" | "modelProvider" | "tmpDirs">,
   harness: string,
   prompt: string | undefined,
   once: boolean,
@@ -893,80 +908,30 @@ async function runHostedLaunch(
 }
 
 /**
- * Exits with "Unknown command" if `first` looks like a command name Commander
- * was never told about — i.e. it reached the default `session start` action
- * only because nothing else claimed it, not because the user meant to start a
- * session named that. A no-op for flags and anything already registered.
- *
- * Exported so `index.ts` can run this ahead of `program.parse()`. It has to
- * live outside the start action: Commander resolves `--help`/`-h` at the
- * ROOT, before any action (including start's) ever runs, so a guard placed
- * only inside `resolveLaunchContext` never sees `barry <typo> --help` — that
- * invocation fell through to root help with exit 0 instead of reporting the
- * unknown command.
- */
-export function checkKnownCommand(first: string): void {
-  if (!first || first.startsWith("-") || !/^[a-z][\w-]*$/i.test(first)) return;
-  if (knownCommands.includes(first)) return;
-
-  if (isIdentityCommand(first)) {
-    console.error(`Error: "${first}" is an identity command, not a system command.\n`);
-    console.error(`Barry operates through identity personas. Run the command under an identity:`);
-    console.error(`  <identity> ${process.argv.slice(2).join(" ")}`);
-    console.error(`\nOr specify an identity explicitly:`);
-    console.error(`  barry --identity <identity> ${process.argv.slice(2).join(" ")}`);
-    console.error(`\nRun "barry identity list" to see your installed identities.`);
-    process.exit(1);
-  }
-
-  const close = knownCommands.filter((cmd) => levenshtein(first, cmd) <= 2 && first !== cmd);
-  if (close.length > 0) {
-    console.error(`Unknown command: ${first}`);
-    console.error(`Did you mean: ${close.join(", ")}?`);
-    process.exit(1);
-  }
-  console.error(`Unknown command: ${first}`);
-  console.error(`Run "barry --help" for available commands.`);
-  process.exit(1);
-}
-
-/**
- * Shared setup for every provider: command-typo detection, barry/bag/trait
+ * Shared setup for every harness: command-typo detection, identity/bag/bound
  * resolution, MCP config building, temp-dir creation, session pre-creation, and
- * child env population (including barry env resolution + vault resolver).
- * Returns everything the launchers need.
+ * child env population.
  */
 async function selectIdentity(options: StartOptions): Promise<ResolvedIdentity & { name: string }> {
   try {
+    const target = currentTarget();
+    const requested = options.barry ?? options.name;
+    if (target.kind === "identity" && target.record && (!requested || requested === target.name)) {
+      console.log(`Barry: ${target.name} (identity command)`);
+      return { ...await resolveIdentity(target.name, target.record), name: target.name };
+    }
     const user = await getCurrentUser();
-    // An explicit name, then BARRY_IDENTITY (a per-identity command), then
-    // the repository's .barry, then the owner's active default: the operation
-    // reads the last three itself.
     const selection = await identityRecords.resolve({
-      // --name is the identity flag here, matching every other barry command;
-      // --barry is its alias. (--session-name names the session.)
       name: options.barry ?? options.name,
       repoPath: process.cwd(),
     });
     const identityName = selection.barry.name;
-    // Name first: the source alone ("file") is the same string for a repo
-    // binding and the global default, so it never answered "who am I running
-    // as?" — the question this line exists for.
     console.log(`Barry: ${identityName} (${identityRecords.describeSource(selection.source)})`);
 
-    // Only worth suggesting when it can be acted on: nothing pinned here, and
-    // more than one identity to choose between. A tip that fires when there is
-    // no choice to make just teaches the user to ignore tips.
     if (selection.source !== "repo") {
       await maybeSuggestLocalIdentity();
     }
 
-    // Drift is silent by construction: the directory wins on read, so a stale
-    // row only shows up as a session behaving unlike its barry.yaml. Say so
-    // here, where it is about to affect this session.
-    // Compare the ROW with the file. selection.barry is loaded from the
-    // directory for a file-backed identity, so passing it compared the file
-    // with itself and this warning could never fire.
     const cachedRow = await identityRecords.row(selection.barry.id);
     const drift = cachedRow && cachedRow.name === identityName ? identityRecords.drift(cachedRow, user.id) : [];
     if (drift.length > 0) {
@@ -977,375 +942,96 @@ async function selectIdentity(options: StartOptions): Promise<ResolvedIdentity &
       );
     }
 
-    return { ...await resolveIdentity(identityName), name: identityName };
+    return { ...await resolveIdentity(identityName, selection.barry), name: identityName };
   } catch (error: unknown) {
     if (isCliError(error)) throw error;
     throw new CliError(`Error loading barry: ${error instanceof Error ? error.message : String(error)}`, 1);
   }
-
 }
 
-async function resolveLaunchContext(args: string[], options: StartOptions, identity: ResolvedIdentity & { name: string }, harnessRecord: InstalledAdapter, requestedMode: string | undefined, mode: ModeId): Promise<LaunchContext> {
-  // Check if first arg looks like a mistyped command (since start is the default command).
-  // Also caught pre-parse in index.ts (see checkKnownCommand's doc comment) — kept
-  // here too as defense in depth for any path that reaches this action directly.
-  if (args.length > 0) checkKnownCommand(args[0]);
+async function authorizeSessionBags(prep: SessionPreparation, options: StartOptions, resolveNamespaces: () => Promise<string[] | undefined>): Promise<void> {
+  const { identityBagNames, sessionBags, sessionId } = prep;
+  if (!options.prompt) {
+    try {
+      const registry = loadRegistry();
+      const barryRegistry: typeof registry = {};
+      for (const name of [...new Set([...identityBagNames, ...sessionBags])]) {
+        if (registry[name]) barryRegistry[name] = registry[name];
+      }
 
-  // `--read` is `--all` under the `readonly` bound. It used to select a shipped
-  // composite trait, `read`, whose bag list went stale whenever a bag was
-  // added; now it is whatever `--all` grants, restricted.
-  if (options.read) {
-    options.bound = [...new Set([...(options.bound?.split(",").map(name => name.trim()).filter(Boolean) ?? []), "readonly"])].join(",");
-    options.all = true;
-  }
+      const configuredAuth = getBagsNeedingAuth(barryRegistry);
+      if (!configuredAuth.length) return;
 
-  const claudeArgs = args;
+      const activeNamespaces = await resolveNamespaces();
+      const needsAuth = filterBagsNeedingAuthForSession(
+        configuredAuth,
+        activeNamespaces,
+      );
 
-  // Determine transport mode (default: http for instant startup)
-  const transport = options.transport ?? "http";
-
-  let identityBagNames = identity.bags;
-  const { name: identityName, id: identityId, configuration: identityConfiguration, bagGrant: identityBagGrant } = identity;
-
-  // Pre-warm / kick off identity secret resolution in the background while
-  // bag composition, prompts, and the interactive trait picker are displayed.
-  const pendingIdentityEnv: Promise<Environment | null> = identityConfiguration
-    ? identityEnvironment(identityConfiguration)
-    : Promise.resolve(null);
-  // A failure is reported where this is awaited. Until then it is marked
-  // handled, so one that lands while the picker is up is not an unhandled
-  // rejection.
-  pendingIdentityEnv.catch(() => {});
-
-  // Every session loads the base identity's bags, whatever identity it runs
-  // as. Loading is not granting: these contribute hooks, skills, actions and
-  // instructions, while tools are gated by the base identity's traits, and
-  // `filterTools` fails closed.
-  for (const name of baseIdentitySelection().bags) {
-    if (!identityBagNames.includes(name)) {
-      identityBagNames.unshift(name);
+      if (needsAuth.length > 0) {
+        console.log("");
+        for (const entry of needsAuth) {
+          console.log(`OAuth required: ${entry.name} (${entry.url})`);
+        }
+        try {
+          const shouldAuth = await confirm({
+            message: `Authorize ${needsAuth.length === 1 ? needsAuth[0].name : `${needsAuth.length} bags`} now?`,
+            default: false,
+          });
+          if (shouldAuth) {
+            for (const entry of needsAuth) {
+              await bagAuthCommand(entry.name);
+            }
+          }
+        } catch (err) {
+          if (isPromptCancellation(err)) {
+            await abandonLaunch(sessionId);
+          }
+        }
+      }
+    } catch {
+      // Registry not available — skip OAuth check
     }
   }
+}
 
-  // Composition is resolved at load time, not read from the stored list: a
-  // parent's manifest `bags:` children must reach the session even when only
-  // the parent is packed. Everything downstream — instructions, actions,
-  // slash commands — keys off this expanded set.
-  identityBagNames = await expandCompositionFromSnapshot(identityBagNames);
-
+async function prepareHarnessLaunch(
+  prep: SessionPreparation,
+  options: StartOptions,
+  identity: ResolvedIdentity & { name: string },
+  harnessRecord: InstalledAdapter,
+  requestedMode: string | undefined,
+  mode: ModeId,
+  pendingIdentityEnv: Promise<Environment | null>,
+  pendingSession: Promise<SessionResolution>,
+  resolveNamespaces: () => Promise<string[] | undefined>,
+): Promise<LaunchContext> {
+  const { sessionId, claudeArgs, directive, sessionBags, identityBagNames, model, modelProvider } = prep;
+  const { name: identityName, id: identityId, configuration: identityConfiguration } = identity;
+  const preflightLoading = span("launch:preflight", () => adapterPreflightNotices(harnessRecord.aliases?.[0] ?? harnessRecord.id, undefined, mode));
+  const transport = options.transport ?? "http";
   let bagConfig: MergedBagConfig | null = null;
-  // Held for the picker's header rather than printed here: the banner is drawn
-  // once, next to the session ID, where it survives the list repainting.
-  let bagSummary: string | null = null;
   {
-    const bags = await loadBags(identityBagNames);
+    const bags = await span("launch:load-bags", () => loadBags(identityBagNames));
     const skipped = identityBagNames.filter(n => !bags.some(p => p.name === n));
     if (skipped.length > 0) {
       console.log(`Bags skipped (disabled or not found): ${skipped.join(", ")}`);
     }
     if (bags.length > 0) {
       bagConfig = mergeBags(bags);
-      // Builtins ship with Barry and are always loaded, so naming them here is
-      // noise that buries the bags this barry actually chose. `loadBags`
-      // already stamped `builtin`, so no second registry lookup is needed.
-      // They are still LOADED — this hides them from the line, nothing else.
-      const shown = options.showBuiltin ? bags : bags.filter((p) => !p.builtin);
-      const hiddenCount = bags.length - shown.length;
-      if (shown.length > 0 || hiddenCount === 0) {
-        const suffix = hiddenCount > 0 ? ` (+${hiddenCount} builtin)` : "";
-        bagSummary = `${shown.map(p => p.name).join(", ")}${suffix}`;
-      } else {
-        bagSummary = `${hiddenCount} builtin`;
-      }
     }
   }
 
-  // Directive: only if -d/--directive is used
-  // -d "text" → use that text; -d (no value) → interactive prompt
-  let directive: string | null = null;
-  if (typeof options.directive === "string") {
-    directive = options.directive;
-  } else if (options.directive === true) {
-    try {
-      const answer = await input({
-        message: "Directive (press Enter to skip):",
-      });
-      directive = answer.trim() || null;
-    } catch (err) {
-      if (err instanceof ExitPromptError || err instanceof CancelPromptError) {
-        throw new CliError("", 0);
-      }
-    }
-  }
-
-  // Pre-create (or reuse) Barry session before spawning agent
-  const source = ["cursor", "codex", "opencode"].includes(harnessRecord.id) ? harnessRecord.id : "cli";
-
-  const selectedBounds = [...new Set([...(options._resumeBounds ?? []), ...(options.bound?.split(",").map(name => name.trim()).filter(Boolean) ?? [])])];
-  if (selectedBounds.length) console.log(`Bounds: ${selectedBounds.join(", ")}`);
-  const identityBounds = identityConfiguration?.bounds.filter(entry => !entry.optional).map(entry => entry.name) ?? [];
-  if (identityBounds.length) console.log(`Identity bounds: ${identityBounds.join(", ")}`);
-
-  async function preCreateSession(id: string, opts?: { directive?: string | null; name?: string }) {
-    // Delegates to the extracted, in-process-testable step; the console warning
-    // and the fatal-bound decision stay here, where the launch's I/O lives.
-    const result = await preCreateSessionStep(
-      {
-        sessionId: id,
-        cwd: process.cwd(),
-        source,
-        ...(opts?.directive !== undefined ? { directive: opts.directive } : {}),
-        ...(opts?.name !== undefined ? { name: opts.name } : {}),
-        identityId,
-        selectedBounds,
-        provider: harnessRecord.id,
-      },
-      {
-        fetch,
-        endpoint: `http://localhost:${getServicePort("api")}/api/v1/sessions/start`,
-        headers: apiHeaders(),
-      },
-    );
-    // A rejected body used to be swallowed here, so a session could start
-    // silently unbounded after `--bound` appeared to succeed. Surface it, and
-    // refuse to continue unbounded when a bound was explicitly requested.
-    if (!result.ok) {
-      if (result.warning) console.warn(`Warning: ${result.warning}`);
-      if (selectedBounds.length) {
-        throw new CliError("Refusing to continue: --bound was requested but the session could not be scoped.", 1);
-      }
-    }
-  }
-
-  let sessionId: string;
-
-  if (options._resumeSessionId) {
-    sessionId = options._resumeSessionId;
-    console.log(`Resuming session: ${sessionId.slice(0, 8)}`);
-    // Forward the name here too: renaming on resume is the natural moment to
-    // label a session you started unnamed.
-    await preCreateSession(sessionId, { name: options.sessionName });
-  } else {
-    sessionId = generateId();
-    await preCreateSession(sessionId, { directive, name: options.sessionName });
-  }
-
-  // Temp dirs created below; tracked directly (not derived from file parents) so
-  // cleanup removes exactly what we made.
   const tmpDirs: string[] = [];
-
-  // Build merged settings (includes sandbox config from external files).
-  // Native tools start off; traits grant them and bounds take them back.
-  // MCP calls continue through Barry’s guarded tools.
-  const settingsPath = buildMergedSettings({ deniedTools: [], bagHooks: bagConfig?.hooks ?? [] });
-  tmpDirs.push(join(settingsPath, ".."));
 
   let mcpConfigPath: string;
   let mcpServers: McpConfig["mcpServers"];
-  // Traits attached to this session (picker / --traits / resume) — drives
-  // trait-granted skill mounting below in addition to MCP tool filtering.
-  let sessionTraits: string[] = [];
 
   if (transport === "http" || transport === "sse") {
-    let config: McpConfig;
-    // Collect selected trait names so we can store them on the session.
-    //
-    // The session contract still carries `selectedNamespaces`/`selectedTools`
-    // for ad-hoc grants — BarrySessions writes them, and the MCP server turns
-    // them into the `__direct_*` synthetic traits. The CLI picker just does not
-    // produce them any more, so it sends neither key rather than an empty one.
-    let selectedTraits: string[] = [];
-
-    // Built after the session exists, so the ID in it is always the real one.
-    const sessionHeader: SessionHeader = {
-      ...(identityName ? { identity: identityName } : {}),
-      ...(bagSummary ? { bags: bagSummary } : {}),
-      sessionId,
-    };
-    // Every branch below either hands this to the picker or prints it; a
-    // session must never start without showing the ID that resumes it.
-    const picksInteractively =
-      !options.all && !options.none && !options.traits && !options.prompt;
-    if (!picksInteractively) printSessionHeader(sessionHeader);
-
-    if (options._resumeTraits && (options.none || options.all || options.traits)) {
-      // Resuming with an explicit capability flag — the flag wins, no picker.
-      selectedTraits = options.traits
-        ? options.traits.split(",").map((t) => t.trim()).filter(Boolean)
-        : options.all
-          ? await allPackedTraits(identityBagNames)
-          : options.none
-            ? []
-            : options._resumeTraits;
-      if (selectedTraits.length > 0) {
-        config = await grantedMcpConfig(identityId, selectedTraits, sessionId, harnessRecord.id);
-        console.log(`Traits: ${selectedTraits.join(", ")}`);
-        console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")}`);
-      } else {
-        config = await sessionMcpConfig([], sessionId);
-        console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")} (${describeUnselectedServers(config, identityBagGrant)})`);
-      }
-    } else if (options._resumeTraits) {
-      // Resuming — show the picker with the previous session's traits already
-      // checked, so they can be accepted with Enter or adjusted. Resume used to
-      // skip the picker entirely, which left no way to change capabilities
-      // without starting a fresh session.
-      try {
-        const pick = await pickCapabilities(identityBagNames, options._resumeTraits, options.showBuiltin, sessionHeader, identityId);
-        selectedTraits = pick.traits;
-        if (pick.traits.length > 0) {
-          config = await grantedMcpConfig(identityId, pick.traits, sessionId, harnessRecord.id);
-          console.log(`\nTraits: ${pick.traits.join(", ")}`);
-          console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")}`);
-        } else {
-          config = await sessionMcpConfig([], sessionId);
-          console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")} (${describeUnselectedServers(config, identityBagGrant)})`);
-        }
-      } catch (err) {
-        if (err instanceof ExitPromptError || err instanceof CancelPromptError) {
-          await abandonLaunch(sessionId);
-        }
-        // Picker unavailable (e.g. non-TTY) — fall back to the recorded traits
-        // rather than dropping the session's capabilities on the floor.
-        console.warn(`Warning: capability picker failed — ${err instanceof Error ? err.message : err}`);
-        // The banner rode along with the picker frame, which never drew.
-        printSessionHeader(sessionHeader);
-        selectedTraits = options._resumeTraits;
-        if (selectedTraits.length > 0) {
-          config = await grantedMcpConfig(identityId, selectedTraits, sessionId, harnessRecord.id);
-          console.log(`Traits (resumed): ${selectedTraits.join(", ")}`);
-          console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")}`);
-        } else {
-          config = await sessionMcpConfig([], sessionId);
-          console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")} (${describeUnselectedServers(config, identityBagGrant)})`);
-        }
-      }
-    } else if (options.none) {
-      // --none: skip trait selection. NOT the same as "no servers" — identity
-      // bags still grant their namespaces, so this list is usually not empty.
-      config = await sessionMcpConfig([], sessionId);
-      console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")} (${describeUnselectedServers(config, identityBagGrant)})`);
-    } else if (options.all) {
-      // Every packed bag's own trait: what the identity packs, all of it. It
-      // used to start every MCP server and select no trait, so the session's
-      // grant was only the defaults.
-      selectedTraits = await allPackedTraits(identityBagNames);
-      config = await grantedMcpConfig(identityId, selectedTraits, sessionId, harnessRecord.id);
-      console.log(`Traits: every packed bag${options.bound ? ` (bound: ${options.bound})` : ""}`);
-      console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")}`);
-    } else if (options.traits) {
-      selectedTraits = options.traits.split(",").map((t) => t.trim()).filter(Boolean);
-      config = await grantedMcpConfig(identityId, selectedTraits, sessionId, harnessRecord.id);
-      console.log(`Traits: ${selectedTraits.join(", ")}`);
-      console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")}`);
-    } else if (options.prompt) {
-      // --prompt is the non-interactive entrypoint (scripts, cron, `barry -p`),
-      // so it must never block on the TTY picker. No capability flag was given,
-      // so fall back to always-on servers — same result the picker's non-TTY
-      // path already produced, minus the hang.
-      config = await sessionMcpConfig([], sessionId);
-      console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")} (${describeUnselectedServers(config, identityBagGrant)}; pass --traits/--all for more)`);
-    } else {
-      try {
-        const pick = await pickCapabilities(identityBagNames, undefined, options.showBuiltin, sessionHeader, identityId);
-        if (pick.traits.length > 0) {
-          selectedTraits = pick.traits;
-          config = await grantedMcpConfig(identityId, pick.traits, sessionId, harnessRecord.id);
-          console.log(`\nTraits: ${pick.traits.join(", ")}`);
-          console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")}`);
-        } else {
-          // No selection — only always-on servers
-          config = await sessionMcpConfig([], sessionId);
-          console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")} (${describeUnselectedServers(config, identityBagGrant)})`);
-        }
-      } catch (err) {
-        if (err instanceof ExitPromptError || err instanceof CancelPromptError) {
-          await abandonLaunch(sessionId);
-        }
-        console.warn(`Warning: capability picker failed — ${err instanceof Error ? err.message : err}`);
-        // The banner rode along with the picker frame, which never drew.
-        printSessionHeader(sessionHeader);
-        config = await sessionMcpConfig([], sessionId);
-        console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")} (${describeUnselectedServers(config, identityBagGrant)})`);
-      }
-    }
-
-    sessionTraits = selectedTraits;
-
-    // Traits were already written by `grantedMcpConfig`, which has to do
-    // it before it asks the server for the session's namespaces. What is left is
-    // the case that path never reaches: an EMPTY selection.
-    //
-    // Clearing matters on resume. The picker runs there now, so unchecking every
-    // trait is a deliberate act and must overwrite the session's previous traits
-    // rather than silently leaving them in place. `--none` and `--all` land here
-    // too; both skip trait resolution entirely.
-    //
-    // Through the API rather than the DB: PATCH also invalidates the active SDK
-    // session's tool connections on trait changes, which the old direct writes
-    // never did.
-    if (selectedTraits.length === 0 && options._resumeTraits) {
-      await persistSessionTraits(sessionId, []);
-    }
-
-    // Pre-flight OAuth check: prompt only for bags this session can actually
-    // reach that need browser-based authorization. Still before the agent
-    // spawns, so the user can auth interactively.
-    //
-    // Deliberately placed here, after traits are resolved and persisted, not
-    // with the other bag setup further up. It needs the session's resolved
-    // GRANT, and `resolveSessionNamespaces` reads that back from the MCP
-    // server — which can only answer once the traits are recorded. Moving this
-    // earlier reintroduces the bug it fixes: prompting to authorize every OAuth
-    // bag installed on the identity, including ones no trait grants.
-    if (!options.prompt) {
-      try {
-        const registry = loadRegistry();
-        const barryRegistry: typeof registry = {};
-        for (const name of identityBagNames) {
-          if (registry[name]) barryRegistry[name] = registry[name];
-        }
-
-        // Scoped by the session's GRANTED namespaces, not only currently active tools:
-        // an unauthorized bag has no active tools yet, so comparing only against
-        // `resolveSessionNamespaces` dropped unauthorized bags from the check.
-        const granted = await resolveGrantedNamespacesForSession({
-          sessionId,
-          identityId,
-          sessionTraits,
-          isAll: options.all,
-          harness: harnessRecord.id,
-        });
-        const needsAuth = filterBagsNeedingAuthForSession(
-          getBagsNeedingAuth(barryRegistry),
-          granted,
-        );
-
-        if (needsAuth.length > 0) {
-          console.log("");
-          for (const entry of needsAuth) {
-            console.log(`OAuth required: ${entry.name} (${entry.url})`);
-          }
-          try {
-            const shouldAuth = await confirm({
-              message: `Authorize ${needsAuth.length === 1 ? needsAuth[0].name : `${needsAuth.length} bags`} now?`,
-              default: false,
-            });
-            if (shouldAuth) {
-              for (const entry of needsAuth) {
-                await bagAuthCommand(entry.name);
-              }
-            }
-          } catch (err) {
-            if (err instanceof ExitPromptError || err instanceof CancelPromptError) {
-              await abandonLaunch(sessionId);
-            }
-          }
-        }
-      } catch {
-        // Registry not available — skip OAuth check
-      }
-    }
+    const activeNamespaces = sessionBags.length ? (await resolveNamespaces()) ?? [] : [];
+    const config = await guestSessionMcpConfig(activeNamespaces, sessionId);
+    if (sessionBags.length) console.log(`Session bags: ${sessionBags.join(", ")}`);
+    console.log(`MCP servers: ${Object.keys(config.mcpServers).join(", ")}${sessionBags.length ? "" : ` (${describeUnselectedServers(config)})`}`);
 
     if (options.healthCheck) {
       const { unhealthy } = await checkSseHealth();
@@ -1361,6 +1047,7 @@ async function resolveLaunchContext(args: string[], options: StartOptions, ident
     mcpServers = artifact.mcpServers;
   } else {
     console.log("Transport: stdio (spawning MCP servers as subprocesses)");
+    const { generateMcpConfig } = await import("../mcp-config.js");
     const config = generateMcpConfig("stdio", identityId ?? undefined, harnessRecord.id);
     const artifact = buildMcpConfig(config);
     tmpDirs.push(artifact.tmpDir);
@@ -1369,19 +1056,11 @@ async function resolveLaunchContext(args: string[], options: StartOptions, ident
     console.log(`MCP servers: ${Object.keys(config.mcpServers).length} configured`);
   }
 
-  // The agent's environment: your shell's, plus what its identity exposes and
-  // the session's own Barry credential (added below). No instance secrets are
-  // loaded into this process, so there is nothing to strip back out.
-  //
-  // Ensure hook binaries are on PATH, carry the session id/directive/identity,
-  // and strip every declared credential name so no ambient provider key reaches
-  // the harness — the denylist is computed from declarations (every credential
-  // env var any installed adapter or vendor row names, plus the identity's own
-  // secret keys), not a hardcoded list, so a new harness is covered without
-  // touching this file. Claude Code falls back to subscription (OAuth) auth
-  // when its key is genuinely absent, so an exhausted key here must fail the
-  // session, not defer to the logged-in account.
+  mark("launch:oauth");
+  mark("launch:mcp-config");
+
   const cliBin = join(PATHS.identityDir, "cli", "node_modules", ".bin");
+  const credentialEnvs = await sessionCredentialEnvs();
   const childEnv: Record<string, string | undefined> = buildLaunchEnv({
     baseEnv: process.env,
     cliBin,
@@ -1389,7 +1068,7 @@ async function resolveLaunchContext(args: string[], options: StartOptions, ident
     directive,
     identityId,
     stripCredentialNames: [
-      ...await sessionCredentialEnvs(),
+      ...credentialEnvs,
       ...Object.keys(identityConfiguration?.secrets ?? {}),
     ],
   });
@@ -1406,7 +1085,6 @@ async function resolveLaunchContext(args: string[], options: StartOptions, ident
     }
   }
 
-  // Check for missing bag credentials after env resolution
   if (bagConfig && Object.keys(bagConfig.mcpServers).length > 0) {
     const deferredConfigs: Record<string, { name: string; env?: string[] }> = {};
     for (const [name, server] of Object.entries(bagConfig.mcpServers)) {
@@ -1432,18 +1110,7 @@ async function resolveLaunchContext(args: string[], options: StartOptions, ident
     }
   }
 
-  const sessionProvider = harnessRecord.aliases?.[0] ?? harnessRecord.id;
-  let model: string | undefined;
-  let modelProvider: string | undefined;
-  try {
-    ({ model, modelProvider } = resolveModelSelection(options, harnessRecord, adapterSettings(identity.adapters, harnessRecord)?.model));
-  } catch (err) {
-    if (isCliError(err)) throw err;
-    throw new CliError(`Error: ${err instanceof Error ? err.message : String(err)}`, 1);
-  }
-  // The gate. Against the env the identity built, not the process env: an
-  // endpoint key that arrived from nowhere declared is the leak this exists
-  // to close. A refusal names the missing credential and both fix paths.
+  const sessionHarness = harnessRecord.aliases?.[0] ?? harnessRecord.id;
   {
     const routedVendors =
       modelProvider && modelProvider !== harnessRecord.vendor
@@ -1465,25 +1132,22 @@ async function resolveLaunchContext(args: string[], options: StartOptions, ident
         required,
         env: identityBuiltEnv ?? { vars: {}, sources: {} },
         ambientEnv: childEnv,
-        credentialEnvs: await sessionCredentialEnvs(),
+        credentialEnvs,
       });
     } catch (err) {
       if (isCliError(err)) throw err;
       throw new CliError(`Error: ${err instanceof Error ? err.message : String(err)}`, 1);
     }
   }
+  mark("launch:credentials");
   if (model) {
-    const provider: CatalogProvider = sessionProvider;
+    const harnessId: HarnessId = sessionHarness;
     const vendors = installedModels().vendors();
     if (!isOfferedModel(harnessRecord, vendors, model)) {
-      // Cursor can be asked what it actually offers, and it ships ids faster
-      // than the curated catalog tracks them, so a catalog miss alone is not
-      // evidence of a bad model. An unreadable list (empty) falls back to the
-      // catalog's answer rather than silently blessing anything.
       let cursorModels: string[] = [];
-      if (provider === "cursor") {
+      if (harnessId === "cursor") {
         const { harnessAdapter } = await import("../adapters/installed.js");
-        const cursorAdapter = await harnessAdapter(provider);
+        const cursorAdapter = await harnessAdapter(harnessId);
         cursorModels = await cursorAdapter.listModels?.({ env: childEnv }) ?? [];
       }
       if (!cursorModels.includes(model)) {
@@ -1491,32 +1155,19 @@ async function resolveLaunchContext(args: string[], options: StartOptions, ident
           ? cursorModels.filter((m) => m.includes(model) || model.includes(m)).slice(0, 3)
           : suggestOfferedModels(harnessRecord, vendors, model);
         console.warn(
-          `Warning: model '${model}' is not in the curated catalog${suggestions.length ? ` — did you mean: ${suggestions.join(", ")}?` : ""} (proceeding anyway)`,
+          `Warning: model '${model}' is not in the curated model list${suggestions.length ? ` — did you mean: ${suggestions.join(", ")}?` : ""} (proceeding anyway)`,
         );
       }
     }
     console.log(`Model: ${model}${options.model ? "" : " (barry default)"}`);
   }
 
-  // Say the unflattering thing before the session starts, not after the user
-  // finds out. A small local model often answers in prose instead of calling
-  // tools — it reports edits and commands it never ran — and that reads as the
-  // agent working until someone checks the disk. Unconditional disclosure
-  // rather than a probe: the behavior is intermittent, so a green probe would
-  // not mean the next turn behaves.
-  // Was `sessionProvider === "ollama"`: ollama is a model provider now, not an
-  // agent id, so the check is on the resolved MODEL's routing instead. Any
-  // qwen/llama id claude routes to Ollama gets the same disclosure a
-  // dedicated ollama agent used to give unconditionally.
   const routedToOllama = modelProvider === "ollama";
   if (routedToOllama) {
-    // Routing gave a model routed to a vendor with none named that vendor's default.
-    const effectiveModel = model;
-    if (effectiveModel) {
-      // Print before waiting: the probe can take tens of seconds on a cold
-      // model, and a silent pause reads as a hang.
-      console.log(`Preflight ollama/${effectiveModel}: checking tool calling…`);
-      for (const notice of await ollamaPreflightNotices(effectiveModel, {
+    const resolvedModel = model;
+    if (resolvedModel) {
+      console.log(`Preflight ollama/${resolvedModel}: checking tool calling…`);
+      for (const notice of await ollamaPreflightNotices(resolvedModel, {
         ...(childEnv.BARRY_OLLAMA_URL ? { baseUrl: childEnv.BARRY_OLLAMA_URL } : {}),
       })) console.warn(notice);
     }
@@ -1524,162 +1175,132 @@ async function resolveLaunchContext(args: string[], options: StartOptions, ident
 
   const routedToLlama = modelProvider === "llamacpp";
   if (routedToLlama) {
-    const effectiveModel = model;
-    if (effectiveModel) {
-      console.log(`Preflight llamacpp/${effectiveModel}: checking health and tool calling…`);
-      for (const notice of await llamacppPreflightNotices(effectiveModel, {
+    const resolvedModel = model;
+    if (resolvedModel) {
+      console.log(`Preflight llamacpp/${resolvedModel}: checking health and tool calling…`);
+      for (const notice of await llamacppPreflightNotices(resolvedModel, {
         ...(childEnv.BARRY_LLAMACPP_URL ? { baseUrl: childEnv.BARRY_LLAMACPP_URL } : {}),
       })) console.warn(notice);
     }
   }
 
-  // The adapter's own requirements, checked by the SAME function `barry adapter
-  // doctor` runs — two implementations of "is codex installed" is how a launch
-  // succeeds against a requirement doctor calls broken.
-  //
-  // One line, success included, following the ollama probe's precedent: a
-  // silent preflight cannot be told from one that was skipped. Only a MISSING
-  // BINARY blocks; an unpinned or logged-out vendor is reported and the session
-  // starts, because a warning the user can act on beats a refusal they cannot.
-  for (const line of await adapterPreflightNotices(sessionProvider)) console.warn(line);
+  for (const line of await preflightLoading) console.warn(line);
 
-  // Hand the resolved provider/model to the session-tracker hook, which runs in
-  // the child and posts /sessions/start. It has no other way to learn them —
-  // the hook payload carries no model field — and without them a CLI session
-  // (the great majority) records no provenance for any of its messages.
-  // Set even when `model` is undefined: the provider still pins the row.
   Object.assign(childEnv, launchProvenanceEnv({
-    provider: sessionProvider,
+    harness: sessionHarness,
     ...(model ? { model } : {}),
     ...(modelProvider ? { modelProvider } : {}),
-    // `BARRY_MODE` is assigned at this same point; the mode travels the same
-    // road as the provider, for the same reason (see the note below).
     mode: resolveRecordedMode(harnessRecord, requestedMode),
   }));
 
-  // The mode travels the same road as the provider, for the same reason: the
-  // session record is the only place a reader can later learn what guarantees
-  // this session actually had. A session whose mode is unrecorded is one whose
-  // capture and gating nobody can reconstruct — and D5's matrix is built from
-  // exactly this field.
-  //
-  // Recorded even when it came from the adapter's DEFAULT rather than an
-  // explicit `--mode`, which is the great majority of sessions. Writing only
-  // the explicit case would leave most rows blank and make the field useless
-  // for the one question it exists to answer; worse, a later reader would have
-  // to re-derive the default from whatever the adapter declares TODAY, which
-  // is not necessarily what it declared when the session ran.
-  // (Assigned together with the provider/model keys just above via
-  // `launchProvenanceEnv`, so the whole provenance block is written at once.)
-
-  // Every registered bag, loaded ONCE for the three catalog calls below
-  // (skills, instructions, slash commands). The catalogs used to fetch this
-  // themselves and leant on the loader's process-wide memoization to avoid
-  // three loads; holding it here makes the single load explicit instead.
-  // Best-effort: a registry that will not load must not block a launch — the
-  // three blocks below each degrade on their own.
   let registeredBags: readonly Bag[] = [];
   try {
-    registeredBags = (await loadBagRegistrySnapshot()).bags;
+    registeredBags = (await span("launch:snapshot", () => loadBagRegistrySnapshot())).bags;
   } catch (err) {
     console.warn(`Warning: Could not load bag registry — ${err instanceof Error ? err.message : err}`);
   }
 
-  // What the session is granted, from its identity and the traits it selected:
-  // its skills, instructions and the bound native tools are denied by.
-  const granted = await grantsOf(identityId, { traits: sessionTraits, bounds: selectedBounds, harness: harnessRecord.id, mode });
+  const resolvedSession = await pendingSession;
 
-  // Trait-granted skills → bag registry skill dirs. Best-effort: skill mounting
-  // must never block launch.
-  let traitSkillDirs: string[] = [];
-  try {
-    const skillNames = granted.skills.map((skill) => skill.name);
-    if (skillNames.length > 0) {
-      traitSkillDirs = await resolveSkillDirs(registeredBags, skillNames);
-      if (traitSkillDirs.length > 0) {
-        console.log(`Trait skills: ${skillNames.join(", ")}`);
+  const finishResources = begin("launch:resources");
+  const skillsLoading = (async () => {
+    let bagSkillDirs: string[] = [];
+    try {
+      const skillNames = resolvedSession.skills.map((skill) => skill.name);
+      if (skillNames.length > 0) {
+        bagSkillDirs = await resolveSkillDirs(registeredBags, skillNames);
+        if (bagSkillDirs.length > 0) {
+          console.log(`Bag skills: ${skillNames.join(", ")}`);
+        }
       }
+    } catch (err) {
+      console.warn(`Warning: Could not resolve bag skills — ${err instanceof Error ? err.message : err}`);
     }
-  } catch (err) {
-    console.warn(`Warning: Could not resolve trait skills — ${err instanceof Error ? err.message : err}`);
-  }
 
-  // Instructions this session can reach. Two parts, both cheap:
-  //
-  //   index   — one line per on-demand instruction, so the agent knows what
-  //             guidance exists and can fetch it when relevant.
-  //   pointer — for instructions a TRAIT names, one line saying when it
-  //             applies, derived from the instruction's own description.
-  //
-  // Deliberately NOT joinAlwaysInstructions: always-on bodies are a standing
-  // tax on every turn of every session, and the whole point of the index is
-  // that the body arrives only when it is wanted. The server path
-  // (session-runtime) makes the other choice; that is its call, not this one's.
-  //
-  // Best-effort, like the skills block above: prose must never block a launch.
-  let instructionPrompt = "";
-  try {
-    const instructions = await listAllInstructions(registeredBags, { bagNames: identityBagNames });
-    const traitInstructionNames = granted.instructions.map((instruction) => instruction.name);
+    return bagSkillDirs;
+  })();
+  const instructionsLoading = (async () => {
+    let instructionPrompt = "";
+    try {
+      const activeBagNames = [...new Set([...identityBagNames, ...sessionBags])];
+      const instructions = await listAllInstructions(registeredBags, { bagNames: activeBagNames });
+      const bagInstructionNames = resolvedSession.instructions.map((instruction) => instruction.name);
 
-    // The pointer covers trait-named instructions with more context than the
-    // index would, so they are excluded there rather than listed twice.
-    const sections = [
-      buildInstructionsIndex(instructions, { exclude: traitInstructionNames }),
-      buildTraitInstructionPointer(traitInstructionNames, instructions),
-    ].filter((s): s is string => Boolean(s));
+      const sections = [
+        buildInstructionsIndex(instructions, { exclude: bagInstructionNames }),
+        buildBagInstructionPointer(bagInstructionNames, instructions),
+      ].filter((s): s is string => Boolean(s));
 
-    if (sections.length > 0) instructionPrompt = sections.join("\n\n");
-  } catch (err) {
-    console.warn(`Warning: Could not resolve instructions — ${err instanceof Error ? err.message : err}`);
-  }
-
-  // Loaded bags may contribute computed prompt sections. Contributor failures
-  // are isolated by the host and never block session startup.
-  try {
-    const { collectPromptSections } = await import("@barry-rocks/sdk/internal/instructions");
-    const loadedBags = registeredBags.filter((bag) => identityBagNames.includes(bag.name));
-    const promptSections = await collectPromptSections(loadedBags, {
-      cwd: process.cwd(),
-      sessionId,
-      provider: sessionProvider,
-    });
-    const prompt = promptSections.join("\n\n");
-    if (prompt) {
-      instructionPrompt = instructionPrompt
-        ? `${instructionPrompt}\n\n${prompt}`
-        : prompt;
+      if (sections.length > 0) instructionPrompt = sections.join("\n\n");
+    } catch (err) {
+      console.warn(`Warning: Could not resolve instructions — ${err instanceof Error ? err.message : err}`);
     }
-  } catch (err) {
-    console.warn(`Warning: Could not resolve bag prompts — ${err instanceof Error ? err.message : err}`);
-  }
 
-  // Scoped to what this session can actually reach — enabled bags UNION
-  // trait-granted action dirs. See selectSlashCommandActions for why both.
-  let slashCommandActions: ActionMeta[] = [];
-  try {
-    slashCommandActions = selectSlashCommandActions(
-      await listAllActions(registeredBags),
-      identityBagNames,
-      traitSkillDirs,
-    );
-  } catch (err) {
-    console.warn(`Warning: Could not resolve action slash commands — ${err instanceof Error ? err.message : err}`);
-  }
+    return instructionPrompt;
+  })();
+  const promptsLoading = (async () => {
+    try {
+      const { collectPromptSections } = await import("@barry-rocks/sdk/internal/instructions");
+      const activeBagNames = [...new Set([...identityBagNames, ...sessionBags])];
+      const loadedBags = registeredBags.filter((bag) => activeBagNames.includes(bag.name));
+      const promptSections = await collectPromptSections(loadedBags, {
+        cwd: process.cwd(),
+        sessionId,
+        provider: sessionHarness,
+      });
+      const prompt = promptSections.join("\n\n");
+      return prompt;
+    } catch (err) {
+      console.warn(`Warning: Could not resolve bag prompts — ${err instanceof Error ? err.message : err}`);
+    }
 
-  const { native, deniedTools, allowedNativeTools } = resolveGrants(granted, harnessRecord, mode);
+    return "";
+  })();
+  const actionsLoading = skillsLoading.then(async (bagSkillDirs) => {
+    let slashCommandActions: ActionMeta[] = [];
+    try {
+      slashCommandActions = selectSlashCommandActions(
+        await listAllActions(registeredBags, {
+          bagNames: [
+            ...new Set([
+              ...identityBagNames,
+              ...sessionBags,
+              ...registeredBags
+                .filter((bag) =>
+                  [...bag.skillsDirs, ...bag.actionsDirs].some((dir) =>
+                    bagSkillDirs.some((skill) => skill === dir || skill.startsWith(`${dir}/`)),
+                  ),
+                )
+                .map((bag) => bag.name),
+            ]),
+          ],
+        }),
+        identityBagNames,
+        bagSkillDirs,
+      );
+    } catch (err) {
+      console.warn(`Warning: Could not resolve action slash commands — ${err instanceof Error ? err.message : err}`);
+    }
+
+    return slashCommandActions;
+  });
+  const [bagSkillDirs, instructionIndex, bagPrompt, slashCommandActions] = await Promise.all([
+    skillsLoading, instructionsLoading, promptsLoading, actionsLoading,
+  ]);
+  const instructionPrompt = [instructionIndex, bagPrompt].filter(Boolean).join("\n\n");
+  finishResources();
+  const { native, deniedTools, allowedNativeTools } = resolveSessionNativeTools(resolvedSession, harnessRecord, mode);
   if (Object.keys(native.conflicts).length) {
     throw new CliError(`Session bounds cannot take back ${Object.keys(native.conflicts).join(", ")} on ${harnessRecord.id} (${mode}): ${[...new Set(Object.values(native.conflicts))].join("; ")}. Start in another mode or on another harness, or drop the bound.`, 1);
-  }
-  const nativeHarnesses = (await (await import("../adapters/installed.js")).adapterStore()).adapters.installed();
-  for (const name of sessionTraits) {
-    if (!granted.traits.includes(name) && !granted.traits.includes(`${harnessRecord.bag?.manifest.name}:${name}`) && nativeHarnesses.some(record => record.bag?.manifest.traits[`${record.bag.manifest.name}:${name}`])) console.warn(`${harnessRecord.id} has no ${name} trait`);
   }
   console.log(`Native tools: ${native.allowed.join(", ") || "none"}`);
   for (const [tool, reason] of Object.entries(native.refused)) console.warn(`${tool} refused on ${harnessRecord.id} (${mode}): ${reason}`);
   if (Object.keys(native.uncontrolled).length) console.warn(`${harnessRecord.id} (${mode}) cannot turn off ${Object.keys(native.uncontrolled).join(", ")}: ${[...new Set(Object.values(native.uncontrolled))].join("; ")}`);
   if (native.operatorOverride) console.warn(native.operatorOverride);
-  buildMergedSettings({ deniedTools, bagHooks: bagConfig?.hooks ?? [], path: settingsPath });
+  const finishSettings = begin("launch:settings");
+  const settingsPath = buildMergedSettings({ deniedTools, bagHooks: bagConfig?.hooks ?? [] });
+  finishSettings();
+  tmpDirs.push(join(settingsPath, ".."));
   if (deniedTools.length && harnessRecord.capabilities.toolDenial === "none") {
     console.warn(`Native denials cannot be enforced in this launch mode: ${deniedTools.join(", ")}`);
   }
@@ -1691,7 +1312,7 @@ async function resolveLaunchContext(args: string[], options: StartOptions, ident
     mcpConfigPath,
     mcpServers,
     bagConfig,
-    traitSkillDirs,
+    bagSkillDirs,
     instructionPrompt,
     slashCommandActions,
     claudeArgs,
@@ -1705,18 +1326,9 @@ async function resolveLaunchContext(args: string[], options: StartOptions, ident
   };
 }
 
-
-/**
- * Tell the API a session's process has exited.
- *
- * Awaited with a 2-second timeout and retried once before process.exit.
- * The reaper is the backstop when this close-write is lost.
- */
 /**
  * Leave a launch cancelled before anything ran — a picker or prompt the user
- * pressed Ctrl+C at. The session row already exists, and with no process for
- * the reaper to find dead, it stayed "running" forever; ending it removes it,
- * as ending any session with no messages does.
+ * pressed Ctrl+C at.
  */
 async function abandonLaunch(sessionId: string): Promise<never> {
   await endSession(sessionId);
@@ -1726,13 +1338,9 @@ async function abandonLaunch(sessionId: string): Promise<never> {
 async function endSession(sessionId: string): Promise<void> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(`http://localhost:${getServicePort("api")}/api/v1/sessions/end`, {
+      const res = await fetch(`${getServiceUrl("api")}/api/v1/sessions/end`, {
         method: "POST",
         headers: apiHeaders(),
-        // camelCase only: the API refuses a snake_case key outright (400), so
-        // the `session_id` this also sent made every end here fail, silently —
-        // sessions ended only when the reaper found their process dead, and a
-        // launch cancelled before it had one stayed "running" for good.
         body: JSON.stringify({ sessionId, reason: "process_exit" }),
         signal: AbortSignal.timeout(2000),
       });
@@ -1746,23 +1354,18 @@ async function endSession(sessionId: string): Promise<void> {
 /**
  * Record what this launch runs as: its mode, the guarantees the plan actually
  * arranged, and the vendor conversation id `barry resume` looks up.
- *
- * Awaited, unlike the other bookkeeping writes here: the child is spawned
- * right after and `attachChildLifecycle` exits on its close, so an un-awaited
- * write can be lost and leave `barry resume` with nothing to find. Errors are
- * still swallowed, because failing to record must not stop the session.
  */
-async function recordLaunch(sessionId: string, provider: string, mode: ModeId, plan: LaunchPlan): Promise<void> {
+async function recordLaunch(sessionId: string, harness: string, mode: ModeId, plan: LaunchPlan): Promise<void> {
   try {
-    await fetch(`http://localhost:${getServicePort("api")}/api/v1/sessions/start`, {
+    await fetch(`${getServiceUrl("api")}/api/v1/sessions/start`, {
       method: "POST",
       headers: apiHeaders(),
       body: JSON.stringify({
         sessionId,
-        provider,
+        provider: harness,
         mode,
         guarantees: plan.guarantees,
-        ...(plan.harnessSessionId ? { providerSessionId: plan.harnessSessionId } : {}),
+        ...(plan.harnessSessionId ? { harnessSessionId: plan.harnessSessionId } : {}),
       }),
       signal: AbortSignal.timeout(3000),
     });
@@ -1770,9 +1373,7 @@ async function recordLaunch(sessionId: string, provider: string, mode: ModeId, p
 }
 
 /**
- * An identity's name, given its name or its store folder id. A
- * node-qualified reference (`laptop/coder`) named an identity on another
- * machine; sessions now always run where they are started.
+ * An identity's name, given its name or its store folder id.
  */
 async function localIdentityName(reference: string): Promise<string> {
   if (reference.includes("/")) throw new Error(`"${reference}" names an identity on another machine; start the session on that machine instead`);
@@ -1784,28 +1385,103 @@ async function localIdentityName(reference: string): Promise<string> {
 }
 
 export async function startCommand(args: string[], options: StartOptions): Promise<void> {
+  if (options.rebuildBags) process.env.BARRY_BAGS_REBUILD = "1";
   const identityReference = options.name ?? options.barry;
   if (identityReference) options.name = await localIdentityName(identityReference);
 
-  const selectedIdentity = await selectIdentity(options);
-  const { adapterStore } = await import("../adapters/installed.js");
-  const { adapters } = await adapterStore();
-  const record = selectHarness(options, selectedIdentity.adapters, adapters.installed());
-  const provider = record.aliases?.[0] ?? record.id;
+  const apiGuard = ensureApiCurrent(cliBuild(), { base: getServiceUrl("api"), headers: apiHeaders(), noRestart: options.apiRestart === false });
+  const selectedIdentity = await span("start:identity-selected", () => selectIdentity(options));
+  const records = await span("start:adapters", () => installedHarnesses());
+  const record = selectHarness(options, selectedIdentity.adapters, records);
+  const harness = record.aliases?.[0] ?? record.id;
   const requestedMode = options.mode ?? adapterSettings(selectedIdentity.adapters, record)?.mode;
-  // Settled BEFORE resolveLaunchContext, which creates the session row and
-  // writes MCP config: a mode this adapter cannot run is ordinary user error,
-  // and it should cost nothing and strand nothing.
   const launched = resolveModeOrExit(options, selectedIdentity, record);
-  const ctx = await resolveLaunchContext(args, options, selectedIdentity, record, requestedMode, launched.mode);
-  // Hosted runs in Barry's runtime; this terminal is one of its renderers.
-  if (launched.mode === "hosted") return runHostedLaunch(ctx, provider, options.prompt, Boolean(options.prompt), options, selectedIdentity);
+  mark("start:mode");
+  if (launched.mode !== "hosted") await span("start:ensure-full", () => ensureBarry());
+  const uiLoading = import("../ui/dispatch.js");
+  uiLoading.catch(() => {});
+  if (launched.mode !== "hosted") void import("@barry-rocks/sessions-bag/client/terminal-relay").catch(() => {});
+  const pendingIdentityEnv = launched.mode === "hosted" ? Promise.resolve(null) : span("launch:identity-env", () => identityEnvironment(selectedIdentity.configuration));
+  pendingIdentityEnv.catch(() => {});
+  const prep = await prepareSession(args, options, selectedIdentity, record, launched.mode, {
+    supportsBags: supportsCreateBags(),
+    persistSelection: persistSessionSelection,
+    recallSelection: () => recallSelection({ identityId: selectedIdentity.id, harness: record.id }),
+    rememberSelection: selection => rememberSelection({ identityId: selectedIdentity.id, harness: record.id, bags: selection.bags, bounds: selection.bounds }),
+    checkKnownCommand,
+    expandComposition: async names => expandCompositionSync(names),
+    baseBags: () => baseIdentitySelection().bags,
+    isBuiltinBag: name => loadRegistry()[name]?.type === "local" ? (loadBagSync(name)?.builtin ?? false) : false,
+    allBags: allSelectableBags,
+    pick: pickCapabilities,
+    printHeader: printSessionHeader,
+    warn: console.warn,
+    cancelled: error => isPromptCancellation(error),
+    abandon: async () => { throw new CliError("", 0); },
+    directive: async () => {
+      try { return (await (await import("@inquirer/prompts")).input({ message: "Directive (press Enter to skip):" })).trim() || null; }
+      catch (error) {
+        if (isPromptCancellation(error)) throw new CliError("", 0);
+        return null;
+      }
+    },
+    model: async () => {
+      const identityModel = adapterSettings(selectedIdentity.adapters, record)?.model;
+      if (launched.mode === "hosted" && !options.model && !options.modelProvider && !options.zai && !options.ollama && !options.llamacpp && !identityModel) return {};
+      if (launched.mode === "hosted") {
+        const vendors = await span("preaction:model-declarations", () => modelVendorsForRouting());
+        return resolveModelSelection(options, record, identityModel, vendors);
+      }
+      await span("preaction:models", () => ensureModelsInstalled());
+      return resolveModelSelection(options, record, identityModel);
+    },
+    create: async input => {
+      const current = await apiGuard.beforeCreate(launched.mode === "hosted" || input.selectedBounds.length > 0);
+      if (!current.ok) return { ok: false, body: {}, warning: current.warning };
+      const deps = { fetch, endpoint: `${getServiceUrl("api")}/api/v1/sessions/start`, headers: apiHeaders() };
+      const result = await preCreateSessionStep(input, deps);
+      if (!result.ok && await apiGuard.retryCreate(result.warning ?? "")) return preCreateSessionStep(input, deps);
+      return result;
+    },
+  });
+  const pendingSession =
+    launched.mode === "hosted"
+      ? undefined
+      : span("launch:session", () =>
+          resolveSessionCapabilities(prep.identityId, {
+            bags: prep.sessionBags,
+            bounds: prep.selectedBounds,
+            harness: record.id,
+            mode: launched.mode,
+            identityBagNames: prep.identityBagNames,
+          }),
+        );
+  pendingSession?.catch(() => {});
+  let namespaces: Promise<string[] | undefined> | undefined;
+  const resolveNamespaces = () =>
+    (namespaces ??= (async () =>
+      resolveSessionBagNamespaces({
+        sessionId: prep.sessionId,
+        identityId: prep.identityId,
+        sessionBags: prep.sessionBags,
+        isAll: options.all,
+        harness: record.id,
+        bounds: prep.selectedBounds,
+        mode: launched.mode,
+        ...(pendingSession ? { resolved: await pendingSession } : {}),
+      }))());
+  if (options.transport !== "stdio") await span("launch:oauth", () => authorizeSessionBags(prep, options, resolveNamespaces));
+  if (launched.mode === "hosted") {
+    void fetch(`${getServiceUrl("api")}/api/v1/sessions/${prep.sessionId}/prepare`, { method: "POST", headers: apiHeaders(), signal: AbortSignal.timeout(5000) }).catch(() => {});
+    await uiLoading;
+    return runHostedLaunch(prep, harness, options.prompt, Boolean(options.prompt), options, selectedIdentity);
+  }
+  const ctx = await prepareHarnessLaunch(prep, options, selectedIdentity, record, requestedMode, launched.mode, pendingIdentityEnv, pendingSession!, resolveNamespaces);
   const { harnessAdapter } = await import("../adapters/installed.js");
-  const adapter = await harnessAdapter(provider);
-  // The launch runs the code of the mode it records, never another's.
+  const adapter = await span("launch:adapter-load", () => harnessAdapter(harness));
   const launchMode = launched.mode === "instrumented" ? adapter.modes.instrumented : adapter.modes.guest;
   if (!launchMode) {
-    throw new CliError(`${provider} has no ${launched.mode} mode, so \`barry start\` cannot launch it.`, 1);
+    throw new CliError(`${harness} has no ${launched.mode} mode, so \`barry start\` cannot launch it.`, 1);
   }
 
   const config = buildSessionConfig({
@@ -1828,77 +1504,61 @@ export async function startCommand(args: string[], options: StartOptions): Promi
     deniedTools: ctx.deniedTools,
     allowedNativeTools: ctx.allowedNativeTools,
     skillsDirs: ctx.bagConfig?.skillsDirs ?? [],
-    traitSkillDirs: ctx.traitSkillDirs,
+    bagSkillDirs: ctx.bagSkillDirs,
     slashCommandActions: ctx.slashCommandActions,
     ...(options._resume ? { resume: options._resume } : {}),
     tmpDirs: ctx.tmpDirs,
-    ...(launched.mode === "instrumented" || launched.mode === "guest" ? { relayCommand: thisCliCommand("hook", provider) } : {}),
+    ...(launched.mode === "instrumented" || launched.mode === "guest" ? { relayCommand: thisCliCommand("hook", harness) } : {}),
     ...(launched.mode === "instrumented" ? { telemetry: telemetryReceiver() } : {}),
   });
 
-  // A mode that attaches shows the hosted session, so a one-shot is simply a
-  // hosted one.
   if (launchMode.attachesTo === "hosted") {
-    if (options.prompt) return runHostedLaunch(ctx, provider, options.prompt, true, options, selectedIdentity);
-    return runAttachedLaunch(ctx, provider, launched.mode, launchMode, config);
+    if (options.prompt) return runHostedLaunch(ctx, harness, options.prompt, true, options, selectedIdentity);
+    return runAttachedLaunch(ctx, harness, launched.mode, launchMode, config);
   }
 
-  // A harness whose own one-shot is not a TUI launch refuses the prompt in
-  // guest mode; that turn runs hosted, on the server, instead. Decided by the
-  // adapter rather than by name here, so there is no second routing rule to
-  // drift from the first.
   let plan: LaunchPlan;
   try {
-    plan = await launchMode.plan(config);
+    plan = await span("launch:plan", () => launchMode.plan(config));
   } catch (err) {
     if (options.prompt && err instanceof NotSupportedInMode && err.operation === "prompt") {
-      return runHostedLaunch(ctx, provider, options.prompt, true, options, selectedIdentity);
+      return runHostedLaunch(ctx, harness, options.prompt, true, options, selectedIdentity);
     }
     throw err;
   }
-  // The plan's directories are the launcher's to remove, spawned or not
-  // (LaunchPlan.tmpDirs), and the launch's own are removed on every exit.
-  // Nothing added these, so each opencode guest launch left its runtime dir.
   ctx.tmpDirs.push(...plan.tmpDirs);
 
-  // Before the spawn, so a session that dies early can still be resumed.
-  await recordLaunch(ctx.sessionId, provider, launched.mode, plan);
+  const launchRecorded = span("launch:record", () => recordLaunch(ctx.sessionId, harness, launched.mode, plan));
+  launchRecorded.catch(() => {});
   const discovery = !plan.harnessSessionId && plan.discoverHarnessSessionId
     ? discoverConversation(
         () => plan.discoverHarnessSessionId!(),
-        (harnessSessionId) => recordLaunch(ctx.sessionId, provider, launched.mode, { ...plan, harnessSessionId }),
+        (harnessSessionId) => recordLaunch(ctx.sessionId, harness, launched.mode, { ...plan, harnessSessionId }),
       )
     : null;
 
-  // A launch that opened a way into the TUI is kept fed while the TUI runs.
   const relay = plan.inbox ? await startTerminalRelay(ctx.sessionId, plan.inbox) : null;
 
   const identity: ProcessIdentityReport = {
     command: [plan.command, ...plan.args].join(" "),
     processName: basename(plan.command),
-    appName: provider,
+    appName: harness,
     parentPid: process.pid,
   };
 
+  report("launch:plan");
   runChildSession(plan, {
     attach: (child, onClose) => attachChildLifecycle(child, ctx, onClose, identity),
     onClose: async () => {
-      // Its claim on the session is withdrawn now; a claim left behind would
-      // lapse on its own within a minute.
       void relay?.stop();
       await discovery?.stop();
+      await launchRecorded;
     },
   });
 }
 
-/**
- * A launch that attaches to the hosted session: the session runs in Barry's
- * runtime, and the vendor TUI is one more place it shows. Leaving ends this
- * attachment, not the session, so its pid is not the session's and closing
- * does not end it.
- */
-async function runAttachedLaunch(ctx: LaunchContext, provider: string, mode: ModeId, launchMode: LaunchMode, config: SessionConfig): Promise<void> {
-  const api = { base: `http://localhost:${getServicePort("api")}/api/v1`, headers: apiHeaders() };
+async function runAttachedLaunch(ctx: LaunchContext, harness: string, mode: ModeId, launchMode: LaunchMode, config: SessionConfig): Promise<void> {
+  const api = { base: `${getServiceUrl("api")}/api/v1`, headers: apiHeaders() };
   const fail = (what: string, err: unknown): never => {
     console.error(`${what}: ${err instanceof Error ? err.message : String(err)}`);
     cleanupTmpDirs(ctx.tmpDirs);
@@ -1906,10 +1566,10 @@ async function runAttachedLaunch(ctx: LaunchContext, provider: string, mode: Mod
   };
 
   const attachment = await attachToHostedSession(ctx.sessionId, {
-    harness: provider,
+    harness,
     ...(ctx.model ? { model: ctx.model } : {}),
     ...(ctx.modelProvider ? { modelProvider: ctx.modelProvider } : {}),
-  }, api).catch((err: unknown) => fail(`Could not open the session to ${provider}'s TUI`, err));
+  }, api).catch((err: unknown) => fail(`Could not open the session to ${harness}'s TUI`, err));
   const detach = () => detachFromHostedSession(ctx.sessionId, attachment.attachmentId, api);
 
   let plan: LaunchPlan;
@@ -1918,10 +1578,10 @@ async function runAttachedLaunch(ctx: LaunchContext, provider: string, mode: Mod
     plan = await launchMode.plan({ ...config, options: { ...options, attachment: { address: attachment.address, harnessSessionId: attachment.harnessSessionId } } });
   } catch (err) {
     await detach();
-    return fail(`Could not launch ${provider}'s TUI`, err);
+    return fail(`Could not launch ${harness}'s TUI`, err);
   }
   ctx.tmpDirs.push(...plan.tmpDirs);
-  await recordLaunch(ctx.sessionId, provider, mode, plan);
+  await recordLaunch(ctx.sessionId, harness, mode, plan);
 
   runChildSession(plan, {
     attach: (child) => {
@@ -1935,10 +1595,6 @@ async function runAttachedLaunch(ctx: LaunchContext, provider: string, mode: Mod
   });
 }
 
-/**
- * Where an instrumented TUI reports: the sessions API's OTLP receiver, with
- * the bearer token the API requires of every request.
- */
 function telemetryReceiver(): { endpoint: string; headers: Record<string, string> } {
   return {
     endpoint: getServiceUrl("api"),

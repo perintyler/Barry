@@ -224,7 +224,7 @@ describe("barry CLI", () => {
       // Barry verbs are top-level now — `barry` is gone.
       // `devops` is hidden from help unless BARRY_DEV=1 (step 25), so it is
       // no longer expected in the default `--help` listing.
-      const expectedCommands = ["identity", "ls", "doctor", "use", "alias", "trait", "bound", "config", "bag", "adapter", "install", "service", "setup", "uninstall", "upgrade", "up", "down", "hosting", "env", "db", "workers", "trash", "archive", "cursor"];
+      const expectedCommands = ["identity", "ls", "doctor", "use", "alias", "bound", "config", "bag", "adapter", "install", "service", "setup", "uninstall", "upgrade", "up", "down", "hosting", "env", "db", "workers", "trash", "archive", "cursor"];
 
       for (const cmd of expectedCommands) {
         // Match the command at line start; the alias forms render as

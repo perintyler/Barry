@@ -114,6 +114,7 @@ const configuration = {
     },
     "bags/workflows": {
       "entry": [
+        "web/**/*.{js,mjs}",
         "web/waiting-reasons.d.ts",
         "tools.ts"
       ]
@@ -135,10 +136,11 @@ const configuration = {
       ]
     },
     "adapters/embeddings/ollama": {},
-    "bags/sessions/extensions/search": {
+    "bags/session-vector-search": {
       "entry": [
         "tools.ts",
-        "src/*.{js,mjs,ts}"
+        "src/*.{js,mjs,ts}",
+        "src/jobs/*.ts"
       ],
       "ignoreDependencies": [
         "tsx"
@@ -169,7 +171,9 @@ const configuration = {
         "src/index.ts",
         "scripts/**/*.{js,mjs,mts,ts}",
         "src/workflows/executor-child.ts",
-        "src/workflows/recovery-child.ts"
+        "src/workflows/owned-process-child.ts",
+        "src/workflows/recovery-child.ts",
+        "src/workflows/work-program-child.ts"
       ],
       "ignoreDependencies": [
         "better-sqlite3"
@@ -184,6 +188,9 @@ const configuration = {
         "src/services/entry.ts",
         "src/hooks/hook-dispatch.ts",
         "scripts/**/*.{js,mjs,mts,ts}"
+      ],
+      "ignoreDependencies": [
+        "@earendil-works/pi-coding-agent"
       ]
     },
     "adapters/completions/anthropic": {
@@ -232,7 +239,7 @@ const configuration = {
       "entry": [
         "src/types.ts",
         "src/core.ts",
-        "src/local/catalog.ts",
+        "src/local/index-store.ts",
         "src/blobs.ts",
         "src/local/blobs.ts",
         "src/create.ts",

@@ -9,7 +9,7 @@ export const NATIVE_TOOLS: readonly string[] = [
 ];
 
 export const NATIVE: NativeControl = {
-  grantable: [
+  controllable: [
     "shell", "read", "grep", "glob", "edit", "write", "patch", "webfetch", "websearch",
   ],
   inseparable: [

@@ -1,3 +1,5 @@
+import {classify} from "../process-liveness.js";
+import {isDeliveryHost,ask} from "./delivery.js";
 import { identityRouting } from "../store/identity-routing.js";
 /**
  * The session storage client — the ONLY sanctioned interface to the
@@ -20,7 +22,6 @@ import { identityRouting } from "../store/identity-routing.js";
 import {
   getSession as dbGetSession,
   listSessions as dbListSessions,
-  listBoundSessions as dbListBoundSessions,
   getActiveSessions as dbGetActiveSessions,
   getSessionStats as dbGetSessionStats,
   searchSessions as dbSearchSessions,
@@ -156,7 +157,6 @@ const store = identityRouting({
   dbGetSessionMessages: dbGetSessionMessages,
   dbGetSessionStats: dbGetSessionStats,
   dbListSessions: dbListSessions,
-  dbListBoundSessions: dbListBoundSessions,
   dbMarkCrashedSessions: dbMarkCrashedSessions,
   dbAppendMessage: dbAppendMessage,
   dbPopPrompts: dbPopPrompts,
@@ -206,6 +206,11 @@ export const getFirstUserMessages = store.dbGetFirstUserMessages;
 // host's waiters at once when this process is the host; any other process's
 // queue is found by the host's next read of the store.
 export const queuePrompt: typeof dbQueuePrompt = async (sessionId, content, options?) => {
+  if (!isDeliveryHost()) {
+    const row=await store.dbGetSession(sessionId);
+    const pid=row?.metadata?.hosted_runtime_pid;
+    if(typeof pid==="number" && pid!==process.pid && classify({pid,pid_started_at:typeof row?.metadata?.hosted_runtime_started_at==="number"?row.metadata.hosted_runtime_started_at:undefined,hostname:typeof row?.metadata?.hosted_runtime_hostname==="string"?row.metadata.hosted_runtime_hostname:undefined}).state!=="dead")return ask("enqueue",{sessionId,content,options});
+  }
   const result = await store.dbQueuePrompt(sessionId, content, options);
   // A duplicate was queued by an earlier call, which already woke its waiters.
   if (!result.duplicate) promptQueued(sessionId);
@@ -327,16 +332,3 @@ export const ProviderSessions = {
   getBySession: getProviderSessionsBySession,
   getSessionByProviderId: getSessionByProviderSessionId,
 };
-
-export const listBoundSessions = store.dbListBoundSessions;
-export async function convertSessionBounds(nameOf: (id: number) => string | undefined) {
-  const converted: string[] = [];
-  const unknown: { id: string; boundId: number }[] = [];
-  for (const row of await listBoundSessions()) {
-    const name = row.bound_id === null ? undefined : nameOf(row.bound_id);
-    if (!name) { if (row.bound_id !== null) unknown.push({ id: row.id, boundId: row.bound_id }); continue; }
-    await updateSession(row.id, { bounds: [...new Set([...row.bounds, name])], bound_id: null });
-    converted.push(row.id);
-  }
-  return { converted, unknown };
-}

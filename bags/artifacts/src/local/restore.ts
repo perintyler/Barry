@@ -6,7 +6,7 @@ import { isAbsolute, join } from "node:path";
 import { copySnapshot, storeKey, validateSnapshot, type StoreSnapshot } from "@barry-rocks/sdk/stores";
 import type { StoreBinding } from "@barry-rocks/sdk/stores";
 import { ArtifactError, IdentityIdSchema, TimestampSchema } from "../types.js";
-import { createSqliteArtifactRepository } from "./catalog.js";
+import { createSqliteArtifactRepository } from "./index-store.js";
 import { openLocalArtifactStore } from "./store.js";
 import migrations from "../generated/artifacts-migrations.js";
 export { activateLocalArtifactRestore } from "./activation.js";

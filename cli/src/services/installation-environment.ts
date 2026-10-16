@@ -23,6 +23,8 @@ export function installationEnvironment(
     if (!values.has(entry.name) || secrets.includes(entry.name)) {
       throw new Error(`${service}: installation environment override ${entry.name} is not a declared nonsecret value`);
     }
+    // Hosted sessions use one aggregate MCP connection. Split is an identity choice.
+    if (service === "sessions.api" && entry.name === "BARRY_NAMESPACE_SPLIT") continue;
     values.set(entry.name, entry);
   }
   return [...values.values()];

@@ -70,16 +70,9 @@ describe("sessions store schema", () => {
     ).toThrow(/FOREIGN KEY/i);
   });
 
-  it("fsyncs every commit, so a power cut cannot lose acknowledged writes", () => {
-    // 2 is FULL. Unlike the foreign_keys assertion above, this one DOES fail
-    // when its pragma line is removed: WAL leaves synchronous at NORMAL (1),
-    // so the default and the intended value differ. Verified by deleting
-    // `pragma("synchronous = FULL")` and watching this go red.
-    //
-    // NORMAL is durable against a process being killed but not against power
-    // loss or a kernel panic. This store holds the coordination state every
-    // other session reads, so it takes the fsync.
-    expect(getSessionsSqlite().pragma("synchronous", { simple: true })).toBe(2);
+  it("uses WAL NORMAL for background recording (power-loss tradeoff documented in ADR 0049)", () => {
+    expect(getSessionsSqlite().pragma("journal_mode", { simple: true })).toBe("wal");
+    expect(getSessionsSqlite().pragma("synchronous", { simple: true })).toBe(1);
   });
 
   it("indexes the FTS5 table over messages rather than duplicating its content", () => {

@@ -40,6 +40,8 @@ export interface InstalledJob {
   /** The self-contained file a worker runs, by its real path. */
   main: string;
   bound: Bound;
+  /** Named definition bounds must be refreshed at privileged dispatch boundaries. */
+  boundNames?: string[];
   /** Node permission flags the bound translates to. */
   flags: string[];
   requires: { bins: string[]; labels: Record<string, string> };
@@ -51,8 +53,9 @@ export interface JobInventory { jobs: InstalledJob[]; skipped: { type: string; r
 function notRemotable(job: RemotableJobSource, bound: Bound | null): string | undefined {
   if (job.runs.using !== "node") return `it runs with \`using: ${job.runs.using}\`; only node jobs run on other machines`;
   if (job.runs.secrets?.length) return "it declares secrets, which never leave this installation";
-  if (!job.bounds?.length || !bound) return "it is unbounded; a job runs elsewhere only bounded to `files: { allowOnly: [] }`";
-  if (!bound.files?.allowOnly || bound.files.allowOnly.length > 0) return "its bound lets it touch files; a job runs elsewhere only with `files: { allowOnly: [] }`";
+  if (!job.bounds?.length || !bound) return "it is unbounded; a job runs elsewhere only bounded to `files: { allow: [] }`";
+  const allowedFiles = bound.files?.allow;
+  if (!allowedFiles || allowedFiles.length > 0) return "its bound lets it touch files; a job runs elsewhere only with `files: { allow: [] }`";
   return undefined;
 }
 
@@ -67,7 +70,7 @@ export async function installedJobs(bags: readonly { name: string; jobs?: readon
       try {
         for (const name of job.bounds ?? []) {
           const resolved = await boundByName(name);
-          if (!resolved) throw new Error(`unknown bound ${name}; run \`barry bag sync-traits ${bag.name}\``);
+          if (!resolved) throw new Error(`unknown bound ${name}`);
           bound = mergeBounds(bound, resolved);
         }
       } catch (error) { skip(error instanceof Error ? error.message : String(error)); continue; }
@@ -81,9 +84,9 @@ export async function installedJobs(bags: readonly { name: string; jobs?: readon
         digest = inspectArtifact(main, type, String(job.version), false).digest;
       } catch (error) { skip(`its main is not one self-contained file: ${error instanceof Error ? error.message : String(error)}`); continue; }
       inventory.jobs.push({
-        type, bag: bag.name, main, bound: bound!, flags: flags.flags,
+        type, bag: bag.name, main, bound: bound!, boundNames: [...(job.bounds ?? [])], flags: flags.flags,
         requires: { bins: job.requires.bins, labels: job.requires.labels ?? {} },
-        contract: { type, digest, ...(job.inputSchema ? { inputSchema: job.inputSchema } : {}), ...(job.outputSchema ? { outputSchema: job.outputSchema } : {}), ...(job.timeout ? { timeoutMs: job.timeout * 1000 } : {}) },
+        contract: { type, digest, nodes: structuredClone(bound!.nodes ?? {}), ...(job.inputSchema ? { inputSchema: job.inputSchema } : {}), ...(job.outputSchema ? { outputSchema: job.outputSchema } : {}), ...(job.timeout ? { timeoutMs: job.timeout * 1000 } : {}) },
       });
     }
   }

@@ -1,0 +1,935 @@
+{
+  "recorded": "2026-10-15",
+  "baseline_commit": "7c1ca8c10",
+  "source_plan": "streaming-followups-and-session-stop.md",
+  "baseline_rows": [
+    {
+      "phase": "baseline",
+      "id": "oARb5mA0Dqfejl28tYdHb",
+      "load_average": [
+        15.849609375,
+        18.08154296875,
+        14.6435546875
+      ]
+    },
+    {
+      "frames": 17,
+      "chars": 83,
+      "bytes": 3910,
+      "post_rtt_ms": 121.94450000000143,
+      "starting_ms": 123.734292000001,
+      "streaming_ms": 2105.1030420000006,
+      "first_partial_ms": 7902.672000000002,
+      "final_text_ms": 8285.848458,
+      "status": "waiting",
+      "waiting_ms": 8430.387708000002,
+      "server": {
+        "warm_hit": 1,
+        "identity_resolve_ms": 545.6351250000298,
+        "bag_status_ms": 1482.7602500002831,
+        "bags_ms": 1724.6542499996722,
+        "native_policy_ms": 45.1290830001235,
+        "prepare_total_ms": 2513.566916998476,
+        "env_ms": 6.748457999899983,
+        "skills_ms": 703.6361670009792,
+        "sandbox_ms": 13.908540999516845,
+        "deliver_at": 10723478.518,
+        "first_event_ms": 6197.342042000964,
+        "first_token_ms": 7858.617417000234,
+        "turn_done_ms": 8359.849958000705,
+        "queue_ms": 79.80825000070035,
+        "warm_wait_ms": 1945.0545830000192,
+        "open_ms": 0.1282500009983778,
+        "deliver_ms": 2058.8668329995126,
+        "frames": 14,
+        "bytes": 1989,
+        "partial_frames": 7,
+        "sdk_ttft_ms": 2072,
+        "sdk_ttft_stream_ms": 1818,
+        "sdk_time_to_request_ms": 496,
+        "ws_send_p50_ms": 0.7872080001980066,
+        "ws_send_p95_ms": 45.480000000447035,
+        "ws_send_max_ms": 45.480000000447035,
+        "record_p50_ms": 9.40650000050664,
+        "record_p95_ms": 9.40650000050664,
+        "record_max_ms": 9.40650000050664,
+        "persist_p50_ms": 28.33445799909532,
+        "persist_p95_ms": 67.5762499999255,
+        "persist_max_ms": 67.5762499999255,
+        "model_gap_p50_ms": 3.8492499999701977,
+        "model_gap_p95_ms": 127.70737500116229,
+        "model_gap_max_ms": 127.70737500116229,
+        "gap_p50_ms": 0.1632500011473894,
+        "gap_p95_ms": 127.6712499987334,
+        "gap_max_ms": 127.6712499987334
+      },
+      "gap_p50_ms": 0.09558299999844166,
+      "gap_p95_ms": 127.63695899999948,
+      "gap_max_ms": 127.63695899999948,
+      "load_average": [
+        13.443359375,
+        17.3935546875,
+        14.4765625
+      ]
+    },
+    {
+      "frames": 14,
+      "chars": 88,
+      "bytes": 3042,
+      "post_rtt_ms": 46.11808299999757,
+      "starting_ms": 49.582249999999476,
+      "streaming_ms": 49.716333000000304,
+      "first_partial_ms": 900.2711249999993,
+      "final_text_ms": 1284.817583,
+      "status": "waiting",
+      "waiting_ms": 1394.610166999999,
+      "server": {
+        "warm_hit": 1,
+        "identity_resolve_ms": 545.6351250000298,
+        "bag_status_ms": 1482.7602500002831,
+        "bags_ms": 1724.6542499996722,
+        "native_policy_ms": 45.1290830001235,
+        "prepare_total_ms": 2513.566916998476,
+        "env_ms": 1.0727909989655018,
+        "skills_ms": 703.6361670009792,
+        "sandbox_ms": 13.908540999516845,
+        "deliver_at": 10729857.346666,
+        "turn_done_ms": 1276.267457999289,
+        "first_event_ms": 881.107791999355,
+        "first_token_ms": 881.1094169989228,
+        "queue_ms": 26.04641699977219,
+        "warm_wait_ms": 0.002875000238418579,
+        "open_ms": 0.010833000764250755,
+        "deliver_ms": 27.83108299970627,
+        "frames": 11,
+        "bytes": 1097,
+        "partial_frames": 8,
+        "sdk_ttft_ms": 1230,
+        "sdk_ttft_stream_ms": 846,
+        "sdk_time_to_request_ms": 47,
+        "record_p50_ms": 0.0006250012665987015,
+        "record_p95_ms": 0.0006250012665987015,
+        "record_max_ms": 0.0006250012665987015,
+        "ws_send_p50_ms": 0.1666670013219118,
+        "ws_send_p95_ms": 4.411624999716878,
+        "ws_send_max_ms": 4.411624999716878,
+        "model_gap_p50_ms": 3.0198329985141754,
+        "model_gap_p95_ms": 296.8287920001894,
+        "model_gap_max_ms": 296.8287920001894,
+        "gap_p50_ms": 2.7752919998019934,
+        "gap_p95_ms": 297.05883299931884,
+        "gap_max_ms": 297.05883299931884,
+        "persist_p50_ms": 5.756999999284744,
+        "persist_p95_ms": 5.756999999284744,
+        "persist_max_ms": 5.756999999284744
+      },
+      "gap_p50_ms": 2.718124999999418,
+      "gap_p95_ms": 297.1281250000029,
+      "gap_max_ms": 297.1281250000029,
+      "load_average": [
+        13.443359375,
+        17.3935546875,
+        14.4765625
+      ]
+    },
+    {
+      "phase": "baseline_cleanup",
+      "id": "oARb5mA0Dqfejl28tYdHb",
+      "status": 200
+    }
+  ],
+  "baseline_warm_classification": "legacy-reported; superseded by isWarm() semantics after deployment",
+  "load_at_verification": [
+    29.8349609375,
+    30.76025390625,
+    26.2705078125
+  ],
+  "quiet_gate_load_limit": 5,
+  "quiet_gate_status": "not measured: host remains loaded",
+  "after_rows": [
+    {
+      "phase": "installed_after",
+      "id": "Sqxyef0hYr1U0z6xP4d8m",
+      "load_average": [
+        7.9873046875,
+        11.5791015625,
+        17.53515625
+      ]
+    },
+    {
+      "frames": 17,
+      "chars": 93,
+      "bytes": 4869,
+      "post_rtt_ms": 210.39949999999953,
+      "starting_ms": 210.84170899999845,
+      "streaming_ms": 16389.428208999998,
+      "first_partial_ms": 19292.787292,
+      "final_text_ms": 19821.401708999998,
+      "status": "waiting",
+      "waiting_ms": 19915.223125,
+      "server": {
+        "warm_hit": 1,
+        "queue_ms": 108.6363330000022,
+        "warm_wait_ms": 16143.814874999996,
+        "env_ms": 28.385999999998603,
+        "open_ms": 0.11437500000465661,
+        "deliver_ms": 16285.419417000005,
+        "first_event_ms": 18263.619167000004,
+        "first_token_ms": 19188.725417,
+        "turn_done_ms": 19759.044208,
+        "frames": 14,
+        "bytes": 2465,
+        "partial_frames": 7,
+        "sdk_ttft_ms": 1676,
+        "sdk_ttft_stream_ms": 1224,
+        "sdk_time_to_request_ms": 399,
+        "ws_queue_p50_ms": 0.30808400000387337,
+        "ws_queue_p95_ms": 12.777083000000857,
+        "ws_queue_max_ms": 12.777083000000857,
+        "ws_callback_p50_ms": 0.1334999999962747,
+        "ws_callback_p95_ms": 25.312707999997656,
+        "ws_callback_max_ms": 25.312707999997656,
+        "ws_send_p50_ms": 0.46558399999776157,
+        "ws_send_p95_ms": 42.47525000000314,
+        "ws_send_max_ms": 42.47525000000314,
+        "record_p50_ms": 3.58037499999773,
+        "record_p95_ms": 3.58037499999773,
+        "record_max_ms": 3.58037499999773,
+        "persist_p50_ms": 25.164708000003884,
+        "persist_p95_ms": 34.094749999996566,
+        "persist_max_ms": 34.094749999996566,
+        "model_gap_p50_ms": 0.0669999999954598,
+        "model_gap_p95_ms": 444.9399579999954,
+        "model_gap_max_ms": 444.9399579999954,
+        "gap_p50_ms": 0.006500000003143214,
+        "gap_p95_ms": 449.04045799999585,
+        "gap_max_ms": 449.04045799999585
+      },
+      "gap_p50_ms": 0.007332999997743173,
+      "gap_p95_ms": 445.32004099999904,
+      "gap_max_ms": 445.32004099999904,
+      "load_average": [
+        9.1708984375,
+        11.509765625,
+        17.30224609375
+      ],
+      "claude_processes": 1
+    },
+    {
+      "frames": 19,
+      "chars": 97,
+      "bytes": 4458,
+      "post_rtt_ms": 64.70262500000172,
+      "starting_ms": 65.7944580000003,
+      "streaming_ms": 65.94087500000023,
+      "first_partial_ms": 771.7339580000007,
+      "final_text_ms": 1527.7507499999992,
+      "status": "waiting",
+      "waiting_ms": 1552.424041000002,
+      "server": {
+        "warm_hit": 1,
+        "queue_ms": 15.841333000003942,
+        "warm_wait_ms": 0.25525000000197906,
+        "env_ms": 1.0452090000035241,
+        "open_ms": 0.009666999998444226,
+        "deliver_ms": 17.246666999999434,
+        "first_event_ms": 722.5422499999986,
+        "first_token_ms": 722.5489170000001,
+        "turn_done_ms": 1482.9555000000037,
+        "frames": 16,
+        "bytes": 2092,
+        "partial_frames": 13,
+        "sdk_ttft_ms": 1395,
+        "sdk_ttft_stream_ms": 679,
+        "sdk_time_to_request_ms": 34,
+        "record_p50_ms": 0.0002919999969890341,
+        "record_p95_ms": 0.0002919999969890341,
+        "record_max_ms": 0.0002919999969890341,
+        "ws_queue_p50_ms": 0.02558300000237068,
+        "ws_queue_p95_ms": 1.807874999998603,
+        "ws_queue_max_ms": 1.807874999998603,
+        "ws_callback_p50_ms": 0.08774999999877764,
+        "ws_callback_p95_ms": 0.31758300000365125,
+        "ws_callback_max_ms": 0.31758300000365125,
+        "ws_send_p50_ms": 0.16729099999793107,
+        "ws_send_p95_ms": 1.8475839999955497,
+        "ws_send_max_ms": 1.8475839999955497,
+        "model_gap_p50_ms": 0.21612499999901047,
+        "model_gap_p95_ms": 681.3925000000017,
+        "model_gap_max_ms": 681.3925000000017,
+        "gap_p50_ms": 0.25262500000098953,
+        "gap_p95_ms": 681.5517499999987,
+        "gap_max_ms": 681.5517499999987
+      },
+      "gap_p50_ms": 0.18120899999848916,
+      "gap_p95_ms": 681.1015829999997,
+      "gap_max_ms": 681.1015829999997,
+      "load_average": [
+        9.1708984375,
+        11.509765625,
+        17.30224609375
+      ],
+      "claude_processes": 1
+    },
+    {
+      "phase": "installed_cleanup",
+      "id": "Sqxyef0hYr1U0z6xP4d8m",
+      "status": 200
+    }
+  ],
+  "verification": {
+    "sdk": {
+      "passed": 2720,
+      "skipped": 2
+    },
+    "sessions_api": {
+      "passed": 785
+    },
+    "sessions_bag": {
+      "passed": 1685,
+      "skipped": 12
+    },
+    "mcp": {
+      "passed": 459
+    },
+    "adapters": {
+      "claude": 138,
+      "codex": 108,
+      "opencode": 73,
+      "antigravity": 61,
+      "cursor": 50,
+      "pi": 51
+    },
+    "btui": {
+      "passed": 149,
+      "version": "0.3.1",
+      "final_regression": "early_inactive_handshake_defers_to_the_attached_record"
+    },
+    "targeted_cli": {
+      "passed": 60
+    },
+    "scratch_bag_build": {
+      "doctor_exit": 0,
+      "build_exit": 0,
+      "bag": "sessions/search"
+    },
+    "launch_parity": "unchanged",
+    "cli": {
+      "passed": 1503,
+      "skipped": 6,
+      "workers": 1,
+      "duration_s": 382.7
+    },
+    "wal_fixture": {
+      "passed": 12,
+      "fix": "Prime the reader read-mark before signaling ready; all byte comparisons retained."
+    },
+    "final_api_regressions": {
+      "passed": 129
+    },
+    "final_runtime": {
+      "passed": 68
+    },
+    "recording_worker": {
+      "passed": 11
+    },
+    "final_acp": {
+      "passed": 14
+    },
+    "final_mapper": {
+      "passed": 5
+    },
+    "final_cli_stop_regressions": {
+      "passed": 49,
+      "typecheck": "passed",
+      "eslint": "passed"
+    },
+    "final_cli_control_regressions": {
+      "passed": 58
+    },
+    "final_entry_checks": {
+      "passed": 6,
+      "bundle_rebuilt": true
+    },
+    "installed_bags": {
+      "built": 70,
+      "total": 70,
+      "duration_s": 6.2
+    }
+  },
+  "limitations": [
+    "No causal namespace latency improvement established: fresh legacy reused SDK time to request was 47 ms.",
+    "Quiet-machine gates were not measured: host load remained above 5. Installed reused turn starting 65.8 ms, SDK time to request 34 ms, socket send p95/max 1.85 ms at load 9.17.",
+    "Initial installed cold module loading blocked the API and launch attempts timed out; API restart required an explicit start. A later prepared first turn completed after a 16.1 s warm wait. Native and raw double Ctrl-C exit 130 after stop; the raw drill found and fixed an exit-code response race.",
+    "Swift generation was skipped because BARRY_KIT_DIR is unset; TypeScript/OpenAPI generation completed.",
+    "A first MCP drill used an already-loaded stale tool bundle: its sequence conflict recovered with an explicit mapping. Rebuilding all 70 bags and restarting MCP before the final drill produced a resident-routed inbox write with no new conflict.",
+    "Loaded CLI stop wall time was 1.39 s and 5.32 s; API handlers took 75 ms and 86 ms. These do not meet the full CLI wall-time gate.",
+    "The final fresh no-prompt native session reached ready and exited 0; ui:spawn was 1147.5 ms at load 5.42, missing the 500 ms gate."
+  ],
+  "implementation_commit": "3c27bf8d9",
+  "btui_commit": "a7fa726",
+  "preview_rows": [
+    {
+      "phase": "private_after",
+      "id": "z4Tq_ZeZiiHeKFeJF6-wX",
+      "commit": "04aae2067",
+      "load_average": [
+        21.71630859375,
+        20.44384765625,
+        22.59130859375
+      ]
+    },
+    {
+      "frames": 75,
+      "chars": 683,
+      "bytes": 12814,
+      "post_rtt_ms": 289.93212499999936,
+      "starting_ms": 290.8362909999996,
+      "streaming_ms": 7010.816457999999,
+      "first_thinking_ms": 41242.946958,
+      "first_partial_ms": 46149.921166,
+      "final_text_ms": 47678.469541,
+      "status": "waiting",
+      "waiting_ms": 48706.323666,
+      "server": {
+        "warm_hit": 1,
+        "queue_ms": 132.3897089999955,
+        "warm_wait_ms": 6706.342875000002,
+        "env_ms": 10.27049999999872,
+        "open_ms": 0.1568330000009155,
+        "deliver_ms": 6853.382499999992,
+        "first_event_ms": 37367.96366699999,
+        "first_thinking_ms": 40977.88649999999,
+        "first_token_ms": 45824.67458399999,
+        "turn_done_ms": 48156.874375,
+        "frames": 72,
+        "bytes": 9847,
+        "thinking_frames": 17,
+        "partial_frames": 50,
+        "coalesced_frames": 2,
+        "sdk_ttft_ms": 8410,
+        "sdk_ttft_stream_ms": 2792,
+        "sdk_time_to_request_ms": 1816,
+        "ws_queue_p50_ms": 8.498084000006202,
+        "ws_queue_p95_ms": 91.74054199999955,
+        "ws_queue_max_ms": 127.07974999998987,
+        "ws_callback_p50_ms": 10.308167000010144,
+        "ws_callback_p95_ms": 25.57158299999719,
+        "ws_callback_max_ms": 142.73258300000452,
+        "ws_send_p50_ms": 15.90091699999175,
+        "ws_send_p95_ms": 131.72712499999034,
+        "ws_send_max_ms": 200.85379100000137,
+        "record_p50_ms": 3.4796250000072177,
+        "record_p95_ms": 3.4796250000072177,
+        "record_max_ms": 3.4796250000072177,
+        "persist_p50_ms": 229.4388750000071,
+        "persist_p95_ms": 230.80520899999829,
+        "persist_max_ms": 230.80520899999829,
+        "model_gap_p50_ms": 4.816791999997804,
+        "model_gap_p95_ms": 71.40645799999766,
+        "model_gap_max_ms": 197.68141600000672,
+        "gap_p50_ms": 0.056750000003376044,
+        "gap_p95_ms": 67.88645800000813,
+        "gap_max_ms": 161.7766660000052
+      },
+      "gap_p50_ms": 0.2003340000010212,
+      "gap_p95_ms": 77.62412499999482,
+      "gap_max_ms": 4316.593124999999,
+      "load_average": [
+        34.1318359375,
+        24.36328125,
+        23.9267578125
+      ],
+      "claude_processes": 1
+    },
+    {
+      "frames": 64,
+      "chars": 589,
+      "bytes": 10908,
+      "post_rtt_ms": 1341.5729580000043,
+      "starting_ms": 1355.9736659999908,
+      "streaming_ms": 1364.4417499999981,
+      "first_thinking_ms": 3669.6490829999966,
+      "first_partial_ms": 3705.8749580000003,
+      "final_text_ms": 6189.301540999993,
+      "status": "waiting",
+      "waiting_ms": 6631.8918330000015,
+      "server": {
+        "warm_hit": 1,
+        "queue_ms": 272.4721669999999,
+        "warm_wait_ms": 28.222916999991867,
+        "env_ms": 6.4861670000100276,
+        "open_ms": 0.04899999999906868,
+        "deliver_ms": 310.8965420000022,
+        "first_event_ms": 2549.430959000005,
+        "first_thinking_ms": 2550.476250000007,
+        "first_token_ms": 2615.907334000003,
+        "turn_done_ms": 5386.0895420000015,
+        "frames": 61,
+        "bytes": 7984,
+        "thinking_frames": 5,
+        "partial_frames": 53,
+        "sdk_ttft_ms": 2103,
+        "sdk_ttft_stream_ms": 1148,
+        "sdk_time_to_request_ms": 287,
+        "record_p50_ms": 0.0021249999990686774,
+        "record_p95_ms": 0.0021249999990686774,
+        "record_max_ms": 0.0021249999990686774,
+        "ws_queue_p50_ms": 0.1482500000129221,
+        "ws_queue_p95_ms": 3.5228749999951106,
+        "ws_queue_max_ms": 38.44891700000153,
+        "ws_callback_p50_ms": 0.34308299999975134,
+        "ws_callback_p95_ms": 2.9204999999928987,
+        "ws_callback_max_ms": 26.309124999999767,
+        "ws_send_p50_ms": 0.667541999995592,
+        "ws_send_p95_ms": 8.617249999995693,
+        "ws_send_max_ms": 55.18758299999172,
+        "model_gap_p50_ms": 33.10954099999799,
+        "model_gap_p95_ms": 139.1466669999936,
+        "model_gap_max_ms": 177.3449580000015,
+        "gap_p50_ms": 32.8960839999927,
+        "gap_p95_ms": 147.3904579999944,
+        "gap_max_ms": 176.35595899999316
+      },
+      "gap_p50_ms": 30.724958000006154,
+      "gap_p95_ms": 149.94291699999303,
+      "gap_max_ms": 175.2684159999917,
+      "load_average": [
+        33.8515625,
+        24.62939453125,
+        24.02587890625
+      ],
+      "claude_processes": 1
+    },
+    {
+      "phase": "private_cleanup",
+      "id": "z4Tq_ZeZiiHeKFeJF6-wX",
+      "status": 200,
+      "stop_ms": 1509.2695830000011,
+      "response": {
+        "message": "Session stopped",
+        "recordingPending": false
+      },
+      "load_average": [
+        36.025390625,
+        25.23291015625,
+        24.2421875
+      ]
+    }
+  ],
+  "installed_health": {
+    "load_average": [
+      10.3779296875,
+      9.41552734375,
+      12.05908203125
+    ],
+    "namespaceSplit": "false",
+    "results": [
+      {
+        "name": "api",
+        "http": 200,
+        "health_ms": 1422.8065,
+        "body": {
+          "ok": true,
+          "service": "barry-server",
+          "pid": 59354,
+          "build": {
+            "release": null,
+            "schema": {
+              "sessions": 20
+            }
+          },
+          "uptime": 868,
+          "activeSessions": 1,
+          "dbConnected": true,
+          "lastSessionCompleted": "2026-10-15T06:00:23.137Z",
+          "memoryUsage": {
+            "rss": 59113472
+          }
+        }
+      },
+      {
+        "name": "mcp",
+        "http": 200,
+        "health_ms": 208.99312499999996,
+        "body": {
+          "ok": true,
+          "transports": 0,
+          "maxTransports": 400,
+          "leakWarnTransports": 250,
+          "ready": "ready"
+        }
+      }
+    ]
+  },
+  "installed_version": [
+    {
+      "elapsed_ms": 167.7960829983931,
+      "load_average": [
+        13.49462890625,
+        18.53125,
+        24.134765625
+      ],
+      "status": 0,
+      "stdout": "0.0.0-dev\n",
+      "timing": "bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): Bad file descriptor\nBarry timing (exit) \u2014 entry: bundle\nstage                             start ms    dur ms\nbin:start                              20.6       0.0\nbin:loader-ready                       60.5       0.0\n"
+    },
+    {
+      "elapsed_ms": 124.9782920058351,
+      "load_average": [
+        13.49462890625,
+        18.53125,
+        24.134765625
+      ],
+      "status": 0,
+      "stdout": "0.0.0-dev\n",
+      "timing": "bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): Bad file descriptor\nBarry timing (exit) \u2014 entry: bundle\nstage                             start ms    dur ms\nbin:start                              19.8       0.0\nbin:loader-ready                       40.3       0.0\n"
+    },
+    {
+      "elapsed_ms": 166.34412499843165,
+      "load_average": [
+        13.49462890625,
+        18.53125,
+        24.134765625
+      ],
+      "status": 0,
+      "stdout": "0.0.0-dev\n",
+      "timing": "bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): Bad file descriptor\nBarry timing (exit) \u2014 entry: bundle\nstage                             start ms    dur ms\nbin:start                              28.5       0.0\nbin:loader-ready                       47.7       0.0\n"
+    }
+  ],
+  "live_native_stop": {
+    "ui": "btui",
+    "exit": 130,
+    "elapsed_ms": 10916.666042001452,
+    "keys": [
+      {
+        "key": "first Ctrl-C",
+        "ms": 10666.916166999727
+      },
+      {
+        "key": "second Ctrl-C",
+        "ms": 10719.721250003204
+      }
+    ],
+    "session_ids": [
+      "Kgv8IjJk7h28dxdvRsRw2",
+      "Kgv8IjJk7h28dxdvRsRw2"
+    ],
+    "stop_notice": false,
+    "output_tail": "thinking 8.6s \u00b7 Kgv8IjJk \u00b7 claude-opus-\u2026  Turn forced to stop (Ctrl-C again to stop)\r\r  \u2834 thinking 8.7s \u00b7 Kgv8IjJk \u00b7 claude-opus-\u2026  Turn forced to stop (Ctrl-C again to stop)Barry server timing: {\"queue_ms\":454.1373749999984,\"warm_wait_ms\":8011.094125000003,\"env_ms\":2.2402079999883426,\"open_ms\":0.029666000002180226,\"deliver_ms\":8468.399000000005,\"frames\":4,\"bytes\":1162,\"record_p50_ms\":0.5783329999976559,\"record_p95_ms\":0.5783329999976559,\"record_max_ms\":0.5783329999976559,\"ws_queue_p50_ms\":1.522624999997788,\"ws_queue_p95_ms\":1.7444170000089798,\"ws_queue_max_ms\":1.7444170000089798,\"ws_callback_p50_ms\":0.1820830000069691,\"ws_callback_p95_ms\":3.0898749999905704,\"ws_callback_max_ms\":3.0898749999905704,\"ws_send_p50_ms\":1.8509159999957774,\"ws_send_p95_ms\":5.279041999994661,\"ws_send_max_ms\":5.279041999994661}\n\r\r\n  \u00b7 \u23f1 first_draw_ms 1 \u00b7 post_rtt_ms 467 \u00b7 starting_ms 8500 \u00b7 streaming_ms 8500 \u00b7\r\n    waiting_ms 8659 \u00b7 0 chunks/0 bytes \u00b7 gaps p50 0 p95 0 max 0 \u00b7 116 draws \u00b7 server\r\n    ws_send_p95_ms 5.3\r\n\r\n  \u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\r\n  \u2502 \u203a Message Barry                                                                  \u2502\r\n  \u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\r\n  \u25cf ready \u00b7 Kgv8IjJk \u00b7 claude-opus-5 \u00b7 barr\u2026  Turn forced to stop (Ctrl-C again to stop)\r\r\n\u25c6 detached from Kgv8IjJk\r\n  btui Kgv8IjJk7h28dxdvRsRw2\r\n\r\nSession: Kgv8IjJk7h28dxdvRsRw2\r\n  bux session resume Kgv8IjJk7h28dxdvRsRw2\r\n",
+    "load_average": [
+      7.96337890625,
+      11.125,
+      17.0634765625
+    ]
+  },
+  "live_raw_stop": {
+    "ui": "raw",
+    "exit": 130,
+    "elapsed_ms": 4424.4371249951655,
+    "keys": [
+      {
+        "key": "first Ctrl-C",
+        "ms": 4164.48270798719
+      },
+      {
+        "key": "second Ctrl-C",
+        "ms": 4169.5701659919
+      }
+    ],
+    "session_ids": [
+      "yByh3nTv4iw-4wY9GlIwG",
+      "yByh3nTv4iw-4wY9GlIwG"
+    ],
+    "stop_notice": false,
+    "output_tail": "1271,\"ws_callback_max_ms\":1.2437090000021271,\"ws_send_p50_ms\":3.127875000005588,\"ws_send_p95_ms\":16.006666999979643,\"ws_send_max_ms\":16.006666999979643}\r\n\r\nrecording delayed\u2026\r\n\r\nSession: yByh3nTv4iw-4wY9GlIwG\r\n  bux session resume yByh3nTv4iw-4wY9GlIwG\r\nBarry timing (exit) \u2014 entry: bundle\r\nstage                             start ms    dur ms\r\nbin:start                             137.5       0.0\r\nbin:loader-ready                      174.6       0.0\r\nidentity:binding-validated            267.5       0.0\r\nidentity:user                         417.5       8.9\r\nidentity:synced                       433.7     407.7\r\nmain:imports-done                     852.3       0.0\r\nmain:harnesses                        852.3       2.0\r\nmain:bag-groups                       857.8       0.0\r\nmain:parse-start                      857.9       0.0\r\npreaction:ensure-barry                858.6      12.3\r\npreaction:instance-secret             870.9       2.0\r\napi:health                            881.7     106.7\r\nstart:identity-selected               885.3       1.6\r\nstart:adapters                        887.1       1.6\r\nstart:mode                            889.5       0.0\r\nsession:composition                   901.9      14.9\r\nsession:traits                        920.4       0.1\r\npreaction:model-declarations          920.5      27.4\r\nsession:precreate                     948.2     211.1\r\nlaunch:oauth                         1159.3       0.2\r\nui:resolve                           1160.3       0.0\r\n",
+    "load_average": [
+      10.0419921875,
+      10.2861328125,
+      15.66796875
+    ]
+  },
+  "live_native_stream": {
+    "ui": "btui",
+    "exit": 0,
+    "elapsed_ms": 16312.899833006668,
+    "keys": [
+      {
+        "key": "first Ctrl-C",
+        "ms": 16268.936833002954
+      }
+    ],
+    "session_ids": [
+      "ukCH6GDGUdRPQ7_NUzpPn",
+      "ukCH6GDGUdRPQ7_NUzpPn"
+    ],
+    "stop_notice": false,
+    "output_tail": "5964,\"record_max_ms\":1.0195829999865964,\"ws_queue_p50_ms\":0.031124999979510903,\"ws_queue_p95_ms\":1.2037080000154674,\"ws_queue_max_ms\":22.055916999990586,\"ws_callback_p50_ms\":0.1663340000086464,\"ws_callback_p95_ms\":1.5070420000120066,\"ws_callback_max_ms\":22.425082999980077,\"ws_send_p50_ms\":0.36133399995742366,\"ws_send_p95_ms\":8.330666000023484,\"ws_send_max_ms\":22.589624999964144,\"persist_p50_ms\":72.47504200000549,\"persist_p95_ms\":414.0467500000377,\"persist_max_ms\":414.0467500000377,\"model_gap_p50_ms\":61.54616700002225,\"model_gap_p95_ms\":84.37487500003772,\"model_gap_max_ms\":834.6178749999963,\"gap_p50_ms\":61.5509590000147,\"gap_p95_ms\":83.94004199997289,\"gap_max_ms\":836.0560410000035}\n\r\r\n  \u00b7 \u23f1 final_text_ms 14559 \u00b7 first_draw_ms 0 \u00b7 first_partial_ms 6831 \u00b7 post_rtt_ms 985 \u00b7\r\n    starting_ms 5464 \u00b7 streaming_ms 5467 \u00b7 waiting_ms 15063 \u00b7 121 chunks/1218 bytes \u00b7\r\n    gaps p50 62 p95 85 max 835 \u00b7 301 draws \u00b7 server first_event_ms 5799.1 \u00b7\r\n    first_token_ms 6819.5 \u00b7 ws_send_p95_ms 8.3 \u00b7 warm_hit 1.0\r\n\r\n  \u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\r\n  \u2502 \u203a Message Barry                                                                  \u2502\r\n  \u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\r\n  \u25cf ready \u00b7 ukCH6GDG \u00b7 claude-opus-5 \u00b7 barry-bux                          / for commands\r\r\n\u25c6 detached from ukCH6GDG\r\n  btui ukCH6GDGUdRPQ7_NUzpPn\r\n\r\nSession: ukCH6GDGUdRPQ7_NUzpPn\r\n  bux session resume ukCH6GDGUdRPQ7_NUzpPn\r\n",
+    "load_average": [
+      8.23779296875,
+      9.3359375,
+      14.33935546875
+    ]
+  },
+  "live_control": [
+    {
+      "phase": "cli_interrupt",
+      "id": "tZ0aJAyiUo_aNB7uovANa",
+      "elapsed_ms": 12117.635791,
+      "outcome": "Turn forced to stop",
+      "load_average": [
+        8.2392578125,
+        8.8115234375,
+        13.33740234375
+      ]
+    },
+    {
+      "phase": "soft_resume",
+      "id": "tZ0aJAyiUo_aNB7uovANa",
+      "ok": true,
+      "load_average": [
+        8.17333984375,
+        8.783203125,
+        13.24853515625
+      ]
+    },
+    {
+      "phase": "cli_stop",
+      "id": "tZ0aJAyiUo_aNB7uovANa",
+      "elapsed_ms": 1391.5118749999965,
+      "outcome": "Session stopped",
+      "load_average": [
+        8.7998046875,
+        8.90283203125,
+        13.2646484375
+      ]
+    },
+    {
+      "phase": "recorded",
+      "id": "tZ0aJAyiUo_aNB7uovANa",
+      "count": 21,
+      "durable": true,
+      "error_frames": 0,
+      "load_average": [
+        8.7998046875,
+        8.90283203125,
+        13.2646484375
+      ]
+    }
+  ],
+  "live_stop_after_model_setup_skip": [
+    {
+      "phase": "cli_stop",
+      "id": "ukCH6GDGUdRPQ7_NUzpPn",
+      "elapsed_ms": 5316.950833,
+      "outcome": "Session stopped",
+      "load_average": [
+        9.5966796875,
+        9.06884765625,
+        12.58740234375
+      ]
+    },
+    {
+      "phase": "recorded",
+      "id": "ukCH6GDGUdRPQ7_NUzpPn",
+      "count": 5,
+      "durable": true,
+      "error_frames": 0,
+      "load_average": [
+        9.5966796875,
+        9.06884765625,
+        12.58740234375
+      ]
+    }
+  ],
+  "live_wedge": [
+    {
+      "phase": "created",
+      "id": "lf1_oTQEkDVCitB3gZlqh",
+      "load_average": [
+        10.3779296875,
+        9.41552734375,
+        12.05908203125
+      ]
+    },
+    {
+      "phase": "real_mcp",
+      "result": {
+        "phase": "mcp_send_prompt",
+        "id": "lf1_oTQEkDVCitB3gZlqh",
+        "tool": "call_tool",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n  \"queued\": true,\n  \"duplicate\": false,\n  \"targetSession\": \"lf1_oTQEkDVCitB3gZlqh\",\n  \"delivery\": \"tool-call\",\n  \"explanation\": \"No inbox listener \u2014 the session reads this on its next Barry tool call.\"\n}"
+            }
+          ]
+        },
+        "elapsed_ms": 494.87529099999995,
+        "load_average": [
+          10.2685546875,
+          9.44189453125,
+          12.0224609375
+        ]
+      },
+      "load_average": [
+        10.2685546875,
+        9.44189453125,
+        12.0224609375
+      ]
+    },
+    {
+      "phase": "inbox_delivered",
+      "id": "lf1_oTQEkDVCitB3gZlqh",
+      "error_frames": 0,
+      "load_average": [
+        9.7265625,
+        9.36865234375,
+        11.951171875
+      ]
+    },
+    {
+      "phase": "wedge_complete",
+      "id": "lf1_oTQEkDVCitB3gZlqh",
+      "error_frames": 0,
+      "load_average": [
+        9.267578125,
+        9.279296875,
+        11.904296875
+      ]
+    },
+    {
+      "phase": "cleanup",
+      "id": "lf1_oTQEkDVCitB3gZlqh",
+      "http": 200,
+      "load_average": [
+        9.267578125,
+        9.279296875,
+        11.904296875
+      ]
+    }
+  ],
+  "live_wedge_log_check": {
+    "enqueue_http": 200,
+    "enqueue_ms": 318,
+    "new_sequence_conflicts": 0,
+    "error_frames": 0
+  },
+  "live_fresh_attach": {
+    "ui": "btui",
+    "exit": 0,
+    "elapsed_ms": 1761.3802090054378,
+    "keys": [
+      {
+        "key": "first Ctrl-C",
+        "ms": 1748.584959001164
+      }
+    ],
+    "session_ids": [
+      "pGE_2HiVtRnx17WFzO4nC",
+      "pGE_2HiVtRnx17WFzO4nC"
+    ],
+    "stop_notice": false,
+    "output_tail": "\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\r\n  \u280b attaching \u00b7 pGE_2HiV                                                  / for commands\r\r  \u2819 attaching \u00b7 pGE_2HiV                                                  / for commands\r\r  \u2839 attaching \u00b7 pGE_2HiV                                                  / for commands\r\r  \u2838 attaching \u00b7 pGE_2HiV                                                  / for commands\r\r  \u283c attaching \u00b7 pGE_2HiV                                                  / for commands\r\r  \u2834 attaching \u00b7 pGE_2HiV                                                  / for commands\r\r\r\n                                     \u256d\u2500\u2500\u2500\u2500\u256e \u256d\u2500\u2500\u2500\u2500\u256e \r\n                                     \u2502    \u251c\u2500\u2524    \u2502 \r\n                                     \u2570\u2500\u2500\u2500\u2500\u256f \u2570\u2500\u2500\u2500\u2500\u256f \r\n                                                   \r\n                                   barry  /  pGE_2HiV\r\n                                   ~/repos/barry-bux\r\n                             claude-code  \u00b7  claude-opus-5\r\n\r\n  \u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\r\n  \u2502 \u203a Message Barry                                                                  \u2502\r\n  \u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\r\n  \u25cf ready \u00b7 pGE_2HiV \u00b7 claude-opus-5 \u00b7 barry-bux                          / for commands\r\r\n\u25c6 detached from pGE_2HiV\r\n  btui pGE_2HiVtRnx17WFzO4nC\r\n\r\nSession: pGE_2HiVtRnx17WFzO4nC\r\n  bux session resume pGE_2HiVtRnx17WFzO4nC\r\n",
+    "load_average": [
+      5.4228515625,
+      7.4384765625,
+      10.6455078125
+    ],
+    "ui_spawn_ms": 1147.5
+  },
+  "final_cleanup": [
+    {
+      "id": "KHoZ-CcNR4cx8BAm9lbog",
+      "stop_ms": 91.061917,
+      "http": 200,
+      "body": {
+        "message": "Session stopped",
+        "recordingPending": false
+      },
+      "load_average": [
+        6.2138671875,
+        8.4072265625,
+        11.4130859375
+      ]
+    },
+    {
+      "id": "wpg-_9VTMJKyqWgxv7Cm1",
+      "stop_ms": 951.533792,
+      "http": 200,
+      "body": {
+        "message": "Session stopped",
+        "recordingPending": false
+      },
+      "load_average": [
+        8.93115234375,
+        7.982421875,
+        10.6552734375
+      ]
+    },
+    {
+      "id": "pGE_2HiVtRnx17WFzO4nC",
+      "stop_ms": 368.6004169999999,
+      "http": 200,
+      "body": {
+        "message": "Session stopped",
+        "recordingPending": false
+      },
+      "load_average": [
+        8.93115234375,
+        7.982421875,
+        10.6552734375
+      ]
+    }
+  ],
+  "owned_harness_children_after_wedge": {
+    "api_pid": 59354,
+    "owned_harness_children": []
+  },
+  "final_health": {
+    "load_average": [
+      12.44287109375,
+      8.8212890625,
+      10.859375
+    ],
+    "namespaceSplit": "false",
+    "results": [
+      {
+        "name": "api",
+        "http": 200,
+        "health_ms": 156.26554199999998,
+        "body": {
+          "ok": true,
+          "service": "barry-server",
+          "pid": 59354,
+          "build": {
+            "release": null,
+            "schema": {
+              "sessions": 20
+            }
+          },
+          "uptime": 1156,
+          "activeSessions": 0,
+          "dbConnected": true,
+          "lastSessionCompleted": "2026-10-15T06:03:46.804Z",
+          "memoryUsage": {
+            "rss": 67010560
+          }
+        }
+      },
+      {
+        "name": "mcp",
+        "http": 200,
+        "health_ms": 69.43050000000002,
+        "body": {
+          "ok": true,
+          "transports": 1,
+          "maxTransports": 400,
+          "leakWarnTransports": 250,
+          "ready": "ready"
+        }
+      }
+    ]
+  }
+}

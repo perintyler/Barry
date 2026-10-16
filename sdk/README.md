@@ -29,7 +29,7 @@ const sessions = await Barry.identity("bux").sessions();
 
 An explicit `secret` bypasses local credential discovery. `Barry` uses the transport its caller installs or supplies. Hosting code that needs the raw HTTP client imports it from `/internal/client`; that entry carries no compatibility promise.
 
-Bag authors use `Barry.Tool` and `Barry.bag` from `@barry-rocks/sdk`. Subject modules expose tools, traits, bounds, identities, sessions, instructions, actions, apps, workflows and stores. See [module ownership](docs/modules.md), [bags](docs/bags.md) and [bounds](docs/bounds.md).
+Bag authors use `Barry.Tool` and `Barry.bag` from `@barry-rocks/sdk`. Subject modules expose tools, bounds, identities, sessions, instructions, actions, apps, workflows and stores. See [module ownership](docs/modules.md), [bags](docs/bags.md) and [bounds](docs/bounds.md).
 
 Library imports do not start Barry. Application entry points start services only when invoked. Concrete session, decision and completion adapters are separate packages. Swift apps use BarryKit, a separate repository; `pnpm contracts:generate` writes its OpenAPI spec.
 
@@ -40,18 +40,18 @@ Setup records shipped call-code packages; use `barry adapter model add <package-
 Node composition roots can load the same selection registry:
 
 ```ts
-import { loadModelProviders } from "@barry-rocks/sdk/adapters/models";
-import { barryModelProvidersPath } from "@barry-rocks/sdk/services";
+import { loadModelVendors } from "@barry-rocks/sdk/adapters/models";
+import { barryModelVendorsPath } from "@barry-rocks/sdk/services";
 
-const providers = loadModelProviders({ file: barryModelProvidersPath() });
-const factories = await providers.load();
+const vendors = loadModelVendors({ file: barryModelVendorsPath() });
+const factories = await vendors.load();
 ```
 
-Reading selections loads no provider code. `load([packageName])` imports only the named registered packages. Empty installations choose no default provider. Unavailable packages and conflicting factories are skipped and reported in `providers.refused`; healthy selections still load. Provider selection never supplies credentials or grants execution permissions. Application entry points read this registry instead of importing every model provider.
+Reading selections loads no vendor code. `load([packageName])` imports only the named registered packages. Empty installations choose no default vendor. Unavailable packages and conflicting factories are skipped and reported in `vendors.refused`; healthy selections still load. Vendor selection never supplies credentials or grants execution permissions. Application entry points read this registry instead of importing every model vendor.
 
-One-off schedules accept explicit `identity`, `traits` and `bounds` selections in their options. Identity-free script schedules must select a trait that grants `bash.Bash`; an omitted or empty selection grants nothing. The SDK preserves those fields, including explicit empty arrays, on the request wire.
+At-schedules accept explicit `identity`, `bags` and `bounds` selections in their options. Identity-free script schedules must select the `bash` bag; an omitted or empty selection grants nothing. The SDK preserves those fields, including explicit empty arrays, on the request wire.
 
-Session packages are selected separately with `barry adapter add <package-directory>`. Reading an installation's adapter registry never discovers sibling packages or bootstraps its bag store. Barry setup/start owns baseline policy bootstrap and preserves intentionally deleted optional traits. Adapter `listModels` receives an explicit environment; discovery must not borrow an ambient provider key or user login. Cursor's executable resolution loads only its selected adapter.
+Session packages are selected separately with `barry adapter add <package-directory>`. Reading an installation's adapter registry never discovers sibling packages or bootstraps its bag store. Barry setup/start owns baseline bound bootstrap. Adapter `listModels` receives an explicit environment; discovery must not borrow an ambient vendor key or user login. Cursor's executable resolution loads only its selected adapter.
 
 ## Session streaming
 
@@ -120,7 +120,7 @@ if ("started" in created && created.started === false) {
 await client.sessions.update(created.id, { name: "Repository review", pinned: true });
 ```
 
-Omit `prompt` to create an idle session before subscribing with `AgUiConnection`. With a prompt, the result retains `started: true` or `started: false` with `startError`; a successful HTTP creation does not promise a running turn. Inputs are validated before credential resolution or HTTP. Updates preserve omitted fields and allow explicit empty traits or null bounds. `prompt` and `useWorktree` are creation fields and are rejected on update. Session writes are never automatically retried.
+Omit `prompt` to create an idle session before subscribing with `AgUiConnection`. With a prompt, the result retains `started: true` or `started: false` with `startError`; a successful HTTP creation does not promise a running turn. Inputs are validated before credential resolution or HTTP. Updates preserve omitted fields and allow explicit empty bags or null bounds. `prompt` and `useWorktree` are creation fields and are rejected on update. Session writes are never automatically retried.
 
 
 ## Identity administration
@@ -136,7 +136,7 @@ const client = BarryClient.connect({
   identities: { baseUrl: "https://identities.example", resolveCredential },
 });
 const { identity, warnings } = await client.identities.create({
-  name: "assistant", bags: ["filesystem"], traits: [],
+  name: "assistant", bags: ["filesystem"], bounds: [],
 });
 for (const warning of warnings ?? []) console.warn(warning.message);
 await client.identities.update(identity.id, { displayName: "Project assistant" });
@@ -152,13 +152,13 @@ Service control uses its own MCP endpoint: `Barry.at({ baseUrl, secret, services
 
 ## Authorization contracts
 
-`@barry-rocks/sdk/internal/auth` supplies the scope and principal types used by Barry’s Node services. Device grants enumerate scopes and identity IDs explicitly; wildcard/admin grants are rejected, and artifact sharing requires read access. Parsed device principals and their grant arrays are frozen. `hasScope` and `hasIdentityGrant` check a principal supplied by a trusted verifier; parsing a shape does not authenticate a caller. Installation principals remain separate from device credentials. Services must also enforce the target resource's ownership and execution policy.
+`@barry-rocks/sdk/internal/auth` supplies the scope and principal types used by Barry’s Node services. Device grants enumerate scopes and identity IDs explicitly; wildcard/admin grants are rejected, and artifact sharing requires read access. Parsed device principals and their grant arrays are frozen. `hasScope` and `hasIdentityGrant` check a principal supplied by a trusted verifier; parsing a shape does not authenticate a caller. Installation principals remain separate from device credentials. Services must also enforce the target resource's ownership and execution bounds.
 
 Node services use `authorizeRequest` from `@barry-rocks/sdk/internal/auth`, or pass its options to `applyAuth(app, options)`. Supply a trusted `verifyCredential(credential, signal)` and a `policy(request)` returning required scopes plus an `authorize(principal, request, signal)` resource check. Device requests without a policy are forbidden. Verified installation principals retain operator access; handlers still enforce ownership. The middleware binds an immutable `request.authPrincipal`, rejects malformed/conflicting/duplicate credential headers, and bounds verification and resource checks with one deadline (five seconds by default, configurable up to sixty seconds). Failed verification returns 401, denied scope/resource access 403, and unavailable verification 503 without exposing credential or store errors. Verifiers should honor cancellation. For an admitted streaming request, `revalidateRequestAuthorization(request, signal)` rechecks its original credential and policy within the configured deadline. It returns false on rotation, revocation, changed actor/grants, resource denial, cancellation, timeout or verifier failure. The hook retains the original route, keeps the credential private and leaves `request.authPrincipal` unchanged; transport close releases its state. Stream implementations must stop publishing and clean up subscriptions when a recheck fails. Policy callbacks should capture validated resource identifiers for later checks.
 
 Node transports can use `authenticateCredential` from `@barry-rocks/sdk/internal/auth` with their trusted verifier. `requestCredential` applies the same strict header parsing as HTTP. Invalid credentials return null; verifier failure or deadline expiry throws a redacted `Authorization unavailable` error. The returned frozen handle keeps its credential private, exposes the immutable principal, and offers `revalidate(signal)` plus `authorize({scopes, authorize}, signal)`. Each call rechecks the original credential and exact actor/grants under one bounded deadline. Resource predicates apply to installation operators too; device scopes are enforced before the predicate. Call `dispose()` on disconnect to cancel in-flight checks and release the credential. A transport must keep the handle server-owned and never accept one from client configuration.
 
-Workflow harnesses use the Node-only `@barry-rocks/sdk/internal/auth` functions. A version-three `bws3` token binds a UUID `credentialId` to its actor, numeric identity, session, scope fingerprint and expiry (at most 24 hours). Minting signs claims; it does not issue or persist a run. The Sessions owner must first rotate its dedicated `workflow_credential_id` atomically against the expected owner, identity, scope and open/unended state. Pass that ID to `mintWorkflowSessionCredential`, then use `verifyWorkflowSessionCredentialForSession` against the current persisted record for every admission and retained transport check. Ending a run or changing its persisted session owner, identity or workflow scope clears the binding; reopening the same session requires a fresh ID and token. Metadata edits cannot restore a cleared ID. Version-two tokens are rejected.
+Workflow harnesses use the Node-only `@barry-rocks/sdk/internal/auth` functions. A version-three `bws3` token binds a UUID `credentialId` to its actor, numeric identity, session, bound fingerprint and expiry (at most 24 hours). Minting signs claims; it does not issue or persist a run. The Sessions owner must first rotate its dedicated `workflow_credential_id` atomically against the expected owner, identity, approved bounds and open/unended state. Pass that ID to `mintWorkflowSessionCredential`, then use `verifyWorkflowSessionCredentialForSession` against the current persisted record for every admission and retained transport check. Ending a run or changing its persisted session owner, identity or workflow bounds clears the binding; reopening the same session requires a fresh ID and token. Metadata edits cannot restore a cleared ID. Version-two tokens are rejected.
 
 
 The identities service currently permits device `GET /api/v1/identities/:id` only with `identities:read` and an explicit canonical identity grant. It verifies current database ownership and resolves the identity using the paired actor. Lists, mutations and other identity operations require operator access until their scoped policies are implemented.
@@ -207,7 +207,7 @@ Stable entries are versioned APIs for adapters and code outside this repository.
 | `/testing` | Subject fakes |
 | `/tools` | Tools and prompts |
 | `/bags` | Bag manifests, resources, types, and tool authoring |
-| `/services` | Instance paths, addresses, hosting policy, test instances, and local connection options |
+| `/services` | Instance paths, addresses, hosting config, test instances, and local connection options |
 | `/services/http` | Service HTTP scaffolding and route registration |
 | `/stores` | A bag's store, migrations, bindings, context, snapshots, and scratch guard |
 | `/logging` | Node logging |
@@ -226,7 +226,7 @@ Stable entries are versioned APIs for adapters and code outside this repository.
 | `/adapters/models` | Model adapters, including decision models |
 | `/openapi.json` | Published HTTP API |
 
-Internal entries use `/internal/` followed by actions, adapters, auth, bags, client, env, hooks, identities, instructions, jobs, mcp, nodes, routes, schedules, services, sessions, stores, tools, traits, vault, or workflows.
+Internal entries use `/internal/` followed by actions, adapters, auth, bags, client, env, hooks, identities, instructions, jobs, mcp, nodes, routes, schedules, services, sessions, stores, tools, vault, or workflows.
 
 A process hosting no subjects connects explicitly:
 

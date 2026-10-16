@@ -1,3 +1,5 @@
+import { resolveHarnessCommand } from "@barry-rocks/sdk/adapters/harnesses";
+import { OPENCODE_REQUIREMENTS } from "./modes.js";
 import { allowedNative } from "./native-tools.js";
 /**
  * OpenCode's guest launch: the human drives opencode's own TUI.
@@ -64,7 +66,7 @@ export async function planOpenCodeLaunch(config: SessionConfig, guarantees: Guar
   });
 
   return {
-    command: "opencode",
+    command: resolveHarnessCommand(OPENCODE_REQUIREMENTS, config.env),
     args: ["--standalone", "--session", harnessSessionId],
     env: { ...identityEnv, ...env },
     cwd: config.cwd,

@@ -1,10 +1,9 @@
-import { getAllTraits } from "../merge.js";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, utimesSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { loadBag, loadBags, loadAllBags, getInvalidManifests, bagLoadStamp } from "../loader.js";
-import { ownNamespaces } from "../../traits/auto-traits.js";
+import { loadBag, loadBags, loadAllBags, getInvalidManifests, bagLoadStamp, loadBagSync, expandCompositionSync, pruneBagDiskCaches } from "../loader.js";
+import { contractDerivation } from "../../tools/tool-contract.js";
 import { addSnapshotBag } from "./snapshot-fixture.js";
 import type { Bag } from "../types.js";
 import { getBagBuildDir } from "../paths.js";
@@ -45,17 +44,67 @@ describe("loader", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("loads an extension by its registered name and degrades a stale row", async () => {
+  it("loads a standalone bag and degrades a retired slash-registered extension row", async () => {
     const dir = join(tmpDir, "search");
     mkdirSync(dir);
-    writeFileSync(join(dir, "bag.yaml"), "name: search\nextends: sessions\ndescription: Search\n");
+    writeFileSync(join(dir, "bag.yaml"), "name: session-vector-search\ndescription: Search\n");
+    addSnapshotBag("session-vector-search", { type: "local", path: dir });
     addSnapshotBag("sessions/search", { type: "local", path: dir });
-    addSnapshotBag("sessions-search", { type: "local", path: dir });
-    expect(await resolveLoadBag("sessions/search")).toMatchObject({ name: "sessions/search", manifest: { extends: "sessions" } });
-    expect(await resolveLoadBag("sessions-search")).toMatchObject({ name: "sessions-search", manifest: null, tools: [] });
-    expect(getInvalidManifests().get("sessions-search")).toMatch(/sessions\/search.*barry bag doctor --fix/);
+    expect(await resolveLoadBag("session-vector-search")).toMatchObject({ name: "session-vector-search", manifest: { name: "session-vector-search" } });
+    expect(await resolveLoadBag("sessions/search")).toMatchObject({ name: "sessions/search", manifest: null, tools: [] });
+    expect(getInvalidManifests().get("sessions/search")).toMatch(/session-vector-search.*barry bag doctor --fix/);
   });
 
+  it("preserves invalid manifest diagnostics in a fresh process disk cache", async () => {
+    const dir = join(tmpDir, "bad-disk"); mkdirSync(dir);
+    writeFileSync(join(dir, "bag.yaml"), "name: bad-disk\nbogusKey: true\n");
+    addSnapshotBag("bad-disk", { type: "local", path: dir });
+    expandCompositionSync(["bad-disk"]);
+    vi.resetModules();
+    const manifest = await import("../manifest.js");
+    const parse = vi.spyOn(manifest, "parseManifest");
+    const fresh = await import("../loader.js");
+    fresh.loadBagSync("bad-disk");
+    expect(parse).not.toHaveBeenCalled();
+    expect(fresh.getInvalidManifests().get("bad-disk")).toContain("bogusKey");
+    parse.mockRestore();
+  });
+  it.each(["src/tools.ts", "tools.ts"])("invalidates cached manifests when %s is added", async entry => {
+    const dir = join(tmpDir, "new-tools"); mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "bag.yaml"), "version: v0.1\nname: new-tools\ndescription: New tools\n");
+    addSnapshotBag("new-tools", { type: "local", path: dir });
+    expect(loadBagSync("new-tools")?.manifest?.toolsEntry).toBeUndefined();
+    vi.resetModules();
+    writeFileSync(join(dir, entry), "export const tool = {};");
+    const fresh = await import("../loader.js");
+    expect(fresh.loadBagSync("new-tools")?.manifest?.toolsEntry?.entry).toBe(entry);
+  });
+  it("prunes old snapshot generations without deleting recent or unrelated files", () => {
+    const old = new Date(Date.now() - 120_000);
+    for (const kind of ["snapshot", "manifests"]) for (let i = 0; i < 5; i++) {
+      const path = join(tmpDir, `${kind}-${i}.json`); writeFileSync(path, "{}"); utimesSync(path, old, new Date(old.getTime() + i));
+    }
+    writeFileSync(join(tmpDir, "snapshot-abcdef.json"), "{}");
+    writeFileSync(join(tmpDir, "unrelated.json"), "{}");
+    pruneBagDiskCaches(tmpDir);
+    expect(existsSync(join(tmpDir, "snapshot-0.json"))).toBe(false);
+    expect(existsSync(join(tmpDir, "manifests-0.json"))).toBe(false);
+    expect(existsSync(join(tmpDir, "snapshot-abcdef.json"))).toBe(true);
+    expect(existsSync(join(tmpDir, "unrelated.json"))).toBe(true);
+  });
+  it("includes cached build failures in the aggregate launch warning", async () => {
+    const dir = join(tmpDir, "cached-failure"); mkdirSync(dir);
+    writeFileSync(join(dir, "bag.yaml"), "version: v0.1\nname: cached-failure\ndescription: Broken\n");
+    writeFileSync(join(dir, "tools.ts"), 'import "@definitely/not-installed";');
+    addSnapshotBag("cached-failure", { type: "local", path: dir });
+    const build = await import("../build.js");
+    await expect(build.ensureToolsBuilt({ name: "cached-failure", bagDir: dir, entry: join(dir, "tools.ts") })).rejects.toThrow();
+    vi.resetModules(); diagnostics.warn.mockClear();
+    const fresh = await import("../loader.js");
+    const bags = await fresh.loadBags(["cached-failure"]);
+    expect(bags[0].toolsError).toContain("@definitely/not-installed");
+    expect(diagnostics.warn).toHaveBeenCalledWith(expect.stringContaining("1 bags could not load their tools"));
+  });
   it("returns null for a bag the registry does not list", async () => {
     addSnapshotBag("present", { type: "local", path: tmpDir });
     expect(await loadBag("nonexistent")).toBeNull();
@@ -65,46 +114,29 @@ describe("loader", () => {
     await expect(loadBag("anything")).rejects.toThrow(/snapshot is missing.*barry bag doctor --fix/);
   });
 
-  // Regression. This loop rebuilt each manifest trait field by field and did
-  // not copy `bound`, so every inline restriction declared by a bag outside
-  // this repo arrived at the traits table as `{}`. Nothing reported it:
-  // parseManifest kept the bound, identity-bags stamped it, upsertTrait wrote
-  // the column, and `barry bag sync-traits` printed success — the value was
-  // simply gone before any of them saw it.
-  //
-  // It fails open, which is the direction that matters: the agent keeps the
-  // grant and loses the restriction, and a trait with no teeth renders exactly
-  // like one with teeth. Real case: the raw-git denial on `IC` in
-  // ~/repos/bags/coding had never once been enforced.
-  //
-  // Asserting on denyPrograms rather than on `bound` being defined — an empty
-  // `{}` is truthy and was the actual broken value.
-  it("carries a manifest trait's inline bound through to the loaded trait", async () => {
+  it("carries a manifest bound definition through to the loaded bag", async () => {
     const bagDir = join(tmpDir, "bounded-bag");
     mkdirSync(bagDir, { recursive: true });
     writeFileSync(
       join(bagDir, "bag.yaml"),
       [
         "name: bounded-bag",
-        "description: a bag whose trait restricts bash",
-        "traits:",
-        "  Restricted:",
-        '    description: "grants the bag, denies raw git"',
-        "    access: readwrite",
-        "    bags: [bounded-bag]",
-        "    bound:",
-        "      bash:",
-        "        denyPrograms:",
-        "          - git",
+        "description: a bag whose bound restricts bash",
+        "bounds:",
+        "  restricted:",
+        '    description: "denies raw git"',
+        "    bash:",
+        "      deny:",
+        "        - git *",
         "",
       ].join("\n"),
     );
     addSnapshotBag("bounded-bag", { type: "local", path: bagDir });
 
     const bag = await resolveLoadBag("bounded-bag");
-    const trait = bag?.traits.find((t) => t.name === "bounded-bag:Restricted");
-    expect(trait, "manifest trait did not load at all").toBeDefined();
-    expect(trait?.bound?.bash?.denyPrograms).toEqual(["git"]);
+    const bound = bag?.bounds?.["bounded-bag:restricted"];
+    expect(bound, "manifest bound did not load at all").toBeDefined();
+    expect(bound?.bound.bash?.deny).toEqual(["git *"]);
   });
 
   it("returns null for disabled bag", async () => {
@@ -124,11 +156,11 @@ mcp-servers:
   test-api:
     type: http
     url: http://localhost:9999/mcp
-traits:
+bounds:
   custom:
-    description: Custom trait
-    access: read
-    namespaces: [test-api]
+    description: Custom bound
+    tools:
+      allow: [test-api:read]
 `);
 
     writeFileSync(join(bagDir, "tools.ts"), 'export const read = { name: "read", namespace: "documents", access: "read", description: "Read documents", schema: {}, handler: async () => "ok" };');
@@ -139,13 +171,10 @@ traits:
     expect(bag!.name).toBe("my-bag");
     expect(bag!.description).toBe("Test bag");
     expect(bag!.skillsDirs).toHaveLength(1);
-    expect(bag!.traits).toHaveLength(1);
-    expect(bag!.traits[0].name).toBe("my-bag:custom");
+    expect(Object.keys(bag!.bounds ?? {})).toEqual(["my-bag:custom"]);
     expect(Object.keys(bag!.mcpServers)).toEqual(["test-api"]);
     expect(bag!.manifest?.toolsEntry?.entry).toBe("tools.ts");
     expect(bag!.tools).toEqual([READ_META]);
-    const generated = getAllTraits(bag!).find(trait => trait.name === "my-bag");
-    expect(generated?.bags).toEqual(["documents", "test-api"]);
   });
 
   it("loads a local bag without manifest (skills-only)", async () => {
@@ -159,7 +188,7 @@ traits:
     expect(bag!.name).toBe("skills-only");
     expect(bag!.manifest).toBeNull();
     expect(bag!.skillsDirs).toHaveLength(1);
-    expect(bag!.traits).toEqual([]);
+    expect(bag!.bounds).toBeUndefined();
   });
 
   it("degrades a bag with an invalid manifest instead of throwing", async () => {
@@ -318,14 +347,14 @@ traits:
       const bag = await loadBag("summarized");
 
       expect(bag?.tools).toEqual([READ_META]);
-      const summary = JSON.parse(readFileSync(join(getBagBuildDir("summarized", bagDir), "tools.summary.json"), "utf-8"));
+      const summary = JSON.parse(readFileSync(join(getBagBuildDir("summarized", bagDir), `tools.summary-${contractDerivation()}.json`), "utf-8"));
       expect(summary.tools).toEqual(bag?.tools);
     });
 
     it("is what a later load reads, while the bundle is unchanged", async () => {
       const bagDir = writeToolBag("trusted", READ);
       await loadBag("trusted");
-      const summaryFile = join(getBagBuildDir("trusted", bagDir), "tools.summary.json");
+      const summaryFile = join(getBagBuildDir("trusted", bagDir), `tools.summary-${contractDerivation()}.json`);
       const summary = JSON.parse(readFileSync(summaryFile, "utf-8"));
       writeFileSync(summaryFile, JSON.stringify({ ...summary, tools: [{ toolName: "from-summary", namespace: "documents", access: "read" }] }));
 
@@ -335,7 +364,7 @@ traits:
     it("is read again from the bundle once the bundle is rebuilt", async () => {
       const bagDir = writeToolBag("rebuilt", READ);
       await loadBag("rebuilt");
-      const summaryFile = join(getBagBuildDir("rebuilt", bagDir), "tools.summary.json");
+      const summaryFile = join(getBagBuildDir("rebuilt", bagDir), `tools.summary-${contractDerivation()}.json`);
       writeFileSync(summaryFile, JSON.stringify({ stamp: "an older bundle", tools: [] }));
 
       expect((await loadBag("rebuilt"))?.tools).toEqual([READ_META]);
@@ -350,7 +379,7 @@ traits:
       } finally {
         warn.mockReset();
       }
-      expect(existsSync(join(getBagBuildDir("never-summarized", bagDir), "tools.summary.json"))).toBe(false);
+      expect(existsSync(join(getBagBuildDir("never-summarized", bagDir), `tools.summary-${contractDerivation()}.json`))).toBe(false);
     });
   });
 
@@ -375,6 +404,32 @@ traits:
       addSnapshotBag(name, { type: "local", path: bagDir });
     }
 
+    it("expands composition without loading either bag's tool code", () => {
+      writeBag("parent", 'throw new Error("must not load");', "bags: [child]\n");
+      writeBag("child", 'throw new Error("must not load");');
+      const first = loadBagSync("parent");
+      expect(loadBagSync("parent")).toBe(first);
+      expect(expandCompositionSync(["parent"])).toEqual(["parent", "child"]);
+      expect(existsSync(join(getBagBuildDir("parent", join(tmpDir, "parent")), "tools.js"))).toBe(false);
+      expect(first?.toolsError).toBeUndefined();
+    });
+
+    it("reuses a disk manifest snapshot across processes and invalidates edited manifests", async () => {
+      writeBag("disk-parent", 'throw new Error("must not load");', "bags: [disk-child]\n");
+      writeBag("disk-child", 'throw new Error("must not load");');
+      expect(expandCompositionSync(["disk-parent"])).toEqual(["disk-parent", "disk-child"]);
+      vi.resetModules();
+      const manifest = await import("../manifest.js");
+      const parse = vi.spyOn(manifest, "parseManifest");
+      const fresh = await import("../loader.js");
+      expect(fresh.expandCompositionSync(["disk-parent"])).toEqual(["disk-parent", "disk-child"]);
+      expect(parse).not.toHaveBeenCalled();
+      writeFileSync(join(tmpDir, "disk-parent", "bag.yaml"), "version: v0.1\nname: disk-parent\ndescription: changed\nbags: []\n");
+      expect(fresh.expandCompositionSync(["disk-parent"])).toEqual(["disk-parent"]);
+      expect(parse).toHaveBeenCalled();
+      parse.mockRestore();
+    });
+
     // Regression. Since tool metadata moved into code, loadBag imports every
     // bag's tools and threw when one failed; loadBags is a Promise.all, so a
     // single broken bag rejected the registry snapshot, `bag doctor`, and the
@@ -397,28 +452,26 @@ traits:
 
     // The bag-name guess is wrong whenever the code stamps another namespace,
     // and here nobody can see what it stamps. A guessed grant is hollow.
-    it("contributes no guessed namespace", async () => {
+    it("contributes no guessed tools when tool code fails to load", async () => {
       writeBag("broken", 'throw new Error("nope");');
       const [broken] = await loadBags(["broken"]);
-      expect([...ownNamespaces(broken)]).toEqual([]);
+      expect(broken.tools).toEqual([]);
     });
 
-    // Own bag name: the dedupe is per process, so a name an earlier test
-    // already failed with the same reason would never warn here.
-    it("warns once per process, not once per load", async () => {
+    it("reports one aggregate warning for the process rather than one per bag", async () => {
+      vi.resetModules();
+      const fresh = await import("../loader.js");
       writeBag("broken-twice", 'throw new Error("nope");');
-      await loadBag("broken-twice");
-      await loadBag("broken-twice");
-      const warnings = warn.mock.calls.filter(([message]) => String(message).includes('bag "broken-twice" could not load its tools'));
+      writeBag("also-broken", 'throw new Error("nope");');
+      await fresh.loadBags(["broken-twice", "also-broken"]);
+      await fresh.loadBags(["broken-twice", "also-broken"]);
+      const warnings = warn.mock.calls.filter(([message]) => String(message).includes("bags could not load their tools"));
       expect(warnings).toHaveLength(1);
+      expect(String(warnings[0][0])).toContain("2 bags");
     });
   });
 
-  // Regression. Policy-name qualification turned a trait named after its own
-  // bag into `<bag>:<bag>`, so it stopped overriding the auto-trait and the
-  // bare name became readwrite with no bounds. `first-response-escalate`
-  // depends on this override: its manifest calls `access: read` load-bearing.
-  it("keeps a trait named after its bag bare, so it still overrides the auto-trait", async () => {
+  it("keeps a bound named after its bag bare and qualifies other bounds", async () => {
     const bagDir = join(tmpDir, "escalate");
     mkdirSync(bagDir, { recursive: true });
     writeFileSync(join(bagDir, "bag.yaml"), `
@@ -427,25 +480,20 @@ name: escalate
 description: Escalation
 mcp-servers:
   slack: { type: http, url: http://localhost:9999/mcp }
-traits:
+bounds:
   escalate:
     description: Deep reads only
-    access: read
-    namespaces: [datadog]
-    bounds: [no-secrets]
+    tools:
+      allow: [datadog:read]
   helper:
     description: Qualified as usual
-    namespaces: [datadog]
+    tools:
+      allow: [datadog]
 `);
     addSnapshotBag("escalate", { type: "local", path: bagDir });
     const bag = await resolveLoadBag("escalate");
 
-    expect(bag!.traits.map((t) => t.name).sort()).toEqual(["escalate", "escalate:helper"]);
-    const main = getAllTraits(bag!).filter((t) => t.name === "escalate");
-    expect(main).toHaveLength(1);
-    expect(main[0].access).toBe("read");
-    expect(main[0].bags).toEqual(["datadog"]);
-    expect(main[0].boundNames).toEqual(["no-secrets"]);
+    expect(Object.keys(bag!.bounds ?? {}).sort()).toEqual(["escalate", "escalate:helper"]);
   });
 
   describe("bagLoadStamp", () => {

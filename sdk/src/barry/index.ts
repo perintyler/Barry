@@ -12,7 +12,14 @@ export type {
   ActionHandle,
   ServiceHandle,
   ScheduleHandle,
-  OneOffHandle,
+  AtScheduleHandle,
   DeviceHandle,
 } from "./api.js";
+export type {
+  BagLike,
+  BagToolInput,
+  BoundConstructor,
+  BoundEntryLike,
+  IdentityLike,
+} from "./resolve.js";
 export * from "./subjects.js";

@@ -1,7 +1,7 @@
-import { loadModelProviders, shippedModelProviders } from "@barry-rocks/sdk/adapters/models";
+import { loadModelVendors, shippedModelVendors } from "@barry-rocks/sdk/adapters/models";
 import { adapterStore } from "../adapters/installed.js";
 import { selectShippedSessionAdapters } from "../adapters/setup.js";
-import { barryModelProvidersPath, readServiceRegistry, barryAppSupportDir, barryCacheDir, barryConfigDir, barryLogsDir, ensureInstanceSecret, barryCurrentDir, installationRoot } from "@barry-rocks/sdk/services";
+import { barryModelVendorsPath, readServiceRegistry, barryAppSupportDir, barryCacheDir, barryConfigDir, barryLogsDir, ensureInstanceSecret, barryCurrentDir, installationRoot } from "@barry-rocks/sdk/services";
 import { isSystemService, setupSystem, systemNeeds, systemOS, type SystemOS } from "../services/system.js";
 import { downloadRuntime, nodeRuntime, type Download } from "../services/runtime.js";
 import type { ServiceSpec } from "../services/specs.js";
@@ -231,8 +231,8 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
     barryConfigDir(),
   ])
     mkdirSync(dir, { recursive: true });
-  const providers = loadModelProviders({ file: barryModelProvidersPath() });
-  for (const shipped of shippedModelProviders(root)) {
+  const providers = loadModelVendors({ file: barryModelVendorsPath() });
+  for (const shipped of shippedModelVendors(root)) {
     const recorded = providers.installed().find(record => record.packageName === shipped.packageName);
     // A user selection elsewhere replaces the shipped package and stays the user's. One at the
     // shipped directory is the shipped package itself, adopted so a later move refreshes it.

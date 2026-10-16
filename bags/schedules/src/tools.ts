@@ -8,9 +8,9 @@ import { Barry } from "@barry-rocks/sdk";
 import { getServiceUrl } from "@barry-rocks/sdk/services";
 import { ScheduleSchema, scheduleScriptAction, type ScheduleTrigger } from "@barry-rocks/sdk/internal/schedules";
 import { z } from "zod";
-import { listSchedules, findSchedule, parseRuntimeSpec, RUNTIME_BAG, type ScheduleEntry } from "./catalog.js";
+import { listSchedules, findSchedule, parseRuntimeSpec, RUNTIME_BAG, type ScheduleEntry } from "./registry.js";
 import { deleteRuntimeSchedule, insertRuntimeSchedule, listStates, updateState, type ScheduleState } from "./store.js";
-import { cancelOneOff, createOneOff, listOneOffs, type OneOff } from "./one-offs.js";
+import { cancelAtSchedule, createAtSchedule, listAtSchedules, type AtSchedule } from "./at-schedules.js";
 import { parseActionRef } from "@barry-rocks/sdk/internal/actions";
 import { parseJobRef } from "@barry-rocks/sdk/internal/jobs";
 import { schedulerHealth } from "./health.js";
@@ -49,8 +49,8 @@ export function summarizeSchedule(entry: ScheduleEntry, state: ScheduleState | u
   };
 }
 
-/** A one-off as every surface reports it. */
-export function summarizeOneOff(o: OneOff) {
+/** An at-schedule as every surface reports it. */
+export function summarizeAtSchedule(o: AtSchedule) {
   return {
     id: o.id,
     action: o.job ? `job ${o.job}` : o.action ?? "inline",
@@ -78,7 +78,7 @@ export const listSchedulesTool = Barry.Tool({
       scheduler: health.status === "ok" ? "ok" : `${health.status}: ${health.reason}`,
       ...(errors.length ? { load_errors: errors } : {}),
       schedules: schedules.map((s) => summarizeSchedule(s, states.get(s.id))),
-      one_offs: listOneOffs({ limit: 30 }).map(summarizeOneOff),
+      one_offs: listAtSchedules({ limit: 30 }).map(summarizeAtSchedule),
     };
   },
 });
@@ -122,8 +122,8 @@ export const createScheduleTool = Barry.Tool({
 - a trigger: \`every\` ("5m", "1h"), \`cron\` ("0 9 * * 1", optional \`timezone\`), or \`at\` (ISO time with offset, runs once)
 - \`action\`: an action name ("bag:name") or an inline action ({description, run: ...} or {description, prompt: ...})
 - optional \`inputs\`, \`overlap\` (skip|queue), \`catch_up\` (none|once), \`enabled\`.
-Example reminder: {"at":"2030-01-01T09:00:00Z","traits":["bash"],"action":{"description":"Remind","run":{"command":"barry","args":["notify","Standup"]}}}
-The selected trait must grant bash.Bash; choose an installed identity or explicitly select traits.`,
+Example reminder: {"at":"2030-01-01T09:00:00Z","bags":["bash"],"action":{"description":"Remind","run":{"command":"barry","args":["notify","Standup"]}}}
+The selected bag must provide bash:Bash; choose an installed identity or explicitly select bags.`,
   schema: {
     name: z
       .string()
@@ -146,18 +146,18 @@ The selected trait must grant bash.Bash; choose an installed identity or explici
       const ref = schedule.payload.kind === "ref" ? schedule.payload.ref : null;
       const job = schedule.payload.kind === "job" ? schedule.payload.ref : null;
       if (job && !parseJobRef(job).bag) throw new Error(`A runtime schedule names its job as bag:name, got "${job}".`);
-      const { oneOff } = createOneOff({
+      const { schedule: created } = createAtSchedule({
         bag: job ? parseJobRef(job).bag! : ref ? (parseActionRef(ref).bag ?? RUNTIME_BAG) : RUNTIME_BAG,
         action: ref,
         ...(job ? { job } : { inlineAction: scheduleScriptAction(ScheduleSchema.parse(grammar)) }),
         inputs: schedule.inputs ?? {},
-        permissions: { identity: schedule.identity, traits: schedule.traits, bounds: schedule.bounds },
+        permissions: { identity: schedule.identity, bags: schedule.bags, bounds: schedule.bounds },
         dueAt: new Date(schedule.trigger.time),
         idempotencyKey: `runtime:${name}`,
         ...(retry?.attempts ? { retryAttempts: Math.min(Math.max(retry.attempts, 1), 5) } : {}),
         createdBy: context?.sessionId ?? null,
       });
-      return { id: oneOff.id, trigger: describeTrigger(schedule.trigger), status: oneOff.status };
+      return { id: created.id, trigger: describeTrigger(schedule.trigger), status: created.status };
     }
     try {
       insertRuntimeSchedule(name, spec, context?.sessionId ?? null);
@@ -188,7 +188,7 @@ export const cancelScheduleTool = Barry.Tool({
   description: "Cancel a one-off schedule (sch_…). One that has not started is cancelled; a running one is asked to stop (its script is killed) and ends cancelled. The answer says which.",
   schema: { id: z.string().min(1).describe("The one-off's id, sch_…") },
   handler: async ({ id }) => {
-    const result = cancelOneOff(id);
+    const result = cancelAtSchedule(id);
     if (!result) throw new Error(`No one-off schedule "${id}".`);
     return { id, ...result };
   },

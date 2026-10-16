@@ -15,7 +15,92 @@ import { probeHealth } from "@barry-rocks/mcp-bag";
 import { loadAdapters } from "@barry-rocks/sdk/internal/adapters";
 import { barryAdaptersPath } from "@barry-rocks/sdk/services";
 
+import { parse } from "yaml";
+import { convertLegacyBound, SHIPPED_GLOBAL_BOUND_NAMES } from "./doctor-migration.js";
+
 export interface InstallCheck { name: string; status: "pass" | "fail"; detail: string }
+
+/**
+ * Verify that root `identity.yaml` defines all 5 shipped global bounds with
+ * non-empty rules, and that every bag job's `bounds` references resolve to a
+ * declared bound in root `identity.yaml` or `<bag>:<bound>` in `bag.yaml`.
+ */
+export async function checkShippedBounds(rootIdentityYamlPath?: string): Promise<string> {
+  const current = currentInstallation();
+  const candidatePath =
+    rootIdentityYamlPath ??
+    (current.root && existsSync(join(current.root, "identity.yaml"))
+      ? join(current.root, "identity.yaml")
+      : undefined);
+
+  let yamlPath = candidatePath;
+  if (!yamlPath) {
+    const { identityRecords } = await import("@barry-rocks/identities-bag");
+    const builtinDir = identityRecords.builtinDirectory?.();
+    if (builtinDir && existsSync(join(builtinDir, "identity.yaml"))) {
+      yamlPath = join(builtinDir, "identity.yaml");
+    }
+  }
+  if (!yamlPath || !existsSync(yamlPath)) {
+    throw new Error("root identity.yaml is missing");
+  }
+
+  const parsed = parse(readFileSync(yamlPath, "utf8")) as Record<string, unknown> | null;
+  const rawBounds = Array.isArray(parsed?.bounds) ? parsed.bounds : [];
+  const globalByName = new Map<string, Record<string, unknown>>();
+  for (const entry of rawBounds) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const obj = entry as Record<string, unknown>;
+    if (typeof obj.name === "string") {
+      globalByName.set(obj.name, convertLegacyBound(obj));
+    } else {
+      const k = Object.keys(obj)[0];
+      const v = k ? obj[k] : undefined;
+      if (k && v && typeof v === "object" && !Array.isArray(v)) {
+        globalByName.set(k, convertLegacyBound(v as Record<string, unknown>));
+      }
+    }
+  }
+
+  for (const requiredName of SHIPPED_GLOBAL_BOUND_NAMES) {
+    const rules = globalByName.get(requiredName);
+    if (!rules) {
+      throw new Error(`root identity.yaml is missing shipped global bound '${requiredName}'`);
+    }
+    const hasDimension = ["tools", "inputs", "files", "bash", "network", "nodes"].some(
+      (dim) => rules[dim] !== undefined,
+    );
+    if (!hasDimension) {
+      throw new Error(`shipped global bound '${requiredName}' has no restriction rules`);
+    }
+  }
+
+  let allBags: Awaited<ReturnType<typeof loadAllBags>> = [];
+  try {
+    allBags = await loadAllBags();
+  } catch {
+    allBags = [];
+  }
+  const knownBounds = new Set<string>(globalByName.keys());
+  for (const bag of allBags) {
+    for (const bName of Object.keys(bag.manifest?.bounds ?? {})) {
+      knownBounds.add(bName);
+      knownBounds.add(`${bag.name}:${bName}`);
+    }
+  }
+  for (const bag of allBags) {
+    if (!bag.manifest?.jobs) continue;
+    for (const job of Object.values(bag.manifest.jobs)) {
+      for (const name of job.bounds ?? []) {
+        if (!knownBounds.has(name) && !knownBounds.has(`${bag.name}:${name}`)) {
+          throw new Error(`${bag.name}: unknown bound ${name}`);
+        }
+      }
+    }
+  }
+
+  return "shipped global bounds and job bounds are valid";
+}
 
 /** Diagnostics never repair or provision an absent install. Each independent failure survives. */
 export async function installationChecks(): Promise<InstallCheck[]> {
@@ -76,6 +161,11 @@ export async function installationChecks(): Promise<InstallCheck[]> {
       if (!service.registered) throw new Error("not registered");
       if (service.enabled && !service.pid) throw new Error("enabled but not running");
       const definition = management.definition(service.name);
+      if(service.name==="sessions.api" && service.pid && process.platform==="darwin") {
+        const env=execFileSync("/bin/ps",["eww","-p",String(service.pid)],{encoding:"utf8",timeout:3000});
+        const split=/\bBARRY_NAMESPACE_SPLIT=(\S+)/.exec(env)?.[1];
+        if(split==="1"||split==="true")throw new Error("BARRY_NAMESPACE_SPLIT drifts from the bag manifest (false); restart sessions.api. Split tools belong in identity adapter settings");
+      }
       if (service.enabled && definition.health && await probeHealth(resources[service.name]?.url, definition.health) !== "ok") throw new Error("unhealthy");
       return service.enabled ? "enabled, running and healthy" : "disabled as chosen";
     });
@@ -83,15 +173,7 @@ export async function installationChecks(): Promise<InstallCheck[]> {
     if (failed.length) throw new Error(failed.map(check => `${check.name.slice(8)}: ${check.detail}`).join("; "));
     return `${services.length} registered services; enabled services are healthy`;
   });
-  await check("bounds", async () => {
-    const { bounds } = await import("@barry-rocks/identities-bag");
-    for (const bag of await loadAllBags()) {
-      if (!bag.manifest?.jobs) continue;
-      for (const name of Object.keys(bag.manifest.bounds ?? {})) if (!await bounds.get({ name })) throw new Error(`${bag.name}: unknown bound ${name}`);
-      for (const job of Object.values(bag.manifest.jobs)) for (const name of job.bounds ?? []) if (!await bounds.get({ name })) throw new Error(`${bag.name}: unknown bound ${name}`);
-    }
-    return "job bounds are synced";
-  });
+  await check("bounds", async () => checkShippedBounds());
   await check("owner", async () => {
     const { owner } = await import("@barry-rocks/identities-bag");
     const record = owner.installation().current();

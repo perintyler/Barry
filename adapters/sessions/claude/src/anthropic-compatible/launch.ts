@@ -1,3 +1,5 @@
+import { resolveHarnessCommand } from "@barry-rocks/sdk/adapters/harnesses";
+import { CLAUDE_REQUIREMENTS } from "../modes.js";
 /**
  * The `claude` TUI launch, for guest and instrumented.
  *
@@ -132,7 +134,7 @@ export async function planClaudeLaunch(
   }
 
   return {
-    command: "claude",
+    command: resolveHarnessCommand(CLAUDE_REQUIREMENTS, config.env),
     args,
     env,
     tmpDirs,

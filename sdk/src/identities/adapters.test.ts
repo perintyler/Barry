@@ -42,3 +42,17 @@ describe("identity adapters", () => {
     expect(mergeAdapters(parent, own)).toEqual(mergeAdapters(parent, intended));
   });
 });
+
+it("inherits effort and stores only explicit child overrides", () => {
+  const parent: IdentityAdapters={claude:{effort:"high",model:"opus"}};
+  expect(mergeAdapters(parent,{claude:{mode:"hosted"}}).claude.effort).toBe("high");
+  expect(ownAdapters(parent,{claude:{effort:"high",model:"opus"}})).toEqual({});
+  expect(ownAdapters(parent,{claude:{effort:"low",model:"opus"}})).toEqual({claude:{effort:"low"}});
+  expect(IdentityAdaptersSchema.safeParse({claude:{effort:"turbo"}}).success).toBe(false);
+});
+it("inherits namespace splitting without freezing a child's other settings",()=>{
+ const parent={claude:{default:true,namespaceSplit:true}};
+ const merged=mergeAdapters(parent,{claude:{namespaceSplit:false}});
+ expect(merged.claude.namespaceSplit).toBe(false);
+ expect(ownAdapters(parent,merged)).toEqual({claude:{namespaceSplit:false}});
+});

@@ -25,6 +25,8 @@ export interface BarryClientOptions extends ClientCredentials {
 
 /** Controls for one request; pass separately from resource filters or inputs. */
 export interface RequestOptions {
+  /** Optional versioned representation; older services may ignore it. */
+  responseProfile?: "action-work-v1";
   signal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -130,7 +132,7 @@ export class ApiTransport {
       response = await this.fetchImpl(url, {
         method,
         headers: {
-          Accept: "application/json",
+          Accept: options.responseProfile === "action-work-v1" ? "application/json;profile=barry-action-work-v1" : "application/json",
           // Sent even on GET: the API's CSRF guard rejects a state-changing
           // request without a JSON content type, and sending it always means no
           // caller has to know which routes that covers.

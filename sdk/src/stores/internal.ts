@@ -10,7 +10,9 @@ export { bootstrapStoreGeneration, activateStoreGeneration, interruptedStoreGene
 export { pruneStoreGenerations } from "./generation-pruning.js";
 export { prepareStoreGeneration, validatePreparedStoreGeneration, type PreparedStoreGeneration } from "./generation-preparation.js";
 export { prepareBackupGeneration, validateBackup } from "./backup-generation.js";
-export * from "./store-catalog.js";
+export * from "./store-inventory.js";
 export * from "./sql-migrations.js";
 
 export { SqliteDatabase, type SqliteConnection } from "./sqlite-connection.js";
+
+export { forgetSessionIdentity } from "./paths.js";

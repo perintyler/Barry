@@ -136,18 +136,18 @@ describe("loadIdentityFromDirectory", () => {
     expect(record.metadata.display_name).toBeUndefined();
   });
 
-  it("reads bags and traits", () => {
+  it("reads bags and bounds", () => {
     const yaml = `
 name: dev
 bags:
   - git
   - bdiff
-traits:
-  - coding
+bounds:
+  - readonly
 `;
     const record = loadIdentityFromDirectory(identityDir(yaml));
     expect(record.metadata.bags).toEqual(["git", "bdiff"]);
-    expect(record.metadata.traits).toEqual(["coding"]);
+    expect(record.metadata.bounds).toEqual(["readonly"]);
   });
 
   it("ignores retired settings and warns once per file", () => {
@@ -257,15 +257,16 @@ status_notify:
     const yaml = `
 name: locked
 bound:
-  deniedTools:
-    - Bash
+  tools:
+    deny:
+      - "*:Bash"
   files:
     deny:
       - "*.env"
 `;
     const record = loadIdentityFromDirectory(identityDir(yaml));
     expect(record.metadata.bound).toEqual({
-      deniedTools: ["Bash"],
+      tools: { deny: ["*:Bash"] },
       files: { deny: ["*.env"] },
     });
   });
@@ -278,15 +279,16 @@ bound:
     const yaml = `
 name: locked
 scope:
-  deniedTools:
-    - Bash
+  tools:
+    deny:
+      - "*:Bash"
   files:
     deny:
       - "*.env"
 `;
     const record = loadIdentityFromDirectory(identityDir(yaml));
     expect(record.metadata.bound).toEqual({
-      deniedTools: ["Bash"],
+      tools: { deny: ["*:Bash"] },
       files: { deny: ["*.env"] },
     });
   });
@@ -409,13 +411,13 @@ describe("directory-scanning helpers", () => {
 
     it("writes the supplied config", () => {
       const dir = createIdentityDirectory("dev", {
-        traits: ["coding"],
+        bags: ["coding"],
         adapters: { "claude-code": { model: "claude-sonnet-4-20250514" } },
       });
 
       const yaml = yamlParse(readFileSync(join(dir, "identity.yaml"), "utf-8")) as IdentityYaml;
       expect(yaml.name).toBe("dev");
-      expect(yaml.traits).toEqual(["coding"]);
+      expect(yaml.bags).toEqual(["coding"]);
       expect(yaml.adapters?.["claude-code"].model).toBe("claude-sonnet-4-20250514");
       expect(yaml.inherits).toBe("base");
     });
@@ -454,21 +456,21 @@ describe("directory-scanning helpers", () => {
     });
 
     it("merges updates into the existing config", () => {
-      const dir = seedIdentity(identities, "dev", "name: dev\ntraits:\n  - coding\n");
+      const dir = seedIdentity(identities, "dev", "name: dev\nbags:\n  - coding\n");
       writeIdentityYaml(dir, { adapters: { "claude-code": { model: "claude-sonnet-4-20250514" } } });
 
       const record = loadIdentityFromDirectory(dir);
-      expect(record.metadata.traits).toEqual(["coding"]);
+      expect(record.metadata.bags).toEqual(["coding"]);
       expect(record.metadata.adapters?.["claude-code"].model).toBe("claude-sonnet-4-20250514");
     });
 
     it("preserves keys it does not know about", () => {
       const dir = seedIdentity(identities, "dev", "name: dev\ncustom_key: keep-me\n");
-      writeIdentityYaml(dir, { traits: ["coding"] });
+      writeIdentityYaml(dir, { bags: ["coding"] });
 
       const raw = yamlParse(readFileSync(join(dir, "identity.yaml"), "utf-8"));
       expect(raw.custom_key).toBe("keep-me");
-      expect(raw.traits).toEqual(["coding"]);
+      expect(raw.bags).toEqual(["coding"]);
     });
 
     it("deletes a key when the update sets it to undefined", () => {
@@ -482,13 +484,13 @@ describe("directory-scanning helpers", () => {
 
     it("leaves no temp file behind", () => {
       const dir = seedIdentity(identities, "dev", "name: dev\n");
-      writeIdentityYaml(dir, { traits: ["coding"] });
+      writeIdentityYaml(dir, { bags: ["coding"] });
       expect(existsSync(join(dir, ".identity.yaml.tmp"))).toBe(false);
     });
 
     it("throws when there is no identity config to merge into", () => {
       const dir = mkdtempSync(join(tmpdir(), "barry-nofile-"));
-      expect(() => writeIdentityYaml(dir, { traits: [] })).toThrow("No identity.yaml");
+      expect(() => writeIdentityYaml(dir, { bags: [] })).toThrow("No identity.yaml");
     });
   });
 });
@@ -587,8 +589,8 @@ describe("findIdentityDrift", () => {
 
   // Order is not meaning for these lists, so a reorder must not read as drift.
   it("ignores list ordering", () => {
-    seedIdentity(identities, "goode", "name: goode\ntraits:\n  - coding\n  - sessions\n");
-    expect(findIdentityDrift(row("goode", { traits: ["sessions", "coding"] }), 1)).toEqual([]);
+    seedIdentity(identities, "goode", "name: goode\nbags:\n  - coding\n  - sessions\n");
+    expect(findIdentityDrift(row("goode", { bags: ["sessions", "coding"] }), 1)).toEqual([]);
   });
 
   // A DB-only identity has no directory to disagree with, so it can never drift.

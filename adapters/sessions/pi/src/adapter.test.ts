@@ -20,7 +20,7 @@ describe("Pi Adapter", () => {
 
     const req = adapter.requirements?.binary;
     expect(req).toBeDefined();
-    expect(req?.pin?.version).toBe(VERIFIED_ON);
+    expect(req?.recommendedVersion).toBe(VERIFIED_ON);
     expect(new RegExp(req.versionPattern).test(VERIFIED_ON)).toBe(true);
   });
 
@@ -43,11 +43,22 @@ describe("Pi Adapter", () => {
   });
 
   it("declares native tools, offered models, and transcript support", () => {
-    expect(adapter.nativeTools.length).toBe(13);
+    expect(adapter.tools.length).toBe(13);
     expect(adapter.offeredModels?.length).toBeGreaterThan(0);
     expect(adapter.listModels).toBeTypeOf("function");
     expect(adapter.transcript).toBeDefined();
     expect(adapter.transcript?.locate).toBeTypeOf("function");
     expect(adapter.transcript?.read).toBeTypeOf("function");
   });
+
+  it("exports inference policy, usage evidence, fault taxonomy, and reconciliation primitives", async () => {
+    const mod = await import("./adapter.js");
+    expect(mod.validateInferencePolicy).toBeTypeOf("function");
+    expect(mod.evaluateInferencePolicyPreSend).toBeTypeOf("function");
+    expect(mod.buildUsageEvidence).toBeTypeOf("function");
+    expect(mod.classifyInferenceFault).toBeTypeOf("function");
+    expect(mod.reduceUsageEvidence).toBeTypeOf("function");
+    expect(mod.createInMemoryUsageReconcilePort).toBeTypeOf("function");
+  });
 });
+

@@ -3,14 +3,14 @@ import { samePrincipal } from "./principal-comparison.js";
 import { withDeadline } from "./with-deadline.js";
 export { requestCredential } from "./credentials.js";
 
-export interface CredentialPolicy {
+export interface CredentialRules {
   scopes: readonly DeviceScope[];
   authorize: (principal: AuthPrincipal, signal: AbortSignal) => boolean | Promise<boolean>;
 }
 export interface CredentialAuthorization {
   readonly principal: AuthPrincipal;
   revalidate(signal?: AbortSignal): Promise<boolean>;
-  authorize(policy: CredentialPolicy, signal?: AbortSignal): Promise<boolean>;
+  authorize(rules: CredentialRules, signal?: AbortSignal): Promise<boolean>;
   dispose(): void;
 }
 export interface CredentialVerificationOptions {
@@ -43,11 +43,11 @@ export async function authenticateCredential(credential: string, options: Creden
     if (!initial.success) { secret = undefined; lifetime.abort(); return null; }
     principal = initial.data;
   } catch { secret = undefined; lifetime.abort(); throw new Error("Authorization unavailable"); }
-  const check = async (policy?: CredentialPolicy, signal?: AbortSignal): Promise<boolean> => {
+  const check = async (rules?: CredentialRules, signal?: AbortSignal): Promise<boolean> => {
     if (secret === undefined || lifetime.signal.aborted) return false;
-    // Capture a validated policy so a caller cannot change its grant during an await.
-    const scopes = policy ? Object.freeze([...policy.scopes]) : undefined;
-    const authorize = policy?.authorize;
+    // Capture validated rules so a caller cannot change its requirements during an await.
+    const scopes = rules ? Object.freeze([...rules.scopes]) : undefined;
+    const authorize = rules?.authorize;
     if (scopes && (!scopes.length || !scopes.every(scope => DeviceScopeSchema.safeParse(scope).success))) return false;
     try {
       return await run(async (signal, assertActive) => {
@@ -63,7 +63,7 @@ export async function authenticateCredential(credential: string, options: Creden
   return Object.freeze({
     principal,
     revalidate: (signal?: AbortSignal) => check(undefined, signal),
-    authorize: (policy: CredentialPolicy, signal?: AbortSignal) => policy && Array.isArray(policy.scopes) && typeof policy.authorize === "function" ? check(policy, signal) : Promise.resolve(false),
+    authorize: (rules: CredentialRules, signal?: AbortSignal) => rules && Array.isArray(rules.scopes) && typeof rules.authorize === "function" ? check(rules, signal) : Promise.resolve(false),
     dispose: () => { secret = undefined; lifetime.abort(); },
   });
 }

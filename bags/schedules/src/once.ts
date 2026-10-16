@@ -1,11 +1,11 @@
 import { BarryError } from "@barry-rocks/sdk";
 import { findAction, validateActionInputs } from "@barry-rocks/sdk/internal/actions";
 import { loadBagRegistrySnapshot } from "@barry-rocks/sdk/internal/bags";
-import type { OneOffRequest } from "@barry-rocks/sdk/internal/schedules";
-import { createOneOff, IdempotencyConflictError, InputTooLargeError, MAX_INPUT_BYTES } from "./one-offs.js";
+import type { AtScheduleRequest } from "@barry-rocks/sdk/internal/schedules";
+import { createAtSchedule, IdempotencyConflictError, InputTooLargeError, MAX_INPUT_BYTES } from "./at-schedules.js";
 
 /** Validate before accepting durable work; the scheduler validates again at execution. */
-export async function scheduleOnce(input: OneOffRequest, identityId?: number) {
+export async function scheduleAt(input: AtScheduleRequest, identityId?: number) {
   if (Buffer.byteLength(JSON.stringify(input.inputs ?? {})) > MAX_INPUT_BYTES) {
     throw new BarryError("invalid", `inputs are limited to ${MAX_INPUT_BYTES} bytes of JSON`);
   }
@@ -15,10 +15,16 @@ export async function scheduleOnce(input: OneOffRequest, identityId?: number) {
   const errors = validateActionInputs(action, input.inputs);
   if (errors.length) throw new BarryError("invalid", errors.join(" "));
   if (action.context !== "none") throw new BarryError("invalid", `action "${action.qualifiedName}" needs a calling conversation (context: session)`);
+  const selectedBags = input.bags;
   try {
-    return createOneOff({
+    return createAtSchedule({
       bag: action.bag, action: action.qualifiedName, inputs: input.inputs ?? {},
-      permissions: { identity: input.identity, identityId, traits: input.traits, bounds: input.bounds },
+      permissions: {
+        identity: input.identity,
+        identityId,
+        ...(selectedBags ? { bags: selectedBags } : {}),
+        ...(input.bounds ? { bounds: input.bounds } : {}),
+      },
       dueAt: new Date(input.dueAt),
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
       ...(input.timeoutS ? { timeoutS: input.timeoutS } : {}),

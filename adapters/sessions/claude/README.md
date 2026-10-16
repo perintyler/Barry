@@ -27,3 +27,7 @@ TUI launches retain Claude's folder-trust prompt for ordinary repository directo
 ## Connection, environment and modes
 
 Connects to Claude Code’s selected CLI build and Anthropic-compatible model endpoint. Supported modes: hosted, instrumented and guest; the default is hosted. The selected identity must provide its configured model credentials; the Claude route requires `ANTHROPIC_API_KEY`. Registration is separate from execution and grants no credentials. See the [adapter declaration](src/adapter.ts) and its requirements for the selected build’s actual guarantees.
+
+Hosted cancellation follows the [shared Session contract](../../../sdk/src/sessions/README.md):
+interrupt acknowledges a request; the runtime owns the completion deadline. Close aborts startup,
+releases owned resources, and ends an open reader once. Shared conformance tests exercise this adapter.

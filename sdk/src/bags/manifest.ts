@@ -1,4 +1,3 @@
-export { extensionName, parentOf, registeredName } from "./extensions.js";
 import { SecretNamesSchema } from "../env/secret-names.js";
 /**
  * Parse and validate bag.yaml manifests
@@ -11,10 +10,10 @@ import { join, isAbsolute, normalize, sep } from "path";
 import { homedir } from "os";
 import { parse } from "yaml";
 import { z } from "zod";
-import { qualifyPolicyNames } from "./policy-names.js";
+import { qualifyBoundNames } from "./bound-names.js";
 import { JobsSchema, normalizeJob, type BagJob } from "./job-manifest.js";
 import { resolveConstants } from "./constants.js";
-import { VendorCatalogSchema, validateVendorCatalog } from "../adapters/models/vendors/catalog.js";
+import { VendorModelsSchema, validateVendorModels } from "../adapters/models/vendors/models.js";
 import { getBagSource } from "./registry.js";
 import { BoundSchema } from "../bounds/index.js";
 import { HooksSchema, normalizeHooks } from "../tools/hooks-schema.js";
@@ -24,6 +23,12 @@ import { ScheduleSchema, normalizeSchedule, type BagSchedule } from "../schedule
 import type { BagManifest, BagToolMeta, BagToolsEntry, BagMcpServer, BagAccess, BagChildSource, BagDependency, BagAuthCommand, BagService, BagApp, BagScript } from "./types.js";
 
 const MANIFEST_FILENAME = "bag.yaml";
+
+/** Decode only: callers may validate an allowed declaration profile before
+ * normalization can resolve composed constants or discover filesystem tools. */
+export function decodeManifestYaml(source: string): unknown {
+  return parse(source);
+}
 
 function resolvePath(p: string): string {
   return p.replace(/^~/, homedir());
@@ -49,11 +54,6 @@ export function findManifest(bagDir: string): string | null {
  * action naming a file cannot resolve and fails as a missing file.
  */
 export function parseManifestObject(raw: unknown, label = "manifest", bagDir = "", options: { source?: "local" | "remote" } = {}): BagManifest {
-  // Report ownership even when a forbidden declaration has an invalid shape.
-  if (raw && typeof raw === "object" && "extends" in raw && raw.extends !== undefined) {
-    const forbidden = Object.keys(raw).filter((key) => !EXTENSION_KEYS.has(key));
-    if (forbidden.length) throw new Error(`${label}: ${forbidden.map((key) => `${key} is not allowed on an extension; declare it on the parent`).join("; ")}`);
-  }
   const providers = new Map<string, { raw: unknown; directory: string }>();
   if (raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).name === "string") {
     providers.set((raw as { name: string }).name, { raw, directory: bagDir });
@@ -88,7 +88,7 @@ export function parseManifestObject(raw: unknown, label = "manifest", bagDir = "
   if (options.source !== "remote" && Array.isArray(result.data.tools) && result.data.tools.length) {
     throw new Error(`${label}: local tool metadata belongs in Barry.Tool code; tools only accepts named visibility overrides`);
   }
-  return qualifyPolicyNames(normalizeManifest(result.data, bagDir, label));
+  return qualifyBoundNames(normalizeManifest(result.data, bagDir, label));
 }
 
 /**
@@ -196,71 +196,33 @@ const McpServerSchema = z.object({
   message: "must declare url or command",
 });
 /**
- * A named bound a manifest defines at its top level. Strict for the same reason
- * as TraitSchema: a misspelled key would otherwise parse clean and restrict
- * nothing. Identity files define bounds with the same fields.
+ * A named bound a manifest defines at its top level. Strict so a misspelled key
+ * fails validation instead of parsing clean and restricting nothing.
  */
-export const BoundDefinitionSchema = z.object({
-  description: z.string().min(1),
+const NestedBoundDefinitionSchema = z.object({
+  description: z.string().min(1).optional(),
   bound: BoundSchema,
 }).strict();
-/**
- * Unknown keys are rejected, like every sibling schema here. Until now this one
- * alone was permissive despite comments claiming otherwise, so a trait that
- * misspelled a restriction key — `bound` for `bounds`, or the reverse — parsed
- * clean and silently unrestricted.
- */
-export const TraitSchema = z.object({
-  description: z.string(),
-  access: z.enum(["read", "readwrite", "write"]).optional(),
-  includes: StringListSchema.optional(),
-  harnessTraits: z.record(z.string(), z.string().min(1)).optional(),
-  nativeTools: z.record(z.string().min(1), z.array(z.string().min(1))).optional(),
-  /** Bag/namespace names — accepts both `bags` and legacy `namespaces`. */
-  bags: StringListSchema.optional(),
-  namespaces: StringListSchema.optional(),
-  skills: StringListSchema.optional(),
-  /**
-   * Instruction names this trait points at. Names, not prose — the body lives
-   * in an `instructions/` file and resolves through the instruction catalog,
-   * so the text is authored once and stays under the prompt budgets.
-   */
-  instructions: StringListSchema.optional(),
-  /**
-   * Named bounds whose restrictions this trait carries. Read-only is composed
-   * this way — the grant plus `bounds: [readonly]` — which is exactly what the
-   * generated `<bag>:read` twin is. A manifest trait named `read` replaces
-   * that twin, for a bag whose read-only variant needs to differ.
-   *
-   * The legacy `scopes:` spelling was dropped here. It was documented as
-   * permanent on the premise that external bag.yaml files are unreachable and
-   * unsweepable, so no moment could exist when every bag was known converted.
-   * The premise was wrong: every bag.yaml on disk was swept and exactly one
-   * still said `scopes:` (the slack bag, since converted). The sweep is also
-   * repeatable — registered-manifests.test.ts parses every registered local
-   * bag, so a straggler fails the suite instead of failing silently in a
-   * running MCP server. `config/*.yaml` keeps its legacy readers, because its
-   * gitignored `*.local.yaml` twins genuinely cannot be swept.
-   */
-  bounds: StringListSchema.optional(),
-  /**
-   * Restriction declared inline, rather than referenced by name, so an
-   * external bag can ship an opinionated bound without a row in this
-   * framework's config.
-   *
-   * Validated against the real bound shape — a permissive `z.record()` would
-   * let a misspelled `denyPrograms` parse into a bound that denies nothing and
-   * looks, from every angle, exactly like a working one. A restriction that
-   * fails open is worse than one that fails to parse.
-   */
-  bound: BoundSchema.optional(),
-}).strict();
+
+export const BoundDefinitionSchema = z.preprocess((value) => {
+  if (value && typeof value === "object" && !Array.isArray(value) && !("bound" in value)) {
+    const { description, ...rest } = value as Record<string, unknown>;
+    return {
+      ...(description !== undefined ? { description } : {}),
+      bound: rest,
+    };
+  }
+  return value;
+}, NestedBoundDefinitionSchema).transform((d) => ({
+  ...d.bound,
+  ...(d.description !== undefined ? { description: d.description } : {}),
+  bound: d.bound,
+}));
 const ToolMetaSchema = z.object({
   toolName: z.string().min(1),
   namespace: z.string().min(1),
   access: z.enum(["read", "readwrite", "write"]).optional(),
   includes: StringListSchema.optional(),
-  harnessTraits: z.record(z.string(), z.string().min(1)).optional(),
 }).strict();
 const PromptsEntrySchema = z.object({ entry: z.string().min(1) }).strict();
 /**
@@ -498,8 +460,9 @@ const BagChildSourceSchema = z.object({
   ref: z.string().min(1).optional(),
   path: z.string().min(1).optional(),
   subdir: z.string().min(1).optional(),
+  optional: z.boolean().optional(),
 }).strict().superRefine((v, ctx) => {
-  if (!v.repo && !v.path) {
+  if (!v.repo && !v.path && !v.optional) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "needs `repo` or `path`" });
   }
   if (v.repo && v.path) {
@@ -585,14 +548,16 @@ const StoreDeclarationSchema = z.preprocess((value, ctx) => {
   return value;
 }, z.strictObject({ owned_by: z.enum(["identity", "node"]), engine: z.literal("sqlite"), migrations: z.string().min(1) }));
 
-const EXTENSION_KEYS = new Set(["name", "extends", "description", "version", "instructions", "tools", "dependencies", "schedules", "scripts"]);
+const ImplementsSchema = z.strictObject({
+  tools: z.array(z.string().regex(/^[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9._-]*$/i, "implements.tools entries must be <bag>:<toolName>")).min(1),
+});
 
 const ManifestSchema = z.object({
   // The bag's own release, not a schema version — there is only ever one
   // manifest format, so nothing branches on this. Free-form and optional so a
   // bag can version itself (`v0.1`) without every bag having to.
   version: z.string().min(1).optional(),
-  name: z.string().min(1),
+  name: z.string().min(1).refine((name) => !name.includes("/"), "bag names cannot contain /"),
   description: z.string(),
   instructions: z.string().optional(),
   default_notifier: DefaultNotifierSchema.optional(),
@@ -605,7 +570,7 @@ const ManifestSchema = z.object({
   nouns: z.unknown().optional(),
   "mcp-servers": z.record(z.string(), McpServerSchema).optional(),
   constants: z.record(z.string(), z.unknown()).optional(),
-  vendors: VendorCatalogSchema.optional(),
+  vendors: VendorModelsSchema.optional(),
   /**
    * Harness credentials: env var -> vault default. See BagManifest.credentials.
    * A vault-only map — a manifest is shared code, and inline constants in
@@ -632,7 +597,7 @@ const ManifestSchema = z.object({
     entry: z.string().min(1).refine(entry => /\.(?:m?js)$/.test(entry) && !entry.startsWith("/") && entry.split("/").every(part => part !== ".." && /^[a-z0-9._-]+$/i.test(part)), "restore entry must be a compiled JavaScript path inside the bag"),
   })).optional(),
   bounds: z.record(z.string(), BoundDefinitionSchema).optional(),
-  traits: z.record(z.string(), TraitSchema).optional(),
+  traits: retired("`traits` is gone; declare tools in code, restrictions under `bounds`, and bag composition under `bags`."),
   tools: z.union([z.array(ToolMetaSchema), ToolVisibilitySchema.transform(toolVisibility => ({ toolVisibility }))]).optional(),
   prompts: PromptsEntrySchema.optional(),
   "tool-metadata": retired("`tool-metadata` is gone; declare local metadata in Barry.Tool code. Remote MCP metadata uses protocol tool arrays."),
@@ -643,6 +608,7 @@ const ManifestSchema = z.object({
   "slash-commands": SlashCommandsSchema.optional(),
   hooks: HooksSchema.optional(),
   requires: z.record(z.string(), RequirementSchema).optional(),
+  implements: ImplementsSchema.optional(),
   services: z.record(z.string(), BagServiceSchema).optional(),
   apps: z.record(z.string(), BagAppSchema).optional(),
   // Work this bag ships for Barry to run (job-manifest.ts). An entry in the
@@ -665,15 +631,17 @@ const ManifestSchema = z.object({
   infra: BagInfraSchema.optional(),
   provides: ProvidesSchema.optional(),
   bags: BagsSchema.optional(),
-  extends: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i, "extends must be a plain bag name").optional(),
+  extends: retired("`extends` is gone; declare a standalone bag with `requires` and `implements`."),
 }).strict().superRefine((value, ctx) => {
-  if (value.extends !== undefined) {
-    if (!/^[a-z0-9][a-z0-9._-]*$/i.test(value.name)) ctx.addIssue({ code: "custom", path: ["name"], message: "an extension name must be a plain bag name" });
-    if (value.extends === value.name) ctx.addIssue({ code: "custom", path: ["extends"], message: "an extension cannot extend itself" });
-    for (const key of Object.keys(value)) {
-      if (!EXTENSION_KEYS.has(key)) ctx.addIssue({ code: "custom", path: [key], message: `${key} is not allowed on an extension; declare it on the parent` });
+  if (value.implements?.tools) {
+    for (const entry of value.implements.tools) {
+      const targetBag = entry.split(":")[0]!;
+      if (targetBag === value.name) {
+        ctx.addIssue({ code: "custom", path: ["implements", "tools"], message: "a bag cannot implement its own tools" });
+      } else if (!Object.hasOwn(value.requires ?? {}, targetBag)) {
+        ctx.addIssue({ code: "custom", path: ["implements", "tools"], message: `implements.tools target "${targetBag}" must be declared in requires` });
+      }
     }
-    if (Array.isArray(value.tools) && value.tools.length) ctx.addIssue({ code: "custom", path: ["tools"], message: "extension tools only accepts visibility overrides; declare metadata on the parent" });
   }
   if (value.store && value.stores) ctx.addIssue({ code: "custom", path: ["stores"], message: "declare either store or stores, never both" });
   const stores = value.store ? { default: value.store } : value.stores ?? {};
@@ -685,24 +653,6 @@ const ManifestSchema = z.object({
 function normalizeAccess(value: unknown): BagAccess {
   const s = String(value ?? "read");
   return s === "readwrite" || s === "write" ? "readwrite" : "read";
-}
-
-export function normalizeTrait(d: z.infer<typeof TraitSchema>): NonNullable<BagManifest["traits"]>[string] {
-  return {
-    description: d.description,
-    ...(d.includes ? { includes: d.includes } : {}),
-    ...(d.harnessTraits ? { harnessTraits: d.harnessTraits } : {}),
-    ...(d.nativeTools ? { nativeTools: d.nativeTools } : {}),
-    access: normalizeAccess(d.access),
-    bags: d.bags ?? d.namespaces ?? [],
-    skills: d.skills ?? [],
-    instructions: d.instructions ?? [],
-    // `bounds:` in YAML, `boundNames` in the resolved shape — the same
-    // spelling split the DB layer uses, where `bound` is already taken by
-    // the inline restriction object, carried through just below.
-    boundNames: d.bounds ?? [],
-    ...(d.bound ? { bound: d.bound } : {}),
-  };
 }
 
 function normalizeManifest(raw: z.infer<typeof ManifestSchema>, bagDir: string, label: string): BagManifest {
@@ -722,16 +672,6 @@ function normalizeManifest(raw: z.infer<typeof ManifestSchema>, bagDir: string, 
       };
     }
   }
-
-
-  const traits: BagManifest["traits"] = {};
-  if (raw.traits) {
-    for (const [traitName, d] of Object.entries(raw.traits)) {
-      traits[traitName] = normalizeTrait(d);
-    }
-  }
-
-
 
   const toolVisibility = raw.tools && !Array.isArray(raw.tools) ? raw.tools.toolVisibility : undefined;
   let toolsEntry: BagToolsEntry | undefined;
@@ -849,9 +789,8 @@ function normalizeManifest(raw: z.infer<typeof ManifestSchema>, bagDir: string, 
     ...(raw.constants ? { constants: raw.constants } : {}),
     // Compatibility doors can point at a vendor in another installed bag.
     // The assembled registry validates those relationships together.
-    ...(raw.vendors ? { vendors: validateVendorCatalog(raw.vendors, false) } : {}),
+    ...(raw.vendors ? { vendors: validateVendorModels(raw.vendors, false) } : {}),
     ...(raw.credentials ? { credentials: raw.credentials } : {}),
-    traits,
     tools,
     toolsEntry,
     ...(toolVisibility ? { toolVisibility } : {}),
@@ -898,6 +837,7 @@ function normalizeManifest(raw: z.infer<typeof ManifestSchema>, bagDir: string, 
           ),
         }
       : {}),
+    ...(raw.implements ? { implements: { tools: raw.implements.tools } } : {}),
     services,
     apps,
     schedules,
@@ -914,7 +854,6 @@ function normalizeManifest(raw: z.infer<typeof ManifestSchema>, bagDir: string, 
           },
         }
       : {}),
-    ...(raw.extends ? { extends: raw.extends } : {}),
     ...normalizeBags(raw.bags),
   };
 }
@@ -930,19 +869,27 @@ function normalizeManifest(raw: z.infer<typeof ManifestSchema>, bagDir: string, 
  */
 function normalizeBags(
   raw: string[] | Record<string, BagChildSource | null> | undefined,
-): { bags?: string[]; bagSources?: Record<string, BagChildSource> } {
+): { bags?: string[]; optionalBags?: string[]; bagSources?: Record<string, BagChildSource> } {
   if (!raw) return {};
   if (Array.isArray(raw)) {
     return raw.length ? { bags: raw } : {};
   }
   const names = Object.keys(raw);
   if (!names.length) return {};
+  const requiredNames: string[] = [];
+  const optionalNames: string[] = [];
   const sources: Record<string, BagChildSource> = {};
   for (const [name, source] of Object.entries(raw)) {
-    if (source) sources[name] = source;
+    if (source?.optional) {
+      optionalNames.push(name);
+    } else {
+      requiredNames.push(name);
+    }
+    if (source && (source.repo || source.path)) sources[name] = source;
   }
   return {
-    bags: names,
+    ...(requiredNames.length ? { bags: requiredNames } : {}),
+    ...(optionalNames.length ? { optionalBags: optionalNames } : {}),
     ...(Object.keys(sources).length ? { bagSources: sources } : {}),
   };
 }

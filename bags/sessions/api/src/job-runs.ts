@@ -19,11 +19,11 @@ import {
   DEFAULT_TIMEOUT_S,
   IdempotencyConflictError,
   InputTooLargeError,
-  createOneOff,
-  getOneOff,
-  type OneOff,
+  createAtSchedule,
+  getAtSchedule,
+  type AtSchedule,
 } from "@barry-rocks/schedules-bag";
-import { callerScriptContext, permitsRawProcess, resolveCallerGrant } from "./routes/caller-grant.js";
+import { callerScriptBound, permitsRawProcess, resolveCallerBounds } from "./routes/caller-bounds.js";
 
 export interface JobRunInput {
   /** `bag:name[@version]`. */
@@ -41,7 +41,7 @@ export const TERMINAL_JOB_STATUSES = new Set(["succeeded", "failed", "cancelled"
 
 /** Refuse a session that may not start this job, or null when it may. */
 async function refuseCaller(job: JobMeta, callerSessionId: string): Promise<JobRunRefusal | null> {
-  const grant = await resolveCallerGrant(callerSessionId, {});
+  const grant = await resolveCallerBounds(callerSessionId, {});
   if ("status" in grant) return grant;
   // An action job's agent runs with the caller's access, as a subagent does.
   if (job.runs.using === "action") return null;
@@ -50,7 +50,7 @@ async function refuseCaller(job: JobMeta, callerSessionId: string): Promise<JobR
   }
   let allowed = false;
   try {
-    allowed = permitsRawProcess(await callerScriptContext(grant));
+    allowed = permitsRawProcess(await callerScriptBound(grant));
   } catch {
     allowed = false;
   }
@@ -58,7 +58,7 @@ async function refuseCaller(job: JobMeta, callerSessionId: string): Promise<JobR
 }
 
 /** Check a request and store its run, or say why not. Throws only on store trouble. */
-export async function acceptJobRun(input: JobRunInput): Promise<{ oneOff: OneOff; created: boolean } | { refused: JobRunRefusal }> {
+export async function acceptJobRun(input: JobRunInput): Promise<{ schedule: AtSchedule; oneOff: AtSchedule; created: boolean } | { refused: JobRunRefusal }> {
   if (!parseJobRef(input.ref).bag) return { refused: { status: 400, title: "Qualified job required", detail: `name the job as bag:name, not "${input.ref}"` } };
   const { bags } = await loadBagRegistrySnapshot();
   const job = findJob(bags, input.ref);
@@ -82,7 +82,7 @@ export async function acceptJobRun(input: JobRunInput): Promise<{ oneOff: OneOff
   }
 
   try {
-    return createOneOff({
+    return createAtSchedule({
       bag: job.bag,
       action: null,
       job: input.ref,
@@ -101,33 +101,33 @@ export async function acceptJobRun(input: JobRunInput): Promise<{ oneOff: OneOff
 }
 
 /** Poll a run until it ends or `waitS` passes. */
-export async function awaitJobRun(id: string, waitS: number | undefined): Promise<OneOff | null> {
-  let oneOff = getOneOff(id);
-  if (!waitS || !oneOff) return oneOff;
+export async function awaitJobRun(id: string, waitS: number | undefined): Promise<AtSchedule | null> {
+  let schedule = getAtSchedule(id);
+  if (!waitS || !schedule) return schedule;
   const deadline = Date.now() + waitS * 1000;
-  while (oneOff && !TERMINAL_JOB_STATUSES.has(oneOff.status) && Date.now() < deadline) {
+  while (schedule && !TERMINAL_JOB_STATUSES.has(schedule.status) && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, Math.min(250, Math.max(50, deadline - Date.now()))));
-    oneOff = getOneOff(id);
+    schedule = getAtSchedule(id);
   }
-  return oneOff;
+  return schedule;
 }
 
 /** A run as the contract serves it, with the latest attempt's output. */
-export async function serializeJobRun(oneOff: OneOff) {
-  const latest = oneOff.attempts?.at(-1);
+export async function serializeJobRun(schedule: AtSchedule) {
+  const latest = schedule.attempts?.at(-1);
   const run = latest?.runId ? await ActionRuns.get(latest.runId) : null;
   return {
-    id: oneOff.id,
-    job: oneOff.job ?? "",
-    status: oneOff.status,
-    reason: oneOff.reason,
-    key: oneOff.idempotencyKey,
-    callerSessionId: oneOff.callerSessionId,
-    attempts: oneOff.attempts?.length ?? 0,
+    id: schedule.id,
+    job: schedule.job ?? "",
+    status: schedule.status,
+    reason: schedule.reason,
+    key: schedule.idempotencyKey,
+    callerSessionId: schedule.callerSessionId,
+    attempts: schedule.attempts?.length ?? 0,
     runId: latest?.runId ?? null,
     output: run?.output ?? null,
     outputType: run?.output_type ?? null,
-    createdAt: oneOff.createdAt.toISOString(),
-    updatedAt: oneOff.updatedAt.toISOString(),
+    createdAt: schedule.createdAt.toISOString(),
+    updatedAt: schedule.updatedAt.toISOString(),
   };
 }

@@ -1,8 +1,8 @@
-import type { OneOff } from "./one-offs.js";
+import type { AtSchedule } from "./at-schedules.js";
 
 const isoOrNull = (d: Date | null) => (d ? d.toISOString() : null);
 
-export function serializeOneOff(o: OneOff) {
+export function serializeAtSchedule(o: AtSchedule) {
   return {
     id: o.id,
     bag: o.bag,

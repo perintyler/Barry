@@ -26,7 +26,7 @@ import { currentStoreContext } from "@barry-rocks/sdk/internal/stores";
  *    soft reference.
  */
 
-import { join } from "node:path";
+import { join, isAbsolute } from "node:path";
 import Database from "better-sqlite3";
 import { bagDataDir } from "@barry-rocks/sdk/services";
 
@@ -62,4 +62,14 @@ export function setDb(db: ActionsDb): void {
 export function closeDb(): void {
   store.close();
   replaced = null;
+}
+
+/** A trusted host selects the exact projection file; no ambient identity fallback. */
+export function openActionWorkProjectionStore(path: string): { database: ActionsDb; close(): void } {
+  if (!isAbsolute(path)) throw new Error("Projection store path must be absolute.");
+  const selected = openBagStore({ file: "actions.db", identityScoped: false, migrations: MIGRATIONS, synchronous: "FULL", path: () => path, connect: file => new Database(file) });
+  const database = selected.db();
+  // Background publication must yield to scheduling when this store is busy.
+  database.pragma("busy_timeout = 50");
+  return { database, close: () => selected.close() };
 }

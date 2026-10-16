@@ -27,7 +27,7 @@ function memoryBag(): Bag {
   return {
     name: manifest.name, description: manifest.description, builtin: true,
     source: { type: "local", path: BAG_DIR }, manifest,
-    skillsDirs: [], actionsDirs: [], instructionsDirs: [], traits: [], mcpServers: {},
+    skillsDirs: [], actionsDirs: [], instructionsDirs: [], bounds: {}, mcpServers: {},
     tools: [], dependencies: [], slashCommands: [], hooks: [], requires: [],
     services: [], apps: [], schedules: [],
   };

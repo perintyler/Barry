@@ -49,13 +49,13 @@ describe("barry config export/import", () => {
     }
   });
 
-  it("exports all config files", () => {
-    const { stdout, exitCode } = run("config", "export", "--dir", configDir);
+  it("exports config files without traits.yaml or bounds.yaml", () => {
+    const { exitCode } = run("config", "export", "--dir", configDir);
     expect(exitCode).toBe(0);
 
     expect(existsSync(join(configDir, "identities.yaml"))).toBe(true);
-    expect(existsSync(join(configDir, "traits.yaml"))).toBe(true);
-    expect(existsSync(join(configDir, "bounds.yaml"))).toBe(true);
+    expect(existsSync(join(configDir, "traits.yaml"))).toBe(false);
+    expect(existsSync(join(configDir, "bounds.yaml"))).toBe(false);
     expect(existsSync(join(configDir, "settings.yaml"))).toBe(true);
   });
 
@@ -65,20 +65,6 @@ describe("barry config export/import", () => {
     expect(config.version).toBe(1);
     expect(config.exported_at).toBeDefined();
     expect(Array.isArray(config.identities)).toBe(true);
-  });
-
-  it("exports traits.yaml as an array or comment", () => {
-    const raw = readFileSync(join(configDir, "traits.yaml"), "utf-8");
-    // Either a YAML array or a comment indicating no user-defined traits
-    const parsed = yamlParse(raw);
-    if (parsed !== null) {
-      expect(Array.isArray(parsed)).toBe(true);
-      for (const trait of parsed) {
-        expect(trait.name).toBeDefined();
-        expect(trait.access).toMatch(/^(read|readwrite)$/);
-        expect(Array.isArray(trait.namespaces)).toBe(true);
-      }
-    }
   });
 
   it("imports exported config without error", () => {
@@ -113,8 +99,8 @@ describe("barry config export/import", () => {
   // An identity is a directory now: importing one that does not exist creates
   // it in Barry's identities folder, and importing it again changes that file.
   describe("importing identities", () => {
-    const identityYaml = () =>
-      yamlParse(readFileSync(join(process.env.BARRY_HOME!, "app-support", "identities", "imported", "identity.yaml"), "utf-8"));
+    const identityYaml = (name = "imported") =>
+      yamlParse(readFileSync(join(process.env.BARRY_HOME!, "app-support", "identities", name, "identity.yaml"), "utf-8"));
     const importOne = (fields: Record<string, unknown>) => {
       const dir = mkdtempSync(join(tmpdir(), "barry-config-import-"));
       try {
@@ -137,6 +123,77 @@ describe("barry config export/import", () => {
       const { exitCode, stderr } = importOne({ default_model: "qwen3:4b", default_model_provider: "ollama" });
       expect(exitCode, stderr).toBe(0);
       expect(identityYaml()).toMatchObject({ name: "imported", adapters: { "claude-code": { model: "ollama/qwen3:4b" } } });
+    });
+
+    it("converts legacy traits.yaml and bounds.yaml backups into bags and { allow, deny } bounds", () => {
+      const dir = mkdtempSync(join(tmpdir(), "barry-config-legacy-import-"));
+      try {
+        writeFileSync(
+          join(dir, "traits.yaml"),
+          yamlStringify([
+            {
+              name: "custom-readonly-git",
+              description: "Read-only git trait",
+              access: "read",
+              namespaces: ["git"],
+              boundNames: ["readonly"],
+            },
+          ]),
+          "utf-8",
+        );
+        writeFileSync(
+          join(dir, "bounds.yaml"),
+          yamlStringify([
+            {
+              name: "custom-no-bash",
+              description: "Deny Bash",
+              bound: {
+                deniedTools: ["Bash"],
+              },
+            },
+          ]),
+          "utf-8",
+        );
+        writeFileSync(
+          join(dir, "identities.yaml"),
+          yamlStringify({
+            version: 1,
+            exported_at: "2026-01-01",
+            identities: [
+              {
+                name: "legacyimported",
+                traits: ["custom-readonly-git", "read"],
+              },
+            ],
+          }),
+          "utf-8",
+        );
+        writeFileSync(
+          join(dir, "settings.yaml"),
+          yamlStringify({ defaultBarry: "legacyimported" }),
+          "utf-8",
+        );
+
+        const { exitCode, stderr } = run("config", "import", "--dir", dir);
+        expect(exitCode, stderr).toBe(0);
+
+        const importedYaml = identityYaml("legacyimported");
+        expect(importedYaml.traits).toBeUndefined();
+        expect(importedYaml.bounds).toEqual(
+          expect.arrayContaining([
+            "readonly",
+            {
+              "custom-no-bash": {
+                description: "Deny Bash",
+                tools: { deny: ["*:Bash"] },
+                optional: true,
+              },
+            },
+          ]),
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 

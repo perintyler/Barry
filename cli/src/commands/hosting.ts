@@ -9,7 +9,7 @@
  */
 import { readFileSync } from "node:fs";
 import { loadAllBags } from "@barry-rocks/sdk/internal/bags";
-import { readHostingPolicy, hostingPolicyPath, readApplied, routesPath, type AppliedFile, type RoutesFile, readServiceRegistry } from "@barry-rocks/sdk/services";
+import { readHostingConfig, hostingConfigPath, readApplied, routesPath, type AppliedFile, type RoutesFile, readServiceRegistry } from "@barry-rocks/sdk/services";
 import { resolveHosting, type HostedService } from "../services/hosting/resolve.js";
 
 
@@ -54,9 +54,9 @@ function appliedState(
 }
 
 export async function hostingStatusCommand(service: string | undefined, options: { public?: boolean } = {}): Promise<void> {
-  const policy = readHostingPolicy();
-  if (!policy) {
-    console.log(`No ${hostingPolicyPath()}: nothing is exposed beyond loopback on this Mac.`);
+  const config = readHostingConfig();
+  if (!config) {
+    console.log(`No ${hostingConfigPath()}: nothing is exposed beyond loopback on this Mac.`);
     return;
   }
   const registry = readServiceRegistry();
@@ -68,7 +68,7 @@ export async function hostingStatusCommand(service: string | undefined, options:
     .filter(([, e]) => e.kind === "service")
     .map(([key, e]) => ({ key, bag: e.bag, name: e.name, ...(e.url ? { url: e.url } : {}), localOnly: localOnly.has(key) }));
   const providers = bags.flatMap((b) => (b.manifest?.provides ? [{ bag: b.name, provides: b.manifest.provides }] : []));
-  const plan = resolveHosting(policy, services, providers);
+  const plan = resolveHosting(config, services, providers);
 
   const rows: Row[] = [];
   /** Problems a provider reports about one of its instances (a daemon down, names that will not resolve). */

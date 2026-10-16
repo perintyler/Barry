@@ -95,8 +95,8 @@ export interface IdentityEnvironmentOptions {
   touch?: boolean;
   /**
    * Serve a cached environment when one was built within this many
-   * milliseconds. 0 (the default) builds every time — what MCP wants, since
-   * it builds once per session init.
+   * milliseconds. 0 (the default) builds every time; resident API and MCP
+   * hosts choose their own TTL.
    */
   cacheTtlMs?: number;
   /** A vault session already open for this identity, to reuse instead of opening one. */
@@ -110,6 +110,7 @@ interface CacheEntry {
 }
 
 const cache = new Map<number, Map<string, CacheEntry>>();
+const refreshing = new WeakSet<CacheEntry>();
 
 /**
  * Drop a cached environment.
@@ -120,9 +121,8 @@ const cache = new Map<number, Map<string, CacheEntry>>();
  *
  * THIS CACHE IS PER-PROCESS. A CLI command clearing it affects only the CLI
  * process that is about to exit; the engine and the sessions API keep their
- * own copies. The accepted policy is TTL, not notification: long-running
- * callers pass `cacheTtlMs`, and the engine passes 0 and rebuilds per session
- * init, so it is already current.
+ * own copies. The accepted cross-process policy is TTL: API and MCP
+ * callers pass `cacheTtlMs`; local mutations invalidate immediately.
  *
  * After a write to a SHARED vault, every identity that opens it holds a stale
  * entry — so invalidate with no argument after a vault mutation. The cache
@@ -156,7 +156,19 @@ export async function identityEnvironmentForId(
   });
   if (cacheable) {
     const hit = cache.get(identityId)?.get(selection);
-    if (hit && Date.now() - hit.builtAt < cacheTtlMs) return hit.value;
+    if (hit && Date.now() - hit.builtAt < cacheTtlMs) {
+      if (Date.now() - hit.builtAt >= cacheTtlMs * 0.8 && !refreshing.has(hit)) {
+        refreshing.add(hit);
+        // Fence refreshes against explicit invalidation and newer builds. Keep
+        // the original expiry on failure; a failed refresh cannot extend a secret.
+        void buildForId(identityId, options).then(value => {
+          if (cache.get(identityId)?.get(selection) === hit) {
+            cache.get(identityId)!.set(selection, { builtAt: Date.now(), value: Promise.resolve(value) });
+          }
+        }).catch(() => {}).finally(() => refreshing.delete(hit));
+      }
+      return hit.value;
+    }
   }
 
   const pending = buildForId(identityId, options);

@@ -1,6 +1,6 @@
 import { installProcessCleanup, drainProcessCleanup } from "./process-cleanup.js";
 import generatedMigrations from "../generated/sessions-migrations.js";
-import { migratedStorePath, assertScratchStoreUnderTest, migrateStore } from "@barry-rocks/sdk/stores";
+import { migratedStorePath, assertScratchStoreUnderTest, migrateStore, forgetSessionIdentity } from "@barry-rocks/sdk/stores";
 import { currentStoreContext, withStoreContext } from "@barry-rocks/sdk/internal/stores";
 
 /**
@@ -88,7 +88,7 @@ export function getSessionsSqlite(): BetterSqlite3.Database {
   if (currentStoreContext()?.identity) {
     const path = sessionsDbPath(); const cached = identitySqlite.get(path); if (cached) { drainProcessCleanup(cached, withStoreContext({}, () => getSessionsSqlite())); return cached; }
     assertScratchStoreUnderTest("sessions", path); assertStoreNotLost(path); mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    const sqlite = new BetterSqlite3(path); sqlite.pragma("journal_mode = WAL"); sqlite.pragma("foreign_keys = ON"); sqlite.pragma("busy_timeout = 5000"); sqlite.pragma("synchronous = FULL"); migrate(sqlite);
+    const sqlite = new BetterSqlite3(path); sqlite.pragma("journal_mode = WAL"); sqlite.pragma("foreign_keys = ON"); sqlite.pragma("busy_timeout = 5000"); sqlite.pragma("synchronous = NORMAL"); migrate(sqlite);
     // Provider-session foreign keys reference the node-owned adapter catalog.
     const catalog = withStoreContext({}, () => getSessionsSqlite());
     for (const table of ["providers", "models", "agent_adapters"]) {
@@ -119,14 +119,10 @@ export function getSessionsSqlite(): BetterSqlite3.Database {
     // pages — measured over 10 SIGKILL trials, zero rows lost) but NOT against
     // power loss or a kernel panic, where the page cache goes with it.
     //
-    // FULL costs an fsync per commit. Measured on this machine with this
-    // driver: 0.007 ms/commit at NORMAL, 0.035 ms at FULL — 5x, but still
-    // 28k commits/sec. This store writes a few hundred rows a MINUTE, so the
-    // fsync is free at the rate it actually runs at.
-    // Stated rather than inherited, because every other session's coordination
-    // state lives in this file and "we never thought about it" is not a
-    // durability posture.
-    _sqlite.pragma("synchronous = FULL");
+    // Streaming delivery precedes recording. WAL NORMAL preserves database
+    // integrity; shutdown drains queued writes. A power loss may lose the last
+    // WAL transactions (accepted latency/durability tradeoff, ADR 0049).
+    _sqlite.pragma("synchronous = NORMAL");
     // Per-connection and OFF by default. Three of this schema's relationships
     // are real foreign keys; without this pragma they enforce nothing, and a
     // CASCADE that silently does not fire is exactly the failure this store is
@@ -167,6 +163,7 @@ export function getSessionsDb(): Kysely<SessionsStoreDatabase> {
 }
 
 export function closeSessionsDb(): void {
+  forgetSessionIdentity();
   identityKysely.clear(); for (const handle of identitySqlite.values()) handle.close(); identitySqlite.clear();
   _db = null;
   if (_sqlite) {

@@ -43,7 +43,7 @@ describe.runIf(LIVE)("codex modes, live", { timeout: 240_000 }, () => {
 
   beforeAll(async () => {
     const version = execFileSync("codex", ["--version"], { encoding: "utf8" });
-    expect(version, "the codex on PATH is not the build the guarantees were verified on").toContain(CODEX_REQUIREMENTS.binary.pin.version);
+    expect(version, "the codex on PATH is not the build the guarantees were verified on").toContain(process.env.BARRY_CODEX_LIVE_VERSION ?? CODEX_REQUIREMENTS.binary.recommendedVersion!);
     sentinel = join(made(), "native-sentinel.txt");
     probe = await startProbe(KEYS, { guidance: GUIDANCE, sentinel });
   });
@@ -225,6 +225,43 @@ describe.runIf(LIVE)("codex modes, live", { timeout: 240_000 }, () => {
     expect(existsSync(sentinel), JSON.stringify(events)).toBe(false);
   }, 45_000);
 
+  it("hosted: resumes its conversation, steers and interrupts on the installed build", async () => {
+    const { startEngine, stopAll } = engineStarter(["-c", `model_providers.barry-openai.base_url="${probe.url}/v1"`]);
+    const config = sessionConfig("live-lifecycle");
+    const collect = async (session: Awaited<ReturnType<typeof startCodexHosted>>) => {
+      const events: SessionEvent[] = [];
+      for await (const event of session.events()) { events.push(event); if (event.type === "done") break; }
+      expect(events.filter(event => event.type === "done")).toHaveLength(1);
+      return events;
+    };
+    let session: Awaited<ReturnType<typeof startCodexHosted>> | undefined;
+    try {
+      session = await adapter.modes.hosted!.start(config, startEngine);
+      await session.deliver("ECHO:first");
+      expect(JSON.stringify(await collect(session))).toContain("echoed first");
+      const thread = session.harnessSessionId;
+      const before = probe.modelRequests.length;
+      await session.deliver("HOLD_PROBE");
+      await until(() => probe.modelRequests.length > before, 10_000, "held request");
+      expect(await session.deliver("ECHO:steered", { ifActive: "steer" })).toMatchObject({ status: "steered" });
+      probe.release();
+      const steered = await collect(session);
+      expect(steered.some(event => event.type === "error")).toBe(false);
+      expect(probe.modelRequests.slice(before).some(request => request.lastInput.includes("ECHO:steered"))).toBe(true);
+      const held = probe.modelRequests.length;
+      await session.deliver("HOLD_PROBE");
+      await until(() => probe.modelRequests.length > held, 10_000, "interruptible request");
+      await session.interrupt();
+      await collect(session);
+      probe.release();
+      await session.close();
+      session = await adapter.modes.hosted!.start({ ...config, resume: { harnessSessionId: thread! } }, startEngine);
+      expect(session.harnessSessionId).toBe(thread);
+      await session.deliver("ECHO:resumed");
+      expect(JSON.stringify(await collect(session))).toContain("echoed resumed");
+    } finally { probe.release(); await session?.close(); stopAll(); }
+  }, 45_000);
+
   it("hosted: a bogus key is refused by the real API, rather than sent without a key or replaced by a login", async () => {
     const events = await turn(sessionConfig("live-hosted-bogus", BOGUS_KEY), "Reply with PONG", []);
     const errors = events.filter((event) => event.type === "error").map((event) => JSON.stringify(event));
@@ -283,7 +320,7 @@ describe.runIf(LIVE)("codex modes, live", { timeout: 240_000 }, () => {
     await client.call("initialize", { clientInfo: { name: "barry-live-test", version: "0" }, capabilities: { experimentalApi: true } });
     client.notify("initialized", {});
     const listed = await client.call("hooks/list", { cwds: [cwd] }) as { data: Array<{ hooks: Array<{ key: string; sourcePath: string; eventName: string; currentHash: string }> }> };
-    const gate = listed.data.flatMap((entry) => entry.hooks).find((hook) => hook.sourcePath === join(home, "hooks.json") && hook.eventName === "preToolUse")!;
+    const gate = listed.data.flatMap((entry) => entry.hooks).find((hook) => realpathSync(hook.sourcePath) === realpathSync(join(home, "hooks.json")) && hook.eventName === "preToolUse")!;
     await client.call("config/batchWrite", { filePath: join(home, "config.toml"), reloadUserConfig: true, edits: [{ keyPath: `hooks.state.${JSON.stringify(gate.key)}`, mergeStrategy: "replace", value: { enabled: false, trusted_hash: gate.currentHash } }] });
   }
 

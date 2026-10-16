@@ -53,7 +53,7 @@ prompt: |-
   Report which file changed, what the gate said, and whether anything was
   rolled back.
 # Deliberately empty: this action needs no bag. It drives the agent's own
-# native Edit/Write/Read, which every adapter provides and no trait grants.
+# native Edit/Write/Read, which every adapter provides and no bag grants.
 #
 # It replaces a `localEdit` tool that shelled a region out to a local Ollama
 # model. That tool's reason was token cost — keeping the replacement text out

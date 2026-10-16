@@ -15,11 +15,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Mode, Requirements } from "@barry-rocks/sdk/adapters/harnesses";
 
-export const VERIFIED_ON = "2026.10.01";
+export const VERIFIED_ON = "2026.10.01-14929f9";
 
-/** The exact build Barry verified, then the current local installation. */
+/** The current local installation; no historic build is preferred. */
 export function cursorAgentPaths(home = homedir()): string[] {
-  return [join(home, ".local", "share", "cursor-agent", "versions", `${VERIFIED_ON}-14929f9`, "cursor-agent"), join(home, ".local", "bin", "cursor-agent")];
+  return [join(home, ".local", "bin", "cursor-agent")];
 }
 
 const LIVE_CHECK = "adapters/sessions/cursor/src/live/cursor-live.test.ts";
@@ -34,6 +34,7 @@ const LIVE_CHECK = "adapters/sessions/cursor/src/live/cursor-live.test.ts";
  */
 export const CURSOR_HOSTED: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: [VERIFIED_ON], supportedVersions: [{ min: VERIFIED_ON, max: VERIFIED_ON }] },
   guarantees: {
     capture: "near-total",
     delivery: "wake",
@@ -58,6 +59,7 @@ export const CURSOR_HOSTED: Mode = {
  */
 export const CURSOR_GUEST: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: [VERIFIED_ON], supportedVersions: [{ min: VERIFIED_ON, max: VERIFIED_ON }] },
   guarantees: {
     capture: "post-hoc",
     delivery: "tool-call",
@@ -83,6 +85,7 @@ export const CURSOR_GUEST: Mode = {
  */
 export const CURSOR_INSTRUMENTED: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: [VERIFIED_ON], supportedVersions: [{ min: VERIFIED_ON, max: VERIFIED_ON }] },
   // Hooks are verified to fire on macOS; on Linux nobody has seen them fire.
   platforms: ["darwin"],
   guarantees: {
@@ -103,12 +106,12 @@ export const CURSOR_INSTRUMENTED: Mode = {
 };
 
 /** The version in `--version` output: its first capture group. Shared by doctor and the adapter. */
-export const VERSION_PATTERN = "(\\d{4}\\.\\d{2}\\.\\d{2})";
+export const VERSION_PATTERN = "(\\d{4}\\.\\d{2}\\.\\d{2}(?:-[A-Za-z0-9.-]+)?)";
 
 export const CURSOR_REQUIREMENTS: Requirements = {
   binary: {
     command: "cursor-agent",
-    paths: cursorAgentPaths(),
+    overrideEnv: "CURSOR_AGENT_BIN",
     versionArgs: ["--version"],
     // Cursor uses calendar versions with build suffixes rather than semantic versions.
     // Rationale: docs/decisions/0010-adapter-and-session-regression-invariants.md#note-005
@@ -116,10 +119,7 @@ export const CURSOR_REQUIREMENTS: Requirements = {
     install: {
       fallback: "curl https://cursor.com/install -fsS | bash",
     },
-    pin: {
-      version: VERIFIED_ON,
-      enforcedBy: 'running the pinned build from cursor-agent\'s versions directory, with --disable-auto-update and channel "static" in the session\'s home',
-    },
+    recommendedVersion: VERIFIED_ON,
   },
   // Instrumented is darwin-verified; the adapter itself runs elsewhere, but
   // its declared modes do not claim to.

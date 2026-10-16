@@ -1,12 +1,12 @@
-import { parseTraits, parseBounds, inheritEntries, serializeEntries, type IdentityEntries, type TraitEntry, type BoundEntry } from "./entries.js";
+import { parseBounds, inheritEntries, serializeEntries, type IdentityEntries, type BoundEntry } from "./entries.js";
 export * from "./entries.js";
 import { mergeAdapters, type IdentityAdapters } from "./adapters.js";
 export * from "./adapters.js";
 export * from "./retired.js";
 import { parseVaultName, mergeSecretBindings, type SecretBindings } from "./secrets.js";
 export { parseVaultName, bindSecretReferences, mergeSecretBindings, SecretReferenceSchema, type SecretReference, type SecretBinding, type SecretBindings } from "./secrets.js";
-import { mergeBagConfiguration, type IdentityBagConfiguration } from "./bags.js";
-export { parseIdentityBags, serializeIdentityBags, mergeBagConfiguration, type IdentityBags, type IdentityBagConfiguration, type ToolVisibility } from "./bags.js";
+import { mergeBagConfiguration, requiredIdentityBags, optionalIdentityBags, type IdentityBagConfiguration } from "./bags.js";
+export { parseIdentityBags, serializeIdentityBags, mergeBagConfiguration, requiredIdentityBags, optionalIdentityBags, type IdentityBags, type IdentityBagConfiguration, type ToolVisibility } from "./bags.js";
 import { mergeBounds, type Bound } from "../bounds/index.js";
 /** An identity is reusable configuration, never a process or inheritance chain. */
 export interface Identity { id: number; name: string; metadata: IdentityDefinition }
@@ -16,9 +16,9 @@ export interface IdentityDefinition {
   bag_configs?: Record<string, IdentityBagConfiguration>;
   vault?: string;
   ui?: string;
-  traits?: IdentityEntries; bounds?: IdentityEntries; bags?: string[]; bound?: Record<string, unknown>; scope?: Record<string, unknown>;
+  bounds?: IdentityEntries; bags?: string[]; bound?: Record<string, unknown>; scope?: Record<string, unknown>;
   adapters?: IdentityAdapters;
-  status_notify?: { tool: string; target?: string }; bag_grant?: "session" | "identity";
+  status_notify?: { tool: string; target?: string };
   tool_discovery?: "provider" | "barry";
 }
 
@@ -44,12 +44,17 @@ export function mergeInheritedIdentity(parent: IdentityDefinition, child: Identi
   assertCredentialReferences(parent);
   assertCredentialReferences(child);
   const bags = Array.from(new Set([...(parent.bags ?? []), ...(child.bags ?? [])]));
+  const childSelectedBags = new Set(child.bags ?? []);
   const bag_configs: Record<string, IdentityBagConfiguration> = {};
   for (const bag of bags) {
-    const configuration = mergeBagConfiguration(parent.bag_configs?.[bag], child.bag_configs?.[bag]);
+    const parentConfig = parent.bag_configs?.[bag];
+    let childConfig = child.bag_configs?.[bag];
+    if (parentConfig?.optional && childSelectedBags.has(bag) && childConfig?.optional === undefined) {
+      childConfig = { ...childConfig, optional: false };
+    }
+    const configuration = mergeBagConfiguration(parentConfig, childConfig);
     if (Object.keys(configuration).length) bag_configs[bag] = configuration;
   }
-  const traits = serializeEntries(inheritEntries(parseTraits(parent.traits), parseTraits(child.traits)));
   const bounds = serializeEntries(inheritEntries(parseBounds(parent.bounds), parseBounds(child.bounds)));
 
   const parentBound = parent.bound ?? parent.scope;
@@ -71,21 +76,18 @@ export function mergeInheritedIdentity(parent: IdentityDefinition, child: Identi
     bags: bags.length > 0 ? bags : undefined,
     bag_configs: Object.keys(bag_configs).length ? bag_configs : undefined,
     secrets: mergeSecretBindings(parent.secrets, child.secrets),
-    traits: traits.length > 0 ? traits : undefined,
     bound,
     bounds: bounds.length > 0 ? bounds : undefined,
     adapters: mergeAdapters(parent.adapters ?? {}, child.adapters ?? {}),
     vault: child.vault,
     status_notify: child.status_notify ?? parent.status_notify,
     tool_discovery: child.tool_discovery ?? parent.tool_discovery,
-    bag_grant: child.bag_grant ?? parent.bag_grant,
     ui: child.ui ?? parent.ui,
   };
 }
 export interface ResolvedIdentityConfig {
   vault: IdentityDefinition["vault"] | undefined;
   ui?: string;
-  traits: TraitEntry[];
   bounds: BoundEntry[];
   bags: string[];
   bag_configs: Record<string, IdentityBagConfiguration>;
@@ -94,8 +96,6 @@ export interface ResolvedIdentityConfig {
   bound: Bound | undefined;
   adapters: IdentityAdapters;
   status_notify: IdentityDefinition["status_notify"] | undefined;
-  /** Whether a packed bag grants its tools session-wide. Absent = "session". */
-  bag_grant: "session" | "identity";
 }
 
 export function resolveIdentityConfig(
@@ -123,13 +123,11 @@ export function resolveIdentityConfig(
         bags: parentResolved.bags,
         bag_configs: parentResolved.bag_configs,
         secrets: parentResolved.secrets,
-        traits: serializeEntries(parentResolved.traits),
         bounds: serializeEntries(parentResolved.bounds),
         bound: parentResolved.bound as Record<string, unknown> | undefined,
         adapters: parentResolved.adapters,
         vault: parentResolved.vault,
         status_notify: parentResolved.status_notify,
-        bag_grant: parentResolved.bag_grant,
         ui: parentResolved.ui,
       };
     }
@@ -143,7 +141,6 @@ export function resolveIdentityConfig(
 
   return {
     vault: effective.vault ?? undefined,
-    traits: parseTraits(effective.traits),
     bounds: parseBounds(effective.bounds),
     bags: Array.isArray(effective.bags) ? [...effective.bags] : [],
     bag_configs: effective.bag_configs ?? {},
@@ -151,7 +148,6 @@ export function resolveIdentityConfig(
     bound: inline ? mergeBounds(null, inline) ?? undefined : undefined,
     adapters: mergeAdapters({}, effective.adapters ?? {}),
     status_notify: effective.status_notify?.tool ? effective.status_notify : undefined,
-    bag_grant: effective.bag_grant === "identity" ? "identity" : "session",
     ui: effective.ui,
   };
 }

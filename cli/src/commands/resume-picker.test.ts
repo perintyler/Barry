@@ -5,10 +5,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  * every agent — never infer one from the working directory.
  *
  * The inference it replaced (`getMostRecentSession(process.cwd())`) attached a
- * DIFFERENT project's session id, traits and model whenever the cwd was a parent
+ * DIFFERENT project's session id, bags and model whenever the cwd was a parent
  * of where sessions actually ran. Measured on the live store before removal: from
  * `~/repos` it picked a `~/repos/barry` session; from `~/repos/bags` it picked one
- * under `an external coding action`. Since resume carries traits, that silently
+ * under `an external coding action`. Since resume carries bags, that silently
  * granted another project's capabilities.
  *
  * These assert on the SEAM CALLS rather than on rendered output: the observable
@@ -39,7 +39,8 @@ function sessionRow(over: Record<string, unknown> = {}) {
     id: "sess_picked",
     state: "closed",
     status: "completed",
-    traits: ["coding"],
+    bags: ["coding"],
+    bounds: ["git:no-push"],
     created_at: new Date().toISOString(),
     system_prompt: "a previous session",
     metadata: { working_directory: process.cwd(), name: "picked one" },
@@ -57,7 +58,7 @@ describe("barry session resume, with no session id", () => {
     startCommand.mockResolvedValue(undefined);
   });
 
-  it("forwards an explicit llama.cpp provider to start without restoring the recorded provider", async () => {
+  it("forwards an explicit llama.cpp vendor to start without restoring the recorded vendor", async () => {
     getSession.mockResolvedValue(sessionRow({ metadata: { working_directory: process.cwd(), model_provider: "ollama", model: "old" } }));
     await resumeCommand("sess_picked", { llamacpp: true });
     expect(startCommand.mock.calls[0][1]).toMatchObject({ llamacpp: true });
@@ -65,13 +66,14 @@ describe("barry session resume, with no session id", () => {
     expect(startCommand.mock.calls[0][1].model).toBeUndefined();
   });
 
-  it("asks the user to choose, and carries the chosen session's id and traits", async () => {
+  it("asks the user to choose, and carries the chosen session's id, bags and bounds", async () => {
     await resumeCommand(undefined, {});
 
     expect(select).toHaveBeenCalledTimes(1);
     const [, opts] = startCommand.mock.calls[0] as [unknown, Record<string, unknown>];
     expect(opts._resumeSessionId).toBe("sess_picked");
-    expect(opts._resumeTraits).toEqual(["coding"]);
+    expect(opts._resumeBags).toEqual(["coding"]);
+    expect(opts._resumeBounds).toEqual(["git:no-push"]);
   });
 
   /**
@@ -116,20 +118,25 @@ describe("barry session resume, with no session id", () => {
 
     expect(select).toHaveBeenCalledTimes(1);
     const [, opts] = startCommand.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(opts._resume).toEqual({ providerSessionId: "conv-picked" });
+    expect(opts._resume).toEqual({ harnessSessionId: "conv-picked" });
   });
-  it.each(["claude", "codex", "opencode", "cursor", "pi", "antigravity"])("resumes the exact recorded %s conversation with a newer decoy present", async (provider) => {
-    getSession.mockResolvedValue(sessionRow({ metadata: { provider, working_directory: process.cwd() } }));
-    getProviderSessionsBySession.mockResolvedValue([{ provider: "unrelated", provider_session_id: "decoy" }, { provider, provider_session_id: "older-target" }]);
+  it.each(["claude", "codex", "opencode", "cursor", "pi", "antigravity"])("resumes the exact recorded %s conversation with a newer decoy present", async (harnessName) => {
+    getSession.mockResolvedValue(sessionRow({ metadata: { provider: harnessName, working_directory: process.cwd() } }));
+    getProviderSessionsBySession.mockResolvedValue([{ provider: "unrelated", provider_session_id: "decoy" }, { provider: harnessName, provider_session_id: "older-target" }]);
     await resumeCommand("sess_picked", {});
     expect(select).not.toHaveBeenCalled();
-    expect(startCommand).toHaveBeenCalledWith([], expect.objectContaining({ _resumeSessionId: "sess_picked", _resume: { providerSessionId: "older-target" }, harness: provider === "claude" ? "claude-code" : provider }));
+    expect(startCommand).toHaveBeenCalledWith([], expect.objectContaining({ _resumeSessionId: "sess_picked", _resume: { harnessSessionId: "older-target" }, harness: harnessName === "claude" ? "claude-code" : harnessName }));
   });
 
   it("refuses a missing conversation link instead of creating a replacement", async () => {
     getProviderSessionsBySession.mockResolvedValue([]);
     await expect(resumeCommand("sess_picked", { harness: "opencode" })).rejects.toThrow(/No opencode conversation/);
     expect(startCommand).not.toHaveBeenCalled();
+  });
+
+  it("forwards remembered bags and bounds independently of the existing conversation flag", async () => {
+    await resumeCommand("sess_picked", { lastBags: true });
+    expect(startCommand).toHaveBeenCalledWith([], expect.objectContaining({ last: true, _resumeSessionId: "sess_picked", _resumeBags: expect.any(Array), _resume: { harnessSessionId: "conv-picked" } }));
   });
 
   it("refuses a nonexistent Barry ID", async () => {

@@ -4,6 +4,7 @@ import { VaultClient, VaultItemNotFoundError } from "./client.js";
 import { VaultError } from "./errors.js";
 import type { VaultAuth, VaultItem, VaultItemSummary } from "./client.js";
 import { assertVaultAccessAllowedUnderTest } from "./test-guard.js";
+import { instanceVaultConnection } from "./instance-account.js";
 
 /** Where the vault daemon listens. A machine-level fact, not a per-vault one. */
 export const DEFAULT_VAULT_URL =
@@ -53,7 +54,8 @@ export class VaultRefError extends VaultError {
   }
 }
 
-/** The account a name opens. The name is the whole reference. */
+/** Legacy Keychain descriptor. Preserve the original name when calling openVault:
+ * an installation-owned connection is resolved at opening, not by this descriptor. */
 export function vaultAccountFor(ref: unknown): VaultAccount {
   if (typeof ref !== "string") return validateInlineAccount(ref);
   const name = ref.trim();
@@ -196,22 +198,25 @@ export interface VaultSession {
  */
 export async function openVault(ref: unknown, options: VaultOpenOptions = {}): Promise<VaultSession> {
   const account = vaultAccountFor(ref);
+  const configured = typeof ref === "string" ? instanceVaultConnection(ref.trim()) : undefined;
+  if (configured && options.readSecret) throw new VaultRefError("Configured vault bootstrap cannot be replaced by a caller credential reader.");
+  const serverUrl = configured?.serverUrl ?? account.serverUrl;
+  const read = configured?.readSecret ?? readWith(options);
   assertVaultAccessAllowedUnderTest("openVault", {
-    serverUrl: account.serverUrl,
-    readSecret: options.readSecret,
+    serverUrl,
+    readSecret: configured?.readSecret ?? options.readSecret,
   });
-  const read = readWith(options);
   const credentials = await readAccountCredentials(account, read);
   const email = await vaultEmail(account, read);
 
-  const client = new VaultClient(account.serverUrl);
+  const client = new VaultClient(serverUrl);
   const auth = await client.loginWithApiKey(
     credentials.clientId,
     credentials.clientSecret,
     credentials.masterPassword,
     email,
   );
-  return sessionFor(client, auth, email, account.serverUrl);
+  return sessionFor(client, auth, email, serverUrl);
 }
 
 /** Wrap an open login. Exported for `barry vault` flows that already hold a session. */

@@ -1,3 +1,4 @@
+import { watchTurnEvents } from "@barry-rocks/sessions-bag/store/turn-continuations";
 import type { SessionEvent, TurnSnapshot } from "@barry-rocks/sdk/sessions";
 import type { TurnContinuations } from "@barry-rocks/sessions-bag/store/turn-continuations";
 import type { SessionSubscriber, WsMessage } from "./session-runtime.js";
@@ -21,28 +22,46 @@ export function compatibilityMessages(sessionId: string, event: unknown, now = D
   }
 }
 
-/** The socket publisher bounds its queue and reverifies each native send. */
-export function subscribeCompatibilityTurns(store: TurnContinuations, sessionId: string, socket: SessionSubscriber): () => void {
-  let cursor = store.cursor(sessionId), stopped = false;
-  let timer: NodeJS.Timeout | undefined;
-  const send = (message: WsMessage) => socket.send(JSON.stringify(message));
-  const turn = store.active(sessionId);
-  if (turn?.state === "waiting_for_input") {
-    send({ type: "status", sessionId, status: "waiting_for_input" });
-    for (const message of compatibilityMessages(sessionId, { type: "segment_interrupted", snapshot: { ...turn, interrupts: store.pendingRulings(sessionId, turn.id) } })) send(message);
-  }
-  const stop = () => { stopped = true; if (timer) clearTimeout(timer); };
-  const pump = () => {
-    if (stopped || socket.readyState !== 1) { stop(); return; }
-    try {
-      const records = store.replay(sessionId, cursor, 128);
-      for (const record of records) {
-        for (const message of compatibilityMessages(sessionId, record.event)) send({ ...message, metadata: { turnId: record.turnId, runId: record.runId, executionSequence: record.sequence } });
-        cursor = record.sequence;
+interface CompatibilityHub { sockets:Set<SessionSubscriber>; stop():void }
+const hubs=new WeakMap<TurnContinuations,Map<string,CompatibilityHub>>();
+
+/** One event-driven reader per store/session, shared by all native subscribers. */
+export function subscribeCompatibilityTurns(store:TurnContinuations,sessionId:string,socket:SessionSubscriber):()=>void {
+  const sessions=hubs.get(store)??new Map<string,CompatibilityHub>();hubs.set(store,sessions);
+  let hub=sessions.get(sessionId);
+  const send=(target:SessionSubscriber,message:WsMessage)=>{if(target.readyState===1) target.send(JSON.stringify(message));};
+  if (!hub) {
+    let cursor=store.cursor(sessionId), stopped=false, scheduled=false;
+    let timer:NodeJS.Timeout|undefined;
+    const sockets=new Set<SessionSubscriber>();
+    let unwatch=()=>{};
+    const stop=()=>{stopped=true;if(timer)clearTimeout(timer);unwatch();if(sessions.get(sessionId)===hub)sessions.delete(sessionId);};
+    const pump=()=>{
+      scheduled=false;if(stopped)return;
+      if(timer)clearTimeout(timer);
+      try {
+        const records=store.replay(sessionId,cursor,128);
+        for(const record of records) {
+          for(const message of compatibilityMessages(sessionId,record.event)) {
+            const frame={...message,metadata:{turnId:record.turnId,runId:record.runId,executionSequence:record.sequence}};
+            for(const target of sockets) send(target,frame);
+          }
+          cursor=record.sequence;
+        }
+        if(store.active(sessionId)){timer=setTimeout(pump,records.length>=128?0:1000);timer.unref();}
+      } catch {
+        for(const target of sockets)send(target,{type:"error",sessionId,error:"Execution subscription failed"});stop();
       }
-      timer = setTimeout(pump, records.length >= 128 ? 0 : 150); timer.unref();
-    } catch { send({ type: "error", sessionId, error: "Execution subscription failed" }); stop(); }
-  };
-  pump();
-  return stop;
+    };
+    unwatch=watchTurnEvents(sessionId,()=>{if(!scheduled&&!stopped){scheduled=true;queueMicrotask(pump);}});
+    hub={sockets,stop};sessions.set(sessionId,hub);
+    if(store.active(sessionId)){timer=setTimeout(pump,1000);timer.unref();}
+  }
+  hub.sockets.add(socket);
+  const turn=store.active(sessionId);
+  if(turn?.state==="waiting_for_input") {
+    send(socket,{type:"status",sessionId,status:"waiting_for_input"});
+    for(const message of compatibilityMessages(sessionId,{type:"segment_interrupted",snapshot:{...turn,interrupts:store.pendingRulings(sessionId,turn.id)}}))send(socket,message);
+  }
+  return ()=>{hub!.sockets.delete(socket);if(!hub!.sockets.size)hub!.stop();};
 }

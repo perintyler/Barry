@@ -1,4 +1,4 @@
-import { installationRoot, writeServiceRegistry, type ServiceEntry, barryAppSupportDir, bagLogsDir, readServiceRegistry, readHostingPolicy } from "@barry-rocks/sdk/services";
+import { installationRoot, writeServiceRegistry, type ServiceEntry, barryAppSupportDir, bagLogsDir, readServiceRegistry, readHostingConfig } from "@barry-rocks/sdk/services";
 import { systemPaths, systemDefinition, isSystemService } from "./system.js";
 import {
   listBagNames,
@@ -37,7 +37,6 @@ import {
 } from "./hosting/publish.js";
 
 export async function prepareBagRegistry(): Promise<void> {
-  const { traits } = await import("@barry-rocks/identities-bag");
   let names: string[] = [];
   const previous = process.env.BARRY_CONFIG_ALLOW_EMPTY;
   process.env.BARRY_CONFIG_ALLOW_EMPTY = "1";
@@ -55,7 +54,7 @@ export async function prepareBagRegistry(): Promise<void> {
       // stale one names a folder that no longer exists. Only such a relative
       // row is Barry's to rewrite; an absolute or ~ path is a user's override
       // of a builtin name (the row keeps its builtin flag), and stays.
-      const { getBag, upsertBag } = await import("../bags/registration.js");
+      const { getBag, upsertBag, deleteBag } = await import("../bags/registration.js");
       const shippedPaths = discoverBuiltinBags().local;
       for (const [name, source] of Object.entries(shippedRegistryEntries())) {
         const row = names.includes(name) ? await getBag(name) : null;
@@ -67,13 +66,15 @@ export async function prepareBagRegistry(): Promise<void> {
         const anchoredHere = storedPath !== undefined && !isAbsolute(storedPath) && !storedPath.startsWith("~");
         if (row.builtin && anchoredHere && storedPath !== shippedPaths[name]) await upsertBag(name, source);
       }
+      for (const name of names) {
+        if (name in shippedPaths) continue;
+        const row = await getBag(name);
+        if (!row) continue;
+        const storedPath = row.source.type === "local" ? row.source.path : undefined;
+        const anchoredHere = storedPath !== undefined && !isAbsolute(storedPath) && !storedPath.startsWith("~");
+        if (row.builtin && anchoredHere) await deleteBag(name);
+      }
     }
-    // Insert-when-absent, so a machine's tuned bound is never overwritten and a
-    // bound Barry starts shipping reaches an existing instance too.
-    const bags = await loadAllBags();
-    const builtinNames = new Set(Object.keys(shippedRegistryEntries()));
-    const declared = bags.filter(bag => builtinNames.has(bag.name) && (bag.manifest?.bounds || bag.manifest?.jobs || bag.name === "bash")).map(bag => bag.name);
-    await traits.syncBags(declared, { strict: true });
   } finally {
     if (previous === undefined) delete process.env.BARRY_CONFIG_ALLOW_EMPTY;
     else process.env.BARRY_CONFIG_ALLOW_EMPTY = previous;
@@ -381,7 +382,7 @@ async function publishInstalledHosting() {
     ),
   ) as Record<string, { localOnly?: boolean }>;
   const plan = resolveHosting(
-    readHostingPolicy(),
+    readHostingConfig(),
     Object.entries(resources)
       .filter(([, resource]) => resource.kind === "service")
       .map(([key, resource]) => ({

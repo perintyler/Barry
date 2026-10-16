@@ -5,7 +5,7 @@ import { WorkerCredentialRejected } from "./worker-client.js";
 
 interface Execution {
   connection: OwnerConnection; task: ActivityTask; abort: AbortController;
-  nextHeartbeat: number; outcome?: Outcome; rejected: boolean; maintaining: boolean;
+  nextHeartbeat: number; outcome?: Outcome; rejected: boolean; maintaining: boolean; credentialRejected?: boolean;
 }
 
 export class ActivityWorker {
@@ -13,9 +13,11 @@ export class ActivityWorker {
   private stopped = false;
   private draining = false;
   private readonly lanes = new Set<OwnerConnection>();
+  private readonly retired = new Set<OwnerConnection>();
   private readonly requests = new Map<OwnerConnection, string>();
   private readonly nextPoll = new Map<OwnerConnection, number>();
   private readonly nextAdvertisement = new Map<OwnerConnection, number>();
+  private readonly advertisedCapacity = new Map<OwnerConnection, number>();
   private readonly failures = new Map<OwnerConnection, number>();
   private readonly pending = new Set<Promise<unknown>>();
   private reserved = 0;
@@ -40,8 +42,10 @@ export class ActivityWorker {
       try {
         if (execution.rejected) {
           if (execution.outcome) {
-            if (execution.connection.settlePhysical) await execution.connection.settlePhysical(token);
-            else await execution.connection.complete(token, execution.outcome);
+            if (!execution.credentialRejected) {
+              if (execution.connection.settlePhysical) await execution.connection.settlePhysical(token);
+              else await execution.connection.complete(token, execution.outcome);
+            }
             this.executions.delete(token);
           }
         } else if (execution.outcome) {
@@ -53,9 +57,9 @@ export class ActivityWorker {
           if (!live) { execution.rejected = true; execution.abort.abort(); }
         }
       } catch (error) {
-        // A revoked worker can neither heartbeat nor report: stop the effect now
-        // and forget the attempt; the owner retries it when its lease expires.
-        if (error instanceof WorkerCredentialRejected) { execution.rejected = true; execution.abort.abort(); this.executions.delete(token); }
+        // Retire communication authority immediately, but physical capacity only
+        // after the executor returns. Abort is a request, not proof of cessation.
+        if (error instanceof WorkerCredentialRejected) this.retire(execution.connection);
         this.options.onError?.(error);
       }
       finally { execution.maintaining = false; }
@@ -66,14 +70,16 @@ export class ActivityWorker {
     const connections = this.options.connections, claims: Promise<void>[] = [];
     for (let offset = 0; offset < connections.length; offset++) {
       const connection = connections[(this.cursor + offset) % connections.length];
-      if (this.lanes.has(connection) || (this.nextPoll.get(connection) ?? 0) > performance.now()) continue;
+      if (this.retired.has(connection) || this.lanes.has(connection) || (this.nextPoll.get(connection) ?? 0) > performance.now()) continue;
       this.lanes.add(connection);
       claims.push(this.track((async () => {
         try {
           const capacity = this.options.capacity ?? 4;
           const occupied = [...this.executions.values()].filter(execution => execution.connection === connection && !execution.rejected).length;
-          if ((this.nextAdvertisement.get(connection) ?? 0) <= performance.now()) {
-            await connection.advertise({ types: Object.keys(this.options.activities), labels: this.options.labels ?? {}, artifacts: this.options.artifacts ?? {}, capacity: Math.max(0, capacity - this.executions.size - this.reserved + occupied) });
+          const available = Math.max(0, capacity - this.executions.size - this.reserved + occupied);
+          if ((this.nextAdvertisement.get(connection) ?? 0) <= performance.now() || this.advertisedCapacity.get(connection) !== available) {
+            await connection.advertise({ types: Object.keys(this.options.activities), labels: this.options.labels ?? {}, artifacts: this.options.artifacts ?? {}, capacity: available });
+            this.advertisedCapacity.set(connection, available);
             this.nextAdvertisement.set(connection, performance.now() + 5000);
           }
           if (!this.stopped && !this.draining && this.executions.size + this.reserved < capacity) {
@@ -98,7 +104,7 @@ export class ActivityWorker {
               void this.track(this.execute(execution));
             } finally { this.reserved--; }
           }
-        } catch (error) { const failures = Math.min(5, (this.failures.get(connection) ?? 0) + 1); this.failures.set(connection, failures); this.nextPoll.set(connection, performance.now() + Math.min(5000, 250 * 2 ** failures)); this.options.onError?.(error); }
+        } catch (error) { if (error instanceof WorkerCredentialRejected) this.retire(connection); const failures = Math.min(5, (this.failures.get(connection) ?? 0) + 1); this.failures.set(connection, failures); this.nextPoll.set(connection, performance.now() + Math.min(5000, 250 * 2 ** failures)); this.options.onError?.(error); }
         finally { this.lanes.delete(connection); }
       })()));
     }
@@ -106,6 +112,14 @@ export class ActivityWorker {
     // A caller that awaits tick() must still be able to maintain healthy owners
     // while another lane is waiting on its transport deadline.
     await Promise.race([Promise.all(claims), new Promise(resolve => setTimeout(resolve, 5))]);
+  }
+
+  private retire(connection: OwnerConnection): void {
+    this.retired.add(connection);
+    for (const execution of this.executions.values()) {
+      if (execution.connection !== connection) continue;
+      execution.rejected = true; execution.credentialRejected = true; execution.abort.abort();
+    }
   }
 
   stop(): void {

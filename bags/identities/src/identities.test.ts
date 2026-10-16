@@ -28,7 +28,6 @@ vi.mock("./operations/effects.js", () => ({ announceIdentity: vi.fn(), refreshLi
 
 const { BarryClient } = await import("@barry-rocks/sdk/internal/client");
 const { createIdentitiesRouter } = await import("./identities.js");
-const { traitsRouter } = await import("./traits.js");
 const { boundsRouter } = await import("./bounds.js");
 const { identities } = await import("./operations/identities.js");
 const { bags } = await import("./operations/bags.js");
@@ -51,7 +50,6 @@ beforeAll(async () => {
   const app = express();
   app.use(express.json());
   app.use("/api/v1/identities", createIdentitiesRouter());
-  app.use("/api/v1/traits", traitsRouter);
   app.use("/api/v1/bounds", boundsRouter);
   server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
@@ -71,10 +69,8 @@ const yamlOf = (name: string) => parseYaml(readFileSync(join(getIdentityDir(name
 let counter = 0;
 
 describe("the identities API through the SDK client", () => {
-  it("creates a directory identity, and edits and clears its inline bound in identity.yaml", async () => {
+  it("creates a directory identity, and edits and clears its bounds in identity.yaml", async () => {
     const name = `api-${++counter}`;
-    await (await import("./config/bounds.js")).Bounds.upsertBound({ name: "readonly", bound: {} });
-    await (await import("./config/bounds.js")).Bounds.upsertBound({ name: "no-network", bound: {} });
     const created = await client().identities.create({ name, displayName: "Assistant", bounds: ["readonly"] });
     expect(created.identity).toMatchObject({ name, source: "file", displayName: "Assistant", bounds: ["readonly"] });
     expect(yamlOf(name)).toMatchObject({ displayName: "Assistant", bounds: ["readonly"] });
@@ -119,12 +115,12 @@ describe("the identities API through the SDK client", () => {
     },
   );
 
-  it("refuses unknown creation fields and an unknown trait before creating anything", async () => {
+  it("refuses unknown creation fields and retired traits before creating anything", async () => {
     const invalid = await fetch(`${baseUrl}/api/v1/identities`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "never", bound: { invalid: true } }) });
     expect(invalid.status).toBe(400);
-    const unknownTrait = await fetch(`${baseUrl}/api/v1/identities`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "never", traits: ["no-such-trait"] }) });
-    expect(unknownTrait.status).toBe(400);
-    expect((await unknownTrait.json()).error).toBe("unknown selected trait no-such-trait");
+    const retiredTraits = await fetch(`${baseUrl}/api/v1/identities`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "never", traits: ["no-such-trait"] }) });
+    expect(retiredTraits.status).toBe(400);
+    expect((await retiredTraits.json()).error).toBe("Invalid identity creation input");
     expect(await Identities.getByName(actorId, "never")).toBeUndefined();
   });
 
@@ -204,11 +200,9 @@ describe("the identities API through the SDK client", () => {
     expect(await client().identities.get("no-such-identity")).toBeNull();
   });
 
-  it("decodes the identity, trait, bound and available-bag lists through the SDK", async () => {
+  it("decodes the identity, bound and available-bag lists through the SDK", async () => {
     expect(await client().identities.list()).toEqual(expect.any(Array));
-    expect(await client().identities.traits()).toEqual(expect.any(Array));
     expect(await client().identities.bounds()).toEqual(expect.any(Array));
     expect(await client().identities.bags()).toEqual(expect.any(Array));
   });
-
 });

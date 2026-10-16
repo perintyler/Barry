@@ -1,3 +1,4 @@
+import { forgetSessionIdentity } from "@barry-rocks/sdk/stores";
 /** Expose SQLite operations through promise-returning public names annotated with the independent sessions contract so implementation drift fails at this boundary; see docs/decisions/0013-session-store-and-mcp-admission.md. */
 
 import type * as contract from "./sessions-contract.js";
@@ -36,14 +37,14 @@ export const getProviderSessionsBySession: contract.GetProviderSessionsBySession
   sessionId,
 ) => reads.getProviderSessionsBySessionSqlite(sessionId);
 export const getSessionByProviderSessionId: contract.GetSessionByProviderSessionId = async (
-  providerSessionId,
-) => reads.getSessionByProviderSessionIdSqlite(providerSessionId);
+  harnessSessionId,
+) => reads.getSessionByProviderSessionIdSqlite(harnessSessionId);
 export const createProviderSession: contract.CreateProviderSession = async (data) =>
   writes.createProviderSessionSqlite(data);
 export const endProviderSessionByProviderId: contract.EndProviderSessionByProviderId = async (
-  providerSessionId,
+  harnessSessionId,
 ) => {
-  writes.endProviderSessionByProviderIdSqlite(providerSessionId);
+  writes.endProviderSessionByProviderIdSqlite(harnessSessionId);
 };
 
 
@@ -102,11 +103,13 @@ export const endSession: contract.EndSession = async (id, endReason) => {
   writes.endSessionSqlite(id, endReason);
 };
 export const deleteSession: contract.DeleteSession = async (id) => {
+  forgetSessionIdentity(id);
   writes.deleteSessionSqlite(id);
 };
 export const deleteSessionsByIdentity: contract.DeleteSessionsByIdentity = async (identityId) =>
   writes.deleteSessionsByIdentitySqlite(identityId);
 export const archiveSession: contract.ArchiveSession = async (id) => {
+  forgetSessionIdentity(id);
   writes.archiveSessionSqlite(id);
 };
 export const archiveAllClosedSessions: contract.ArchiveAllClosedSessions = async () =>
@@ -243,5 +246,3 @@ export const Processes = {
 
 /** Durable workflow/session binding journal, owned by the Sessions store. */
 export const workflowSessionJournal = workflowTurnsStore;
-
-export const listBoundSessions = async () => reads.listBoundSessionsSqlite();

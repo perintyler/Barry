@@ -20,9 +20,9 @@
       "types": "./dist/core.d.ts",
       "import": "./dist/core.js"
     },
-    "./local/catalog": {
-      "types": "./dist/local/catalog.d.ts",
-      "import": "./dist/local/catalog.js"
+    "./local/index-store": {
+      "types": "./dist/local/index-store.d.ts",
+      "import": "./dist/local/index-store.js"
     },
     "./blobs": {
       "types": "./dist/blobs.d.ts",

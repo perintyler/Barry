@@ -18,7 +18,7 @@ import { acpHosted, type AcpToolCall, type AcpToolIdentity } from "@barry-rocks/
 import { parseModelRef } from "@barry-rocks/sdk/ids";
 import type { Session, SessionConfig } from "@barry-rocks/sdk/sessions";
 import { agentsMdFor, writeCursorSessionWorkspace } from "../workspace.js";
-import { cursorEnv, keepUserHome, PINNED_LAUNCH, prepareCursorHome, requireCursorKey, resolveCursorAgent, unpinnedWarning } from "../runtime.js";
+import { cursorEnv, keepUserHome, PINNED_LAUNCH, prepareCursorHome, requireCursorKey, resolveCursorAgent } from "../runtime.js";
 
 /** What a cursor session takes beyond the shared config, in `SessionConfig.options`. */
 interface CursorOptions {
@@ -59,7 +59,7 @@ export async function startCursorHosted(config: SessionConfig, mode: Mode): Prom
     { mcpServers: {} },
     { agentsMd: agentsMdFor(config), allowedNativeTools: config.allowedNativeTools, deniedTools: config.deniedTools },
   );
-  const agent = resolveCursorAgent();
+  const agent = resolveCursorAgent(undefined, config.env);
   const sandbox = (config.options as CursorOptions | undefined)?.sandbox;
   const hosted = acpHosted({
     ...mode,
@@ -95,7 +95,7 @@ export async function startCursorHosted(config: SessionConfig, mode: Mode): Prom
   }
   return {
     ...session,
-    warnings: [...(session.warnings ?? []), ...(agent.pinned ? [] : [unpinnedWarning()])],
+    warnings: [...(session.warnings ?? [])],
     async close() {
       await session.close();
       rmSync(workspaceDir, { recursive: true, force: true });

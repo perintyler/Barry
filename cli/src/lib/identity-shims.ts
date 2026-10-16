@@ -1,7 +1,7 @@
 import { openInstance, shellWord, installedCommand, installedProgramPath } from "@barry-rocks/sdk/internal/services";
 import { barryAppSupportDir } from "@barry-rocks/sdk/services";
 import { identityRecords } from "@barry-rocks/identities-bag";
-import type { IdentityBinding } from "../scope.js";
+import type { IdentityBinding } from "../target.js";
 /** Identity shims pass a stable --identity-binding to the installed CLI so every command shares the same selection. */
 
 import { accessSync, chmodSync, constants, lstatSync, realpathSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";

@@ -1,6 +1,6 @@
 # @barry-rocks/session-codex
 
-Custom endpoint URLs must implement the OpenAI Responses API. The pinned Codex
+Custom endpoint URLs must implement the OpenAI Responses API. The recommended Codex
 build no longer accepts `wire_api = "chat"`; a Chat Completions-only endpoint
 cannot be used directly. Configuration loading does not establish that a backend
 implements Responses: verify a real turn against the selected backend.
@@ -34,3 +34,7 @@ The daily `codex/home-retention` job reads session closure through the authentic
 ## Connection, environment and modes
 
 Connects to the selected Codex CLI app-server over a local socket. Supported modes: hosted, instrumented and guest; the default is hosted. Barry supplies the selected identity’s model credentials and a private `CODEX_HOME`; do not substitute a shared vendor home. Registration is separate from execution and grants no credentials. See the [adapter declaration](src/adapter.ts) and its requirements for the selected build’s actual guarantees.
+
+Hosted cancellation follows the [shared Session contract](../../../sdk/src/sessions/README.md):
+interrupt acknowledges a request; the runtime owns the completion deadline. Close aborts startup,
+releases owned resources, and ends an open reader once. Shared conformance tests exercise this adapter.

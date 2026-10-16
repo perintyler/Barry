@@ -1,5 +1,5 @@
 import { toolDefinitions, applyToolVisibility } from "@barry-rocks/sdk/internal/tools";
-import { cliName } from "../scope.js";
+import { cliName } from "../target.js";
 import { shellWord } from "@barry-rocks/sdk/internal/services";
 
 /**

@@ -1,163 +1,286 @@
+import type { AllowDeny, Bound } from "./types.js";
+
+function unionArrays<T extends string>(a?: readonly T[], b?: readonly T[]): T[] | undefined {
+  const combined = [...(a ?? []), ...(b ?? [])];
+  return combined.length > 0 ? [...new Set(combined)] : undefined;
+}
+
+function globToRegExp(pattern: string): RegExp {
+  const escaped = pattern
+    .split("**")
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*"))
+    .join(".*");
+  return new RegExp(`^${escaped}$`);
+}
+
 /**
- * Bound merging — union of denials across every source that contributes
- * restrictions to a session (trait bounds, named bounds, barry bounds,
- * inline session bounds).
- *
- * Bounds only ever take away, so merging is a union: if any source denies
- * something, the merged bound denies it. The two exceptions are the allowlists
- * (`network.allowDomains`, `files.allowOnly`), where the restrictive direction
- * is intersection, and `network.enforce`, where the most restrictive level wins.
- *
- * This lives in agent-bound (not in a server) because both the MCP server
- * (app-level guards) and the API server (sandbox barry generation) must
- * resolve the *same* effective bound. Divergence between them silently
- * downgrades enforcement.
+ * True when every candidate matched by `narrow` is also matched by `broad`.
  */
+function patternCovers(broad: string, narrow: string): boolean {
+  if (broad === narrow) return true;
+  if (broad === "*" || broad === "**" || broad === "*:*") return true;
 
-import type { Bound } from "./types.js";
+  if (broad.endsWith("/**")) {
+    const prefix = broad.slice(0, -3).replace(/\/+$/, "");
+    if (narrow === prefix || narrow.startsWith(`${prefix}/`)) return true;
+  }
+  if (broad.endsWith("/*")) {
+    const prefix = broad.slice(0, -2).replace(/\/+$/, "");
+    if (narrow.startsWith(`${prefix}/`)) {
+      const rest = narrow.slice(prefix.length + 1);
+      if (!rest.includes("/") && rest !== "**") return true;
+    }
+  }
+  if (broad.startsWith("*.") && !broad.slice(2).includes("*")) {
+    const suffix = broad.slice(1); // ".example.com"
+    if (narrow.endsWith(suffix) && narrow.length > suffix.length) return true;
+  }
+  if (!broad.includes(":") && narrow.startsWith(`${broad}:`)) {
+    return true;
+  }
+  if (broad.endsWith(":*") && narrow.startsWith(broad.slice(0, -1))) {
+    return true;
+  }
+  if (broad.startsWith("*:") && narrow.endsWith(broad.slice(1))) {
+    return true;
+  }
+  if (!narrow.includes("*")) {
+    return globToRegExp(broad).test(narrow);
+  }
+  return false;
+}
 
-function mergeNativeTools(a?: Record<string, string[]>, b?: Record<string, string[]>): Record<string, string[]> | undefined {
+function fixedPrefix(pattern: string): string {
+  const idx = pattern.indexOf("*");
+  return idx === -1 ? pattern : pattern.slice(0, idx);
+}
+
+/**
+ * True when two glob patterns could potentially match a common string even
+ * though neither syntactically subsumes the other.
+ */
+function globsCanOverlap(a: string, b: string): boolean {
+  if (!a.includes("*") && !b.includes("*")) return a === b;
+  const prefA = fixedPrefix(a);
+  const prefB = fixedPrefix(b);
+  if (prefA && prefB && !prefA.startsWith(prefB) && !prefB.startsWith(prefA)) {
+    return false;
+  }
+  return true;
+}
+
+function clausesOf(rule?: AllowDeny): string[][] | undefined {
+  if (!rule) return undefined;
+  if (rule.allowClauses?.length) return rule.allowClauses.map((c) => [...new Set(c)]);
+  if (rule.allow !== undefined) return [[...new Set(rule.allow)]];
+  return undefined;
+}
+
+function intersectTwoClauses(
+  clauseA: string[],
+  clauseB: string[],
+): { collapsed: string[] } | { conjunctive: [string[], string[]] } {
+  if (clauseA.length === 0 || clauseB.length === 0) {
+    return { collapsed: [] };
+  }
+  const narrowed: string[] = [];
+  let hasOrthogonalOverlap = false;
+
+  for (const a of clauseA) {
+    for (const b of clauseB) {
+      if (patternCovers(a, b)) {
+        narrowed.push(b);
+      } else if (patternCovers(b, a)) {
+        narrowed.push(a);
+      } else if (globsCanOverlap(a, b)) {
+        hasOrthogonalOverlap = true;
+      }
+    }
+  }
+
+  if (!hasOrthogonalOverlap) {
+    return { collapsed: [...new Set(narrowed)] };
+  }
+  return { conjunctive: [[...new Set(clauseA)], [...new Set(clauseB)]] };
+}
+
+export function mergeAllowDeny(a?: AllowDeny, b?: AllowDeny): AllowDeny | undefined {
   if (!a && !b) return undefined;
-  return Object.fromEntries([...new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])].map((id) => [id, unionStrings(a?.[id], b?.[id]) ?? []]));
-}
+  const deny = unionArrays(a?.deny, b?.deny);
+  const clausesA = clausesOf(a);
+  const clausesB = clausesOf(b);
 
-function unionStrings(a?: string[], b?: string[]): string[] | undefined {
-  if (!a?.length && !b?.length) return undefined;
-  return Array.from(new Set([...(a ?? []), ...(b ?? [])]));
-}
+  let allow: string[] | undefined;
+  let allowClauses: string[][] | undefined;
 
-function mergeBash(
-  base?: Bound["bash"],
-  override?: Bound["bash"],
-): Bound["bash"] | undefined {
-  if (!base && !override) return undefined;
-  const deny = unionStrings(base?.deny, override?.deny);
-  const denyPrograms = unionStrings(base?.denyPrograms, override?.denyPrograms);
-  const merged: NonNullable<Bound["bash"]> = {};
-  if (deny) merged.deny = deny;
-  if (denyPrograms) merged.denyPrograms = denyPrograms;
-  // Undefined-when-empty, matching mergeFiles/mergeNetwork: two bounds that
-  // both carry empty bash arrays must serialize the same as a bound with no
-  // bash at all, so equality/fingerprinting (scopeFingerprint) does not see
-  // `{bash:{}}` and absent-bash as different scopes.
-  return Object.keys(merged).length > 0 ? merged : undefined;
-}
+  if (clausesA === undefined && clausesB === undefined) {
+    allow = undefined;
+  } else if (clausesA === undefined) {
+    if (clausesB!.length === 1) {
+      allow = clausesB![0];
+    } else {
+      allow = clausesB![0];
+      allowClauses = clausesB;
+    }
+  } else if (clausesB === undefined) {
+    if (clausesA.length === 1) {
+      allow = clausesA[0];
+    } else {
+      allow = clausesA[0];
+      allowClauses = clausesA;
+    }
+  } else {
+    const combinedClauses = [...clausesA, ...clausesB];
+    if (combinedClauses.some((c) => c.length === 0)) {
+      allow = [];
+    } else if (clausesA.length === 1 && clausesB.length === 1) {
+      const intersected = intersectTwoClauses(clausesA[0], clausesB[0]);
+      if ("collapsed" in intersected) {
+        allow = intersected.collapsed;
+      } else {
+        allow = intersected.conjunctive[0];
+        allowClauses = intersected.conjunctive;
+      }
+    } else {
+      allow = combinedClauses[0];
+      allowClauses = combinedClauses;
+    }
+  }
 
-/**
- * Merge the `nodes` allow/deny pair, or undefined when neither side carries
- * one. Emitting `{ allow: undefined, deny: undefined }` whenever either side
- * merely mentions nodes left two equivalent bounds with different shapes.
- */
-function mergeNodes(
-  base?: Bound["nodes"],
-  override?: Bound["nodes"],
-): Bound["nodes"] | undefined {
-  if (!base && !override) return undefined;
-  const allow = intersectAllowlists(base?.allow, override?.allow);
-  const deny = unionStrings(base?.deny, override?.deny);
-  const merged: NonNullable<Bound["nodes"]> = {};
-  if (allow !== undefined) merged.allow = allow;
-  if (deny) merged.deny = deny;
-  return Object.keys(merged).length > 0 ? merged : undefined;
-}
-
-function mergeFiles(
-  base?: Bound["files"],
-  override?: Bound["files"],
-): Bound["files"] | undefined {
-  if (!base && !override) return undefined;
-  const deny = unionStrings(base?.deny, override?.deny);
-  const allowOnly = intersectAllowlists(base?.allowOnly, override?.allowOnly);
-  const merged: NonNullable<Bound["files"]> = {};
-  if (deny) merged.deny = deny;
-  if (allowOnly) merged.allowOnly = allowOnly;
-  return Object.keys(merged).length > 0 ? merged : undefined;
-}
-
-/**
- * Intersect two allowlists.
- *
- * Every other bound field unions, because bounds only ever subtract and a
- * longer deny-list is more restrictive. An allowlist subtracts by *shrinking*,
- * so the restrictive direction is the intersection: the merged bound may permit
- * only what BOTH sources permit.
- *
- * `undefined` means "this source expresses no opinion" and is the identity
- * element, so it must not collapse the other side to empty. An explicit `[]`
- * does mean "allow nothing" and correctly intersects to empty.
- */
-function intersectAllowlists(a?: string[], b?: string[]): string[] | undefined {
-  if (!a && !b) return undefined;
-  if (!a) return b;
-  if (!b) return a;
-  const bSet = new Set(b);
-  return a.filter((entry) => bSet.has(entry));
-}
-
-export function mergeNetwork(
-  base?: Bound["network"],
-  override?: Bound["network"],
-): Bound["network"] | undefined {
-  if (!base && !override) return undefined;
-  const actions = unionStrings(base?.actions, override?.actions);
-  const domains = unionStrings(base?.domains, override?.domains);
-  const allowDomains = intersectAllowlists(base?.allowDomains, override?.allowDomains);
-  // enforce: most restrictive wins — "sandbox" > "guard" > undefined
-  const enforce = base?.enforce === "sandbox" || override?.enforce === "sandbox"
-    ? "sandbox" as const
-    : base?.enforce ?? override?.enforce;
-  const merged: NonNullable<Bound["network"]> = {};
-  if (actions) merged.actions = actions;
-  if (domains) merged.domains = domains;
-  // Preserve an empty array: "allow nothing" is a real, restrictive statement.
-  if (allowDomains) merged.allowDomains = allowDomains;
-  if (enforce) merged.enforce = enforce;
-  return Object.keys(merged).length > 0 ? merged : undefined;
-}
-
-export function mergeBounds(
-  base: Bound | null,
-  override: Bound | null,
-): Bound | null {
-  if (!base && !override) return null;
-  if (!base) { const { name: _name, description: _description, ...rules } = override!; return rules; }
-  if (!override) { const { name: _name, description: _description, ...rules } = base; return rules; }
+  if (allow === undefined && deny === undefined && allowClauses === undefined) {
+    return undefined;
+  }
   return {
-    nodes: mergeNodes(base.nodes, override.nodes),
-    nativeTools: mergeNativeTools(base.nativeTools, override.nativeTools),
-    deniedTools: unionStrings(base.deniedTools, override.deniedTools),
-    deniedAccess: unionStrings(base.deniedAccess, override.deniedAccess),
-    files: mergeFiles(base.files, override.files),
-    bash: mergeBash(base.bash, override.bash),
-    network: mergeNetwork(base.network, override.network),
+    ...(allow !== undefined ? { allow } : {}),
+    ...(deny !== undefined ? { deny } : {}),
+    ...(allowClauses !== undefined ? { allowClauses } : {}),
   };
 }
 
-/**
- * True if a bound carries any actual restriction (not just `{}`).
- *
- * `network.enforce` counts: a bound of `{network:{enforce:"sandbox"}}` is a
- * real instruction to escalate enforcement, and dropping it here would strip
- * that escalation before it ever reached the merge.
- */
-export function boundHasContent(bound?: Bound): boolean {
+function normalizeInputRule(rule: unknown): AllowDeny | undefined {
+  if (typeof rule === "string") return { allow: [rule] };
+  if (Array.isArray(rule)) return { allow: rule.map(String) };
+  if (rule && typeof rule === "object") {
+    const obj = rule as AllowDeny;
+    const allow = obj.allow !== undefined ? [...new Set(obj.allow)] : undefined;
+    const deny = obj.deny?.length ? [...new Set(obj.deny)] : undefined;
+    const allowClauses = obj.allowClauses?.length ? obj.allowClauses.map((c) => [...new Set(c)]) : undefined;
+    if (allow === undefined && deny === undefined && allowClauses === undefined) return undefined;
+    return {
+      ...(allow !== undefined ? { allow } : {}),
+      ...(deny !== undefined ? { deny } : {}),
+      ...(allowClauses !== undefined ? { allowClauses } : {}),
+    };
+  }
+  return undefined;
+}
+
+export function mergeInputs(
+  a?: Record<string, Record<string, AllowDeny>>,
+  b?: Record<string, Record<string, AllowDeny>>,
+): Record<string, Record<string, AllowDeny>> | undefined {
+  if (!a && !b) return undefined;
+  const toolIds = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})]);
+  const merged: Record<string, Record<string, AllowDeny>> = {};
+  for (const toolId of toolIds) {
+    const paramsA = a?.[toolId];
+    const paramsB = b?.[toolId];
+    const paramNames = new Set([...Object.keys(paramsA ?? {}), ...Object.keys(paramsB ?? {})]);
+    const mergedParams: Record<string, AllowDeny> = {};
+    for (const param of paramNames) {
+      const rule = mergeAllowDeny(
+        normalizeInputRule(paramsA?.[param]),
+        normalizeInputRule(paramsB?.[param]),
+      );
+      if (rule) mergedParams[param] = rule;
+    }
+    if (Object.keys(mergedParams).length > 0) {
+      merged[toolId] = mergedParams;
+    }
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+export function mergeNetwork(
+  a?: Bound["network"],
+  b?: Bound["network"],
+): Bound["network"] | undefined {
+  if (!a && !b) return undefined;
+
+  const base = mergeAllowDeny(a, b);
+  const enforce =
+    a?.enforce === "sandbox" || b?.enforce === "sandbox"
+      ? "sandbox"
+      : a?.enforce ?? b?.enforce;
+
+  if (!base && !enforce) {
+    return undefined;
+  }
+  return {
+    ...(base ?? {}),
+    ...(enforce ? { enforce } : {}),
+  };
+}
+
+function hasAllowDeny(dim?: AllowDeny): boolean {
+  return Boolean(
+    dim &&
+      (dim.allow !== undefined ||
+        (dim.allowClauses && dim.allowClauses.length > 0) ||
+        (dim.deny && dim.deny.length > 0)),
+  );
+}
+
+export function boundHasContent(bound?: Bound | null): boolean {
   if (!bound) return false;
   return Boolean(
-    bound.nodes?.allow !== undefined || Boolean(bound.nodes?.deny?.length) ||
-    Object.values(bound.nativeTools ?? {}).some((tools) => tools.length > 0) ||
-      bound.deniedTools?.length ||
-      bound.deniedAccess?.length ||
-      bound.files?.deny?.length ||
-      // An allowlist is content even when empty — `allowOnly: []` means
-      // "permit nothing", the most restrictive statement available.
-      bound.files?.allowOnly !== undefined ||
-      bound.bash?.deny?.length ||
-      bound.bash?.denyPrograms?.length ||
-      bound.network?.actions?.length ||
-      bound.network?.domains?.length ||
-      // An allowlist is content even when empty — `allowDomains: []` means
-      // "permit nothing", the most restrictive statement available.
-      bound.network?.allowDomains !== undefined ||
-      bound.network?.enforce,
+    hasAllowDeny(bound.tools) ||
+      (bound.inputs &&
+        Object.values(bound.inputs).some((paramRules) =>
+          Object.values(paramRules).some((rule) => hasAllowDeny(rule)),
+        )) ||
+      hasAllowDeny(bound.files) ||
+      hasAllowDeny(bound.bash) ||
+      hasAllowDeny(bound.network) ||
+      bound.network?.enforce ||
+      hasAllowDeny(bound.nodes),
   );
+}
+
+function mergeTwoBounds(a?: Bound | null, b?: Bound | null): Bound | null {
+  if (!a && !b) return null;
+
+  const tools = mergeAllowDeny(a?.tools, b?.tools);
+  const inputs = mergeInputs(a?.inputs, b?.inputs);
+  const files = mergeAllowDeny(a?.files, b?.files);
+  const bash = mergeAllowDeny(a?.bash, b?.bash);
+  const network = mergeNetwork(a?.network, b?.network);
+  const nodes = mergeAllowDeny(a?.nodes, b?.nodes);
+
+  const merged: Bound = {
+    ...(tools ? { tools } : {}),
+    ...(inputs ? { inputs } : {}),
+    ...(files ? { files } : {}),
+    ...(bash ? { bash } : {}),
+    ...(network ? { network } : {}),
+    ...(nodes ? { nodes } : {}),
+  };
+
+  return boundHasContent(merged) ? merged : null;
+}
+
+/**
+ * Merge any number of bounds into a single effective `Bound`.
+ *
+ * Across all 6 dimensions (`tools`, `inputs`, `files`, `bash`, `network`, `nodes`),
+ * `deny` lists union and `allow` lists intersect (preserving conjunctive clauses
+ * when glob patterns are orthogonal). Returns `null` when the merged result has
+ * no restrictions.
+ */
+export function mergeBounds(...bounds: (Bound | null | undefined)[]): Bound | null {
+  let acc: Bound | null = null;
+  for (const bound of bounds) {
+    acc = mergeTwoBounds(acc, bound);
+  }
+  return acc;
 }

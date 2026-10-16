@@ -80,7 +80,7 @@ export function identityRouting<T extends object>(store: T): T {
                 }
                 if (identity)
                     return withStoreContext({ identity }, () => operation(...args));
-                if (["listBoundSessions", "listSessions", "getActiveSessions", "searchSessions", "searchMessages", "getSessionStats", "markCrashedSessions", "archiveAllClosedSessions"].includes(method)) {
+                if (["listSessions", "getActiveSessions", "searchSessions", "searchMessages", "getSessionStats", "markCrashedSessions", "archiveAllClosedSessions"].includes(method)) {
                     const partitions = sessionPartitions(method === "listSessions" ? input?.access : undefined, method === "listSessions" && typeof input?.identityId === "number" ? input.identityId : undefined);
                     const results = [await operation(...args)];
                     for (const entry of partitions)

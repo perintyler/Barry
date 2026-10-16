@@ -9,7 +9,7 @@ import { CODEX_REQUIREMENTS } from "../modes.js";
 
 describe.runIf(process.env.BARRY_CODEX_LIVE === "1")("Codex stdio configuration, live", () => {
   it("loads private environment references through the pinned vendor and completes MCP initialization", async () => {
-    expect(execFileSync("codex", ["--version"], { encoding: "utf8" })).toContain(CODEX_REQUIREMENTS.binary.pin.version);
+    expect(execFileSync("codex", ["--version"], { encoding: "utf8" })).toContain(process.env.BARRY_CODEX_LIVE_VERSION ?? CODEX_REQUIREMENTS.binary.recommendedVersion!);
     const root = mkdtempSync(join(tmpdir(), "cx-stdio-live-"));
     const marker = join(root, "observed.json");
     const fixture = join(root, "server.cjs");

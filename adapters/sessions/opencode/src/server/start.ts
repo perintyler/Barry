@@ -1,3 +1,5 @@
+import { resolveHarnessCommand } from "@barry-rocks/sdk/adapters/harnesses";
+import { OPENCODE_REQUIREMENTS } from "../modes.js";
 /**
  * The server a hosted opencode session runs on.
  *
@@ -27,7 +29,7 @@ export function openCodeEngineSpec(sessionId: string, cwd: string, env: Record<s
     needsPassword: true,
     passwordEnvVar: "OPENCODE_SERVER_PASSWORD",
     command: (address) => ({
-      command: "opencode",
+      command: resolveHarnessCommand(OPENCODE_REQUIREMENTS, env),
       args: serveArgs(Number(address.split(":").pop())),
       // Config on the SERVER. An attaching client's copy is ignored — that
       // asymmetry is E6.

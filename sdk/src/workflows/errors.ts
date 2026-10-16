@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PayloadLimit } from "./types.js";
 
 export class WorkflowError extends Error {
-  constructor(readonly code: string, message: string, readonly status = 400, readonly retryable = false) { super(message); }
+  constructor(readonly code: string, message: string, readonly status = 400, readonly retryable = false, readonly admissionDisposition?: "not-accepted") { super(message); }
 }
 type SqliteFault = { code?: string; errcode?: number; message?: string };
 function sqliteFault(error: SqliteFault | null): boolean {
@@ -16,7 +16,7 @@ function sqlitePrimary(error: SqliteFault | null): number {
 }
 export function publicError(error: unknown) {
   const requestId = randomUUID();
-  if (error instanceof WorkflowError) return { status: error.status, body: { code: error.code, message: error.message, error: error.message, retryable: error.retryable, requestId } };
+  if (error instanceof WorkflowError) return { status: error.status, body: { code: error.code, message: error.message, error: error.message, retryable: error.retryable, requestId, ...(error.admissionDisposition ? { admission_disposition: error.admissionDisposition } : {}) } };
   if (error instanceof PayloadLimit) return { status: 413, body: { code: "PayloadTooLarge", message: error.message, error: error.message, retryable: false, requestId } };
   const fault = error as { code?: string; errcode?: number; message?: string } | null;
   if (sqliteFault(fault)) {

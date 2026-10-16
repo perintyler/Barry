@@ -59,9 +59,9 @@ it("maps recurring schedules and scheduler health from the existing route", asyn
   expect(String(fetch.mock.calls[0][0])).toBe("http://example.test/api/v1/schedules");
 });
 
-it("forwards the one-off query", async () => {
+it("forwards the at-schedule query", async () => {
   const fetch = remote({ schedules: [] });
-  await Barry.oneOffs({ status: "pending", limit: 7 });
+  await Barry.atSchedules({ status: "pending", limit: 7 });
   const query = new URL(String(fetch.mock.calls[0][0])).searchParams;
   expect(query.get("status")).toBe("pending");
   expect(query.get("limit")).toBe("7");
@@ -80,12 +80,12 @@ it("forwards a numeric action identity as identity_id", async () => {
 });
 
 const wireIdentity = {
-  id: 3, name: "bux", token: "identity-token", vaultEmail: null, isDefault: false, createdAt: "2026-09-24T00:00:00Z", lastUsedAt: null, displayName: null, bags: [], traits: [], bounds: [], bound: null,
+  id: 3, name: "bux", token: "identity-token", vaultEmail: null, isDefault: false, createdAt: "2026-09-24T00:00:00Z", lastUsedAt: null, displayName: null, bags: [], bounds: [], bound: null,
   adapters: {}, envKeys: [],
 };
 const wireSession = {
   id: "s1", name: "Session", systemPrompt: null, summary: null, repoPath: null, identityId: 3,
-  identitySource: null, status: "running", traits: [], bound: null, pinned: false, useWorktree: false,
+  identitySource: null, status: "running", bags: [], bounds: [], bound: null, pinned: false, useWorktree: false,
   worktreeStatus: null, worktreePath: null, baseRepoPath: null, source: null, provider: "claude",
   model: null, createdAt: "2026-09-24T00:00:00Z", startedAt: null,
 };
@@ -224,18 +224,18 @@ it("refuses lastChanges over HTTP", async () => {
   expect(fetch).not.toHaveBeenCalled();
 });
 
-const wireOneOff = { id: "o1", bag: "ops", action: "ops:task", inputs: {}, dueAt: "2026-10-10T00:00:00Z", createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-01T00:00:00Z", status: "pending", reason: null, idempotencyKey: null, timeoutS: 600, retryAttempts: 3, failures: 0, recoveries: 0 };
-it("forwards retry attempts and the one-off bag filter", async () => {
-  const fetch = remote({ schedule: wireOneOff }, { schedules: [wireOneOff] });
-  expect(await Barry.scheduleOnce({ action: "ops:task", dueAt: wireOneOff.dueAt, attempts: 3 })).toMatchObject({ retryAttempts: 3 });
+const wireAtSchedule = { id: "o1", bag: "ops", action: "ops:task", inputs: {}, dueAt: "2026-10-10T00:00:00Z", createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-01T00:00:00Z", status: "pending", reason: null, idempotencyKey: null, timeoutS: 600, retryAttempts: 3, failures: 0, recoveries: 0 };
+it("forwards retry attempts and the at-schedule bag filter", async () => {
+  const fetch = remote({ schedule: wireAtSchedule }, { schedules: [wireAtSchedule] });
+  expect(await Barry.scheduleAt({ action: "ops:task", dueAt: wireAtSchedule.dueAt, attempts: 3 })).toMatchObject({ retryAttempts: 3 });
   expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({ retry: { attempts: 3 } });
-  await Barry.oneOffs({ bag: "ops" });
+  await Barry.atSchedules({ bag: "ops" });
   expect(new URL(String(fetch.mock.calls[1][0])).searchParams.get("bag")).toBe("ops");
 });
-it("returns the one-off after requesting cancellation", async () => {
-  const after = { ...wireOneOff, status: "cancelled", reason: "cancelled" };
+it("returns the at-schedule after requesting cancellation", async () => {
+  const after = { ...wireAtSchedule, status: "cancelled", reason: "cancelled" };
   const fetch = remote({ cancelled: true, status: "cancelled" }, { schedule: after });
-  const handle = Barry.oneOff("o1");
+  const handle = Barry.atSchedule("o1");
   expect(handle.id).toBe("o1");
   expect(fetch).not.toHaveBeenCalled();
   expect(await handle.cancel()).toMatchObject(after);

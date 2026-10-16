@@ -98,8 +98,8 @@ assert.deepEqual(sessionStore.installed(), []);` : `const model = ${vendor === "
 assert.equal(model.ref, ${JSON.stringify(`${vendor === "systemone" ? "fixture" : vendor}/fixture-model`)});
 assert.equal(typeof model.${kind === "completion" ? "complete" : kind === "embedding" ? "embed" : "decide"}, 'function');`}
 ${kind !== "session" && vendor !== "systemone" ? `
-const { loadModelProviders } = await import('@barry-rocks/sdk/adapters/models');
-const store = loadModelProviders({file:${JSON.stringify(join(consumer, "model-providers.json"))}});
+const { loadModelVendors } = await import('@barry-rocks/sdk/adapters/models');
+const store = loadModelVendors({file:${JSON.stringify(join(consumer, "model-vendors.json"))}});
 assert.deepEqual(store.installed(), []);
 await store.add(${JSON.stringify(join(consumer, "node_modules", name))});
 assert.equal(store.installed()[0].packageName, ${JSON.stringify(name)});

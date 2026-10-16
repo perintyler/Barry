@@ -80,3 +80,20 @@ export function decide(nextFireAt: Date | null, catchUp: "none" | "once", now: D
 export function nextAfterFiring(trigger: ScheduleTrigger, now: Date): Date | null {
   return nextFireAfter(trigger, now);
 }
+
+/**
+ * How many slots were due from `from` (itself due) through `to`, counting at
+ * most `max`. A catch-up folds these into one occurrence; the count is what
+ * the occurrence records, bounded so a year asleep costs `max` steps, not a
+ * walk over every minute.
+ */
+export function countDueSlots(trigger: ScheduleTrigger, from: Date, to: Date, max: number): number {
+  if (from.getTime() > to.getTime()) return 0;
+  let count = 1;
+  let cursor = nextFireAfter(trigger, from);
+  while (cursor && cursor.getTime() <= to.getTime() && count < max) {
+    count += 1;
+    cursor = nextFireAfter(trigger, cursor);
+  }
+  return count;
+}

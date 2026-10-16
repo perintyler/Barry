@@ -20,6 +20,7 @@ export interface SessionUpdate {
   result?: string;
   error?: string;
   status?: string;
+  metadata?: { timing?: Record<string, number>; code?: string };
 }
 
 export interface HostedSessionApi {
@@ -28,7 +29,8 @@ export interface HostedSessionApi {
    * harness. Resolves to a reason when the API refused it, null when taken.
    */
   send(content: string, first: boolean): Promise<string | null>;
-  interrupt(): Promise<void>;
+  interrupt(): Promise<void | {message?:string}>;
+  stop?(): Promise<void>;
 }
 
 export interface HostedTerminalIO {
@@ -59,26 +61,35 @@ export function runHostedTerminal(
   /** Set while a turn this terminal sent is running: how its end is told. */
   const running: { end: (() => void) | null } = { end: null };
   let answerShown = false;
+  const stream={bytes:0,thinking:"",thinkingVisible:false};
+  let turnNumber=0;
+  let interruptRequested=false;
+  let stopped=false;
+  let stopPending:Promise<void>|null=null;
+  let finishStop!:(code:number)=>void;
+  const stopDone=new Promise<number>(resolve=>{finishStop=resolve;});
   /** What this terminal sent, so the API's echo of it is not printed again as someone else's. */
   const sentHere: string[] = [];
   let failed = false;
 
   void (async () => {
     for await (const update of updates) {
-      const shown = render(update, { answerShown, sentHere });
+      const shown = render(update, { answerShown, sentHere, stream });
       if (shown) io.write(shown);
       if (update.type === "text" && update.role !== "user" && update.content) answerShown = true;
       if (update.type === "error" || (update.type === "result" && update.error)) failed = true;
       const end = running.end;
       if (isTurnEnd(update) && end) {
         running.end = null;
+        interruptRequested=false;
         end();
       }
     }
   })();
 
   const turn = async (content: string, first: boolean): Promise<void> => {
-    answerShown = false;
+    turnNumber++;
+    answerShown = false; stream.bytes=0;stream.thinking="";stream.thinkingVisible=false;interruptRequested=false;
     const ended = new Promise<void>((resolve) => (running.end = resolve));
     sentHere.push(content);
     const refused = await api.send(content, first);
@@ -108,10 +119,23 @@ export function runHostedTerminal(
   })();
 
   return {
-    done,
+    done:Promise.race([done.then(async code=>{
+      // The terminal waiting frame can beat the stop HTTP response. Keep
+      // ownership of the exit code until that explicit stop settles.
+      const pending=stopPending;
+      if(pending){try{await pending;return 130;}catch{/* Reported by interrupt(). */}}
+      return stopped?130:code;
+    }),stopDone]),
     interrupt: async () => {
       if (!running.end) return false;
-      await api.interrupt();
+      if(interruptRequested) {
+        if(!stopped){stopped=true;stopPending=Promise.resolve().then(()=>api.stop?.());try{await stopPending;finishStop(130);}catch(error){stopped=false;throw error;}finally{stopPending=null;}}
+        return true;
+      }
+      interruptRequested=true;
+      const number=turnNumber;
+      const response=await api.interrupt();
+      if(!stopped && number===turnNumber)io.write(`${response?.message??"Turn interrupted"} (Ctrl-C again to stop)\n`);
       return true;
     },
   };
@@ -122,8 +146,17 @@ function isTurnEnd(update: SessionUpdate): boolean {
 }
 
 /** One update as the terminal shows it, or null for what it does not. */
-function render(update: SessionUpdate, state: { answerShown: boolean; sentHere: string[] }): string | null {
+function render(update: SessionUpdate, state: { answerShown: boolean; sentHere: string[]; stream: {bytes:number;thinking:string;thinkingVisible:boolean} }): string | null {
   switch (update.type) {
+    case "partial": {const prefix=state.stream.thinkingVisible?"\n":"";state.stream.thinkingVisible=false;state.stream.bytes+=update.content?.length??0;return prefix+(update.content??"");}
+    case "thinking": {
+      if(!update.content)return null;
+      state.stream.thinking+=update.content;state.stream.thinkingVisible=true;
+      const width=Math.max(1,(process.stdout.columns??80)-3);
+      const tail=Array.from(state.stream.thinking.replace(/\s+/g," ")).slice(-width).join("");
+      return `\r\x1b[2K\x1b[2m∴ ${tail}\x1b[0m`;
+    }
+    case "status": if (update.metadata?.code==="persistence_lagging") return "\nrecording delayed…\n"; if (update.metadata?.code==="persistence_recovered") return "\nrecording caught up\n"; return update.status==="starting" ? "[2mstarting…[0m\n" : null;
     case "text": {
       if (!update.content) return null;
       if (update.role === "user") {
@@ -135,10 +168,13 @@ function render(update: SessionUpdate, state: { answerShown: boolean; sentHere: 
         }
         return `\n› (from elsewhere) ${update.content}\n`;
       }
+      if (state.stream.bytes) {state.stream.bytes=0;return "\n";}
       return `${update.content}\n`;
     }
-    case "tool_start":
-      return update.name ? `⚡ ${update.name}\n` : null;
+    case "tool_start": {
+      const prefix=state.stream.thinkingVisible?"\n":"";state.stream.thinkingVisible=false;
+      return update.name ? `${prefix}⚡ ${update.name}\n` : null;
+    }
     case "tool_result": {
       if (!update.result) return null;
       const preview = update.result.length > TOOL_PREVIEW_CHARS ? `${update.result.slice(0, TOOL_PREVIEW_CHARS)}...` : update.result;

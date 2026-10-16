@@ -23,8 +23,10 @@
       "tmpDirs": [
         "<TMP_0>"
       ],
-      "warnings": [],
-      "providerSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
+      "warnings": [
+        "opencode: unknown version; recommended 2.0.26; could not establish the runtime version"
+      ],
+      "harnessSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
     },
     "written": {}
   },
@@ -68,8 +70,10 @@
       "tmpDirs": [
         "<TMP_0>"
       ],
-      "warnings": [],
-      "providerSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
+      "warnings": [
+        "opencode: unknown version; recommended 2.0.26; could not establish the runtime version"
+      ],
+      "harnessSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
     },
     "written": {}
   },
@@ -100,8 +104,10 @@
       "tmpDirs": [
         "<TMP_1>"
       ],
-      "warnings": [],
-      "providerSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
+      "warnings": [
+        "opencode: unknown version; recommended 2.0.26; could not establish the runtime version"
+      ],
+      "harnessSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
     },
     "written": {}
   },
@@ -129,8 +135,10 @@
       "tmpDirs": [
         "<TMP_0>"
       ],
-      "warnings": [],
-      "providerSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
+      "warnings": [
+        "opencode: unknown version; recommended 2.0.26; could not establish the runtime version"
+      ],
+      "harnessSessionId": "ses_d7a58c25d42ef5c1be87fe3a0d"
     },
     "written": {}
   },

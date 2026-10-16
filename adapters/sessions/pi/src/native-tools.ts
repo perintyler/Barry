@@ -10,7 +10,7 @@ export const NATIVE_TOOLS: readonly string[] = [
 ];
 
 export const NATIVE: NativeControl = {
-  grantable: [
+  controllable: [
     "bash", "powershell", "read", "grep", "find", "ls", "edit", "write",
   ],
 };

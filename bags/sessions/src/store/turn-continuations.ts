@@ -4,7 +4,7 @@ import type { Liveness, ProcessIdentity } from "../process-liveness.js";
 import {
   canonicalJson, executionHash,
   type ApprovalDecision, type ContinuationDescriptor, type PermissionRequest,
-  type RecordedCallResult, type ReviewPolicy, type TurnSnapshot,
+  type RecordedCallResult, type ReviewRules, type TurnSnapshot, type SegmentOutcome,
 } from "@barry-rocks/sdk/sessions";
 
 interface TurnRow {
@@ -19,6 +19,11 @@ interface InterruptRow {
   expires_at: string | null; decision_json: string | null;
 }
 
+const eventListeners = new Map<string, Set<() => void>>();
+export function watchTurnEvents(sessionId:string, listener:()=>void):()=>void {
+  const set=eventListeners.get(sessionId)??new Set();set.add(listener);eventListeners.set(sessionId,set);
+  return ()=>{set.delete(listener);if (!set.size) eventListeners.delete(sessionId);};
+}
 export class ExecutionConflict extends Error {}
 export class ExecutionRecoveryRequired extends Error {}
 
@@ -28,15 +33,33 @@ export class TurnContinuations {
     private readonly db: Database.Database,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly ownerProcess?: ProcessIdentity,
+    private readonly access: { workflowBinding?: string } = {},
   ) {}
+
+  /** Workflow destinations have a separate executor; ordinary turn recovery cannot adopt them. */
+  private canDrive(sessionId: string): boolean {
+    // Older explicitly constructed fixture stores may predate destination ownership.
+    const exists = this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_workflow_destinations'").get();
+    const row = exists ? this.db.prepare("SELECT binding_key FROM session_workflow_destinations WHERE session_id=?").get(sessionId) as { binding_key: string } | undefined : undefined;
+    return row ? row.binding_key === this.access.workflowBinding : this.access.workflowBinding === undefined;
+  }
+
+  private assertDriver(sessionId: string): void {
+    if (!this.canDrive(sessionId)) throw new ExecutionConflict("This session belongs to its workflow executor");
+  }
 
   /** A dead owner permits recording loss, never replaying an in-flight effect. */
   reconcileOwners(classify: (identity: ProcessIdentity) => Liveness, limit = 32): void {
+    const workflowTable = this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_workflow_destinations'").get();
+    const ownership = !workflowTable ? "" : this.access.workflowBinding === undefined
+      ? "AND NOT EXISTS(SELECT 1 FROM session_workflow_destinations d WHERE d.session_id=session_turns.session_id)"
+      : "AND EXISTS(SELECT 1 FROM session_workflow_destinations d WHERE d.session_id=session_turns.session_id AND d.binding_key=?)";
     const rows = this.db.prepare(`SELECT id,session_id,owner,owner_process_json,continuation_json,state
       FROM session_turns WHERE owner_process_json IS NOT NULL
-      AND (owner IS NOT NULL OR state='waiting_for_input') ORDER BY owner_checked_at IS NOT NULL,owner_checked_at,rowid LIMIT ?`)
-      .all(limit) as Array<{ id: string; session_id: string; owner: string | null; owner_process_json: string; continuation_json: string | null; state: string }>;
+      AND (owner IS NOT NULL OR state='waiting_for_input') ${ownership} ORDER BY owner_checked_at IS NOT NULL,owner_checked_at,rowid LIMIT ?`)
+      .all(...(workflowTable && this.access.workflowBinding !== undefined ? [this.access.workflowBinding, limit] : [limit])) as Array<{ id: string; session_id: string; owner: string | null; owner_process_json: string; continuation_json: string | null; state: string }>;
     for (const row of rows) {
+      if (!this.canDrive(row.session_id)) continue;
       this.db.prepare("UPDATE session_turns SET owner_checked_at=? WHERE id=?").run(this.now(), row.id);
       if (row.state === "waiting_for_input" && (!row.continuation_json || (JSON.parse(row.continuation_json) as ContinuationDescriptor).format !== "barry.live.permission")) continue;
       const verdict = classify(JSON.parse(row.owner_process_json) as ProcessIdentity);
@@ -93,14 +116,17 @@ export class TurnContinuations {
   runnable(): Array<{ turn: TurnSnapshot; input: unknown; restoring: boolean }> {
     const sessionsWithQueued = this.db.prepare("SELECT DISTINCT session_id FROM session_turns WHERE state='queued'").all() as Array<{ session_id: string }>;
     for (const { session_id } of sessionsWithQueued) {
+      if (!this.canDrive(session_id)) continue;
       this.promoteQueued(session_id);
     }
     const rows = this.db.prepare("SELECT id,session_id,input_json,continuation_json FROM session_turns WHERE state='running' AND owner IS NULL").all() as Array<{ id: string; session_id: string; input_json: string; continuation_json: string | null }>;
-    return rows.map((row) => ({ turn: this.snapshot(row.session_id, row.id), input: JSON.parse(row.input_json), restoring: row.continuation_json !== null }));
+    return rows.filter(row => this.canDrive(row.session_id)).map((row) => ({ turn: this.snapshot(row.session_id, row.id), input: JSON.parse(row.input_json), restoring: row.continuation_json !== null }));
   }
 
   promoteQueued(sessionId: string): { turn: TurnSnapshot; input: unknown } | undefined {
+    if (!this.canDrive(sessionId)) return undefined;
     return this.transaction(() => {
+      if (!this.canDrive(sessionId)) return undefined;
       if (this.active(sessionId)) return undefined;
       const next = this.db.prepare("SELECT id,run_id,input_json FROM session_turns WHERE session_id=? AND state='queued' ORDER BY rowid ASC LIMIT 1").get(sessionId) as { id: string; run_id: string; input_json: string } | undefined;
       if (!next) return undefined;
@@ -156,10 +182,12 @@ export class TurnContinuations {
     });
   }
 
-  admit(input: { sessionId: string; requestId: string; runId: string; actor: string; content: unknown; policy: ReviewPolicy; ifActive?: "error" | "queue" }): TurnSnapshot {
+  admit(input: { sessionId: string; requestId: string; runId: string; actor: string; content: unknown; policy: ReviewRules; ifActive?: "error" | "queue" }): TurnSnapshot {
+    this.assertDriver(input.sessionId);
     const hashPayload = input.ifActive ? input : { sessionId: input.sessionId, requestId: input.requestId, runId: input.runId, actor: input.actor, content: input.content, policy: input.policy };
     const hash = executionHash(hashPayload);
     return this.transaction(() => {
+      this.assertDriver(input.sessionId);
       const existing = this.db.prepare("SELECT id,request_hash FROM session_turns WHERE session_id=? AND request_id=?").get(input.sessionId, input.requestId) as { id: string; request_hash: string } | undefined;
       if (existing) {
         if (existing.request_hash !== hash) throw new ExecutionConflict("Request identity was reused with different input");
@@ -183,7 +211,9 @@ export class TurnContinuations {
   }
 
   claim(sessionId: string, turnId: string, owner: string): boolean {
+    if (!this.canDrive(sessionId)) return false;
     return this.transaction(() => {
+      if (!this.canDrive(sessionId)) return false;
       this.row(sessionId, turnId);
       const changed = this.db.prepare("UPDATE session_turns SET owner=?,owner_process_json=? WHERE id=? AND state='running' AND owner IS NULL").run(owner, this.ownerProcess ? canonicalJson(this.ownerProcess) : null, turnId).changes;
       if (changed) this.db.prepare("UPDATE session_run_segments SET state='running' WHERE id=(SELECT run_id FROM session_turns WHERE id=?) AND state='accepted'").run(turnId);
@@ -192,12 +222,14 @@ export class TurnContinuations {
   }
 
   pause(sessionId: string, turnId: string, owner: string, continuation: ContinuationDescriptor, calls: PermissionRequest[]): TurnSnapshot {
+    this.assertDriver(sessionId);
     if (!calls.length || new Set(calls.map((call) => call.id)).size !== calls.length) throw new ExecutionConflict("Invalid pending batch");
     const json = canonicalJson(continuation);
     return this.transaction(() => {
+      this.assertDriver(sessionId);
       const row = this.row(sessionId, turnId);
       if (row.state !== "running" || row.owner !== owner) throw new ExecutionConflict("Execution ownership changed");
-      const policy = JSON.parse(row.policy_json) as ReviewPolicy;
+      const policy = JSON.parse(row.policy_json) as ReviewRules;
       for (const call of calls) {
         this.db.prepare(`INSERT INTO session_interrupts(id,turn_id,run_id,call_id,call_json,status,expires_at)
           VALUES(?,?,?,?,?,'pending',?)`).run(randomUUID(), turnId, row.run_id, call.id, canonicalJson(call), policy.mode === "review_required" ? policy.expiresAt ?? null : null);
@@ -212,12 +244,15 @@ export class TurnContinuations {
   }
 
   resolve(input: { sessionId: string; turnId: string; requestId: string; runId: string; actor: string; decisions: ApprovalDecision[]; context?: unknown }): TurnSnapshot {
+    this.assertDriver(input.sessionId);
     return this.resolveBatch(input, false);
   }
 
   /** Compatibility clients vote one call at a time on the authoritative batch. */
   recordRuling(input: { sessionId: string; turnId: string; interruptId: string; decision: ApprovalDecision["decision"]; actor: string }): TurnSnapshot {
+    this.assertDriver(input.sessionId);
     return this.transaction(() => {
+      this.assertDriver(input.sessionId);
       const row = this.row(input.sessionId, input.turnId);
       const interrupt = this.db.prepare("SELECT * FROM session_interrupts WHERE turn_id=? AND id=?").get(input.turnId, input.interruptId) as InterruptRow | undefined;
       if (!interrupt) throw new ExecutionConflict("Interrupt does not belong to this turn");
@@ -245,9 +280,11 @@ export class TurnContinuations {
   }
 
   private resolveBatch(input: Parameters<TurnContinuations["resolve"]>[0], expiring: boolean): TurnSnapshot {
+    this.assertDriver(input.sessionId);
     const requestHash = executionHash(input);
     const decisionsHash = executionHash([...input.decisions].sort((a, b) => a.interruptId.localeCompare(b.interruptId)));
     return this.transaction(() => {
+      this.assertDriver(input.sessionId);
       const row = this.row(input.sessionId, input.turnId);
       const receipt = this.db.prepare("SELECT request_hash FROM session_resolution_receipts WHERE turn_id=? AND request_id=?").get(input.turnId, input.requestId) as { request_hash: string } | undefined;
       if (receipt) {
@@ -284,14 +321,16 @@ export class TurnContinuations {
 
   expireDue(): TurnSnapshot[] {
     const rows = this.db.prepare("SELECT DISTINCT t.id,t.session_id FROM session_turns t JOIN session_interrupts i ON i.turn_id=t.id WHERE t.state='waiting_for_input' AND i.status='pending' AND i.expires_at IS NOT NULL AND julianday(i.expires_at)<=julianday(?)").all(this.now()) as Array<{ id: string; session_id: string }>;
-    return rows.map((row) => {
+    return rows.filter(row => this.canDrive(row.session_id)).map((row) => {
       const turn = this.snapshot(row.session_id, row.id);
       return this.resolveBatch({ sessionId: row.session_id, turnId: row.id, requestId: `expiry:${turn.runId}`, runId: randomUUID(), actor: "session-deadline", decisions: turn.interrupts.filter((item) => item.status === "pending").map((item) => ({ interruptId: item.id, decision: { allow: false, reason: "Approval deadline expired" } })) }, true);
     });
   }
 
   cancel(sessionId: string, turnId: string): TurnSnapshot {
+    this.assertDriver(sessionId);
     return this.transaction(() => {
+      this.assertDriver(sessionId);
       const row = this.row(sessionId, turnId);
       if (["completed", "failed", "cancelled"].includes(row.state)) return this.snapshot(sessionId, turnId);
       if (row.state === "waiting_for_input" && row.continuation_json && (JSON.parse(row.continuation_json) as ContinuationDescriptor).format === "barry.live.permission") {
@@ -309,12 +348,15 @@ export class TurnContinuations {
   }
 
   released(sessionId: string, turnId: string, owner: string): void {
+    this.assertDriver(sessionId);
     this.row(sessionId, turnId);
     this.db.prepare("UPDATE session_turns SET owner=NULL WHERE id=? AND owner=?").run(turnId, owner);
   }
 
   lost(sessionId: string, turnId: string, error: string): TurnSnapshot {
+    this.assertDriver(sessionId);
     return this.transaction(() => {
+      this.assertDriver(sessionId);
       const row = this.row(sessionId, turnId);
       if (row.state !== "waiting_for_input" && !row.owner) return this.snapshot(sessionId, turnId);
       this.db.prepare("UPDATE session_turns SET state=?,error=?,revision=revision+1,updated_at=? WHERE id=?").run(row.state === "waiting_for_input" ? "recovery_required" : row.state, error, this.now(), turnId);
@@ -357,7 +399,9 @@ export class TurnContinuations {
   }
 
   denied(sessionId: string, turnId: string, owner: string, call: PermissionRequest, outcome: RecordedCallResult): RecordedCallResult {
+    this.assertDriver(sessionId);
     return this.transaction(() => {
+      this.assertDriver(sessionId);
       const row = this.row(sessionId, turnId);
       if (row.owner !== owner || row.state !== "running") throw new ExecutionConflict("Execution ownership changed");
       const proposed = this.db.prepare("SELECT call_json FROM session_interrupts WHERE turn_id=? AND call_id=?").get(turnId, call.id) as { call_json: string } | undefined;
@@ -369,7 +413,9 @@ export class TurnContinuations {
   }
 
   async execute(sessionId: string, turnId: string, owner: string, call: PermissionRequest, effect: () => Promise<RecordedCallResult>): Promise<RecordedCallResult> {
+    this.assertDriver(sessionId);
     const prior = this.transaction(() => {
+      this.assertDriver(sessionId);
       const row = this.row(sessionId, turnId);
       if (row.state !== "running" || row.owner !== owner) throw new ExecutionConflict("Execution ownership changed");
       const proposed = this.db.prepare("SELECT call_json,status FROM session_interrupts WHERE turn_id=? AND call_id=?").get(turnId, call.id) as { call_json: string; status: string } | undefined;
@@ -396,8 +442,11 @@ export class TurnContinuations {
   }
 
   append(sessionId: string, turnId: string, event: unknown): number {
+    this.assertDriver(sessionId);
     const row = this.row(sessionId, turnId);
-    return Number(this.db.prepare("INSERT INTO session_execution_events(session_id,turn_id,run_id,event_json,created_at) VALUES(?,?,?,?,?)").run(sessionId, turnId, row.run_id, canonicalJson(event), this.now()).lastInsertRowid);
+    const sequence=Number(this.db.prepare("INSERT INTO session_execution_events(session_id,turn_id,run_id,event_json,created_at) VALUES(?,?,?,?,?)").run(sessionId, turnId, row.run_id, canonicalJson(event), this.now()).lastInsertRowid);
+    queueMicrotask(()=>{for (const listener of eventListeners.get(sessionId)??[]) listener();});
+    return sequence;
   }
 
   replay(sessionId: string, after = 0, limit = 256, inclusive = false): Array<{ sequence: number; turnId: string; runId: string; event: unknown }> {
@@ -407,8 +456,51 @@ export class TurnContinuations {
     return rows.map((row) => ({ sequence: row.sequence, turnId: row.turn_id, runId: row.run_id, event: JSON.parse(row.event_json) }));
   }
 
-  finish(sessionId: string, turnId: string, owner: string, outcome: { state: "completed" | "failed" | "recovery_required"; result?: unknown; error?: string; conversation?: ContinuationDescriptor }): TurnSnapshot {
+  /** Metadata-only recovery, called inside destination proof/receipt settlement.
+   * Never admits, claims, dispatches, authorizes, or executes a continuation. */
+  recoverWorkflowOutcome(input: { sessionId: string; turnId: string; segmentId: string; owner: string; expectedRevision: number; outcome: SegmentOutcome }): TurnSnapshot {
+    this.assertDriver(input.sessionId);
+    if (!this.access.workflowBinding) throw new ExecutionConflict("Workflow recovery requires its destination capability");
     return this.transaction(() => {
+      this.assertDriver(input.sessionId);
+      const row = this.row(input.sessionId, input.turnId), outcome = input.outcome;
+      if (row.run_id !== input.segmentId || row.revision !== input.expectedRevision || row.owner !== null && row.owner !== input.owner) throw new ExecutionConflict("Workflow recovery revision or ownership changed");
+      if (this.db.prepare("SELECT 1 FROM session_call_outcomes WHERE turn_id=? AND state IN ('executing','uncertain')").get(input.turnId)) throw new ExecutionRecoveryRequired("Tool effect outcome remains uncertain");
+      const same = (left: unknown, right: unknown) => executionHash(left) === executionHash(right);
+      if (row.state === "completed") {
+        if (outcome.type !== "completed" || !same(row.result_json === null ? null : JSON.parse(row.result_json), outcome.result ?? null)
+          || outcome.conversation !== undefined && !same(row.continuation_json === null ? null : JSON.parse(row.continuation_json), outcome.conversation)) throw new ExecutionConflict("Workflow terminal outcome conflict");
+        return this.snapshot(input.sessionId, input.turnId);
+      }
+      if (row.state === "failed") {
+        if (outcome.type !== "failed" || row.error !== outcome.error) throw new ExecutionConflict("Workflow terminal outcome conflict");
+        return this.snapshot(input.sessionId, input.turnId);
+      }
+      if (row.state === "waiting_for_input") {
+        const calls = this.db.prepare("SELECT call_json FROM session_interrupts WHERE turn_id=? AND run_id=? ORDER BY rowid").all(input.turnId, input.segmentId) as { call_json: string }[];
+        if (outcome.type !== "interrupted" || !same(row.continuation_json === null ? null : JSON.parse(row.continuation_json), outcome.continuation)
+          || !same(calls.map(call => JSON.parse(call.call_json)), outcome.calls)) throw new ExecutionConflict("Workflow checkpoint outcome conflict");
+        this.released(input.sessionId, input.turnId, input.owner);
+        return this.snapshot(input.sessionId, input.turnId);
+      }
+      if (row.state !== "running" && row.state !== "recovery_required") throw new ExecutionConflict("Workflow turn is not recoverable");
+      if (this.db.prepare("SELECT 1 FROM session_interrupts WHERE turn_id=? AND run_id=?").get(input.turnId, input.segmentId)) throw new ExecutionConflict("Workflow checkpoint already has conflicting interrupts");
+      // Historic ownership exists only within this writer transaction. No
+      // runnable scan or execution callback can adopt it before settlement.
+      this.db.prepare("UPDATE session_turns SET state='running',owner=? WHERE id=?").run(input.owner, input.turnId);
+      let repaired: TurnSnapshot;
+      if (outcome.type === "interrupted") repaired = this.pause(input.sessionId, input.turnId, input.owner, outcome.continuation, outcome.calls);
+      else repaired = this.finish(input.sessionId, input.turnId, input.owner, outcome.type === "failed" ? { state: "failed", error: outcome.error }
+        : { state: "completed", ...(outcome.result === undefined ? {} : { result: outcome.result }), ...(outcome.conversation ? { conversation: outcome.conversation } : {}) });
+      this.released(input.sessionId, input.turnId, input.owner);
+      return repaired;
+    });
+  }
+
+  finish(sessionId: string, turnId: string, owner: string, outcome: { state: "completed" | "failed" | "recovery_required"; result?: unknown; error?: string; conversation?: ContinuationDescriptor }): TurnSnapshot {
+    this.assertDriver(sessionId);
+    return this.transaction(() => {
+      this.assertDriver(sessionId);
       const row = this.row(sessionId, turnId);
       if (row.owner !== owner || row.state !== "running") throw new ExecutionConflict("Execution ownership changed");
       this.db.prepare("UPDATE session_run_segments SET state=?,ended_at=? WHERE id=?").run(outcome.state === "completed" ? "completed" : "failed", this.now(), row.run_id);

@@ -8,8 +8,8 @@
  */
 import { createModels, installModels, installedModels, assembleVendors, mergeVendorFactories } from "@barry-rocks/sdk/adapters/models";
 
-import { loadAdapters } from "@barry-rocks/sdk/internal/adapters";
-import { barryAdaptersPath } from "@barry-rocks/sdk/services";
+import { installedAdapterStore } from "./harness-flags.js";
+
 import { shippedVendorRows, selectedVendorFactories } from "./shipped-vendors.js";
 
 export async function ensureModelsInstalled(): Promise<void> {
@@ -19,7 +19,7 @@ export async function ensureModelsInstalled(): Promise<void> {
   } catch {
     // Nothing installed yet — this process is the one that must install.
   }
-  const installedAdapters = loadAdapters({ file: barryAdaptersPath() });
+  const installedAdapters = await installedAdapterStore();
   const installedVendorCode = await installedAdapters.loadVendorCode();
   for (const [id, problems] of installedVendorCode.refused) {
     console.error(`[barry] vendor code from adapter "${id}" did not load: ${problems.join("; ")}`);
@@ -29,4 +29,10 @@ export async function ensureModelsInstalled(): Promise<void> {
       assembleVendors([...(await shippedVendorRows()), ...installedAdapters.installed().filter((r) => !r.bag).flatMap((r) => r.vendorCode?.vendors ?? [])], mergeVendorFactories(await selectedVendorFactories(), installedVendorCode.factories)),
     ),
   );
+}
+
+/** Routing needs declarations only; hosted execution installs factories in the API. */
+export async function modelVendorsForRouting() {
+  const adapters = await installedAdapterStore();
+  return [...await shippedVendorRows(), ...adapters.installed().filter(record => !record.bag).flatMap(record => record.vendorCode?.vendors ?? [])];
 }

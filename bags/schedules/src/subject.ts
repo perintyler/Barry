@@ -1,19 +1,19 @@
-import { Barry, BarryError, type Caller, type Schedule, type Schedules } from "@barry-rocks/sdk";
-import { listSchedules } from "./catalog.js";
+import { Barry, BarryError, type AtScheduleInput, type AtScheduleQuery, type Caller, type Schedule, type Schedules } from "@barry-rocks/sdk";
+import { listSchedules } from "./registry.js";
 import { listStates } from "./store.js";
-import { listOneOffs, cancelOneOff, getOneOff } from "./one-offs.js";
+import { listAtSchedules, cancelAtSchedule, getAtSchedule } from "./at-schedules.js";
 import { schedulerHealth } from "./health.js";
 import { summarizeSchedule } from "./tools.js";
-import { serializeOneOff } from "./domain.js";
-import { scheduleOnce } from "./once.js";
+import { serializeAtSchedule } from "./domain.js";
+import { scheduleAt } from "./once.js";
 
 function allowed(caller: Caller): void {
   if (caller.kind === "device") throw new BarryError("forbidden", "A device may not read or create schedules");
 }
 
-export const schedules: Schedules = {
-  name: "schedules",
-  async list(caller) {
+export const schedules = {
+  name: "schedules" as const,
+  async list(caller: Caller) {
     allowed(caller);
     const found = await listSchedules(), states = listStates();
     return found.schedules.map(entry => {
@@ -27,34 +27,35 @@ export const schedules: Schedules = {
       } satisfies Schedule;
     });
   },
-  async scheduler(caller) {
+  async scheduler(caller: Caller) {
     allowed(caller);
     const health = schedulerHealth(), { errors } = await listSchedules();
     return { status: health.status, reason: "reason" in health ? health.reason : null,
       heartbeatAt: health.heartbeat?.at.toISOString() ?? null, loadErrors: errors };
   },
-  async oneOffs(query, caller) {
+  async atSchedules(query: AtScheduleQuery, caller: Caller) {
     allowed(caller);
-    return listOneOffs(query).map(serializeOneOff);
+    return listAtSchedules(query).map(serializeAtSchedule);
   },
-  async cancelOneOff(id, caller) {
+  async cancelAtSchedule(id: string, caller: Caller) {
     allowed(caller);
-    if (!cancelOneOff(id)) throw new BarryError("not_found", `One-off not found: ${id}`);
-    return serializeOneOff(getOneOff(id)!);
+    if (!cancelAtSchedule(id)) throw new BarryError("not_found", `One-off not found: ${id}`);
+    return serializeAtSchedule(getAtSchedule(id)!);
   },
-  async scheduleOnce(input, caller) {
+  async scheduleAt(input: AtScheduleInput, caller: Caller) {
     allowed(caller);
     // HTTP callers meet the wire schema's bound; in-process callers must get the same answer.
     if (input.attempts !== undefined && !(Number.isInteger(input.attempts) && input.attempts >= 1 && input.attempts <= 5))
       throw new BarryError("invalid", `attempts must be a whole number from 1 to 5, not ${input.attempts}`);
     const identity = input.identity !== undefined ? await Barry.as(caller).identity(input.identity).get() : undefined;
-    const result = await scheduleOnce({
+    const selectedBags = input.bags;
+    const result = await scheduleAt({
       action: input.action, inputs: input.inputs, dueAt: input.dueAt instanceof Date ? input.dueAt.toISOString() : input.dueAt,
       ...(identity ? { identity: identity.name } : {}),
-      ...(input.traits ? { traits: [...input.traits] } : {}), ...(input.bounds ? { bounds: [...input.bounds] } : {}),
+      ...(selectedBags ? { bags: [...selectedBags] } : {}), ...(input.bounds ? { bounds: [...input.bounds] } : {}),
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
       ...(input.attempts !== undefined ? { retry: { attempts: input.attempts } } : {}),
     }, identity?.id);
-    return serializeOneOff(result.oneOff);
+    return serializeAtSchedule(result.schedule);
   },
-};
+} satisfies Schedules;

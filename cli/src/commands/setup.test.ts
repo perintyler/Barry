@@ -1,12 +1,12 @@
 import { openInstance } from "@barry-rocks/sdk/internal/services";
-import { barryAppSupportDir, barryLogsDir, barryModelProvidersPath } from "@barry-rocks/sdk/services";
+import { barryAppSupportDir, barryLogsDir, barryModelVendorsPath } from "@barry-rocks/sdk/services";
 import { ServiceManagement } from "@barry-rocks/mcp-bag";
 import { systemOS } from "../services/system.js";
 import { nodeRuntime, runtimeTarball } from "../services/runtime.js";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadModelProviders, shippedModelProviders } from "@barry-rocks/sdk/adapters/models";
+import { loadModelVendors, shippedModelVendors } from "@barry-rocks/sdk/adapters/models";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServiceOS } from "@barry-rocks/mcp-bag";
@@ -119,17 +119,17 @@ describe("setup shipped call code", () => {
     packageAt("embeddings", "beta");
     packageAt("decisions", "gamma");
     const third = packageAt("outside", "third");
-    const providers = loadModelProviders({ file: barryModelProvidersPath() });
+    const providers = loadModelVendors({ file: barryModelVendorsPath() });
     await providers.add(third);
     await setupCommand({ launchd: os });
     expect(providers.installed().map(record => record.packageName)).toEqual(["third", "alpha", "beta", "gamma"]);
-    const before = readFileSync(barryModelProvidersPath(), "utf8");
+    const before = readFileSync(barryModelVendorsPath(), "utf8");
     vi.mocked(console.log).mockClear();
     await setupCommand({ launchd: os });
-    expect(readFileSync(barryModelProvidersPath(), "utf8")).toBe(before);
+    expect(readFileSync(barryModelVendorsPath(), "utf8")).toBe(before);
     expect(vi.mocked(console.log).mock.calls.flat().some(line => String(line).startsWith("Selected "))).toBe(false);
     expect(providers.installed().find(record => record.packageName === "third")?.shipped).toBeUndefined();
-    expect(shippedModelProviders(root)).toHaveLength(3);
+    expect(shippedModelVendors(root)).toHaveLength(3);
   });
   it("updates a moved shipped package and its version", async () => {
     packageAt("completions", "alpha");
@@ -143,7 +143,7 @@ describe("setup shipped call code", () => {
     manifest.version = "2.0.0";
     writeFileSync(join(path, "package.json"), JSON.stringify(manifest));
     await setupCommand({ launchd: os });
-    expect(loadModelProviders({ file: barryModelProvidersPath() }).installed()).toEqual([
+    expect(loadModelVendors({ file: barryModelVendorsPath() }).installed()).toEqual([
       expect.objectContaining({ packageName: "alpha", path, version: "2.0.0", shipped: true }),
     ]);
   });
@@ -156,38 +156,38 @@ describe("setup shipped call code", () => {
     writeFileSync(join(path, "changed.js"), "export const CHANGED = { completion: { alpha: () => ({}) } };");
     writeFileSync(join(path, "package.json"), JSON.stringify(manifest));
     await setupCommand({ launchd: os });
-    expect(loadModelProviders({ file: barryModelProvidersPath() }).installed()).toEqual([
+    expect(loadModelVendors({ file: barryModelVendorsPath() }).installed()).toEqual([
       expect.objectContaining({ packageName: "alpha", version: "1.0.0", factoryExport: "CHANGED", shipped: true }),
     ]);
   });
   it("adopts a hand-added record that is exactly the shipped one, then keeps it current", async () => {
     const path = packageAt("completions", "alpha");
-    await loadModelProviders({ file: barryModelProvidersPath() }).add(path);
+    await loadModelVendors({ file: barryModelVendorsPath() }).add(path);
     await setupCommand({ launchd: os });
-    expect(loadModelProviders({ file: barryModelProvidersPath() }).installed()).toEqual([
+    expect(loadModelVendors({ file: barryModelVendorsPath() }).installed()).toEqual([
       expect.objectContaining({ packageName: "alpha", path, shipped: true }),
     ]);
     expect(vi.mocked(console.log).mock.calls.flat()).toContain(`Adopted alpha from ${path}.`);
-    const before = readFileSync(barryModelProvidersPath(), "utf8");
+    const before = readFileSync(barryModelVendorsPath(), "utf8");
     vi.mocked(console.log).mockClear();
     await setupCommand({ launchd: os });
-    expect(readFileSync(barryModelProvidersPath(), "utf8")).toBe(before);
+    expect(readFileSync(barryModelVendorsPath(), "utf8")).toBe(before);
     expect(vi.mocked(console.log).mock.calls.flat().some(line => /^(Adopted|Selected) /.test(String(line)))).toBe(false);
     const moved = join(home, "moved");
     renameSync(root, moved);
     deps.root.mockReturnValue(moved);
     await setupCommand({ launchd: os });
-    expect(loadModelProviders({ file: barryModelProvidersPath() }).installed()).toEqual([
+    expect(loadModelVendors({ file: barryModelVendorsPath() }).installed()).toEqual([
       expect.objectContaining({ packageName: "alpha", path: join(moved, "adapters", "completions", "alpha"), shipped: true }),
     ]);
   });
   it("preserves a user selection of a shipped package name from another directory", async () => {
     packageAt("completions", "alpha");
     const replacement = packageAt("outside", "alpha");
-    await loadModelProviders({ file: barryModelProvidersPath() }).add(replacement);
-    const before = readFileSync(barryModelProvidersPath(), "utf8");
+    await loadModelVendors({ file: barryModelVendorsPath() }).add(replacement);
+    const before = readFileSync(barryModelVendorsPath(), "utf8");
     await setupCommand({ launchd: os });
-    expect(readFileSync(barryModelProvidersPath(), "utf8")).toBe(before);
+    expect(readFileSync(barryModelVendorsPath(), "utf8")).toBe(before);
     expect(vi.mocked(console.log).mock.calls.flat().some(line => /^(Adopted|Selected) /.test(String(line)))).toBe(false);
   });
   it("reports an unbuilt package without recording it and still records healthy packages", async () => {
@@ -195,9 +195,9 @@ describe("setup shipped call code", () => {
     packageAt("decisions", "beta");
     rmSync(join(path, "index.js"));
     await setupCommand({ launchd: os });
-    expect(loadModelProviders({ file: barryModelProvidersPath() }).installed().map(record => record.packageName)).toEqual(["beta"]);
+    expect(loadModelVendors({ file: barryModelVendorsPath() }).installed().map(record => record.packageName)).toEqual(["beta"]);
     expect(vi.mocked(console.error).mock.calls.flat().join(" ")).toContain("pnpm build:packages");
-    expect(existsSync(barryModelProvidersPath())).toBe(true);
+    expect(existsSync(barryModelVendorsPath())).toBe(true);
   });
 });
 

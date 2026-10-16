@@ -2,15 +2,15 @@
  * `barry __describe`: the command surface as JSON, for generated reference
  * docs (the barry-guide bag's CLI reference is built from it).
  *
- * It walks the program after `applyCommandScope`, so `barry __describe`
+ * It walks the program after `applyCommandTarget`, so `barry __describe`
  * describes the system commands and `<identity> __describe` the persona
- * commands, exactly as each scope registers them. Hidden commands and options
+ * commands, exactly as each target registers them. Hidden commands and options
  * are left out, as `--help` leaves them out. Bag groups are marked `bagGroup`
  * because they depend on what is installed, not on the CLI itself.
  *
  * It runs before `parse()` and before the preAction hook, so it starts no
  * services, opens no store, and needs no identity to be resolvable beyond the
- * scope the process was started in.
+ * target the process was started in.
  */
 import type { Argument, Command, Option } from "commander";
 

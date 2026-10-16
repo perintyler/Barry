@@ -1,3 +1,4 @@
+import { assessVersion, modeVersions, type VersionAssessment } from "../adapters/harnesses/versions.js";
 /**
  * What a session records about itself when it starts.
  *
@@ -12,16 +13,19 @@ export interface SessionDeclaration {
   guarantees: Guarantees;
   harnessVersion?: string;
   guaranteesUnverified: boolean;
+  versionAssessment: VersionAssessment;
 }
 
 /**
- * An unknown build is not a mismatch: not every harness reports one, and
- * marking every such session unverified would make the flag meaningless.
+ * An unknown build has no verification evidence. Compatibility and tested
+ * guarantees are separate: a supported range does not verify every build.
  */
 export function declareSession(mode: Mode, observedVersion?: string): SessionDeclaration {
+  const assessment = assessVersion(modeVersions(mode), observedVersion);
   return {
     guarantees: { ...mode.guarantees },
     ...(observedVersion !== undefined ? { harnessVersion: observedVersion } : {}),
-    guaranteesUnverified: observedVersion !== undefined && observedVersion !== mode.verifiedOn,
+    guaranteesUnverified: !assessment.tested,
+    versionAssessment: assessment,
   };
 }

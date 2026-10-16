@@ -241,7 +241,7 @@ export async function persistOne(
   exec: MessageExecutor,
   sessionId: string,
   message: WsMessageInput,
-  providerSessionId: string | null | undefined,
+  harnessSessionId: string | null | undefined,
   modelId: number | null,
   /**
    * Which of the five capture routes produced this row.
@@ -257,7 +257,7 @@ export async function persistOne(
   const eventId = generateId();
   // The insert takes the next sequence in the session itself, under the write
   // lock, so every process that appends to a session agrees on the order.
-  const at = nextSequence(sessionId);
+  const at = message.sequence ?? nextSequence(sessionId);
   // Recorded on every persisted row so subagent output stays distinguishable
   // from the main thread once it is in the transcript.
   const provenance = message.parentToolUseId ? { parentToolUseId: message.parentToolUseId } : {};
@@ -286,7 +286,7 @@ export async function persistOne(
           ...capture,
           id: eventId,
           session_id: sessionId,
-          provider_session_id: providerSessionId ?? null,
+          provider_session_id: harnessSessionId ?? null,
           model_id: modelId,
           type: "message",
           sequence: at,
@@ -311,7 +311,7 @@ export async function persistOne(
           ...capture,
           id: eventId,
           session_id: sessionId,
-          provider_session_id: providerSessionId ?? null,
+          provider_session_id: harnessSessionId ?? null,
           model_id: modelId,
           type: "tool_call",
           sequence: at,
@@ -397,7 +397,7 @@ export async function persistOne(
           ...capture,
           id: eventId,
           session_id: sessionId,
-          provider_session_id: providerSessionId ?? null,
+          provider_session_id: harnessSessionId ?? null,
           model_id: modelId,
           type: "message",
           sequence: at,
@@ -417,7 +417,7 @@ export async function persistOne(
           ...capture,
           id: eventId,
           session_id: sessionId,
-          provider_session_id: providerSessionId ?? null,
+          provider_session_id: harnessSessionId ?? null,
           model_id: modelId,
           type: "message",
           sequence: at,
@@ -437,7 +437,7 @@ export async function persistOne(
           ...capture,
           id: eventId,
           session_id: sessionId,
-          provider_session_id: providerSessionId ?? null,
+          provider_session_id: harnessSessionId ?? null,
           model_id: modelId,
           type: "message",
           sequence: at,
@@ -457,7 +457,7 @@ export async function persistOne(
           ...capture,
           id: eventId,
           session_id: sessionId,
-          provider_session_id: providerSessionId ?? null,
+          provider_session_id: harnessSessionId ?? null,
           model_id: modelId,
           type: "message",
           sequence: at,

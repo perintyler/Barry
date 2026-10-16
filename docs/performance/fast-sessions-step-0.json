@@ -1,0 +1,58 @@
+{
+  "step": 0,
+  "date": "2026-10-14",
+  "node": "26.5.0",
+  "entry": "tsx",
+  "api_restart": "barry service restart sessions.api; health at localhost:4854 returned ok=true, dbConnected=true",
+  "baseline_before": {
+    "source": "fast-barry-sessions/plan/01-baseline-measurements.md",
+    "hosted_ui_spawn_ms": 14500,
+    "identity_version_ms": [
+      760,
+      860
+    ]
+  },
+  "instrumented_after": {
+    "command": "node cli/bin/barry.js --identity-binding <bux binding> --none",
+    "hosted_ui_spawn_ms": [
+      13252.1,
+      11052.6
+    ],
+    "composition_ms": [
+      6945,
+      6213.5
+    ],
+    "load_bags_ms": [
+      4076.3,
+      3449.1
+    ],
+    "identity_env_ms": [
+      5304.7,
+      4904.2
+    ],
+    "identity_sync_ms": [
+      112.2,
+      103.1
+    ]
+  },
+  "note": "Instrumentation only. Warm-cache and filesystem variation explain these baseline differences; no speed improvement is claimed.",
+  "verification": {
+    "cli_focused": "50 tests passed; launch parity passed with unchanged goldens",
+    "api_focused": "92 tests passed; updated timing broadcast and authorization fixtures passed in follow-up 62 tests",
+    "typecheck": [
+      "cli passed",
+      "sessions API passed"
+    ],
+    "cli_full": "1416 passed, 6 skipped, 4 failures reproduced on unchanged master (release Node dylib fixtures; macOS /var realpath fixture)",
+    "api_full": "742 passed; one missing timings fixture fixed and retested"
+  },
+  "remaining_steps": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ]
+}

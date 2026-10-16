@@ -218,3 +218,6 @@ function parsePrompted(raw: string): { value?: unknown; parseError?: string } {
     };
   }
 }
+
+/** Pure contract/decoding steps for durable executors, which must never replay a model call to validate retained text. */
+export { promptedContract as structuredOutputContract, parsePrompted as parseStructuredOutput };

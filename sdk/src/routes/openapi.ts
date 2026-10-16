@@ -46,7 +46,7 @@ export function openApiDocument(routes: readonly Route[], names: Record<string, 
       ...(body ? { requestBody: { required: true, content: { "application/json": { schema: ref(body) } } } } : {}),
       responses: {
         ...Object.fromEntries(Object.entries(responses).map(([status, schema]) => [status, {
-          description: "Success",
+          description: Number(status)>=500?"Service unavailable":Number(status)>=400?"Request refused":"Success",
           ...(stream && schema === null ? { content: { "text/event-stream": { schema: { type: "string" } } } } : schema ? { content: { "application/json": { schema: ref(schema) } } } : {}),
         }])),
         default: { description: "Request failed", content: { "application/problem+json": { schema: { $ref: "#/components/schemas/ProblemDetails" } } } },

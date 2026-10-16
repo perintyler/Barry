@@ -17,7 +17,8 @@ it("repairs historical status-only closure and closes its attached process histo
     migrateStore(database, MIGRATIONS, "terminal-upgrade-fixture");
     expect(database.prepare("SELECT status,active,state,ended_at,metadata FROM sessions WHERE id='legacy'").get()).toEqual({ status: "cancelled", active: 0, state: "closed", ended_at: "2026-10-01T00:00:00Z", metadata: '{"name":"keep","end_reason":"terminal-status-repair"}' });
     expect(database.prepare("SELECT ended_at FROM processes WHERE session_id='legacy'").get()).toEqual({ ended_at: "2026-10-01T00:00:00Z" });
-    expect(database.prepare("SELECT * FROM sessions WHERE id='live'").get()).toEqual(live);
+    const { traits: _traits, bound_id: _boundId, ...expectedLive } = live as Record<string, unknown>;
+    expect(database.prepare("SELECT * FROM sessions WHERE id='live'").get()).toEqual({ ...expectedLive, bags: "[]", bound: null });
     expect(() => database.exec("UPDATE sessions SET status='failed' WHERE id='live'")).toThrow(/terminal session must be closed/);
     database.exec("UPDATE sessions SET state='archived' WHERE id='legacy'");
     database.exec("UPDATE sessions SET summary='archived summary' WHERE id='legacy'");

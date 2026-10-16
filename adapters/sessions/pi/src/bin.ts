@@ -1,26 +1,7 @@
-import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { resolveHarnessCommand } from "@barry-rocks/sdk/adapters/harnesses";
+import { PI_REQUIREMENTS } from "./modes.js";
 
-const LOCAL_SHIM = join(homedir(), ".local", "bin", "pi");
-
-/**
- * Resolve the Pi CLI binary path.
- */
+/** CLI operations use the same executable resolution as doctor. Hosted uses the SDK. */
 export function resolvePiBin(): string {
-  if (process.env.PI_BIN && existsSync(process.env.PI_BIN)) {
-    return process.env.PI_BIN;
-  }
-
-  if (existsSync(LOCAL_SHIM)) return LOCAL_SHIM;
-
-  try {
-    const found = execFileSync("which", ["pi"], { encoding: "utf-8", stdio: "pipe" }).trim();
-    if (found && existsSync(found)) return found;
-  } catch {
-    /* not on PATH */
-  }
-
-  return "pi";
+  return resolveHarnessCommand(PI_REQUIREMENTS);
 }

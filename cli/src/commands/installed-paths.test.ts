@@ -26,13 +26,13 @@ vi.mock("@barry-rocks/mcp-bag", async importOriginal => ({
 }));
 vi.mock("@barry-rocks/sdk/adapters/models", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@barry-rocks/sdk/adapters/models")>();
-  return { ...actual, shippedModelProviders: vi.fn(actual.shippedModelProviders) };
+  return { ...actual, shippedModelVendors: vi.fn(actual.shippedModelVendors) };
 });
 vi.mock("../lib/identity-commands.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/identity-commands.js")>();
   return { ...actual, reconcileAllIdentities: vi.fn(actual.reconcileAllIdentities) };
 });
-import { shippedModelProviders } from "@barry-rocks/sdk/adapters/models";
+import { shippedModelVendors } from "@barry-rocks/sdk/adapters/models";
 import { reconcileAllIdentities } from "../lib/identity-commands.js";
 import { pointCurrent } from "../releases/current.js";
 import { setupCommand } from "./setup.js";
@@ -140,13 +140,13 @@ describe("installed paths", () => {
     const root = join(scratch, "checkout");
     fixture(root);
     vi.stubEnv("BARRY_BUILTIN_DIR", join(root, "bags"));
-    vi.mocked(shippedModelProviders).mockReturnValueOnce([]);
+    vi.mocked(shippedModelVendors).mockReturnValueOnce([]);
     await setupCommand({ launchd: os, systemOS, start: false });
     const files = collect();
     expect(Object.keys(files).filter(name => name.endsWith(".plist"))).toHaveLength(2);
     expect(vi.mocked(reconcileAllIdentities)).not.toHaveBeenCalled();
-    // Shipped model providers are recorded from this root's adapters, joined as given.
-    expect(vi.mocked(shippedModelProviders).mock.lastCall).toEqual([repo]);
+    // Shipped model vendors are recorded from this root's adapters, joined as given.
+    expect(vi.mocked(shippedModelVendors).mock.lastCall).toEqual([repo]);
     expect(statSync(join(process.env.BARRY_HOME!, "bin/barry")).mode & 0o777).toBe(0o755);
     for (const [name, text] of Object.entries(files)) await expect(normalize(text)).toMatchFileSnapshot(`__golden__/installed-checkout/${name}`);
   });
@@ -237,7 +237,7 @@ it("leaves the Homebrew-owned barry command untouched during setup", async () =>
   const root = join(scratch, "checkout");
   fixture(root);
   vi.stubEnv("BARRY_BUILTIN_DIR", join(root, "bags"));
-  vi.mocked(shippedModelProviders).mockReturnValueOnce([]);
+  vi.mocked(shippedModelVendors).mockReturnValueOnce([]);
   const keg = join(scratch, "Cellar/barry/0.1.0/libexec/bin/barry");
   put(scratch, "Cellar/barry/0.1.0/libexec/bin/barry", "Homebrew", 0o755);
   const dir = join(process.env.BARRY_HOME!, "bin");

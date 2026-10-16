@@ -114,7 +114,7 @@ try {
     console.log = (...args: unknown[]) => { messages.push(args.map(String).join(" ")); write(...args); };
     try { await setupCommand({ link: repo, start: false, launchd: first.os }); }
     finally { console.log = write; process.env.PATH = previousPath; }
-    assert(messages.includes("No session adapter is installed. Install one, then run: barry adapter add adapters/sessions/<name>"), "a host with no vendor binary receives an actionable selection hint");
+    assert(messages.includes("Selected session adapter claude-code.") && messages.includes("Selected session adapter pi."), "bundled hosted adapters are selected without a vendor CLI on PATH");
     assert(lstatSync(barryCurrentDir()).isSymbolicLink(), "current is a symlink");
     assert.equal(realpathSync(barryCurrentDir()), repo, "current points at the linked checkout");
     const current = currentInstallation();
@@ -127,7 +127,7 @@ try {
     assert.equal(statSync(barryEnvPath()).mode & 0o777, 0o600, "the instance secret file is private");
     const snapshot = JSON.parse(readFileSync(join(support, "bags.snapshot.json"), "utf8")) as { bags: Record<string, unknown> };
     const shipped = Object.keys(loadBuiltinRegistry()).sort();
-    assert.deepEqual(Object.keys(snapshot.bags).sort(), shipped, "every shipped bag is registered");
+    assert.deepEqual(Object.keys(snapshot.bags).sort(), [...new Set([...shipped, "claude", "pi"])].sort(), "shipped bags and bundled adapter bags are registered");
     const providers = JSON.parse(readFileSync(join(support, "model-providers.json"), "utf8")) as { installed?: { packageName: string; shipped?: boolean }[] } | { packageName: string }[];
     const installed = Array.isArray(providers) ? providers : providers.installed ?? [];
     const names = installed.map(record => record.packageName).sort();
@@ -163,17 +163,12 @@ try {
     return { version, installation: listing.installation, workersStatus: status.trim().split("\n") };
   });
 
-  await scenario("the shipped remotable job is offered once its bag's bounds are synced", () => {
-    // Setup now syncs every shipped job bound; repeating sync preserves it.
-    const before = barry("workers", "status");
-    assert(!before.includes("unknown bound"), `fresh setup: ${before}`);
-    assert(before.includes("model=local"), `fresh setup reports the required label: ${before}`);
-    barry("bag", "sync-traits", "sessions");
-    const after = barry("workers", "status");
-    assert.equal(after, before, "sync-traits is a no-op after setup");
-    assert(!after.includes("unknown bound"), `after sync-traits: ${after}`);
-    assert(after.includes("sessions:summarize-session@1"));
-    return { beforeSync: before.includes("unknown bound") ? "unknown bound (needs sync-traits)" : "known", afterSync: after.trim().split("\n").pop() };
+  await scenario("the shipped remotable job is offered from its bag manifest", () => {
+    const status = barry("workers", "status");
+    assert(!status.includes("unknown bound"), `fresh setup: ${status}`);
+    assert(status.includes("model=local"), `fresh setup reports the required label: ${status}`);
+    assert(status.includes("sessions:summarize-session@1"));
+    return { status: status.trim().split("\n").pop() };
   });
 
   await scenario("doctor --json --strict names enabled services that were deliberately not started", () => {
@@ -182,13 +177,13 @@ try {
     const report = JSON.parse(result.stdout) as { installation: { name: string; status: string; detail: string }[] };
     for (const name of ["current", "shim", "path", "node", "bounds", "owner", "nodes"]) assert.equal(report.installation.find(check => check.name === name)?.status, "pass", `${name}: ${result.stdout}`);
     assert.equal(report.installation.find(check => check.name === "services")?.status, "fail");
-    assert.equal(report.installation.find(check => check.name === "session-adapter")?.status, "fail");
-    assert.match(report.installation.find(check => check.name === "session-adapter")?.detail ?? "", /no session adapter selected/);
+    assert.equal(report.installation.find(check => check.name === "session-adapter")?.status, "pass");
+    assert.match(report.installation.find(check => check.name === "session-adapter")?.detail ?? "", /claude-code/);
     return report;
   });
 
   const second = recordingOS();
-  await scenario("a second setup changes nothing: same instance, same registrations, policy only", async () => {
+  await scenario("a second setup changes nothing: same instance, same registrations, rules only", async () => {
     const id = instanceId();
     const choicesBefore = readFileSync(join(barryAppSupportDir(), "managed-definitions.json"), "utf8");
     const agentsBefore = plists();

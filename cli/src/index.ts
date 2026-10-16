@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
-import { installedProgramPath } from "@barry-rocks/sdk/internal/services";
-import { CLI_SCOPE, type IdentityBinding } from "./scope.js";
+import { mark } from "./lib/timing.js";
+
+import { CLI_TARGET, type IdentityBinding } from "./target.js";
 
 function extractIdentityArg(argv: string[]): { name?: string; cleanArgv: string[] } {
   const cleanArgv: string[] = [];
@@ -38,7 +39,7 @@ if (identityName) {
   const dir = identityRecords.directory({ name: identityName });
   let identity;
   if (dir && user) {
-    const synchronized = await identityRecords.sync(dir, { actorId: user.id });
+    const synchronized = await identityRecords.syncIfChanged(dir, { actorId: user.id });
     identity = await identityRecords.row(synchronized.identityId);
   } else if (user) {
     identity = await identityRecords.byReference(identityName);
@@ -58,14 +59,14 @@ if (identityName) {
   process.env.BARRY_IDENTITY = identity.name;
   process.env.BARRY_IDENTITY_ID = String(identity.id);
   process.env.BARRY_IDENTITY_BINDING = JSON.stringify(binding);
-  (globalThis as Record<symbol, unknown>)[CLI_SCOPE] = {
+  (globalThis as Record<symbol, unknown>)[CLI_TARGET] = {
     kind: "identity",
     binding,
     name: identity.name,
   };
   process.argv = cleanArgv;
 } else {
-  (globalThis as Record<symbol, unknown>)[CLI_SCOPE] = { kind: "system" };
+  (globalThis as Record<symbol, unknown>)[CLI_TARGET] = { kind: "system" };
   delete process.env.BARRY_IDENTITY;
   delete process.env.BARRY_IDENTITY_ID;
   delete process.env.BARRY_IDENTITY_BINDING;
@@ -77,7 +78,9 @@ const handedOver = await dispatchSkew().catch((error: unknown) => {
   process.exitCode = 1;
   return true;
 });
+mark("skew:checked");
 if (!handedOver) {
+  const { installedProgramPath } = await import("@barry-rocks/sdk/internal/services");
   // Session settings name this as each hook's command (see sdk/src/hooks/hooks.ts).
   process.env.BARRY_HOOK_DISPATCHER ??= installedProgramPath("barry-hook");
   await import("./main.js");

@@ -25,9 +25,10 @@ export function fakeIdentities(overrides: Partial<Identities> = {}): Identities 
     update: overrides.update ?? refuse("identities.update"),
     remove: overrides.remove ?? refuse("identities.remove"),
     makeDefault: overrides.makeDefault ?? refuse("identities.makeDefault"),
-    traits: overrides.traits ?? refuse("identities.traits"),
-    grants: overrides.grants ?? refuse("identities.grants"),
-    allTraits: overrides.allTraits ?? refuse("identities.allTraits"),
+    ...(overrides.bags ? { bags: overrides.bags } : {}),
+    ...(overrides.bound ? { bound: overrides.bound } : {}),
+    ...(overrides.tools ? { tools: overrides.tools } : {}),
+    ...(overrides.selectable ? { selectable: overrides.selectable } : {}),
     bounds: overrides.bounds ?? refuse("identities.bounds"),
     owner: overrides.owner ?? refuse("identities.owner"),
     devices: overrides.devices ?? refuse("identities.devices"),
@@ -42,7 +43,13 @@ export function fakeSessions(overrides: Partial<Sessions> = {}): Sessions {
     get: overrides.get ?? refuse("sessions.get"),
     start: overrides.start ?? refuse("sessions.start"),
     update: overrides.update ?? refuse("sessions.update"),
-    grants: overrides.grants ?? refuse("sessions.grants"),
+    ...(overrides.bags ? { bags: overrides.bags } : {}),
+    ...(overrides.bounds ? { bounds: overrides.bounds } : {}),
+    ...(overrides.bound ? { bound: overrides.bound } : {}),
+    ...(overrides.tools ? { tools: overrides.tools } : {}),
+    ...(overrides.skills ? { skills: overrides.skills } : {}),
+    ...(overrides.instructions ? { instructions: overrides.instructions } : {}),
+    ...(overrides.actions ? { actions: overrides.actions } : {}),
     messages: overrides.messages ?? refuse("sessions.messages"),
     message: overrides.message ?? refuse("sessions.message"),
     listening: overrides.listening ?? refuse("sessions.listening"),
@@ -77,9 +84,9 @@ export function fakeSchedules(overrides: Partial<Schedules> = {}): Schedules {
     name: "schedules",
     list: overrides.list ?? refuse("schedules.list"),
     scheduler: overrides.scheduler ?? refuse("schedules.scheduler"),
-    oneOffs: overrides.oneOffs ?? refuse("schedules.oneOffs"),
-    scheduleOnce: overrides.scheduleOnce ?? refuse("schedules.scheduleOnce"),
-    cancelOneOff: overrides.cancelOneOff ?? refuse("schedules.cancelOneOff"),
+    atSchedules: overrides.atSchedules ?? refuse("schedules.atSchedules"),
+    scheduleAt: overrides.scheduleAt ?? refuse("schedules.scheduleAt"),
+    cancelAtSchedule: overrides.cancelAtSchedule ?? refuse("schedules.cancelAtSchedule"),
   };
 }
 
@@ -87,8 +94,12 @@ export function fakeBags(overrides: Partial<Bags> = {}): Bags {
   return {
     name: "bags",
     list: overrides.list ?? refuse("bags.list"),
+    ...(overrides.get ? { get: overrides.get } : {}),
     tools: overrides.tools ?? refuse("bags.tools"),
-    extensions: overrides.extensions ?? refuse("bags.extensions"),
+    ...(overrides.bounds ? { bounds: overrides.bounds } : {}),
+    ...(overrides.skills ? { skills: overrides.skills } : {}),
+    ...(overrides.instructions ? { instructions: overrides.instructions } : {}),
+    ...(overrides.actions ? { actions: overrides.actions } : {}),
     runJob: overrides.runJob ?? refuse("bags.runJob"),
   };
 }
@@ -111,3 +122,6 @@ export function fakeServices(overrides: Partial<Services> = {}): Services {
     restart: overrides.restart ?? refuse("services.restart"),
   };
 }
+
+export {describeSessionContract,type SessionContractFixture} from "../sessions/testing/contract.js";
+export {acpSessionContractFixture} from "../sessions/testing/acp.js";

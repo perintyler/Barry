@@ -36,9 +36,35 @@ export function setupGating(workspaceDir: string, deniedTools: string[] = [], se
   const gatingScript = join(hooksDir, "tool_gate.cjs");
   writeFileSync(
     gatingScript,
-    `const servers = new Set(${JSON.stringify(servers)});
+    `const fs = require('node:fs');
+const path = require('node:path');
+const cliDir = ${JSON.stringify(join(workspaceDir, ".gemini", "antigravity-cli"))};
+const servers = new Set(${JSON.stringify(servers)});
 const denied = new Set(${JSON.stringify(deniedTools.filter((tool) => tool !== "call_mcp_tool"))});
 const native = new Set(${JSON.stringify(allowedNativeTools)});
+// agy spills large MCP results and tool schemas to its private home. Reading
+// those is part of consuming MCP, even when native filesystem tools are denied.
+function runtimeRead(call) {
+  if (!call || call.name !== 'view_file' || typeof call.args?.AbsolutePath !== 'string') return false;
+  const file = call.args.AbsolutePath;
+  if (!path.isAbsolute(file)) return false;
+  try {
+    const root = fs.realpathSync(cliDir);
+    const resolved = path.resolve(file);
+    // Reject symlinks, including symlinked parents, to keep the exception local.
+    if (fs.realpathSync(resolved) !== resolved || !fs.statSync(resolved).isFile()) return false;
+    const parts = path.relative(root, resolved).split(path.sep);
+    if (parts.length === 6 && parts[0] === 'brain' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parts[1]) &&
+        parts[2] === '.system_generated' && parts[3] === 'steps' &&
+        /^[0-9]+$/.test(parts[4]) && parts[5] === 'output.txt') return true;
+    if (parts.length === 3 && parts[0] === 'mcp' && servers.has(parts[1]) && parts[2].endsWith('.json')) {
+      const tool = parts[2].slice(0, -5);
+      return tool.length > 0 && !denied.has('mcp__' + parts[1].replace(/-/g, '_') + '__' + tool);
+    }
+  } catch {}
+  return false;
+}
 let data = '';
 process.stdin.on('data', chunk => { data += chunk; });
 process.stdin.on('end', () => {
@@ -47,7 +73,7 @@ process.stdin.on('end', () => {
     const parsed = JSON.parse(data);
     const call = parsed.toolCall;
     // Under --json-schema, finish only formats the requested response.
-    allowed = ${structured} && call && call.name === 'finish' || call && native.has(call.name) && !denied.has(call.name);
+    allowed = ${structured} && call && call.name === 'finish' || call && native.has(call.name) && !denied.has(call.name) || runtimeRead(call);
     if (call && call.name === 'call_mcp_tool' && call.args) {
       const server = call.args.ServerName;
       const tool = call.args.ToolName;

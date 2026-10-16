@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { expect, it, vi } from "vitest";
@@ -21,7 +21,7 @@ it("runs the absolute entry script from a hook's different cwd and empty PATH", 
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
-    expect(JSON.parse(output)).toEqual({ script, args: ["synthetic binding", "hook", "cursor", argument] });
+    expect(JSON.parse(output)).toEqual({ script: realpathSync(script), args: ["synthetic binding", "hook", "cursor", argument] });
   } finally {
     process.argv[1] = savedScript;
     process.execArgv.push(...savedFlags);

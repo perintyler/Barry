@@ -19,7 +19,7 @@ import { join, resolve } from "node:path";
 import Database from "better-sqlite3";
 
 import { KeychainProvider } from "@barry-rocks/sdk/internal/env";
-import { vaultAccountFor, vaultEmail, deriveKeys, decryptSymmetricKey, decrypt as vaultDecrypt } from "@barry-rocks/sdk/internal/vault";
+import { configuredVaultEndpoint, vaultAccountFor, vaultEmail, deriveKeys, decryptSymmetricKey, decrypt as vaultDecrypt } from "@barry-rocks/sdk/internal/vault";
 
 
 import { vaultDbPath, vaultBackupSecret } from "./vault-backup.js";
@@ -190,7 +190,7 @@ async function verifyDecrypts(snapshotPath: string, identityName: string, metada
     // returns the MASTER-derived encKey/macKey, which unwrap the account's
     // symmetric key into the ITEM-level encKey/macKey that actually decrypt
     // `items.password`. No manual HKDF needed — deriveKeys does it.
-    const { encKey: masterEncKey, macKey: masterMacKey } = deriveKeys(masterPassword, email, account.kdf_salt);
+    const { encKey: masterEncKey, macKey: masterMacKey } = await deriveKeys(masterPassword, email, account.kdf_salt);
     const { encKey, macKey } = decryptSymmetricKey(account.encrypted_key, masterEncKey, masterMacKey);
 
     try {
@@ -299,6 +299,27 @@ async function runRestore(
   const liveReal = existsSync(live) ? realpathSync(live) : resolve(live);
   if (sourceReal === liveReal || (existsSync(live) && statSync(sourceReal).dev === statSync(live).dev && statSync(sourceReal).ino === statSync(live).ino)) throw new VaultRestoreError("Restore source is the live vault database; use a sealed backup snapshot");
 
+  const identityName = options.name ?? getActiveIdentity(await getCurrentUser());
+  if (!identityName) {
+    console.error("Error: No identity specified and no active identity is set — pass --name to verify decryption against it.");
+    process.exitCode = 1;
+    return;
+  }
+  let found: IdentityEntry;
+  try {
+    found = await identityRecords.find(identityName);
+  } catch (error) {
+    if (!isBarryError(error)) throw error;
+    console.error(`Error: ${error.message}`);
+    if (error.hint) console.error(`  ${error.hint}`);
+    process.exitCode = 1;
+    return;
+  }
+  const vaultRef = (found.record.metadata as { vault?: unknown } | null)?.vault;
+  if (vaultRef && configuredVaultEndpoint(parseVaultName(vaultRef)) !== undefined) {
+    throw new VaultRestoreError("Restore of an instance-configured vault account is not supported by this legacy restore command. Preserve its private vault-accounts.yaml connection, declared bootstrap and encrypted daemon database together; qualify that account's bootstrap restore before recovery. This command will not use legacy Keychain credentials or the default daemon for it.");
+  }
+
   // ── 1. Identify ──────────────────────────────────────────────────────
   const looksEncrypted = sourcePath.endsWith(".age");
   const isEncrypted = isAgeEncrypted(sourcePath);
@@ -337,22 +358,6 @@ async function runRestore(
   console.log(`Snapshot:    ${info.accounts} accounts, ${info.items} items, tables: ${info.tables.join(", ")}`);
 
   // ── 3b. Verify by decryption ─────────────────────────────────────────
-  const identityName = options.name ?? getActiveIdentity(await getCurrentUser());
-  if (!identityName) {
-    console.error("Error: No identity specified and no active identity is set — pass --name to verify decryption against it.");
-    process.exitCode = 1;
-    return;
-  }
-  let found: IdentityEntry;
-  try {
-    found = await identityRecords.find(identityName);
-  } catch (error) {
-    if (!isBarryError(error)) throw error;
-    console.error(`Error: ${error.message}`);
-    if (error.hint) console.error(`  ${error.hint}`);
-    process.exitCode = 1;
-    return;
-  }
   await verifyDecrypts(plainPath, identityName, found.record.metadata);
   console.log(`Decrypt check: a real item decrypted successfully with ${identityName}'s master password.`);
 

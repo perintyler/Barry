@@ -17,6 +17,7 @@ export {
   type VaultOpenOptions,
 } from "./account.js";
 export { assertVaultAccessAllowedUnderTest } from "./test-guard.js";
+export { configuredVaultEndpoint } from "./instance-account.js";
 export * from "./crypto.js";
 export * from "./oauth.js";
 export * from "./bag-auth-status.js";

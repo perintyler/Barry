@@ -1,21 +1,21 @@
 // Method bodies extracted from session-runtime.ts for file size.
 // Moved verbatim as free functions taking the runtime instance (`rt`);
 // the SessionRuntime class delegates to these. Pure move + rewire.
+import { timed } from "./timing.js";
 import {SessionRuntime, log} from "../session-runtime.js";
 import type { ActiveSession, McpServerConfig } from "../session-runtime.js";
 import {getCreateSession, getDescribeAdapter, modelRefFor} from "../agent-runtime.js";
 import {getSessionRecord, issueWorkflowCredential} from "../db.js";
 import {resolveEnvForBarry} from "../identity-env.js";
-import {canDenyNativeTools, nativeToolPolicy, resolveEgressSandbox} from "../session-agent-guards.js";
+import {canDenyNativeTools, resolveSessionNativeTools, resolveEgressSandbox} from "../session-agent-guards.js";
 import {withWorkflowSessionCredential} from "../workflow-mcp-credentials.js";
 import {installedModels} from "@barry-rocks/sdk/adapters/models";
-import {executionScopeSchema, scopeFingerprint} from "@barry-rocks/sdk/bounds";
-import {addActionCommandsToPlugin, buildActionCommandsDir, buildSkillsPlugin, listAllActions, resolveSkillDirs, selectSlashCommandActions} from "@barry-rocks/sdk/internal/actions";
+import {approvedBoundsSchema, boundFingerprint} from "@barry-rocks/sdk/bounds";
+import {addActionCommandsToPlugin, buildActionCommandsDir, buildSkillsPlugin, listAllActions, selectSlashCommandActions} from "@barry-rocks/sdk/internal/actions";
 import {mintWorkflowSessionCredential} from "@barry-rocks/sdk/internal/auth";
 import {loadBagRegistrySnapshot} from "@barry-rocks/sdk/internal/bags";
 import {assertSessionCredentials, requiredCredentials} from "@barry-rocks/sdk/internal/env";
 import {type SessionConfig as HarnessSessionConfig, type PermissionDecision, type PermissionRequest, type Session, configureSession, isScopedMcpTool} from "@barry-rocks/sdk/sessions";
-import {sessionGrants} from "@barry-rocks/sessions-bag";
 import {rmSync} from "fs";
 
   /**
@@ -23,7 +23,7 @@ import {rmSync} from "fs";
    * The session stays open between turns for follow-up messages.
    */
 export async function rt_resolveHarnessEnvironment(rt: SessionRuntime, activeSession: ActiveSession): Promise<Record<string, string | undefined>> {
-    const identityEnv = await resolveEnvForBarry(activeSession.identityId);
+    const identityEnv = await timed(activeSession.timings, "env_ms", () => resolveEnvForBarry(activeSession.identityId));
     const env = identityEnv.vars;
 
     // THE GATE. Every credential this turn authenticates with must come
@@ -79,7 +79,7 @@ export async function rt_prepareHarnessConfiguration(rt: SessionRuntime,
         // The running harness's bag maps effective restrictions to its native
         // inventory. Context removal depends on its capabilities; hosted
         // approval requests also run through the per-call ruling below.
-        const native = await nativeToolPolicy(activeSession);
+        const native = await resolveSessionNativeTools(activeSession);
         if (Object.keys(native.conflicts).length) throw new Error(`session bounds cannot take back ${Object.keys(native.conflicts).join(", ")} on ${activeSession.provider} (hosted): ${[...new Set(Object.values(native.conflicts))].join("; ")}`);
         const deniedTools = native.denied;
         if (deniedTools.length && !canDenyNativeTools(activeSession.provider)) throw new Error("native-tool restrictions cannot be enforced by this harness");
@@ -88,16 +88,24 @@ export async function rt_prepareHarnessConfiguration(rt: SessionRuntime,
         if (activeSession.workflowScoped) {
           const secret = process.env.BARRY_SECRET;
           const record = await getSessionRecord(activeSession.id);
-          if (!secret || !record?.metadata?.workflow_scope || !record.user_id || !activeSession.identityId || record.identity_id !== activeSession.identityId) {
+          const rawWorkflowBound = record?.metadata?.workflow_bound;
+          if (!secret || !record || !rawWorkflowBound || !record.user_id || !activeSession.identityId || record.identity_id !== activeSession.identityId) {
             throw new Error("workflow session credential cannot be issued without its persisted identity and scope");
           }
-          const scope = executionScopeSchema.parse(record.metadata.workflow_scope);
+          const scope = approvedBoundsSchema.parse(rawWorkflowBound);
           const { fingerprint, ...evidence } = scope;
-          if (!scope.identity || scopeFingerprint(evidence) !== fingerprint || record.metadata.workflow_identity_id !== activeSession.identityId || (scope.harness && scope.harness !== activeSession.provider)) {
+          const withoutTraits = (() => {
+            const { traits: _t, ...rest } = evidence;
+            return rest;
+          })();
+          const fingerprintMatches =
+            boundFingerprint(evidence) === fingerprint ||
+            boundFingerprint(withoutTraits) === fingerprint;
+          if (!scope.identity || !fingerprintMatches || record.metadata.workflow_identity_id !== activeSession.identityId || (scope.harness && scope.harness !== activeSession.provider)) {
             throw new Error("workflow session credential identity, harness, or scope is invalid");
           }
           const credentialId = await issueWorkflowCredential(activeSession.id, {
-            actorId: record.user_id, identityId: activeSession.identityId, scopeFingerprint: scope.fingerprint,
+            actorId: record.user_id, identityId: activeSession.identityId, boundFingerprint: scope.fingerprint,
           });
           if (!credentialId) throw new Error("workflow session credential run binding is unavailable");
           const credential = mintWorkflowSessionCredential(secret, {
@@ -106,7 +114,7 @@ export async function rt_prepareHarnessConfiguration(rt: SessionRuntime,
             identityId: activeSession.identityId,
             sessionId: activeSession.id,
             identity: scope.identity,
-            scopeFingerprint: scope.fingerprint,
+            boundFingerprint: scope.fingerprint,
             expiresAt: Date.now() + 24 * 60 * 60 * 1000,
           });
           Object.assign(scopedMcpServers, withWorkflowSessionCredential(scopedMcpServers, credential));
@@ -137,19 +145,22 @@ export async function rt_prepareHarnessConfiguration(rt: SessionRuntime,
 
         log.info("sdk.scope", {
           sessionId: activeSession.id,
-          traits: activeSession.traits,
+          bags: activeSession.bags,
+          bounds: activeSession.bounds,
         });
 
         // Mount skills as a loadable plugin where the provider can take one.
         // Best-effort: skill mounting must never block a session start.
+        const skillsStart = performance.now();
         if (record?.capabilities.skillsMount === "plugin") {
           try {
-            // Re-read session traits from the DB — PATCH /sessions/:id updates
+            // Re-read session bags and bounds from the DB — PATCH /sessions/:id updates
             // the row + invalidates the SDK session without touching this
             // in-memory copy, and the next turn lands here.
-            const freshTraits = (await getSessionRecord(activeSession.id))?.traits;
-            if (freshTraits) activeSession.traits = freshTraits;
-            const skillNames = (await sessionGrants(activeSession.id)).skills.map((skill) => skill.name);
+            const freshRow = await getSessionRecord(activeSession.id);
+            if (freshRow?.bags) activeSession.bags = freshRow.bags;
+            if (freshRow?.bounds) activeSession.bounds = freshRow.bounds;
+            if (freshRow?.bound !== undefined) activeSession.bound = freshRow.bound;
             // This block runs EVERY TURN. `loadBagRegistrySnapshot` is the
             // process-wide memo — one load for the life of the server — which
             // is exactly the property the catalogs used to get by calling it
@@ -157,19 +168,23 @@ export async function rt_prepareHarnessConfiguration(rt: SessionRuntime,
             // the registry and re-loads every bag, which for a remote bag with
             // `resources: true` means an MCP handshake per turn per bag.
             const registeredBags = (await loadBagRegistrySnapshot()).bags;
-            const traitSkillDirs = await resolveSkillDirs(registeredBags, skillNames);
-            // Recomputed per turn rather than reused from session start: traits
-            // are re-read from the DB just above, so a trait added mid-session
+            const activeBagSet = new Set([...activeSession.bagNames, ...activeSession.bags]);
+            const extraBagSkillDirs = registeredBags
+              .filter((b) => activeBagSet.has(b.name))
+              .flatMap((b) => b.skillsDirs);
+            const mergedSkillsDirs = [...new Set([...activeSession.bagSkillsDirs, ...extraBagSkillDirs])];
+            // Recomputed per turn rather than reused from session start: bags
+            // are re-read from the DB just above, so a bag added mid-session
             // gets its command on the next turn instead of the next restart.
             const commandActions = selectSlashCommandActions(
               await listAllActions(registeredBags),
-              activeSession.bagNames,
-              traitSkillDirs,
+              [...activeBagSet],
+              [],
             );
             if (activeSession.skillsPluginDir) {
               try { rmSync(activeSession.skillsPluginDir, { recursive: true, force: true }); } catch { /* best-effort */ }
             }
-            activeSession.skillsPluginDir = buildSkillsPlugin(activeSession.bagSkillsDirs, traitSkillDirs);
+            activeSession.skillsPluginDir = buildSkillsPlugin(mergedSkillsDirs, []);
             // Slash commands ride inside the plugin here, not via --add-dir as
             // in the CLI: the SDK reads.claude/commands/ only from cwd and only
             // with settingSources containing "project", and this path sets
@@ -208,23 +223,23 @@ export async function rt_prepareHarnessConfiguration(rt: SessionRuntime,
               }
             }
             if (activeSession.skillsPluginDir) {
-              log.info("skills.mounted", { sessionId: activeSession.id, traitSkills: skillNames, pluginDir: activeSession.skillsPluginDir });
+              log.info("skills.mounted", { sessionId: activeSession.id, bags: [...activeBagSet], pluginDir: activeSession.skillsPluginDir });
             }
           } catch (err) {
             log.warn("skills.load_failed", { sessionId: activeSession.id, error: err instanceof Error ? err.message : String(err) });
           }
         }
 
+        activeSession.timings.skills_ms = performance.now() - skillsStart;
         // Resolve the network scope for kernel-level sandbox enforcement. It
         // MUST agree with what the MCP server enforces at the app layer, so it
-        // merges the same four sources in the same order (trait ∪ named ∪
-        // barry ∪ inline); resolving fewer would silently downgrade a session
-        // from kernel enforcement to cooperative guards.
-        const sandbox = await resolveEgressSandbox(activeSession, {
+        // merges the same sources in the same order; resolving fewer would
+        // silently downgrade a session from kernel enforcement to cooperative guards.
+        const sandbox = await timed(activeSession.timings, "sandbox_ms", () => resolveEgressSandbox(activeSession, {
           provider: activeSession.provider,
           model: activeSession.model,
           modelProvider: activeSession.modelProvider,
-        });
+        }));
 
         const model = modelRefFor(activeSession.provider, activeSession.model, activeSession.modelProvider);
         return configureSession({
@@ -235,9 +250,11 @@ export async function rt_prepareHarnessConfiguration(rt: SessionRuntime,
           // `sessionId` carries Barry's session id to it.
           env,
           ...(model ? { model } : {}),
+          ...(activeSession.promptCacheTtl ? { promptCacheTtl: activeSession.promptCacheTtl } : {}),
+          ...(activeSession.effort ? { effort: activeSession.effort } : {}),
           mcpServers: scopedMcpServers,
           maxTurns: 50,
-          // Traits grant native tools; the effective bound takes them back.
+          // The effective bound takes back native tools.
           deniedTools,
           allowedNativeTools: native.allowed,
           // The text only: each harness takes it in its own form, and one that
@@ -256,16 +273,18 @@ export async function rt_prepareHarnessConfiguration(rt: SessionRuntime,
           ...(sandbox ? { egressSandbox: sandbox } : {}),
           // Tool-call gating over the wire: bounds/denied-tools first, followed
           // by interactive external ruling when an app is connected.
-          decide: interactive
-            ? rt.createDecideFunction(activeSession, deniedTools, Object.keys(scopedMcpServers), native.allowed)
-            : (request) => rt.authorizeContinuationTool(activeSession.id, request),
+          decide: async (request) => {
+            const current=await rt.authorizeContinuationTool(activeSession.id, request);
+            if (!current.allow || !interactive) return current;
+            return rt.createDecideFunction(activeSession, deniedTools, Object.keys(scopedMcpServers), native.allowed)(request);
+          },
         });
   }
 
 export async function rt_authorizeContinuationTool(rt: SessionRuntime, sessionId: string, request: PermissionRequest): Promise<PermissionDecision> {
     const activeSession = rt.activeSessions.get(sessionId);
     if (!activeSession) return { allow: false, reason: "Session is not prepared" };
-    const native = await nativeToolPolicy(activeSession);
+    const native = await resolveSessionNativeTools(activeSession);
     return Object.keys(native.conflicts).length || native.denied.includes(request.tool) || (!native.allowed.includes(request.tool) && !isScopedMcpTool(request.tool, Object.keys(activeSession.mcpServers)))
       ? { allow: false, reason: `${request.tool} is denied by current session bounds` }
       : { allow: true };
@@ -282,9 +301,12 @@ export function rt_ensureHarnessSession(rt: SessionRuntime,
     env?: Record<string, string | undefined>,
   ): Promise<Session> {
     if (activeSession.session) return Promise.resolve(activeSession.session);
-    activeSession.opening ??= rt.openHarnessSession(activeSession, mcpServers, env).finally(() => {
-      activeSession.opening = null;
-    });
+    if(!activeSession.opening){
+      const opening=rt.openHarnessSession(activeSession,mcpServers,env).finally(()=>{
+        if(activeSession.opening===opening)activeSession.opening=null;
+      });
+      activeSession.opening=opening;
+    }
     return activeSession.opening;
   }
 
@@ -293,16 +315,18 @@ export async function rt_openHarnessSession(rt: SessionRuntime,
     mcpServers: Record<string, McpServerConfig>,
     env?: Record<string, string | undefined>,
   ): Promise<Session> {
+    const generation=activeSession.generation;
     log.info("sdk.session_new", { sessionId: activeSession.id });
     const createSession = rt.createSessionOverride ?? getCreateSession();
     const config = await rt.prepareHarnessConfiguration(activeSession, mcpServers, env);
     const adoptedFrom = activeSession.adoptedFrom;
-    const session = await createSession(activeSession.provider, config, adoptedFrom ? { adopt: true } : undefined);
+    const session = await timed(activeSession.timings, "harness_create_ms", () => createSession(activeSession.provider, config, adoptedFrom ? { adopt: true } : undefined));
     // Surface adapter warnings alongside Barry’s native grant diagnostics.
     for (const warning of session.warnings ?? []) {
       log.warn("sdk.session_warning", { sessionId: activeSession.id, provider: activeSession.provider, warning });
     }
 
+    if (rt.isStale(activeSession,generation)) { void session.close().catch(()=>{}); throw new Error("Session stopped during initialization"); }
     activeSession.session = session;
     activeSession.adoptedFrom = null;
     // Metadata, not a failure: a session that ran is more useful than one

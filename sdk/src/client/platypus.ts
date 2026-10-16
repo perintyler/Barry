@@ -10,6 +10,8 @@ import { Sessions } from "./sessions.js";
 
 export { BarryApiError } from "./errors.js";
 export type { BarryClientOptions, ServiceClientOptions, RequestOptions } from "./http.js";
+export type { ActionRunRequest, ActionWorkflowAdmission } from "./actions.js";
+export type { ActionWorkItem, ActionWorkResult, ActionWorkStopAck } from "../actions/types.js";
 export type { SessionListOptions, CreateSessionInput, UpdateSessionInput, CreateSessionResponse } from "./sessions.js";
 
 /**

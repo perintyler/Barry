@@ -13,7 +13,10 @@ import { readRelease, type Release } from "../src/releases/release.js";
 import { receiptSchema } from "../src/releases/receipts.js";
 
 const fixtureTable = "release_verification_fixture";
-const logicalNormalization = "node/identities/identities.db traits.metadata null harnessTraits/nativeTools equals absent (the trait reader omits both); all other stores and values are compared exactly";
+const logicalNormalization = "all stores and values are compared exactly; retired tables dropped by migration (identities.db traits and bounds) are allowed when the migration list advances";
+const DROPPED_MIGRATION_TABLES: Record<string, ReadonlySet<string>> = {
+  [join("node", "identities", "identities.db")]: new Set(["traits", "bounds"]),
+};
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const json = (value: unknown) => JSON.stringify(value, (_key, entry: unknown) => typeof entry === "bigint" ? entry.toString() : entry instanceof Uint8Array ? Buffer.from(entry).toString("base64") : entry);
 interface StoreEvidence { fileSha256: string; tables: Record<string, { rows: number; sha256: string; rawSha256: string }>; fixtureRows: number; fixtureSha256: string }
@@ -42,17 +45,8 @@ export function captureStores(directory: string, seed = false, snapshotDirectory
             const query = db.prepare(`SELECT * FROM ${quoted}`); query.setReadBigInts(true);
             const rawRows = query.all();
             const rawSha256 = hash(rawRows.map(row => json(row)).sort().join("\n"));
-            const rows = rawRows.map(row => {
-              // An upgrade's builtin trait sync may remove explicit nulls;
-              // bags/identities/src/config/traits.ts reads null and absent as the same no-value.
-              // Preserve every non-null value and every other metadata key.
-              if (key === join("node", "identities", "identities.db") && name === "traits" && typeof row.metadata === "string") {
-                const metadata = JSON.parse(row.metadata) as Record<string, unknown>;
-                for (const key of ["harnessTraits", "nativeTools"]) if (metadata[key] === null) delete metadata[key];
-                row = { ...row, metadata: JSON.stringify(metadata) };
-              }
-              return json(row);
-            }).sort(); tables[name] = { rows: rows.length, sha256: hash(rows.join("\n")), rawSha256 };
+            const rows = rawRows.map(row => json(row)).sort();
+            tables[name] = { rows: rows.length, sha256: hash(rows.join("\n")), rawSha256 };
           }
           assert.ok(tables[fixtureTable], `${key}: missing retained fixture`);
           if (snapshotDirectory) {
@@ -67,16 +61,17 @@ export function captureStores(directory: string, seed = false, snapshotDirectory
   };
   walk(directory); assert.ok(Object.keys(evidence).length, "no store databases found"); return evidence;
 }
-export function compareStores(before: Record<string, StoreEvidence>, after: Record<string, StoreEvidence>, unchangedCatalog: boolean): void {
+export function compareStores(before: Record<string, StoreEvidence>, after: Record<string, StoreEvidence>, unchangedMigrations: boolean): void {
   for (const [path, original] of Object.entries(before)) {
     const current = after[path]; assert.ok(current, `store disappeared: ${path}`);
     assert.equal(current.fixtureRows, original.fixtureRows, `${path}: fixture row count changed`);
     assert.equal(current.fixtureSha256, original.fixtureSha256, `${path}: fixture data changed`);
-    if (unchangedCatalog) {
+    if (unchangedMigrations) {
       const logical = (tables: StoreEvidence["tables"]) => Object.fromEntries(Object.entries(tables).map(([name, table]) => [name, { rows: table.rows, sha256: table.sha256 }]));
-      assert.deepEqual(logical(current.tables), logical(original.tables), `${path}: logical data changed under an unchanged migration catalog`);
+      assert.deepEqual(logical(current.tables), logical(original.tables), `${path}: logical data changed under an unchanged migration list`);
     }
     else for (const [name, table] of Object.entries(original.tables)) {
+      if (DROPPED_MIGRATION_TABLES[path]?.has(name)) continue;
       assert.ok(current.tables[name], `${path}: retained table disappeared after migration: ${name}`);
       assert.ok(current.tables[name].rows >= table.rows, `${path}: retained table lost rows after migration: ${name}`);
     }
@@ -119,7 +114,7 @@ export async function verifyReleaseUpgrade(args: string[]): Promise<void> {
   const root = values.output ? resolve(values.output) : mkdtempSync(join(tmpdir(), "barry-release-upgrade-"));
   if (values.output) mkdirSync(root, { mode: 0o700 });
   const results: Array<Record<string, unknown>> = [];
-  const report: Record<string, unknown> = { passed: false, completed: false, previousEvidence: Boolean(values.previous), healthCertified: false, healthPolicy: "User services are deliberately disabled; this matrix does not certify running system health.", logicalNormalization, platform: `${process.platform}-${process.arch}`, node: process.version, results };
+  const report: Record<string, unknown> = { passed: false, completed: false, previousEvidence: Boolean(values.previous), healthCertified: false, healthNote: "User services are deliberately disabled; this matrix does not certify running system health.", logicalNormalization, platform: `${process.platform}-${process.arch}`, node: process.version, results };
   const save = () => writeFileSync(join(root, "acceptance.json"), JSON.stringify(report, null, 2), { mode: 0o600 });
   save(); console.log(`Receipt: ${join(root, "acceptance.json")}`);
   const home = join(root, "home"), instance = join(root, "instance"); mkdirSync(home);

@@ -1,11 +1,13 @@
 import type { Mode } from "@barry-rocks/sdk/adapters/harnesses";
 
 export const VERIFIED_ON = "1.3.1";
+export const HOSTED_RECOMMENDED_VERSION = "1.3.6";
 
 export const EXPERIMENTAL = "hosted evidence uses a scripted Gemini endpoint; V02–V04 have not been checked against Gemini’s real API";
 
 export const ANTIGRAVITY_HOSTED: Mode = {
-  verifiedOn: VERIFIED_ON,
+  verifiedOn: HOSTED_RECOMMENDED_VERSION,
+  versions: { recommendedVersion: HOSTED_RECOMMENDED_VERSION, testedVersions: [VERIFIED_ON, HOSTED_RECOMMENDED_VERSION], supportedVersions: [{ min: VERIFIED_ON, max: HOSTED_RECOMMENDED_VERSION }] },
   guarantees: {
     capture: "total",
     delivery: "wake",
@@ -18,13 +20,14 @@ export const ANTIGRAVITY_HOSTED: Mode = {
   evidence: {
     check: "adapters/sessions/antigravity/src/live/antigravity-hosted-live.test.ts; adapters/sessions/antigravity/src/hosted/stream-session.replay.test.ts; adapters/sessions/qa/run.ts --adapter antigravity --offline",
     proves:
-      "the real 1.3.1 process uses the identity key, runs a scoped MCP tool and refuses a forced shell call; a persistent home resumes its earlier history after close; schema output is parsed and interrupt ends a held turn; recorded streams replay with correlated tools; offline QA checks exact resume. Pinned 1.3.1 hosted checks: a granted shell command executes with a valid gate, but policy-script deletion, throw and timeout each refuse the forced sentinel write; these failure injections use a local fake endpoint, not Gemini real API or a TUI",
+      "the real 1.3.1 and 1.3.6 processes uses the identity key, runs a scoped MCP tool and refuses a forced shell call; a persistent home resumes its earlier history after close; schema output is parsed and interrupt ends a held turn; recorded streams replay with correlated tools; offline QA checks exact resume. Hosted checks on 1.3.1 and 1.3.6: a granted shell command executes with a valid gate, but policy-script deletion, throw and timeout each refuse the forced sentinel write; these failure injections use a local fake endpoint, not Gemini real API or a TUI",
   },
   egressSandbox: false,
 };
 
 export const ANTIGRAVITY_INSTRUMENTED: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: [VERIFIED_ON], supportedVersions: [{ min: VERIFIED_ON, max: VERIFIED_ON }] },
   guarantees: {
     capture: "post-hoc",
     delivery: "turn-end",
@@ -44,6 +47,7 @@ export const ANTIGRAVITY_INSTRUMENTED: Mode = {
 
 export const ANTIGRAVITY_GUEST: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: [VERIFIED_ON], supportedVersions: [{ min: VERIFIED_ON, max: VERIFIED_ON }] },
   guarantees: {
     capture: "post-hoc",
     delivery: "none",

@@ -26,7 +26,7 @@ function configure(key: string) {
   writeFileSync(join(home, "config", "barry.yaml"), "secrets:\n  BARRY_WORKFLOW_ACTOR_KEY: {in: .env}\n");
   writeFileSync(join(home, "app-support", "env"), `BARRY_WORKFLOW_ACTOR_KEY=${key}\n`);
 }
-const execution = { identity: "alice", traits: [], bound: null, allowedToolIds: ["workflows:list"] };
+const execution = { identity: "alice", bags: ["workflows"], bound: null, allowedToolIds: ["workflows:list"] };
 it("reads only the installation binding and observes rotation without rebuilding the signer", async () => {
   const sign = installationWorkflowActor(execution);
   const first = "first-owned-workflow-key-longer-than-thirty-two";

@@ -11,7 +11,7 @@
  * anything was dropped.
  */
 
-import type { ActionMeta } from "./action-catalog.js";
+import type { ActionMeta } from "./action-registry.js";
 
 export interface BuildActionsIndexOptions {
   /** Character budget for the whole index. */

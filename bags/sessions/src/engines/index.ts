@@ -1,3 +1,4 @@
+import {stopOwnedProcess} from "@barry-rocks/sdk/sessions";
 /**
  * Starting, addressing and reaping per-session vendor engines.
  *
@@ -173,7 +174,7 @@ export async function stopEngine(sessionId: string): Promise<void> {
     });
     if (liveness.state === "alive") {
       try {
-        process.kill(record.pid, "SIGTERM");
+        await stopOwnedProcess(record.pid,()=>classifyProcessLiveness({pid:record.pid,pid_started_at:record.pidStartedAt}).state==="alive");
       } catch (err) {
         // Already gone between the probe and the signal. The row still needs
         // marking, so this is not a failure.

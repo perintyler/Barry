@@ -36,6 +36,7 @@ describe("scaffold", () => {
     expect(manifest.version).toBe("v0.1");
     expect(manifest.name).toBe("my-bag");
     expect(manifest.description).toBe("Test");
+    expect(manifest.traits).toBeUndefined();
   });
 
   it("includes server section when withServer is true", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { piEventOf, sumUsage, usageOf } from "./event-mapping.js";
+import { piEventOf, sumUsage, usageSnapshotOf, usageOf } from "./event-mapping.js";
 
 describe("Pi Event Mapping", () => {
   it("maps message_update text deltas to partial events", () => {
@@ -61,6 +61,33 @@ describe("Pi Event Mapping", () => {
       cacheReadTokens: 10,
       costUsd: 0.005,
     });
+    expect(signals.usageSnapshot).toMatchObject({
+      status: "known",
+      input_tokens: 100,
+      output_tokens: 25,
+      cache_read_tokens: 10,
+      total_tokens: 125,
+      reported_cost: 0.005,
+    });
+  });
+
+  it("does not fabricate 0 in usageOf when usage fields are missing or partial, while preserving measured 0", () => {
+    expect(usageOf(undefined)).toBeUndefined();
+    expect(usageOf({ input: 50 })).toBeUndefined();
+
+    const partialSnap = usageSnapshotOf({ input: 50 });
+    expect(partialSnap.status).toBe("partial");
+    expect(partialSnap.input_tokens).toBe(50);
+    expect(partialSnap.output_tokens).toBeNull();
+    expect(partialSnap.unknown_reason).toBe("usage_incomplete");
+
+    const zeroUsage = usageOf({ input: 0, output: 0, totalTokens: 0 });
+    expect(zeroUsage).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    });
+    expect(usageSnapshotOf({ input: 0, output: 0, totalTokens: 0 }).status).toBe("known");
   });
 
   it("maps nested tool execution start", () => {
@@ -113,3 +140,4 @@ describe("Pi Event Mapping", () => {
     });
   });
 });
+

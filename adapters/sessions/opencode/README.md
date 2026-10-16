@@ -29,3 +29,7 @@ The package declares `barry.sessionAdapter.contractVersion: 1` and exports compi
 ## Connection, environment and modes
 
 Hosted mode starts a private OpenCode 2.x server per session and uses its streaming API. Guest mode starts the vendor TUI with a standalone private server; instrumented mode is unavailable. Hosted is the default. Barry constructs session-local configuration and data directories and supplies provider credentials from the identity's declared environment. The server must not borrow a background service's configuration. These modes do not declare an egress sandbox; see `src/modes.ts` for the separate capture, delivery and gating guarantees.
+
+Hosted cancellation follows the [shared Session contract](../../../sdk/src/sessions/README.md):
+interrupt acknowledges a request; the runtime owns the completion deadline. Close aborts startup,
+releases owned resources, and ends an open reader once. Shared conformance tests exercise this adapter.

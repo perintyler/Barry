@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { expandComposition } from "../../traits/auto-traits.js";
+import { expandComposition } from "../bag-dependencies.js";
 import type { Bag } from "../types.js";
 
 function makeBag(name: string, bags?: string[]): Bag {
@@ -14,7 +14,7 @@ function makeBag(name: string, bags?: string[]): Bag {
           name,
           description: "",
           mcpServers: {},
-          traits: {},
+          bounds: {},
           tools: [],
           dependencies: [],
           services: {},
@@ -27,7 +27,7 @@ function makeBag(name: string, bags?: string[]): Bag {
     skillsDirs: [],
     actionsDirs: [],
     instructionsDirs: [],
-    traits: [],
+    bounds: {},
     mcpServers: {},
     tools: [],
     dependencies: [],

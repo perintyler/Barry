@@ -7,7 +7,7 @@ afterEach(() => Barry.reset());
 const identities = fakeIdentities;
 const sessions = fakeSessions;
 
-const grants = { traits: ["git"], bound: null, namespaces: ["git"], tools: [{ name: "status", namespace: "git", bag: "git", description: "", access: "read" as const }], skills: [], instructions: [] };
+const statusTools = [{ name: "status", namespace: "git", bag: "git", description: "", access: "read" as const }];
 
 describe("Barry", () => {
   it("shares installs, caller and reset across separate SDK copies", async () => {
@@ -61,13 +61,22 @@ describe("Barry", () => {
   });
 
   it("asks a session for its tools through its identity, with the ambient caller", async () => {
-    const sessionGrants = vi.fn(async () => grants);
-    Barry.use(sessions({ grants: sessionGrants }));
+    const sessionTools = vi.fn(async () => statusTools);
+    Barry.use(sessions({ tools: sessionTools }));
     const ambient: Caller = { kind: "session", identity: "bux", sessionId: "s1" };
     Barry.useCaller(() => ambient);
     const tools = await Barry.identity("bux").session("s1").tools();
     expect(tools.map((tool) => tool.name)).toEqual(["status"]);
-    expect(sessionGrants).toHaveBeenCalledWith("bux", "s1", ambient);
+    expect(sessionTools).toHaveBeenCalledWith("bux", "s1", ambient);
+  });
+
+  it("delegates Barry.identity(ref).tools and Barry.tools(ref) to the identities subject", async () => {
+    const identityTools = vi.fn(async () => statusTools);
+    Barry.use(identities({ tools: identityTools }));
+    await Barry.identity("bux").tools({ bags: ["git"] });
+    expect(identityTools).toHaveBeenLastCalledWith("bux", { bags: ["git"] }, { kind: "owner" });
+    await Barry.tools("bux", ["git"], ["readonly"]);
+    expect(identityTools).toHaveBeenLastCalledWith("bux", { bags: ["git"], bounds: ["readonly"] }, { kind: "owner" });
   });
 
   it("acts as the caller it is given, over the ambient one", async () => {
@@ -137,3 +146,241 @@ it("passes message queries, sequences, listener calls and file paths to installe
   expect(listening).toHaveBeenCalledWith("bux", "s1", caller);
   expect(lastChanges).toHaveBeenCalledWith(["a"], caller);
 });
+
+describe("Barry.tools, Barry.bound, and Barry.Bound", () => {
+  const sessionsBag = {
+    name: "sessions",
+    tools: [
+      {
+        name: "search_messages",
+        access: "read" as const,
+        description: "Lexical FTS5 search",
+        handler: async () => "fts5",
+      },
+      {
+        name: "send_message",
+        access: "write" as const,
+        description: "Send message",
+        handler: async () => "sent",
+      },
+    ],
+  };
+
+  const vectorSearchBag = {
+    name: "session-vector-search",
+    requires: { sessions: {}, embeddings: {} },
+    implements: { tools: ["sessions:search_messages"] },
+    tools: [
+      {
+        name: "search_messages",
+        access: "read" as const,
+        description: "Hybrid vector + FTS5 search",
+        handler: async () => "vector",
+      },
+    ],
+  };
+
+  it("replaces implemented tools in-place while preserving the target qualified ID", async () => {
+    const tools = Barry.tools({ name: "me" }, [sessionsBag, vectorSearchBag]);
+    expect(tools.map((t) => `${t.namespace}:${t.name}`)).toEqual([
+      "sessions:search_messages",
+      "sessions:send_message",
+    ]);
+    const searchTool = tools.find((t) => t.name === "search_messages")!;
+    expect(searchTool.bag).toBe("session-vector-search");
+    expect(await searchTool.handler!({}, {} as never)).toBe("vector");
+  });
+
+  it("uses a single pinned Bound directly without re-merging live identity.bounds", () => {
+    const identityWithDenyAll = {
+      name: "me",
+      bounds: [{ tools: { deny: ["*"] } }],
+    };
+    const pinnedBound = Barry.Bound({
+      tools: { allow: ["sessions:read"] },
+    });
+    // Passing a single pinned Bound object ignores identityWithDenyAll.bounds
+    const withPinned = Barry.tools(identityWithDenyAll, [sessionsBag], pinnedBound);
+    expect(withPinned.map((t) => t.name)).toEqual(["search_messages"]);
+
+    // Passing an array of bounds merges identityWithDenyAll.bounds + array
+    const withArray = Barry.tools(identityWithDenyAll, [sessionsBag], [pinnedBound]);
+    expect(withArray).toEqual([]);
+  });
+
+  it("expands <bag>:read shorthand and guards tool input parameters", async () => {
+    const slackBag = {
+      name: "slack",
+      bounds: {
+        "self-dm-only": {
+          inputs: {
+            "slack:send_message": {
+              channel_id: { allow: ["U12345"] },
+            },
+          },
+        },
+      },
+      tools: [
+        {
+          name: "read_channel",
+          access: "read" as const,
+          handler: async () => "read",
+        },
+        {
+          name: "send_message",
+          access: "write" as const,
+          input: {
+            type: "object",
+            properties: { channel_id: { type: "string" } },
+          },
+          handler: async (params: Record<string, unknown>) => `sent:${String(params.channel_id)}`,
+        },
+      ],
+    };
+
+    const readOnlyTools = Barry.tools({ name: "me" }, [slackBag], ["slack:read"]);
+    expect(readOnlyTools.map((t) => t.name)).toEqual(["read_channel"]);
+
+    const dmOnlyTools = Barry.tools({ name: "me" }, [slackBag], ["slack:self-dm-only"]);
+    const sendTool = dmOnlyTools.find((t) => t.name === "send_message")!;
+    expect((sendTool.input?.properties as Record<string, { enum?: string[] }>).channel_id.enum).toEqual([
+      "U12345",
+    ]);
+    expect(await sendTool.handler!({ channel_id: "U12345" }, {} as never)).toBe("sent:U12345");
+    await expect(sendTool.handler!({ channel_id: "C99999" }, {} as never)).rejects.toThrow(
+      /Access denied/,
+    );
+  });
+
+  it("defaults unannotated remote tools to write access so <bag>:read blocks them", () => {
+    const remoteBag = {
+      name: "remote-crm",
+      tools: [
+        { name: "get_contact", annotations: { readOnlyHint: true } },
+        { name: "delete_contact" },
+      ],
+    };
+    const tools = Barry.tools({ name: "me" }, [remoteBag], ["remote-crm:read"]);
+    expect(tools.map((t) => t.name)).toEqual(["get_contact"]);
+  });
+
+  it("merges bounds via Barry.Bound.merge and resolves skills, instructions, and actions", () => {
+    const merged = Barry.Bound.merge(
+      { files: { allow: ["~/repos/**"] } },
+      { files: { allow: ["~/repos/barry/**"], deny: ["**/.env"] } },
+    );
+    expect(merged?.files?.allow).toEqual(["~/repos/barry/**"]);
+    expect(merged?.files?.deny).toEqual(["**/.env"]);
+
+    const orthogonal = Barry.Bound.merge(
+      { files: { allow: ["~/repos/**"] } },
+      { files: { allow: ["**/*.ts"] } },
+    );
+    expect(orthogonal?.files?.allowClauses).toEqual([["~/repos/**"], ["**/*.ts"]]);
+
+    const codingBag = {
+      name: "coding",
+      skills: [{ name: "tdd" }],
+      instructions: [{ name: "coding-naming" }],
+      actions: [
+        {
+          name: "review",
+          qualifiedName: "coding:review",
+          bag: "coding",
+          description: "Review PR",
+          executable: true,
+          inputs: [],
+        },
+      ],
+    };
+    expect(Barry.skills({ name: "me" }, [codingBag])).toEqual([{ name: "coding:tdd" }]);
+    expect(Barry.instructions({ name: "me" }, [codingBag])).toEqual([
+      { name: "coding:coding-naming" },
+    ]);
+    expect(Barry.actions({ name: "me" }, [codingBag]).map((a) => a.qualifiedName)).toEqual([
+      "coding:review",
+    ]);
+  });
+
+  it("expands identity.bags, excludes optional identity bags unless selected in bags, and expands child bags (not requires)", () => {
+    const childBag = {
+      name: "child-bag",
+      tools: [{ name: "child_tool", access: "read" as const }],
+    };
+    const requiredOnlyBag = {
+      name: "required-only",
+      tools: [{ name: "secret_tool", access: "read" as const }],
+    };
+    const parentBag = {
+      name: "parent-bag",
+      bags: { "child-bag": {} },
+      requires: { "required-only": {} },
+      tools: [{ name: "parent_tool", access: "read" as const }],
+    };
+    const optionalMcpBag = {
+      name: "mcp",
+      tools: [{ name: "call_mcp", access: "write" as const }],
+    };
+    const identity = {
+      name: "builder",
+      bags: [parentBag, { ...optionalMcpBag, optional: true }],
+    };
+
+    // Without optionalMcpBag in the 2nd argument, optional identity bag is excluded,
+    // child-bag is expanded via parent-bag.bags, and required-only is NOT expanded via requires.
+    const defaultTools = Barry.tools(identity, [childBag]);
+    expect(defaultTools.map((t) => `${t.namespace}:${t.name}`)).toEqual([
+      "parent-bag:parent_tool",
+      "child-bag:child_tool",
+    ]);
+
+    // When optionalMcpBag is explicitly passed in the 2nd `bags` argument, it is included!
+    const withExplicitOptional = Barry.tools(identity, [childBag, optionalMcpBag]);
+    expect(withExplicitOptional.map((t) => `${t.namespace}:${t.name}`)).toEqual([
+      "parent-bag:parent_tool",
+      "child-bag:child_tool",
+      "mcp:call_mcp",
+    ]);
+
+    expect(requiredOnlyBag.name).toBe("required-only");
+  });
+
+  it("throws a deterministic conflict error when two active bags implement the same tool", () => {
+    const secondVectorBag = {
+      name: "alt-vector-search",
+      implements: { tools: ["sessions:search_messages"] },
+      tools: [{ name: "search_messages", access: "read" as const }],
+    };
+    expect(() =>
+      Barry.tools({ name: "me" }, [sessionsBag, vectorSearchBag, secondVectorBag]),
+    ).toThrow(/Multiple active bags implement tool "sessions:search_messages"/);
+  });
+
+  it("exports boundHasProcessRestrictions, readTwin, and protectedConfigPaths from bounds barrel", async () => {
+    const {
+      boundHasProcessRestrictions,
+      readTwin,
+      protectedConfigPaths,
+      BARRY_CONFIG_PROTECTION_BOUND,
+    } = await import("../bounds/index.js");
+
+    expect(boundHasProcessRestrictions(null)).toBe(false);
+    expect(boundHasProcessRestrictions({ tools: { deny: ["*:write"] } })).toBe(false);
+    expect(boundHasProcessRestrictions({ files: { allow: ["~/repos/**"] } })).toBe(true);
+    expect(boundHasProcessRestrictions({ bash: { allow: ["git *"] } })).toBe(true);
+    expect(boundHasProcessRestrictions({ network: { deny: ["*"] } })).toBe(true);
+
+    const twin = readTwin("slack");
+    expect(twin).toEqual({
+      name: "slack:read",
+      description: "Read-only access to slack tools",
+      tools: { deny: ["slack:write"] },
+    });
+
+    const paths = protectedConfigPaths("/tmp/custom-barry-home");
+    expect(paths).toContain("/tmp/custom-barry-home/identities/**");
+    expect(BARRY_CONFIG_PROTECTION_BOUND.files?.deny).toContain("**/identity.yaml");
+  });
+});
+
+

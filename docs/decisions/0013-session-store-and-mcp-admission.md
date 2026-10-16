@@ -4,20 +4,19 @@ Status: accepted
 
 ## Context
 
-Session and MCP code must distinguish missing evidence from positive failure,
-preserve curated authorization grants, and retain independent storage contracts.
-Cache freshness depends on both time and policy inputs. Transcript counters need
+Session and MCP code must distinguish missing evidence from positive failure and
+retain independent storage contracts.
+Cache freshness depends on both time and session selection inputs. Transcript counters need
 to expose hollow translations rather than count every write as success. Long
 source postmortems obscure these invariants; their historical explanations remain
 below, including observations that are not new measurements in this change.
 
 ## Decision
 
-Keep concise controlling invariants beside the implementation. Resolve namespace
-pruning from the full provider set, report unknown bag health explicitly, and
+Keep concise controlling invariants beside the implementation. Report unknown bag health explicitly, and
 require a recognized owner answer for edit conflicts. Cache settled and pending
-resolutions against their separate deadlines and current trait keys. Parse tool
-selection syntax before scoring. Resolve provider ids from provider_sessions and
+resolutions against their separate deadlines and current selection keys. Parse tool
+selection syntax before scoring. Resolve harness session ids from provider_sessions and
 read active-session fields from their flat contract. Translate transcript entries
 with dedupe and channel attribution, and distinguish hollow/duplicate/skipped
 outcomes. Annotate asynchronous public store wrappers from their independent
@@ -25,46 +24,13 @@ contract rather than deriving the contract from the implementation.
 
 ## Consequences
 
-Incomplete evidence cannot silently authorize an edit or masquerade as healthy
+Incomplete evidence cannot silently permit an edit or masquerade as healthy
 state. Slow cache resolution remains single-flight with a bounded pending lifetime.
 Transcript ingestion remains diagnosable and repeatable. Store implementation
 changes must satisfy the existing public contract. Moving these comments changes
 no executable tokens or runtime behavior.
 
 ## Historical rationale
-
-### bags/identities/src/config/trait-namespace-reconcile.ts
-
-```typescript
-/**
- * Reconcile a trait row's stored namespaces against the value derived from
- * bag manifests.
- *
- * `barry bag sync-traits` used to overwrite `namespaces` outright with the
- * derivation. That is right for the case it was written for — a bag changes
- * shape and the row must follow — but it silently destroyed grants that were
- * curated by hand and had nothing in any manifest to reproduce them. The
- * `sessions` trait granted ["sessions","changes","events","actions"]; one bare
- * sync narrowed it to ["sessions"] and live sessions lost their `actions`
- * tools mid-flight (-32601 Method not found).
- *
- * Merging unconditionally is not the fix: "in the DB, not in the derivation"
- * is also the exact signature of rot. Renames that were never migrated
- * (error→sentry, datadog-official→datadog) left 19 traits granting namespaces
- * no bag provides, and a merge-always sync would have made that drift
- * permanently unprunable.
- *
- * The two cases separate cleanly on one question: does ANY loaded bag still
- * provide the namespace?
- *
- *   provided by some bag → a deliberate cross-bag grant. Keep it.
- *   provided by nobody   → dead reference. Prune it.
- *
- * `provided` is the same set `barry bag doctor` uses to report orphaned trait
- * namespaces (`collectProvidedNamespaces`), so the two agree by construction:
- * anything this function prunes is exactly what doctor would have flagged.
- */
-```
 
 ### bags/identities/src/identities.ts
 

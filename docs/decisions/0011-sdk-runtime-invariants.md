@@ -38,7 +38,7 @@ Reviewers can find the original failure analysis without reading it on every sou
  */
 ```
 
-## sdk/src/adapters/models/vendors/catalog.ts
+## sdk/src/adapters/models/vendors/models.ts
 
 ```text
 /**

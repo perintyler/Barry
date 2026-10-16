@@ -3,7 +3,7 @@ description: Barry's MCP server — every packed bag's tools in one server, filt
 
 requires:
   identities:
-    reason: resolves each session's identity, traits and bounds
+    reason: resolves each session's identity, bags and bounds
   sessions:
     reason: reads the session a connection belongs to
   actions:
@@ -21,12 +21,6 @@ tools:
   - services_list: deferred
   - services_status: deferred
   - services_restart: deferred
-
-traits:
-  services:
-    description: Observe and restart this instance's services
-    namespaces: [mcp]
-    access: readwrite
 
 services:
   server:

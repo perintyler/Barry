@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { installationChecks } from "./doctor-install.js";
+import { checkShippedBounds, installationChecks } from "./doctor-install.js";
 import { barryAppSupportDir, barryCurrentDir } from "@barry-rocks/sdk/services";
 import { existsSync } from "node:fs";
 
@@ -63,3 +63,42 @@ it("rejects an existing selector target that is not a Barry installation", async
   const checks = await installationChecks();
   expect(checks.find(check => check.name === "current")).toMatchObject({ status: "fail", detail: "current target has no identity.yaml" });
 });
+
+it("verifies all 5 shipped global bounds in root identity.yaml without querying SQLite", async () => {
+  const root = scratch();
+  const validPath = join(root, "identity.yaml");
+  writeFileSync(
+    validPath,
+    [
+      "name: base",
+      "bounds:",
+      "  - readonly:",
+      "      tools: { deny: ['*:write', '*:Bash', '*:Write', '*:Edit'] }",
+      "      network: { deny: [write] }",
+      "  - no-secrets:",
+      "      files: { deny: ['*.env'] }",
+      "  - no-network:",
+      "      network: { deny: [all] }",
+      "  - no-network-write:",
+      "      network: { deny: [write] }",
+      "  - sandboxed-offline:",
+      "      network: { enforce: sandbox, allow: [], deny: [all] }",
+      "",
+    ].join("\n"),
+  );
+  await expect(checkShippedBounds(validPath)).resolves.toBe("shipped global bounds and job bounds are valid");
+
+  const missingPath = join(root, "incomplete-identity.yaml");
+  writeFileSync(
+    missingPath,
+    [
+      "name: base",
+      "bounds:",
+      "  - readonly:",
+      "      tools: { deny: ['*:write'] }",
+      "",
+    ].join("\n"),
+  );
+  await expect(checkShippedBounds(missingPath)).rejects.toThrow("missing shipped global bound 'no-secrets'");
+});
+

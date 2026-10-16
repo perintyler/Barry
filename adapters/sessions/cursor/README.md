@@ -23,3 +23,7 @@ The package declares `barry.sessionAdapter.contractVersion: 1` and exports compi
 ## Connection, environment and modes
 
 Connects to the selected Cursor agent CLI and its configured model service. Supported modes: hosted, instrumented and guest; the default is hosted. Credentials and the launch environment come from the selected identity. Inspect the requirements before assuming a vendor account is usable. Registration is separate from execution and grants no credentials. See the [adapter declaration](src/adapter.ts) and its requirements for the selected build’s actual guarantees.
+
+Hosted cancellation follows the [shared Session contract](../../../sdk/src/sessions/README.md):
+interrupt acknowledges a request; the runtime owns the completion deadline. Close aborts startup,
+releases owned resources, and ends an open reader once. Shared conformance tests exercise this adapter.

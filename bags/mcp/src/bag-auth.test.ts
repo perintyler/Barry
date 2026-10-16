@@ -279,7 +279,6 @@ describe("authenticateBag", () => {
         schedules: {},
         scripts: {},
         mcpServers: {},
-        traits: {},
         tools: [],
         dependencies: [],
         auth: {
@@ -298,7 +297,6 @@ describe("authenticateBag", () => {
       services: [],
       apps: [],
       schedules: [],
-      traits: [],
       mcpServers: {},
       tools: [],
       dependencies: [],

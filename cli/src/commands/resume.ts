@@ -1,7 +1,7 @@
 import { findInstalled } from "@barry-rocks/sdk/adapters/harnesses";
 import { FALLBACK_HARNESS } from "@barry-rocks/sdk/internal/identities";
 import { installedHarnesses } from "../lib/harness-flags.js";
-import { currentScope, assertOwnedSession } from "../scope.js";
+import { currentTarget, assertOwnedSession } from "../target.js";
 import { existsSync } from "fs";
 import { select } from "@inquirer/prompts";
 import {
@@ -30,6 +30,7 @@ function parseMetadata(raw: unknown): SessionMetadata {
 export interface ResumeOptions {
   harness?: string;
   last?: boolean;
+  lastBags?: boolean;
   barry?: string;
   zai?: boolean;
   ollama?: boolean;
@@ -37,9 +38,12 @@ export interface ResumeOptions {
   modelProvider?: string;
   ui?: string;
   noUi?: boolean;
-  // Capability escape hatches. Resume shows the trait picker pre-checked with
-  // the previous session's traits; any of these skip it (see start.ts).
-  traits?: string;
+  // Capability escape hatches. Resume shows the session picker pre-checked with
+  // the previous session's bags and bounds; any of these skip it (see start.ts).
+  bag?: string;
+  bags?: string;
+  bound?: string;
+  bounds?: string;
   all?: boolean;
   read?: boolean;
   none?: boolean;
@@ -67,13 +71,13 @@ export function resumedModelProvider(options: ResumeOptions, metadata: unknown):
 }
 
 /** Ask the user to select a resumable session without inferring one from cwd; see docs/decisions/0019-cli-checkouts-and-session-selection.md. */
-async function pickSessionToResume(): Promise<{ id: string; traits: string[] } | undefined> {
+async function pickSessionToResume(): Promise<{ id: string; bags: string[]; bounds: string[] } | undefined> {
   // `active: false` is the seam's equivalent of the old `active != true`. The
   // `state in (open, closed)` filter is applied here because the seam has no
   // state filter, and archived sessions should not be offered for resume.
   const page = await listSessions({ limit: 60, active: false });
   const rows = page
-    .filter((r) => (r.state === "open" || r.state === "closed") && (currentScope().kind !== "identity" || r.identity_id === Number(process.env.BARRY_IDENTITY_ID)))
+    .filter((r) => (r.state === "open" || r.state === "closed") && (currentTarget().kind !== "identity" || r.identity_id === Number(process.env.BARRY_IDENTITY_ID)))
     .slice(0, 20);
 
   if (rows.length === 0) return undefined;
@@ -97,13 +101,21 @@ async function pickSessionToResume(): Promise<{ id: string; traits: string[] } |
 
   const id = await select({ message: "Resume session", choices });
   const selected = rows.find((r) => r.id === id);
-  return { id, traits: (selected?.traits as string[]) ?? [] };
+  return {
+    id,
+    bags: (selected?.bags as string[]) ?? [],
+    bounds: (selected?.bounds as string[]) ?? [],
+  };
 }
 
 /** The capability/prompt flags resume forwards verbatim to startCommand. */
 function passthroughOptions(options: ResumeOptions): Partial<StartOptions> {
+  const rawBags = options.bag ?? options.bags;
+  const rawBounds = options.bound ?? options.bounds;
   return {
-    ...(options.traits ? { traits: options.traits } : {}),
+    ...(rawBags ? { bag: rawBags } : {}),
+    ...(rawBounds ? { bound: rawBounds } : {}),
+    ...(options.lastBags ? { last: true } : {}),
     ...(options.all ? { all: true } : {}),
     ...(options.read ? { read: true } : {}),
     ...(options.none ? { none: true } : {}),
@@ -126,13 +138,13 @@ export async function resumeCommand(sessionId: string | undefined, options: Resu
 }
 
 /**
- * Resume a specific Barry session by looking up its provider session ID
+ * Resume a specific Barry session by looking up its harness session ID
  * and passing it directly to the agent's resume flag.
  */
 async function resumeBySessionId(sessionId: string, options: ResumeOptions): Promise<void> {
   const session = await getSession(sessionId);
-  const scope = currentScope();
-  if (scope.kind === "identity") assertOwnedSession(session, scope.binding.id);
+  const target = currentTarget();
+  if (target.kind === "identity") assertOwnedSession(session, target.binding.id);
   if (!session) {
     throw new Error(`Session not found: ${sessionId}`);
   }
@@ -157,32 +169,31 @@ async function resumeBySessionId(sessionId: string, options: ResumeOptions): Pro
     }
   }
 
-  if (session.bound_id != null) throw new Error(`Session ${sessionId} still carries bound_id; run barry doctor --fix`);
-  const recordedProvider = parseMetadata(session.metadata).provider;
+  const recordedHarness = parseMetadata(session.metadata).provider;
   const records = await installedHarnesses();
-  const provider = options.harness ?? (typeof recordedProvider === "string" ? recordedProvider : FALLBACK_HARNESS);
-  const harness = findInstalled(records, provider)?.id ?? provider;
-  const providerSessions = await getProviderSessionsBySession(sessionId);
-  // Find the most recent provider session (they're ordered desc by created_at)
-  const providerSession = providerSessions.find(
+  const requestedHarness = options.harness ?? (typeof recordedHarness === "string" ? recordedHarness : FALLBACK_HARNESS);
+  const harness = findInstalled(records, requestedHarness)?.id ?? requestedHarness;
+  const harnessSessions = await getProviderSessionsBySession(sessionId);
+  // Find the most recent harness session (they're ordered desc by created_at)
+  const harnessSession = harnessSessions.find(
     (ps) => ((findInstalled(records, ps.provider)?.id ?? ps.provider) === harness) && ps.provider_session_id,
   );
 
   const startOpts: StartOptions = {
     barry: options.barry,
     _resumeSessionId: sessionId,
-    _resumeTraits: session.traits ?? [],
+    _resumeBags: session.bags ?? [],
     _resumeBounds: session.bounds ?? [],
     ...passthroughOptions(options),
     harness,
     ...resumedModelProvider(options, session.metadata),
   };
 
-  if (!providerSession?.provider_session_id) {
-    throw new Error(`No ${provider} conversation recorded for ${sessionId}; cannot resume this session without starting a different conversation.`);
+  if (!harnessSession?.provider_session_id) {
+    throw new Error(`No ${requestedHarness} conversation recorded for ${sessionId}; cannot resume this session without starting a different conversation.`);
   }
 
-  startOpts._resume = { providerSessionId: providerSession.provider_session_id };
+  startOpts._resume = { harnessSessionId: harnessSession.provider_session_id };
   return startCommand([], startOpts);
 }
 

@@ -1,6 +1,8 @@
+import { removeWarmAssets } from "./warm.js";
 // Method bodies extracted from session-runtime.ts for file size.
 // Moved verbatim as free functions taking the runtime instance (`rt`);
 // the SessionRuntime class delegates to these. Pure move + rewire.
+import type {ActiveSession} from "../session-runtime.js";
 import {SessionRuntime, log} from "../session-runtime.js";
 import {forgetSession, getSessionRecord, listSessionRecords, updateSessionMetadata, updateSessionRecord} from "../db.js";
 import {Events} from "@barry-rocks/events-bag";
@@ -9,6 +11,20 @@ import {endProviderSessionByProviderId} from "@barry-rocks/sessions-bag/client";
 import {authorizeSessionExecution} from "@barry-rocks/sessions-bag/execution-authorization";
 import {endSession as endSessionLifecycle} from "@barry-rocks/sessions-bag/lifecycle";
 import {rmSync} from "fs";
+
+function finalizeAfterDrain(rt:SessionRuntime,active:ActiveSession,reason:"stopped"|"evicted"|"removed"):void {
+  active.finalization??=(async()=>{
+    while(!(await Promise.all([active.persistence?.flush(1000)??true,active.statePersistence?.flush(1000)??true])).every(Boolean)){/* Preserve accepted writes while the worker retries. */}
+    await endSessionLifecycle({session_id:active.id,reason});
+    if(active.sessionId)await endProviderSessionByProviderId(active.sessionId).catch(()=>{});
+    await updateSessionRecord(active.id,{status:reason==="evicted"?"pending":reason==="removed"?"cancelled":"completed",...(reason==="evicted"?{}:{completed_at:new Date()})});
+    if(reason==="stopped") {
+      const row=await getSessionRecord(active.id);
+      if(row?.metadata?.use_worktree && row.metadata.worktree_status==="active")await updateSessionMetadata(active.id,{worktree_status:"ready_to_merge"});
+    }
+  })().catch(error=>log.warn("session.end_delayed",{sessionId:active.id,error:String(error)}));
+  rt.retainPersistence(active);
+}
 
   /**
    * On startup, mark any DB sessions stuck in "running" as "pending".
@@ -81,6 +97,9 @@ export async function rt_reconcileStaleSessions(rt: SessionRuntime): Promise<voi
           }
         }
         if (owned) continue;
+        // A hosted draft has not begun a turn. Losing its resident process
+        // across a restart does not end the user's durable draft.
+        if (session.status === "pending" && !session.started_at && session.metadata?.mode === "hosted") continue;
 
         // In-memory ownership only ever covered sessions this process drives.
         // CLI sessions are child processes of `barry start` and were NEVER in
@@ -126,6 +145,10 @@ export async function rt_reconcileStaleSessions(rt: SessionRuntime): Promise<voi
 export async function rt_stopSession(rt: SessionRuntime, sessionId: string, principal?: AuthPrincipal, reason: "stopped" | "evicted" = "stopped"): Promise<void> {
     if (principal) await authorizeSessionExecution(principal, { sessionId });
     const activeSession = rt.activeSessions.get(sessionId);
+    if (activeSession && reason === "evicted" && (activeSession.warm || activeSession.warming) && activeSession.lastSequence < 0 && !activeSession.pendingTurns) {
+      await rt.dropResident(sessionId);
+      return;
+    }
     if (activeSession) {
       // Bumped FIRST, synchronously, before any await below — this is what a
       // turn still queued behind this stop (or waiting on the execution
@@ -135,24 +158,9 @@ export async function rt_stopSession(rt: SessionRuntime, sessionId: string, prin
       // staying stopped (, defect D).
       activeSession.generation++;
 
-      // Abort any in-flight turn's provider-level work (SIGTERMs the codex
-      // child, etc.) before discarding the session object. `abortController`
-      // signals runTurn's own event-loop checks; `session.interrupt()` is the
-      // provider's real cancellation — the two are complementary, not
-      // redundant: the controller is session-runtime's signal, interrupt() is
-      // what actually reaches the child process (, defect E).
-      if (activeSession.abortController) {
-        activeSession.abortController.abort();
-      }
-      if (activeSession.session) {
-        await activeSession.session.interrupt().catch(() => {});
-        // Not awaited: close resolves once the harness has exited, and a stop
-        // is a request, not a wait. The turn in flight holds its slot until
-        // then, reading the session's events to their end.
-        void activeSession.session.close().catch(() => {});
-        activeSession.session = null;
-      }
-
+      await rt.forceTurn(activeSession);
+      try {
+      if (activeSession.warm && activeSession.lastSequence < 0) removeWarmAssets(activeSession);
       activeSession.status = "complete";
       rt.sweepToolTimers(sessionId);
       forgetSession(sessionId);
@@ -171,6 +179,12 @@ export async function rt_stopSession(rt: SessionRuntime, sessionId: string, prin
         ? { type: "session_evicted", sessionId, status: "pending" }
         : { type: "status", sessionId, status: "complete" });
 
+      // Do not delete an apparently empty draft while its accepted rows are queued.
+      if (!await rt.flushPersistence(sessionId,1)) {
+        rt.sendInTurn(activeSession,{type:"status",sessionId,status:"complete",metadata:{code:"persistence_lagging",recordingPending:true}});
+        finalizeAfterDrain(rt,activeSession,reason);
+        return;
+      }
       // End the session in DB (use Barry canonical ID)
       await endSessionLifecycle({ session_id: sessionId, reason });
 
@@ -208,9 +222,12 @@ export async function rt_stopSession(rt: SessionRuntime, sessionId: string, prin
       // terminal, so leaving it here would make getActiveSessionIds() report it
       // as running forever. Summary scheduling above is keyed by id and does not
       // depend on this map. Kept last so a throw earlier cannot strand the entry.
-      rt.activeSessions.delete(sessionId);
-      rt.residentBudget.releaseById(sessionId);
-      rt.broadcastSessionList();
+      } finally {
+        rt.retainPersistence(activeSession);
+        rt.activeSessions.delete(sessionId);
+        rt.residentBudget.releaseById(sessionId);
+        rt.broadcastSessionList();
+      }
     }
   }
 
@@ -223,16 +240,14 @@ export async function rt_removeSession(rt: SessionRuntime, sessionId: string, pr
       // past the removal and create a fresh provider session.
       activeSession.generation++;
 
-      if (activeSession.abortController) {
-        activeSession.abortController.abort();
+      await rt.forceTurn(activeSession);
+      try {
+      // Do not delete an apparently empty draft while its accepted rows are queued.
+      if (!await rt.flushPersistence(sessionId,1)) {
+        rt.sendInTurn(activeSession,{type:"status",sessionId,status:"complete",metadata:{code:"persistence_lagging",recordingPending:true}});
+        finalizeAfterDrain(rt,activeSession,"removed");
+        return;
       }
-      if (activeSession.session) {
-        await activeSession.session.interrupt().catch(() => {});
-        // Not awaited, as in stopSession.
-        void activeSession.session.close().catch(() => {});
-        activeSession.session = null;
-      }
-
       // End the session in DB (use Barry canonical ID)
       await endSessionLifecycle({ session_id: sessionId, reason: "removed" }).catch((err) => {
         log.warn("sdk.session_end_error", { sessionId, error: err instanceof Error ? err.message : String(err) });
@@ -255,21 +270,29 @@ export async function rt_removeSession(rt: SessionRuntime, sessionId: string, pr
         activeSession.commandsDir = null;
       }
 
-      rt.activeSessions.delete(sessionId);
-      rt.residentBudget.releaseById(sessionId);
-      rt.broadcastSessionList();
+
+      } finally {
+        rt.retainPersistence(activeSession);
+        rt.activeSessions.delete(sessionId);
+        rt.residentBudget.releaseById(sessionId);
+        rt.broadcastSessionList();
+      }
     }
   }
 
   /**
    * Invalidate the active SDK session so the next turn re-creates MCP
-   * connections with freshly resolved traits/tools. Called when tool
-   * configuration (traits, namespaces, tools) is changed externally
+   * connections with freshly resolved bags, bounds, and tools. Called when tool
+   * configuration (bags, bounds, namespaces, tools) is changed externally
    * (e.g. via the BarrySession macOS app PATCH endpoint).
    */
-export function rt_invalidateSessionTools(rt: SessionRuntime, sessionId: string): void {
+export function rt_invalidateSessionTools(rt: SessionRuntime, sessionId: string, options: { reason?: "grants" | "system_prompt" } = {}): void {
     const activeSession = rt.activeSessions.get(sessionId);
     if (!activeSession) return;
+    if (options.reason === "grants") {
+      // MCP publishes tools/list_changed; the per-call gate resolves current bounds.
+      return;
+    }
     if (activeSession.status === "streaming") {
       log.warn("session.invalidate_while_streaming", { sessionId });
       return;
@@ -280,10 +303,25 @@ export function rt_invalidateSessionTools(rt: SessionRuntime, sessionId: string)
       log.info("session.invalidate_after_detach", { sessionId });
       return;
     }
+    const wasPrepared = !!(activeSession.warm || activeSession.warming);
+    const warming = activeSession.warming;
+    if (warming) activeSession.warmGeneration = (activeSession.warmGeneration ?? 0) + 1;
+    activeSession.warm = null;
     if (activeSession.session) {
       void activeSession.session.close().catch(() => {});
       activeSession.session = null;
       activeSession.sessionId = null;
       log.info("session.tools_invalidated", { sessionId });
-    }
+    }    if (wasPrepared) void Promise.resolve(warming).then(async () => {
+      if (rt.activeSessions.get(sessionId) === activeSession && !activeSession.pendingTurns && !activeSession.abortController) {
+        const row = await getSessionRecord(sessionId);
+        if (row) {
+          if (row.bags) activeSession.bags = row.bags;
+          if (row.bounds) activeSession.bounds = row.bounds;
+          if (row.bound !== undefined) activeSession.bound = row.bound;
+        }
+        return rt.warmHarness(sessionId);
+      }
+    }).catch(error => log.warn("session.rewarm_failed", { sessionId, error: String(error) }));
+
   }

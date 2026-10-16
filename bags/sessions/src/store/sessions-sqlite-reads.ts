@@ -15,7 +15,7 @@
  * The JSON one is already handled: `parseMetadata`, `parseJsonArray` and
  * `parseBound` in `session-helpers.ts` all accept either a string or an
  * object. They are reused here rather than reimplemented, so a change to how a
- * trait array is parsed applies everywhere at once.
+ * bag array is parsed applies everywhere at once.
  *
  * What this module does NOT do is re-derive the shape of a `SessionRecord`:
  * every read goes through `rowToSession`, and a divergence here would surface
@@ -1064,7 +1064,7 @@ export function getProviderSessionsBySessionSqlite(sessionId: string): ProviderS
 
 /** The session owning a provider session id. */
 export function getSessionByProviderSessionIdSqlite(
-  providerSessionId: string,
+  harnessSessionId: string,
 ): SessionRecord | undefined {
   const row = getSessionsSqlite()
     .prepare(
@@ -1073,7 +1073,7 @@ export function getSessionByProviderSessionIdSqlite(
        WHERE ps.provider_session_id = ?
        ORDER BY ps.created_at DESC LIMIT 1`,
     )
-    .get(providerSessionId) as Record<string, unknown> | undefined;
+    .get(harnessSessionId) as Record<string, unknown> | undefined;
   return row ? sqliteRowToSession(row) : undefined;
 }
 
@@ -1106,9 +1106,9 @@ export function getSessionMessagesSqlite(
   const fetchLimit = limit + 1;
 
   const projection = summary
-    ? `id, type, sequence, role, content, name, metadata, created_at,
+    ? `id, dedupe_key, type, sequence, role, content, name, metadata, created_at,
        substr(input, 1, 200) AS input, NULL AS result`
-    : "id, type, sequence, role, content, name, metadata, created_at, input, result";
+    : "id, dedupe_key, type, sequence, role, content, name, metadata, created_at, input, result";
 
   const sqlite = getSessionsSqlite();
   let rows: Array<Record<string, unknown>>;
@@ -1391,8 +1391,4 @@ export function getMessageByClientMessageIdSqlite(
     state: readDeliveryState(parseJsonColumn(row.metadata)),
     content: extractTextFromContent(row.content),
   };
-}
-
-export function listBoundSessionsSqlite(): Pick<import("./session-records.js").SessionRecord, "id" | "identity_id" | "bound_id" | "bounds">[] {
-  return getSessionsSqlite().prepare("SELECT * FROM sessions WHERE bound_id IS NOT NULL").all().map(row => sqliteRowToSession(row as Record<string, unknown>)).map(({ id, identity_id, bound_id, bounds }) => ({ id, identity_id, bound_id, bounds }));
 }

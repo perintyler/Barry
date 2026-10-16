@@ -11,17 +11,17 @@ import { TransportDelivery } from "./transport-delivery.js";
 
 type Principal = { kind: "installation"; actorId: number }
   | ({ kind: "workflow" } & WorkflowSessionCredential);
-interface Grant { principal: Principal; sessionId: string | null; namespace: string }
-interface LiveGrant extends Grant {
+interface TransportLease { principal: Principal; sessionId: string | null; namespace: string }
+interface LiveTransportLease extends TransportLease {
   check(): Promise<boolean>;
   dispose(): void;
   stop?: () => void;
 }
 
-/** A transport ID identifies a connection; it never grants access to its session. */
+/** A transport ID identifies a connection; it never authorizes access to its session on its own. */
 export class TransportAuthorization {
-  private readonly grants = new Map<string, LiveGrant>();
-  private readonly pending = new WeakMap<Request, LiveGrant>();
+  private readonly leases = new Map<string, LiveTransportLease>();
+  private readonly pending = new WeakMap<Request, LiveTransportLease>();
   private readonly requests = new AsyncLocalStorage<Request>();
 
   constructor(private readonly workflow: (request: Request) => WorkflowSessionCredential | undefined,
@@ -45,10 +45,10 @@ export class TransportAuthorization {
   };
 
   bind(id: string, request: Request, transport?: Transport, onRejected?: () => void): void {
-    const grant = this.pending.get(request);
-    if (!grant) throw new Error("Transport authorization is unavailable");
+    const lease = this.pending.get(request);
+    if (!lease) throw new Error("Transport authorization is unavailable");
     this.release(id);
-    this.grants.set(id, grant);
+    this.leases.set(id, lease);
     this.pending.delete(request);
     if (!transport) return;
     let closed = false;
@@ -77,19 +77,19 @@ export class TransportAuthorization {
     const timer = setInterval(() => { void check(); }, 1000);
     timer.unref();
     const unsubscribe = access.subscribe(() => { void check(); });
-    grant.stop = () => { closed = true; delivery.close(); clearInterval(timer); unsubscribe(); };
+    lease.stop = () => { closed = true; delivery.close(); clearInterval(timer); unsubscribe(); };
   }
   release(id: string): void {
-    const grant = this.grants.get(id);
-    this.grants.delete(id);
-    grant?.stop?.();
-    grant?.dispose();
+    const lease = this.leases.get(id);
+    this.leases.delete(id);
+    lease?.stop?.();
+    lease?.dispose();
   }
   async revalidateTransport(id: string): Promise<boolean> {
-    const grant = this.grants.get(id);
-    if (!grant) return false;
+    const lease = this.leases.get(id);
+    if (!lease) return false;
     try {
-      return await grant.check() && this.grants.get(id) === grant;
+      return await lease.check() && this.leases.get(id) === lease;
     } catch { return false; }
   }
   readonly authorizeCall = async (): Promise<boolean> => {
@@ -121,7 +121,7 @@ export class TransportAuthorization {
     const principal: Principal | undefined = workflow ? { kind: "workflow", ...workflow }
       : request.authPrincipal?.kind === "installation" ? { kind: "installation", actorId: request.authPrincipal.actorId } : undefined;
     if (!principal) return false;
-    const existing = typeof header === "string" ? this.grants.get(header) : undefined;
+    const existing = typeof header === "string" ? this.leases.get(header) : undefined;
     if (header && !existing) return "missing";
     const sessionId = existing?.sessionId ?? (typeof selected === "string" ? selected : null);
     if (existing && (existing.namespace !== namespace || (selected !== undefined && selected !== existing.sessionId)
@@ -139,7 +139,7 @@ export class TransportAuthorization {
           ? await authenticateCredential(requestCredential(request) ?? "", { verifyCredential: access.verifyCredential }) : undefined;
         if (principal.kind === "installation" && (!retained || retained.principal.kind !== "installation"
           || retained.principal.actorId !== principal.actorId)) { retained?.dispose(); return false; }
-        const grant: LiveGrant = {
+        const lease: LiveTransportLease = {
           principal: Object.freeze(principal), sessionId, namespace,
           check: retained ? () => retained.authorize({ scopes: ["sessions:read"], authorize: async current => {
             await authorizeSessionExecution(current, { sessionId: sessionId ?? undefined }); return true;
@@ -147,9 +147,9 @@ export class TransportAuthorization {
             && await this.checkWorkflow?.(request) === true,
           dispose: () => { retained?.dispose(); if (!retained) this.disposeWorkflow?.(request); },
         };
-        this.pending.set(request, grant);
+        this.pending.set(request, lease);
         request.res?.once("close", () => {
-          if (this.pending.get(request) === grant) { this.pending.delete(request); grant.dispose(); }
+          if (this.pending.get(request) === lease) { this.pending.delete(request); lease.dispose(); }
         });
       }
     }
@@ -160,6 +160,6 @@ export class TransportAuthorization {
     if (first.kind === "installation") return second.kind === first.kind && first.actorId === second.actorId;
     return second.kind === first.kind && first.actorId === second.actorId && first.credentialId === second.credentialId && first.identityId === second.identityId
       && first.sessionId === second.sessionId && first.identity === second.identity
-      && first.scopeFingerprint === second.scopeFingerprint && first.expiresAt === second.expiresAt;
+      && first.boundFingerprint === second.boundFingerprint && first.expiresAt === second.expiresAt;
   }
 }

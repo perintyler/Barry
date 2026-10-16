@@ -67,10 +67,13 @@ bags:
     expect(record.metadata.bags).toContain("sessions");
     expect(record.metadata.bags).toContain("git");
     expect(record.metadata.bags).toContain("github");
-    // Inherited traits from the base identity
-    expect(record.metadata.traits).toEqual(["artifacts", "bash", "filesystem", "instructions", "sessions"]);
-    // Inherited defaults
-    expect(record.metadata.bag_grant).toBe("session");
+    // Root identity.yaml has bounds instead of traits
+    expect(record.metadata.traits).toBeUndefined();
+    expect(
+      record.metadata.bounds?.map((b) =>
+        typeof b === "string" ? b : "name" in b && typeof b.name === "string" ? b.name : Object.keys(b)[0],
+      ),
+    ).toEqual(["readonly", "no-secrets", "no-network", "no-network-write", "sandboxed-offline"]);
     expect(record.metadata.tool_discovery).toBe("provider");
   });
 
@@ -93,16 +96,17 @@ bags:
     expect(record.metadata.bags).toContain("artifacts");
     expect(record.metadata.bags).toContain("bash");
     expect(record.metadata.bags).toContain("git");
-    expect(record.metadata.traits).toEqual(["artifacts", "bash", "filesystem", "instructions", "sessions"]);
+    expect(record.metadata.traits).toBeUndefined();
+    expect(record.metadata.bounds).toHaveLength(5);
   });
 
-  it("unions child bags and traits with parent", () => {
+  it("unions child bags and bounds with parent", () => {
     createIdentity(
       "parent-agent",
       `
 name: parent-agent
 bags: [actions, bash]
-traits: [bash]
+bounds: [readonly]
 `,
     );
 
@@ -112,13 +116,13 @@ traits: [bash]
 name: child-agent
 inherits: parent-agent
 bags: [filesystem, bash]
-traits: [filesystem]
+bounds: [no-network]
 `,
     );
 
     const record = loadIdentityFromDirectory(childDir);
     expect(record.metadata.bags).toEqual(["actions", "bash", "filesystem"]);
-    expect(record.metadata.traits).toEqual(["bash", "filesystem"]);
+    expect(record.metadata.bounds).toEqual(["readonly", "no-network"]);
   });
 
   it("inherits secret references with child precedence", () => {
@@ -177,8 +181,8 @@ vault: child-vault
       `
 name: parent-agent
 bound:
-  deniedTools: [Bash]
-  deniedAccess: [write]
+  tools:
+    deny: ["*:Bash", "*:write"]
 `,
     );
 
@@ -188,14 +192,14 @@ bound:
 name: child-agent
 inherits: parent-agent
 bound:
-  deniedTools: [Edit]
+  tools:
+    deny: ["*:Edit"]
 `,
     );
 
     const record = loadIdentityFromDirectory(childDir);
     const bound = record.metadata.bound;
-    expect(bound?.deniedTools).toEqual(["Bash", "Edit"]);
-    expect(bound?.deniedAccess).toEqual(["write"]);
+    expect(bound?.tools?.deny).toEqual(["*:Bash", "*:write", "*:Edit"]);
   });
 
   it("rejects circular inheritance", () => {

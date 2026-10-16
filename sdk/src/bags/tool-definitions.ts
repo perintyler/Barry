@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { bagBuildExternals } from "./build-configuration.js";
-import { ensureToolsBuilt } from "./build.js";
+import { ensureToolsBuilt, getBuiltBagEntry } from "./build.js";
 import type { Bag, BagToolMeta } from "./types.js";
 import { toolDefinitions } from "../tools/definitions.js";
 import { contractDerivation, toolContractHash } from "../tools/tool-contract.js";
@@ -20,10 +20,12 @@ export async function loadBagToolDefinitions(bag: ToolsBag) {
 export async function loadBagToolSummaries(bag: ToolsBag): Promise<BagToolMeta[] | undefined> {
   const entry = await toolsEntry(bag);
   if (!entry) return undefined;
-  const summaryFile = entry.built ? entry.path.replace(/\.js$/, ".summary.json") : null;
-  const stamp = summaryFile ? stampOf(entry.path) : null;
+  const stamp = entry.built ? stampOf(entry.path) : null;
+  // Source and compiled SDK hosts have different derivation fingerprints. A
+  // cache per fingerprint keeps resident services from overwriting each other.
+  const summaryFile = stamp ? entry.path.replace(/\.js$/, `.summary-${stamp.split(":")[1]}.json`) : null;
   if (summaryFile && stamp) {
-    const cached = readSummary(summaryFile);
+    const cached = readSummary(summaryFile) ?? readSummary(entry.path.replace(/\.js$/, ".summary.json"));
     if (cached?.stamp === stamp) return cached.tools;
   }
   const tools = (await importToolDefinitions(bag, entry.path, stamp)).map((tool): BagToolMeta => ({
@@ -55,7 +57,7 @@ async function toolsEntry(bag: ToolsBag): Promise<{ path: string; built: boolean
   const source = join(root, bag.manifest.toolsEntry.entry);
   const built = process.env.BARRY_BAGS_BUILT !== "0";
   const path = built
-    ? await ensureToolsBuilt({ name: bag.name, bagDir: root, entry: source, externals: bagBuildExternals(root) })
+    ? ((process.env.BARRY_BAGS_REBUILD === "1" ? null : getBuiltBagEntry(bag.name, root)) ?? await ensureToolsBuilt({ name: bag.name, bagDir: root, entry: source, externals: bagBuildExternals(root) }))
     : source;
   if (!existsSync(path)) throw new Error(`${bag.name}: tool entry is missing: ${path}`);
   return { path, built };

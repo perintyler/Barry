@@ -1,54 +1,128 @@
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parse } from "yaml";
 import { Barry } from "@barry-rocks/sdk";
 import { fakeIdentities } from "@barry-rocks/sdk/testing";
-import { sessionPolicyOver } from "@barry-rocks/identities-bag/testing";
-import type { TraitInfo } from "@barry-rocks/identities-bag";
 import { loadAdapters } from "@barry-rocks/sdk/internal/adapters";
 import type { InstalledAdapter } from "@barry-rocks/sdk/adapters/harnesses";
 import { parseManifest } from "@barry-rocks/sdk/bags";
 import { parseBounds } from "@barry-rocks/sdk/internal/identities";
-import { readFileSync } from "node:fs";
-import { parse } from "yaml";
-import type { Bound } from "@barry-rocks/sdk/bounds";
-vi.mock("./db.js", () => ({ getSessionRecord: vi.fn(async () => undefined) }));
+import { mergeBounds, type Bound } from "@barry-rocks/sdk/bounds";
+
+const db = vi.hoisted(() => ({ bound: null as Bound | null }));
+vi.mock("./db.js", () => ({
+  getSessionRecord: vi.fn(async () => ({
+    id: "s",
+    identity_id: null,
+    bags: [],
+    bounds: [],
+    bound: db.bound,
+    metadata: {},
+  })),
+}));
 vi.mock("./agent-runtime.js", () => ({ getDescribeAdapter: vi.fn() }));
 import { getDescribeAdapter } from "./agent-runtime.js";
-import { nativeToolPolicy, sessionAgentGrants } from "./session-agent-guards.js";
+import { sessionBound, resolveSessionNativeTools } from "./session-agent-guards.js";
 
 let records: InstalledAdapter[];
-let bound: Bound | null = null;
+let namedBounds: Record<string, Bound> = {};
+
 beforeAll(async () => {
   const root = mkdtempSync(join(tmpdir(), "barry-native-api-"));
   vi.stubEnv("BARRY_HOME", root);
-  const adapters = loadAdapters({ file: join(root, "adapters.json"), registerBag: async () => {} });
-  records = await Promise.all(["claude", "cursor", "pi"].map(folder => adapters.add(new URL(`../../../../adapters/sessions/${folder}`, import.meta.url).pathname)));
+  const adapters = loadAdapters({
+    file: join(root, "adapters.json"),
+    registerBag: async () => {},
+  });
+  records = await Promise.all(
+    ["claude", "cursor", "pi"].map((folder) =>
+      adapters.add(new URL(`../../../../adapters/sessions/${folder}`, import.meta.url).pathname),
+    ),
+  );
   const bash = parseManifest(new URL("../../../bash", import.meta.url).pathname)!;
-  const manifests = [...records.map(record => record.bag!.manifest), bash];
-  const traits: TraitInfo[] = manifests.flatMap(manifest => Object.entries(manifest.traits).map(([name, trait]) => ({ ...trait, name, bag: manifest.name, description: trait.description ?? null, namespaces: trait.bags, tools: [], bound: trait.bound ?? {} })));
-  const bounds: Record<string, { bound: Bound }> = { ...Object.fromEntries(parseBounds(parse(readFileSync(new URL("../../../../identity.yaml", import.meta.url), "utf8")).bounds).map(entry => [entry.name, { bound: entry.bound! }])), ...Object.assign({}, ...manifests.map(manifest => manifest.bounds)) };
-  const policy = sessionPolicyOver({ identity: async () => undefined, config: () => { throw Error("no identity"); }, traits: async () => traits, bounds: async () => Object.entries(bounds).map(([name, definition]) => ({ id: 1, token: "fixture", name, description: null, bound: definition.bound })), harness: id => records.find(record => record.id === id || record.aliases?.includes(id)), harnesses: () => records });
-  Barry.use(fakeIdentities({ grants: async (_ref, selection) => policy.grants(undefined, { ...selection, inlineBound: bound }, []) }));
-  vi.mocked(getDescribeAdapter).mockReturnValue(id => records.find(record => record.id === id || record.aliases?.includes(id)));
+  const manifests = [...records.map((record) => record.bag!.manifest), bash];
+  const baseBounds = Object.fromEntries(
+    parseBounds(
+      parse(readFileSync(new URL("../../../../identity.yaml", import.meta.url), "utf8")).bounds,
+    ).map((entry) => [entry.name, entry.bound!]),
+  );
+  const manifestBounds = Object.fromEntries(
+    manifests.flatMap((manifest) =>
+      Object.entries(manifest.bounds ?? {}).flatMap(([name, def]) => [
+        [name, def.bound],
+        [`${manifest.name}:${name}`, def.bound],
+      ]),
+    ),
+  );
+  namedBounds = { ...baseBounds, ...manifestBounds };
+  Barry.use(
+    fakeIdentities({
+      bound: async (_ref, requested) => {
+        let acc: Bound | null = null;
+        for (const entry of requested ?? []) {
+          const next = typeof entry === "string" ? namedBounds[entry] : entry;
+          if (!next) throw new Error(`Unknown bound: ${String(entry)}`);
+          acc = mergeBounds(acc, next);
+        }
+        return acc ?? {};
+      },
+      tools: async () => [],
+    }),
+  );
+  vi.mocked(getDescribeAdapter).mockReturnValue((id) =>
+    records.find((record) => record.id === id || record.aliases?.includes(id)),
+  );
 });
-afterEach(() => { bound = null; });
-afterAll(() => { Barry.reset(); vi.unstubAllEnvs(); });
-it("uses hosted grants for allowed native file reads", async () => {
-  expect((await sessionAgentGrants({ id: "s", provider: "claude" }, ["native-file-reads"])).traits).toEqual(["claude:native-file-reads"]);
-  expect((await nativeToolPolicy({ id: "s", provider: "claude" }, ["native-file-reads"])).allowed).toEqual(["Read", "Glob", "Grep"]);
+
+afterEach(() => {
+  db.bound = null;
 });
-it("takes back network and shell grants at the API seam", async () => {
-  bound = { network: { actions: ["all"] } };
-  expect((await nativeToolPolicy({ id: "s", provider: "claude" }, ["native-network"])).allowed).toEqual([]);
-  bound = null;
-  expect((await nativeToolPolicy({ id: "s", provider: "claude" }, ["native-shell", "bash:no-bash"])).allowed).toEqual([]);
+
+afterAll(() => {
+  Barry.reset();
+  vi.unstubAllEnvs();
 });
-it("reports cursor controls and a bound conflict, and grants nothing for pi network", async () => {
-  expect((await nativeToolPolicy({ id: "s", provider: "cursor" })).uncontrolled).toHaveProperty("Grep");
-  bound = { files: { deny: ["**/.env"] } };
-  expect((await nativeToolPolicy({ id: "s", provider: "cursor" })).conflicts).toHaveProperty("Grep");
-  bound = null;
-  expect((await nativeToolPolicy({ id: "s", provider: "pi" }, ["native-network"])).allowed).toEqual([]);
+
+it("allows native tools by default when unrestricted and withholds <harness>:<ToolName> denials", async () => {
+  expect(await sessionBound({ id: "s", provider: "claude" })).toBeNull();
+  const open = await resolveSessionNativeTools({ id: "s", provider: "claude" });
+  expect(open.allowed).toEqual(expect.arrayContaining(["Read", "Write", "Edit", "Bash"]));
+  expect(open.denied).not.toContain("Write");
+  expect(open.denied).not.toContain("Edit");
+
+  const noEdit = await resolveSessionNativeTools(
+    { id: "s", provider: "claude" },
+    { bounds: ["claude:no-file-writes"] },
+  );
+  expect(noEdit.allowed).toContain("Read");
+  expect(noEdit.denied).toEqual(expect.arrayContaining(["Write", "Edit", "NotebookEdit"]));
+});
+
+it("takes back native file, network, and shell tools when bounds restrict those domains", async () => {
+  db.bound = { network: { deny: ["all"] } };
+  const netRestricted = await resolveSessionNativeTools({ id: "s", provider: "claude" });
+  expect(netRestricted.denied).toEqual(expect.arrayContaining(["Bash", "WebFetch", "WebSearch"]));
+
+  db.bound = null;
+  const noBash = await resolveSessionNativeTools(
+    { id: "s", provider: "claude" },
+    { bounds: ["bash:no-bash"] },
+  );
+  expect(noBash.denied).toContain("Bash");
+});
+
+it("reports cursor controls and a bound conflict, and withholds pi native tools under bounds", async () => {
+  expect(
+    (await resolveSessionNativeTools({ id: "s", provider: "cursor" })).uncontrolled,
+  ).toHaveProperty("Grep");
+  db.bound = { files: { deny: ["**/.env"] } };
+  expect(
+    (await resolveSessionNativeTools({ id: "s", provider: "cursor" })).conflicts,
+  ).toHaveProperty("Grep");
+  db.bound = { tools: { deny: ["pi:bash"] } };
+  expect(
+    (await resolveSessionNativeTools({ id: "s", provider: "pi" })).denied,
+  ).toContain("bash");
 });

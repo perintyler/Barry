@@ -31,7 +31,7 @@
 import { mkdirSync, writeFileSync, mkdtempSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import type { ActionMeta } from "./action-catalog.js";
+import type { ActionMeta } from "./action-registry.js";
 
 /**
  * YAML frontmatter is delimited by lines of `---`, so a description containing

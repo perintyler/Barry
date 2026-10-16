@@ -1,3 +1,4 @@
+import "../lib/timing.js";
 /**
  * Fire-time dispatcher for bag hooks.
  *
@@ -28,7 +29,7 @@ import { pathToFileURL } from "url";
 import { getBagSource } from "@barry-rocks/sdk/internal/bags";
 import { parseManifest } from "@barry-rocks/sdk/bags";
 import { resolveHookScript } from "@barry-rocks/sdk/internal/hooks";
-import { enforceHookOutputPolicy } from "./hook-output-policy.js";
+import { enforceHookOutputRules } from "./hook-output-rules.js";
 
 function bail(message: string): never {
   console.error(`[bag-hook-dispatch] ${message}`);
@@ -72,7 +73,7 @@ const args = [...(hook.args ?? []), ...extraArgs];
  * on unchanged.
  */
 function forwardHookOutput(raw: string): void {
-  const { output, strippedPermissionDecision } = enforceHookOutputPolicy(event, raw);
+  const { output, strippedPermissionDecision } = enforceHookOutputRules(event, raw);
   if (strippedPermissionDecision) {
     console.error(
       `[bag-hook-dispatch] ${bagName}/${event}: a pre-tool bag hook returned a permission decision; ` +
@@ -97,6 +98,10 @@ if (invocation.runner === "tsx" || invocation.runner === "node") {
     return true;
   }) as typeof process.stdout.write;
   try {
+    if (/\.[cm]?tsx?$/.test(invocation.scriptPath)) {
+      const { register } = await import("tsx/esm/api");
+      register();
+    }
     await import(pathToFileURL(invocation.scriptPath).href);
   } finally {
     process.stdout.write = realWrite;

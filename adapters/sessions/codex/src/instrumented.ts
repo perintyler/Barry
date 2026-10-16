@@ -1,3 +1,5 @@
+import { resolveHarnessCommand } from "@barry-rocks/sdk/adapters/harnesses";
+import { CODEX_REQUIREMENTS } from "./modes.js";
 /**
  * Codex instrumented: the codex TUI attached to the engine Barry runs for the
  * hosted session, as `codex resume <thread> --remote`. The session itself is
@@ -25,7 +27,7 @@ export async function planCodexAttach(config: SessionConfig, guarantees: Guarant
   const codexHome = defaultCodexHome(config.sessionId);
   ensureCodexHome(codexHome);
   return {
-    command: "codex",
+    command: resolveHarnessCommand(CODEX_REQUIREMENTS, config.env),
     args: ["resume", attachment.harnessSessionId, "--remote", `unix://${attachment.address}`, "--cd", config.cwd],
     env: { ...env, CODEX_HOME: codexHome },
     tmpDirs: [],

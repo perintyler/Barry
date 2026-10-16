@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { describe, it, expect, afterEach, afterAll } from "vitest";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { createToolServer, createToolServerHandle, wrapSecretInjection, disambiguateToolNames, wrapEditIntent, setAcquireForEdit, wrapShellEditGuard, applyBoundGuards, toToolMeta } from "./tool-runtime.js";
+import { createToolServer, createToolServerHandle, wrapSecretInjection, disambiguateToolNames, wrapEditIntent, setAcquireForEdit, wrapShellEditGuard, toToolMeta } from "./tool-runtime.js";
 import { toolContractHash } from "@barry-rocks/sdk/internal/tools";
-import type { Bound } from "@barry-rocks/sdk/bounds";
+import { applyBoundGuards, type Bound } from "@barry-rocks/sdk/bounds";
 import type { RuntimeTool } from "./tool-runtime.js";
 import { getRegisteredTools, getRequestHandler } from "./sdk-internals.js";
 
@@ -217,13 +217,13 @@ describe("tool discovery modes", () => {
       expect(names).not.toContain("hidden_tool");
     });
 
-    // Registered even with an empty catalog, because this is the ONLY moment
+    // Registered even with an empty deferred list, because this is the ONLY moment
     // they can be: the SDK refuses registerCapabilities after connect, so a
     // server that starts with nothing deferred could never gain them — and
     // sessions gain deferred tools mid-life routinely (a bag enabled via
     // /refresh-tools, or a fail-closed resolve healing itself). Gating on the
-    // init-time catalog left those tools granted, hidden, and unreachable,
-    // which looks exactly like never having been granted.
+    // init-time deferred list left those tools packed, hidden, and unreachable,
+    // which looks exactly like never having been packed.
     it("registers tool_search in barry mode even with nothing deferred", async () => {
       const tools = [makeTool("normal_tool")];
       const server = createToolServer({ tools, toolDiscovery: "barry" });
@@ -428,9 +428,9 @@ describe("output schema passthrough", () => {
 describe("wrapSecretInjection", () => {
   it("injects an explicitly empty bag scope without a session or secrets", async () => {
     const { tool, ctx } = makeProbe();
-    const [wrapped] = wrapSecretInjection([tool], {}, undefined, ["catalog"], []);
+    const [wrapped] = wrapSecretInjection([tool], {}, undefined, ["search"], []);
     await wrapped.handler({});
-    expect(ctx()).toEqual({ secrets: {}, sessionId: undefined, availableTools: ["catalog"], bagNames: [] });
+    expect(ctx()).toEqual({ secrets: {}, sessionId: undefined, availableTools: ["search"], bagNames: [] });
   });
   it("refuses a handler with an unresolved declared secret even when ambient credentials exist", async () => {
     const { tool, ctx } = makeProbe(["TOKEN"]);
@@ -792,18 +792,18 @@ describe("applyBoundGuards path normalization", () => {
 });
 
 /**
- * files.allowOnly inverts the file bound: everything NOT matching is denied.
+ * files.allow inverts the file bound: everything NOT matching is denied.
  * The guard must check both the raw and the normalized form (the same old
  * bypass the deny tests pin), deny wins when a path matches both lists, and
  * the check covers every tool that takes a filesystem path, not just Read.
  */
-describe("applyBoundGuards allowOnly", () => {
+describe("applyBoundGuards files.allow", () => {
   const home = mkdtempSync(join(tmpdir(), "barry-mcp-allow-root-"));
   mkdirSync(join(home, "repos", "vantage", "src"), { recursive: true });
   afterAll(() => rmSync(home, { recursive: true, force: true }));
-  const allowScope: Bound = { files: { allowOnly: [`${home}/repos/vantage/**`] } };
+  const allowScope: Bound = { files: { allow: [`${home}/repos/vantage/**`] } };
 
-  function pathTool(name: string, param: string) {
+  function pathTool(name: string, _param: string) {
     let ran = false;
     const tool: RuntimeTool = {
       namespace: "filesystem",
@@ -841,7 +841,7 @@ describe("applyBoundGuards allowOnly", () => {
 
   it("deny wins when a path matches both lists", async () => {
     const both: Bound = {
-      files: { allowOnly: [`${home}/repos/vantage/**`], deny: [`${home}/repos/vantage/.env`] },
+      files: { allow: [`${home}/repos/vantage/**`], deny: [`${home}/repos/vantage/.env`] },
     };
     const { tool, ran } = pathTool("Read", "file_path");
     const [wrapped] = applyBoundGuards([tool], both);
@@ -933,6 +933,233 @@ describe("bound guards on the call_tool path", () => {
     expect(executed()).toBe(true);
     expect(result.isError).toBeFalsy();
   });
+
+  it("enforces bound.inputs, bound.files, bound.network, and bound.nodes on proxied tools invoked via call_tool", async () => {
+    let remoteCalls = 0;
+    const proxied = [
+      {
+        name: "send_slack_message",
+        description: "send slack message",
+        inputSchema: {
+          type: "object",
+          properties: { channel: { type: "string" }, url: { type: "string" } },
+        },
+        bag: "slack",
+        namespace: "slack",
+        access: "write" as const,
+        deferred: true,
+        proxy: {
+          client: {
+            callTool: async () => {
+              remoteCalls++;
+              return { content: [{ type: "text" as const, text: "sent" }] };
+            },
+          },
+        } as never,
+      },
+    ];
+    const bound: Bound = {
+      inputs: {
+        "slack:send_slack_message": {
+          channel: { allow: ["#alerts", "#ops"], deny: ["#ops-secret"] },
+        },
+      },
+      network: { deny: ["evil.example"] },
+      nodes: { allow: ["mac-studio"] },
+    };
+
+    const deniedNodeServer = createToolServer({
+      tools: [],
+      proxiedTools: proxied,
+      toolDiscovery: "barry",
+      bound,
+      nodeId: "other-node",
+    });
+    const callDeniedNode = getRequestHandler(deniedNodeServer.server, "tools/call")!;
+    const nodeErr = await callDeniedNode(
+      {
+        method: "tools/call",
+        params: {
+          name: "call_tool",
+          arguments: { name: "send_slack_message", arguments: { channel: "#alerts" } },
+        },
+      },
+      {},
+    ) as { isError?: boolean; content: Array<{ text: string }> };
+    expect(nodeErr.isError).toBe(true);
+    expect(remoteCalls).toBe(0);
+
+    const server = createToolServer({
+      tools: [],
+      proxiedTools: proxied,
+      toolDiscovery: "barry",
+      bound,
+      nodeId: "mac-studio",
+    });
+    const call = getRequestHandler(server.server, "tools/call")!;
+
+    const deniedInput = await call(
+      {
+        method: "tools/call",
+        params: {
+          name: "call_tool",
+          arguments: { name: "send_slack_message", arguments: { channel: "#random" } },
+        },
+      },
+      {},
+    ) as { isError?: boolean; content: Array<{ text: string }> };
+    expect(deniedInput.isError).toBe(true);
+    expect(remoteCalls).toBe(0);
+
+    const deniedNet = await call(
+      {
+        method: "tools/call",
+        params: {
+          name: "call_tool",
+          arguments: {
+            name: "send_slack_message",
+            arguments: { channel: "#alerts", url: "https://evil.example/hook" },
+          },
+        },
+      },
+      {},
+    ) as { isError?: boolean };
+    expect(deniedNet.isError).toBe(true);
+    expect(remoteCalls).toBe(0);
+
+    const ok = await call(
+      {
+        method: "tools/call",
+        params: {
+          name: "call_tool",
+          arguments: { name: "send_slack_message", arguments: { channel: "#alerts" } },
+        },
+      },
+      {},
+    ) as { isError?: boolean };
+    expect(ok.isError).toBeFalsy();
+    expect(remoteCalls).toBe(1);
+  });
+});
+
+describe("MCP JSON Schema narrowing for bound.inputs", () => {
+  it("narrows literal allowlists to enum/const + required in tools/list and tool_search, leaving wildcard rules unchanged", async () => {
+    const tools: RuntimeTool[] = [
+      {
+        namespace: "slack",
+        access: "write",
+        name: "send_message",
+        description: "send message",
+        schema: {
+          channel: z.string().optional(),
+          team: z.string().optional(),
+          topic: z.string().optional(),
+        },
+        handler: async () => "ok",
+      },
+      {
+        namespace: "slack",
+        access: "write",
+        name: "post_alert",
+        description: "post alert",
+        deferred: true,
+        schema: {
+          channel: z.string().optional(),
+        },
+        handler: async () => "ok",
+      },
+    ];
+    const bound: Bound = {
+      inputs: {
+        "slack:send_message": {
+          channel: { allow: ["#alerts", "#ops", "#ops-secret"], deny: ["*-secret"] },
+          team: { allow: ["platform"] },
+          topic: { allow: ["deploy-*"] },
+        },
+        "slack:post_alert": {
+          channel: { allow: ["#incidents"] },
+        },
+      },
+    };
+
+    const server = createToolServer({ tools, toolDiscovery: "barry", bound });
+    const listHandler = getRequestHandler(server.server, "tools/list")!;
+    const listed = await listHandler({ method: "tools/list", params: {} }, {}) as {
+      tools: Array<{
+        name: string;
+        inputSchema: {
+          properties?: Record<string, { enum?: string[]; const?: string }>;
+          required?: string[];
+        };
+      }>;
+    };
+    const sendTool = listed.tools.find((t) => t.name === "send_message")!;
+    expect(sendTool.inputSchema.properties?.channel?.enum).toEqual(["#alerts", "#ops"]);
+    expect(sendTool.inputSchema.properties?.channel?.const).toBeUndefined();
+    expect(sendTool.inputSchema.properties?.team?.enum).toEqual(["platform"]);
+    expect(sendTool.inputSchema.properties?.team?.const).toBe("platform");
+    expect(sendTool.inputSchema.properties?.topic?.enum).toBeUndefined();
+    expect(sendTool.inputSchema.required).toEqual(expect.arrayContaining(["channel", "team"]));
+    expect(sendTool.inputSchema.required).not.toContain("topic");
+
+    // Verify tool_search narrows deferred tool schemas too
+    const callHandler = getRequestHandler(server.server, "tools/call")!;
+    const searchRes = await callHandler(
+      { method: "tools/call", params: { name: "tool_search", arguments: { query: "post_alert" } } },
+      {},
+    ) as { content: Array<{ text: string }> };
+    const hits = JSON.parse(searchRes.content[0].text) as Array<{
+      name: string;
+      inputSchema: {
+        properties?: Record<string, { enum?: string[]; const?: string }>;
+        required?: string[];
+      };
+    }>;
+    expect(hits).toHaveLength(1);
+    expect(hits[0].inputSchema.properties?.channel?.enum).toEqual(["#incidents"]);
+    expect(hits[0].inputSchema.properties?.channel?.const).toBe("#incidents");
+    expect(hits[0].inputSchema.required).toContain("channel");
+  });
+
+  it("looks up bound.inputs by original qualified ID even after disambiguateToolNames renames colliding tools", async () => {
+    const tools: RuntimeTool[] = [
+      {
+        namespace: "slack",
+        access: "write",
+        name: "send",
+        description: "slack send",
+        schema: { channel: z.string().optional() },
+        handler: async () => "ok",
+      },
+      {
+        namespace: "email",
+        access: "write",
+        name: "send",
+        description: "email send",
+        schema: { to: z.string().optional() },
+        handler: async () => "ok",
+      },
+    ];
+    const bound: Bound = {
+      inputs: {
+        "slack:send": { channel: { allow: ["#general"] } },
+      },
+    };
+    const server = createToolServer({ tools, bound });
+    const listHandler = getRequestHandler(server.server, "tools/list")!;
+    const listed = await listHandler({ method: "tools/list", params: {} }, {}) as {
+      tools: Array<{
+        name: string;
+        inputSchema: {
+          properties?: Record<string, { enum?: string[]; const?: string }>;
+          required?: string[];
+        };
+      }>;
+    };
+    const slackSend = listed.tools.find((t) => t.name === "slack_send")!;
+    expect(slackSend.inputSchema.properties?.channel?.const).toBe("#general");
+    expect(slackSend.inputSchema.required).toContain("channel");
+  });
 });
 
 describe("wrapEditIntent per-session arbiters", () => {
@@ -996,8 +1223,8 @@ describe("applyBoundGuards network rules reach the git bag's clone", () => {
 
   it("is denied outright when the bound denies fetching", async () => {
     const { tool, ran } = cloneTool();
-    const [wrapped] = applyBoundGuards([tool], { network: { actions: ["read"] } });
-    await expect(wrapped.handler({ url: "https://github.com/a/b.git", destination: "/tmp/x" })).rejects.toThrow(/restricted by network policy/);
+    const [wrapped] = applyBoundGuards([tool], { network: { deny: ["read"] } });
+    await expect(wrapped.handler({ url: "https://github.com/a/b.git", destination: "/tmp/x" })).rejects.toThrow(/restricted by network bound/);
     expect(ran()).toBe(false);
   });
 
@@ -1005,7 +1232,7 @@ describe("applyBoundGuards network rules reach the git bag's clone", () => {
     "is denied for a denied host, written as %s",
     async (url) => {
       const { tool, ran } = cloneTool();
-      const [wrapped] = applyBoundGuards([tool], { network: { domains: ["evil.example"] } });
+      const [wrapped] = applyBoundGuards([tool], { network: { deny: ["evil.example"] } });
       await expect(wrapped.handler({ url, destination: "/tmp/x" })).rejects.toThrow(/network requests to 'evil\.example'/);
       expect(ran()).toBe(false);
     },
@@ -1013,7 +1240,7 @@ describe("applyBoundGuards network rules reach the git bag's clone", () => {
 
   it("runs for a host the bound does not deny", async () => {
     const { tool, ran } = cloneTool();
-    const [wrapped] = applyBoundGuards([tool], { network: { domains: ["evil.example"] } });
+    const [wrapped] = applyBoundGuards([tool], { network: { deny: ["evil.example"] } });
     await expect(wrapped.handler({ url: "https://github.com/a/b.git", destination: "/tmp/x" })).resolves.toBe("cloned");
     expect(ran()).toBe(true);
   });
@@ -1068,7 +1295,7 @@ it.each([
   } finally { await handle.server.close(); }
 });
 
-it("rechecks authority before reading resources or enumerating the current catalog", async () => {
+it("rechecks authority before reading resources or enumerating the current tools", async () => {
   let allowed = true;
   let reads = 0;
   const handle = createToolServerHandle({
@@ -1098,7 +1325,7 @@ it("rechecks authority before reading resources or enumerating the current catal
   } finally { await handle.server.close(); }
 });
 
-it("coalesces catalog notifications and handles asynchronous send failures", async () => {
+it("coalesces tool list notifications and handles asynchronous send failures", async () => {
   const handle = createToolServerHandle({ tools: [] });
   let writes = 0;
   let failures = 0;

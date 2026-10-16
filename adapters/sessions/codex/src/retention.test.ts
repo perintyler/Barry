@@ -59,12 +59,12 @@ it("serializes a new runtime preparation with an in-flight closure probe", async
 });
 
 const wireIdentity = {
-  id: 3, name: "bux", token: "identity-token", vaultEmail: null, isDefault: false, createdAt: "2026-09-24T00:00:00Z", lastUsedAt: null, displayName: null, bags: [], traits: [], bounds: [], bound: null,
+  id: 3, name: "bux", token: "identity-token", vaultEmail: null, isDefault: false, createdAt: "2026-09-24T00:00:00Z", lastUsedAt: null, displayName: null, bags: [], bounds: [], bound: null,
   adapters: {}, envKeys: [],
 };
 const wireSession = {
   id: "s1", name: "Session", systemPrompt: null, summary: null, repoPath: null, identityId: 3,
-  identitySource: null, status: "running", traits: [], bound: null, pinned: false, useWorktree: false,
+  identitySource: null, status: "running", bags: [], bounds: [], bound: null, pinned: false, useWorktree: false,
   worktreeStatus: null, worktreePath: null, baseRepoPath: null, source: null, provider: "claude",
   model: null, createdAt: "2026-09-24T00:00:00Z", startedAt: null,
 };

@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getSession, listSessions, searchSessions } from "./tools.js";
-// The message-content search lives in the `sessions/search` extension, which
-// publishes into this same `sessions` namespace. Importing it here is what keeps
-// the two descriptions honest about which one searches what.
-import { searchMessagesTool } from "../extensions/search/src/tools.js";
+import { getSession, listSessions, searchSessions, searchMessagesTool } from "./tools.js";
 
 /**
  * Tool-surface contracts.

@@ -19,6 +19,7 @@ export interface ResolveSessionNamespacesOptions {
   /** Overrides the MCP base URL (tests, non-default ports). */
   baseUrl?: string;
   timeoutMs?: number;
+  enabled?:boolean;
 }
 
 /**
@@ -31,7 +32,7 @@ export async function resolveSessionNamespaces(
   sessionId: string | undefined,
   options: ResolveSessionNamespacesOptions = {},
 ): Promise<string[]> {
-  if (!isNamespaceSplitEnabled()) return [];
+  if (!(options.enabled??isNamespaceSplitEnabled())) return [];
   if (!sessionId) return dedupe(options.fallback ?? []);
 
   const base = options.baseUrl ?? `http://127.0.0.1:${getServicePort("mcpBarry")}`;

@@ -10,7 +10,7 @@ import { listSchedules, resolveScheduleAction } from "@barry-rocks/schedules-bag
 import { Scheduler } from "@barry-rocks/schedules-bag";
 import { loginEventId } from "@barry-rocks/schedules-bag";
 import { processStartTime } from "@barry-rocks/schedules-bag";
-import { announce, prune, recoverOneOffs, runAgent, runOneOff, runScript, sweepOrphans } from "./runners.js";
+import { announce, prune, recoverAtSchedules, runAgent, runAtSchedule, runScript, sweepOrphans } from "./runners.js";
 import { runScheduledJob } from "@barry-rocks/schedules-bag";
 import { createLogger as createDiagnosticLogger } from "@barry-rocks/sdk/logging";
 const diagnostics = createDiagnosticLogger("schedules.service", { transport: "stderr" });
@@ -23,9 +23,9 @@ async function main(): Promise<void> {
   // What a schedule is granted is composed by the identities subject, answered in-process.
   Barry.use(identities);
   const startedAt = processStartTime(process.pid);
-  // Before the orphaned-run sweep: a script one-off killed with its runner is
+  // Before the orphaned-run sweep: a script schedule killed with its runner is
   // re-queued here, where the sweep would only have closed its run as failed.
-  let recovering: Promise<void> = recoverOneOffs();
+  let recovering: Promise<void> = recoverAtSchedules();
   await recovering;
   const scheduler = new Scheduler({
     listSchedules,
@@ -37,11 +37,11 @@ async function main(): Promise<void> {
     runAgent,
     runJob: (entry) => runScheduledJob(entry),
     announce,
-    runOneOff,
+    runAtSchedule,
     // The scheduler asks every tick; the lookups are async, so each tick
     // settles what the previous one found rather than blocking on it.
-    recoverOneOffs: () => {
-      recovering = recovering.then(() => recoverOneOffs()).catch((error: unknown) => {
+    recoverAtSchedules: () => {
+      recovering = recovering.then(() => recoverAtSchedules()).catch((error: unknown) => {
         diagnostics.error("schedules.recovery_failed", { detail: `schedules: one-off recovery failed: ${error instanceof Error ? error.message : String(error)}` });
       });
     },

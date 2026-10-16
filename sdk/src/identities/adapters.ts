@@ -4,6 +4,10 @@ import { HarnessIdSchema, MODE_IDS } from "../ids.js";
 export const AdapterSettingsSchema = z.strictObject({
   default: z.boolean().optional(),
   model: z.string().min(1).optional(),
+  account: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i).optional(),
+  promptCacheTtl: z.enum(["5m", "1h"]).optional(),
+  namespaceSplit:z.boolean().optional(),
+  effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
   mode: z.enum(MODE_IDS).optional(),
 });
 
@@ -55,7 +59,11 @@ export function ownAdapters(parent: Readonly<IdentityAdapters>, intended: Readon
   const parentDefault = Object.values(parent).filter(entry => entry.default).length === 1 || Object.keys(parent).length <= 1 ? defaultHarness(parent) : undefined;
   for (const [id, settings] of Object.entries(intended)) {
     const fields: AdapterSettings = {};
+    if(settings.namespaceSplit!==undefined && settings.namespaceSplit!==parent[id]?.namespaceSplit)fields.namespaceSplit=settings.namespaceSplit;
+    if (settings.account !== undefined && settings.account !== parent[id]?.account) fields.account = settings.account;
     if (settings.model !== undefined && settings.model !== parent[id]?.model) fields.model = settings.model;
+    if (settings.promptCacheTtl !== undefined && settings.promptCacheTtl !== parent[id]?.promptCacheTtl) fields.promptCacheTtl = settings.promptCacheTtl;
+    if (settings.effort !== undefined && settings.effort !== parent[id]?.effort) fields.effort = settings.effort;
     if (settings.mode !== undefined && settings.mode !== parent[id]?.mode) fields.mode = settings.mode;
     if (id === intendedDefault && intendedDefault !== parentDefault) fields.default = true;
     if (!Object.hasOwn(parent, id) || Object.keys(fields).length) own[id] = fields;

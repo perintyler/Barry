@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import { afterEach, beforeAll, expect, it } from "vitest";
 import { createLocalArtifactMaintenance } from "./maintenance.js";
-import { createSqliteArtifactRepository } from "./catalog.js";
+import { createSqliteArtifactRepository } from "./index-store.js";
 import { createLocalArtifactBlobs, type LocalArtifactBlobs } from "./blobs.js";
 import { createArtifactCreator } from "../create.js";
 

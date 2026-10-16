@@ -50,14 +50,14 @@ function alarm(s: ServiceStatus): string | null {
  * needs attention, or a named one is not running, so a script can gate on it.
  */
 export async function statusCommand(names: string[] = [], options: { json?: boolean } = {}): Promise<void> {
-  const { currentScope } = await import("../scope.js");
-  const scope = currentScope();
+  const { currentTarget } = await import("../target.js");
+  const target = currentTarget();
   const reply = await serviceRequest({ op: "status" });
   let pool = reply.services;
-  if (scope.kind === "identity") {
+  if (target.kind === "identity") {
     try {
       const { identityRecords } = await import("@barry-rocks/identities-bag");
-      const id = await identityRecords.row(scope.binding.id);
+      const id = await identityRecords.row(target.binding.id);
       const packedBags = new Set(id?.metadata.bags ?? []);
       pool = reply.services.filter(s => s.bag === "mcp" || s.bag === "sessions" || packedBags.has(s.bag));
     } catch {

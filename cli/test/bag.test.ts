@@ -5,9 +5,9 @@ import { fakeIdentities } from "@barry-rocks/sdk/testing";
 
 /**
  * Unit-level rather than subprocess-level (unlike the rest of cli/test): the
- * behaviors that matter here — that traits get synced, that sub-bag traits get
- * synced too, that launchd is left alone — are side effects on collaborators,
- * which a spawned `barry bag enable` cannot observe.
+ * behaviors that matter here — that sub-bags are resolved without flattening,
+ * that optionality is recorded, that launchd is left alone — are side effects
+ * on collaborators, which a spawned `barry bag enable` cannot observe.
  */
 const { mockSpawnSync, mockExistsSync, mockUnlinkSync, mockReaddirSync } = vi.hoisted(() => ({
   mockSpawnSync: vi.fn(() => ({ status: 0 })),
@@ -31,10 +31,6 @@ vi.mock("fs", async (importOriginal) => ({
 // "@barry-rocks/sdk/bags" root is a SILENT no-op now that the subject reaches
 // modules directly — it would never match and the suite would run against the
 // real modules.
-vi.mock("@barry-rocks/sdk/internal/traits", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@barry-rocks/sdk/internal/traits")>(),
-  expandComposition: vi.fn((names: string[]) => [...names]),
-}));
 vi.mock("@barry-rocks/sdk/internal/bags", async (importOriginal) => ({
   ...await importOriginal<typeof import("@barry-rocks/sdk/internal/bags")>(),
   isBinaryOnPath: vi.fn(() => true),
@@ -43,7 +39,6 @@ vi.mock("@barry-rocks/sdk/internal/bags", async (importOriginal) => ({
   loadBagSync: vi.fn(() => ({ name: "git", source: { type: "local", path: "/bags/git" }, manifest: { stores: {} } })),
   loadAllBags: vi.fn(async () => []),
   expandCompositionFromSnapshot: vi.fn(async (names: string[]) => [...names]),
-  getAllTraits: vi.fn(() => []),
   loadRegistry: vi.fn(() => ({
     git: { type: "local", path: "/bags/git" },
     reminders: { type: "local", path: "/bags/reminders" },
@@ -72,17 +67,16 @@ vi.mock("@barry-rocks/sdk/bags", async (importOriginal) => ({
 }));
 
 // The identities bag's root, as bag.ts reaches it: an identity's directory,
-// the owner's identities (for --unregister), and the bag sync pack runs.
+// the owner's identities (for --unregister), and the bag resolution pack runs.
 const roots = vi.hoisted(() => ({
   list: vi.fn(async () => [] as Array<{ record: { name: string; metadata: { bags?: string[] } } }>),
-  syncBags: vi.fn(),
+  resolveBags: vi.fn(),
   /** The identity requireIdentity finds by name, until an update replaces it. */
   named: vi.fn(),
 }));
 vi.mock("@barry-rocks/identities-bag", () => ({
   identityRecords: { directory: mockIdentityDir, list: roots.list },
-  traits: { list: vi.fn(async () => []), ensure: vi.fn(async () => []), syncBags: roots.syncBags },
-  bounds: {},
+  resolveBags: roots.resolveBags,
 }));
 
 // pack() gates on installBlockers, which asks the registry whether the bag is
@@ -136,7 +130,7 @@ import type { ResolveBagsResult } from "@barry-rocks/identities-bag";
 import { reconcileServices } from "../src/commands/service.js";
 import { identityFixture } from "./helpers/identity-fixture.js";
 
-const mockResolve = roots.syncBags;
+const mockResolve = roots.resolveBags;
 const mockNamed = roots.named;
 const mockReconcileSupervisor = vi.mocked(reconcileServices);
 /** What pack and unpack write: `Barry.identity(name).update(changes)`, as the identities subject receives it. */
@@ -151,9 +145,7 @@ function resolvedTo(overrides: Partial<ResolveBagsResult> = {}): ResolveBagsResu
     bags: [],
     composedBags: [],
     addedSubBags: [],
-    syncedTraits: [],
     warnings: [],
-    timedOut: false,
     ...overrides,
   };
 }
@@ -187,11 +179,9 @@ afterEach(() => Barry.reset());
 // Services are now managed by the service management, not launchd — no worktree guard needed.
 
 describe("barry bag enable", () => {
-  it("still syncs traits when the bag is already enabled", async () => {
-    // The repair path: re-running enable is how missing trait rows get fixed,
-    // so resolution must happen before the idempotency short-circuit.
+  it("resolves the bag even when the bag is already enabled", async () => {
     mockNamed.mockResolvedValue(barryWithBags(["git"]));
-    mockResolve.mockResolvedValue(resolvedTo({ bags: ["git"], syncedTraits: ["git", "git-read"] }));
+    mockResolve.mockResolvedValue(resolvedTo({ bags: ["git"] }));
 
     await bagPackCommand("git", {});
 
@@ -265,7 +255,7 @@ describe("barry bag disable", () => {
 describe("barry pack", () => {
   it("adds the bag to the named barry", async () => {
     mockNamed.mockResolvedValue(barryWithBags([]));
-    mockResolve.mockResolvedValue(resolvedTo({ bags: ["git"], syncedTraits: ["git", "git-read"] }));
+    mockResolve.mockResolvedValue(resolvedTo({ bags: ["git"] }));
 
     await bagPackCommand("git", { name: "work" });
 
@@ -273,11 +263,25 @@ describe("barry pack", () => {
     expect(mockUpdate).toHaveBeenCalledWith("default", { bags: ["git"] }, expect.anything());
   });
 
-  it("still syncs traits when the bag is already on the barry", async () => {
-    // Same repair invariant as the enable alias: resolution has to run before
-    // the idempotency short-circuit or drifted trait rows never get fixed.
+  it("marks the bag optional when --optional is passed", async () => {
+    mockNamed.mockResolvedValue(barryWithBags([]));
+    mockResolve.mockResolvedValue(resolvedTo({ bags: ["git"] }));
+
+    await bagPackCommand("git", { name: "work", optional: true });
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      "default",
+      {
+        bags: ["git"],
+        bagConfigs: { git: { optional: true } },
+      },
+      expect.anything(),
+    );
+  });
+
+  it("still resolves the bag when it is already on the barry", async () => {
     mockNamed.mockResolvedValue(barryWithBags(["git"]));
-    mockResolve.mockResolvedValue(resolvedTo({ bags: ["git"], syncedTraits: ["git", "git-read"] }));
+    mockResolve.mockResolvedValue(resolvedTo({ bags: ["git"] }));
 
     await bagPackCommand("git", { name: "work" });
 

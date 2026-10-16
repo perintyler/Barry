@@ -56,7 +56,7 @@ export function readAttributes(
 /** One captured record: which claude session it belongs to, and what it says. */
 export interface CapturedTelemetry {
   /** The vendor's session id — `session.id` on every claude OTel event. */
-  providerSessionId: string;
+  harnessSessionId: string;
   event: SessionEvent;
   /**
    * Stable identity for this record, so a receiver that is called twice with
@@ -84,17 +84,17 @@ export function telemetryToEvents(payload: OtelLogsPayload): CapturedTelemetry[]
     for (const scopeLog of resourceLog.scopeLogs ?? []) {
       for (const record of scopeLog.logRecords ?? []) {
         const attributes = readAttributes(record.attributes);
-        const providerSessionId = attributes["session.id"];
+        const harnessSessionId = attributes["session.id"];
         // Without a session id there is nothing to attach the row to. Dropping
         // is right: the alternative is inventing an owner for it.
-        if (typeof providerSessionId !== "string") continue;
+        if (typeof harnessSessionId !== "string") continue;
 
         const eventName = eventNameOf(attributes["event.name"] ?? attributes["name"] ?? bodyText(record));
         const event = recordToEvent(eventName, attributes, record);
         if (!event) continue;
 
         captured.push({
-          providerSessionId,
+          harnessSessionId,
           event,
           dedupeKey: [
             "otel",
@@ -122,15 +122,15 @@ export function telemetrySpansToEvents(payload: OtelTracesPayload): CapturedTele
       for (const span of scopeSpan.spans ?? []) {
         if (span.name !== "claude_code.tool") continue;
         const spanAttributes = readAttributes(span.attributes);
-        const providerSessionId = spanAttributes["session.id"];
-        if (typeof providerSessionId !== "string") continue;
+        const harnessSessionId = spanAttributes["session.id"];
+        if (typeof harnessSessionId !== "string") continue;
         const toolUseId = spanAttributes["tool_use_id"];
         for (const event of span.events ?? []) {
           if (event.name !== "tool.output") continue;
           const output = readAttributes(event.attributes)["output"];
           if (output === undefined) continue;
           captured.push({
-            providerSessionId,
+            harnessSessionId,
             event: { type: "tool_result", result: output, ...(toolUseId !== undefined ? { id: String(toolUseId) } : {}) },
             dedupeKey: ["otel", "tool.output", toolUseId ?? "", event.timeUnixNano ?? ""].join(":"),
           });

@@ -3,7 +3,7 @@
     {
       "command": "node",
       "args": [
-        "monorepo-policy.mjs"
+        "monorepo-rules.mjs"
       ]
     }
   ],
@@ -12,14 +12,6 @@
       "command": "node",
       "args": [
         "identity-residue.mjs"
-      ]
-    }
-  ],
-  "check:bound-vocabulary": [
-    {
-      "command": "node",
-      "args": [
-        "bound-vocabulary.mjs"
       ]
     }
   ],

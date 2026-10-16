@@ -1,5 +1,5 @@
 /**
- * Join the installation's hosting policy with what is registered, and refuse
+ * Join the installation's hosting config with what is registered, and refuse
  * anything unsafe before a provider ever sees it.
  *
  * Core owns these rules so no provider has to remember them: every way in is
@@ -9,7 +9,7 @@
  * `barry hosting status` shows why.
  */
 import type { BagHostingCapability } from "@barry-rocks/sdk/bags";
-import type { HostingGate, HostingPolicy, LocalRoute, PublishedTunnel, RoutesFile } from "@barry-rocks/sdk/services";
+import type { HostingGate, HostingConfig, LocalRoute, PublishedTunnel, RoutesFile } from "@barry-rocks/sdk/services";
 
 
 /** A registered service, as hosting needs to see it. */
@@ -33,7 +33,7 @@ export interface HostingProvider {
 export type PublishedRoutes = Omit<RoutesFile, "generation" | "generated">;
 
 export interface HostingPlan {
-  /** Keyed by provider bag. Every installed provider gets an entry, so one the policy no longer uses tears its routes down. */
+  /** Keyed by provider bag. Every installed provider gets an entry, so one the config no longer uses tears its routes down. */
   published: Map<string, PublishedRoutes>;
   errors: string[];
 }
@@ -64,14 +64,14 @@ function defaultLocalLabel(service: HostedService, httpServicesByBag: Map<string
 }
 
 export function resolveHosting(
-  policy: HostingPolicy | null,
+  config: HostingConfig | null,
   services: HostedService[],
   providers: HostingProvider[],
 ): HostingPlan {
   const errors: string[] = [];
   const published = new Map<string, PublishedRoutes>();
   for (const p of providers) published.set(p.bag, { version: 1, provider: p.bag, tunnels: {} });
-  if (!policy) return { published, errors };
+  if (!config) return { published, errors };
 
   const servicesByKey = new Map(services.map((s) => [s.key, s]));
   const providerByBag = new Map(providers.map((p) => [p.bag, p]));
@@ -106,8 +106,8 @@ export function resolveHosting(
     return service;
   };
 
-  if (policy.local) {
-    const local = policy.local;
+  if (config.local) {
+    const local = config.local;
     const provider = providerByBag.get(local.via);
     if (!provider) {
       errors.push(`local: via ${local.via}, which is not an installed bag`);
@@ -140,7 +140,7 @@ export function resolveHosting(
     }
   }
 
-  for (const [tunnelName, tunnel] of Object.entries(policy.tunnels)) {
+  for (const [tunnelName, tunnel] of Object.entries(config.tunnels)) {
     const where = `tunnel ${tunnelName}`;
     const provider = providerByBag.get(tunnel.via);
     if (!provider) {

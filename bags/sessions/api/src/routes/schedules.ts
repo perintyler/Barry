@@ -1,6 +1,6 @@
 import { identityRecords } from "@barry-rocks/identities-bag";
 import { runScript } from "@barry-rocks/scheduler-service";
-import { oneOffContext, scheduleContext } from "@barry-rocks/schedules-bag";
+import { resolveAtScheduleAccess, resolveScheduleAccess } from "@barry-rocks/schedules-bag";
 import { schedulesRoutes } from "@barry-rocks/sdk/internal/routes";
 import { serve } from "@barry-rocks/sdk/services/http";
 /**
@@ -16,13 +16,13 @@ import { ActionRuns } from "@barry-rocks/actions-bag";
 import {
 	IdempotencyConflictError,
 	MAX_INPUT_BYTES,
-	cancelOneOff, deleteRuntimeSchedule, findSchedule, getOneOff, insertRuntimeSchedule, listOneOffs, listSchedules, listStates, parseRuntimeSpec, resolveOneOffAction, resolveScheduleAction, runScheduledJob, scheduleOnce, schedulerHealth, serializeOneOff, summarizeSchedule, updateState
+	cancelAtSchedule, deleteRuntimeSchedule, findSchedule, getAtSchedule, insertRuntimeSchedule, listAtSchedules, listSchedules, listStates, parseRuntimeSpec, resolveAtScheduleAction, resolveScheduleAction, runScheduledJob, scheduleAt, schedulerHealth, serializeAtSchedule, summarizeSchedule, updateState
 } from "@barry-rocks/schedules-bag";
 import { isBarryError } from "@barry-rocks/sdk";
 import { isScriptAction } from "@barry-rocks/sdk/internal/actions";
 import { loadBagRegistrySnapshot } from "@barry-rocks/sdk/internal/bags";
 import { createLogger } from "@barry-rocks/sdk/logging";
-import { OneOffStatusSchema } from "@barry-rocks/sdk/internal/schedules";
+import { AtScheduleStatusSchema } from "@barry-rocks/sdk/internal/schedules";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { parseRequestBody, sendProblem } from "../http.js";
@@ -84,8 +84,8 @@ routes.route(schedulesRoutes.createOneOffSchedule, async (req, res) => {
   }
   try {
     const identityId = await resolveNumericIdentityId(body.identity);
-    const { oneOff, created } = await scheduleOnce(body, identityId);
-    res.status(created ? 201 : 200).json({ schedule: serializeOneOff(oneOff) });
+    const { schedule, created } = await scheduleAt(body, identityId);
+    res.status(created ? 201 : 200).json({ schedule: serializeAtSchedule(schedule) });
   } catch (error) {
     if (!isBarryError(error)) throw error;
     const status = error.reason === "not_found" ? 404 : error.reason === "conflict" ? 409
@@ -95,77 +95,77 @@ routes.route(schedulesRoutes.createOneOffSchedule, async (req, res) => {
 });
 
 routes.route(schedulesRoutes.listOneOffSchedules, (req, res) => {
-  const status = typeof req.query.status === "string" ? OneOffStatusSchema.safeParse(req.query.status) : undefined;
+  const status = typeof req.query.status === "string" ? AtScheduleStatusSchema.safeParse(req.query.status) : undefined;
   if (status && !status.success) return sendProblem(req, res, 400, "Invalid status", String(req.query.status));
   const limit = Number(req.query.limit ?? 50);
   withStore(req, res, () => {
-    const found = listOneOffs({
+    const found = listAtSchedules({
       ...(typeof req.query.bag === "string" ? { bag: req.query.bag } : {}),
       ...(status?.success ? { status: status.data } : {}),
       limit: Number.isFinite(limit) ? limit : 50,
     });
-    res.json({ schedules: found.map(serializeOneOff) });
+    res.json({ schedules: found.map(serializeAtSchedule) });
   });
 });
 
 routes.route(schedulesRoutes.getOneOffSchedule, (req, res) => {
   withStore(req, res, () => {
-    const found = getOneOff(req.params.id);
+    const found = getAtSchedule(req.params.id);
     if (!found) return sendProblem(req, res, 404, "Unknown schedule", req.params.id);
-    return res.json({ schedule: serializeOneOff(found) });
+    return res.json({ schedule: serializeAtSchedule(found) });
   });
 });
 
 routes.route(schedulesRoutes.cancelOneOffSchedule, (req, res) => {
   withStore(req, res, () => {
-    const result = cancelOneOff(req.params.id);
+    const result = cancelAtSchedule(req.params.id);
     if (!result) return sendProblem(req, res, 404, "Unknown schedule", req.params.id);
     return res.json(result);
   });
 });
 
 /**
- * Run one attempt of a one-off's agent action — posted by the scheduler,
+ * Run one attempt of an at-schedule's agent action — posted by the scheduler,
  * which owns the attempt; the API owns agent spawns. Answers with the
  * executor's body, like POST /actions/:name/run.
  */
 schedulesRouter.post("/once/:id/run", async (req, res) => {
-  const oneOff = getOneOff(req.params.id);
-  if (!oneOff) return res.status(404).json({ error: "unknown_schedule" });
-  if (oneOff.status !== "running") {
-    return res.status(409).json({ error: "not_running", message: `schedule ${oneOff.id} is ${oneOff.status}` });
+  const scheduleItem = getAtSchedule(req.params.id);
+  if (!scheduleItem) return res.status(404).json({ error: "unknown_schedule" });
+  if (scheduleItem.status !== "running") {
+    return res.status(409).json({ error: "not_running", message: `schedule ${scheduleItem.id} is ${scheduleItem.status}` });
   }
   try {
-    const resolved = await resolveOneOffAction(oneOff);
+    const resolved = await resolveAtScheduleAction(scheduleItem);
     if ("unavailable" in resolved) return res.status(404).json({ error: "unavailable", message: resolved.unavailable });
     if (isScriptAction(resolved.action)) return res.status(422).json({ error: "script_requires_scheduler", message: "Script attempts run through the scheduler permission checks" });
     const { bags } = await loadBagRegistrySnapshot();
     // Whom the run acts for. A job a session started acts for that session,
-    // exactly as run_action's subagent does. A one-off with an identity or
-    // traits (a schedule's) runs under them. A JOB asked for with neither
-    // acts with its bag's authority; an action one-off still must name them.
-    const scheduled = Boolean(oneOff.permissions.identity || oneOff.permissions.traits?.length) || !oneOff.job;
-    const identityId = oneOff.callerSessionId ? undefined : oneOff.permissions.identityId ?? (await resolveNumericIdentityId(oneOff.permissions.identity));
+    // exactly as run_action's subagent does. A schedule with an identity or
+    // bags runs under them. A JOB asked for with neither
+    // acts with its bag's authority; an action schedule still must name them.
+    const scheduled = Boolean(scheduleItem.permissions.identity || scheduleItem.permissions.bags?.length) || !scheduleItem.job;
+    const identityId = scheduleItem.callerSessionId ? undefined : scheduleItem.permissions.identityId ?? (await resolveNumericIdentityId(scheduleItem.permissions.identity));
     const result = await executeDetached(
-      { ...resolved.action, timeout: oneOff.timeoutS },
+      { ...resolved.action, timeout: scheduleItem.timeoutS },
       {
-        inputs: oneOff.inputs,
-        ...(oneOff.callerSessionId
-          ? { caller_session_id: oneOff.callerSessionId }
+        inputs: scheduleItem.inputs,
+        ...(scheduleItem.callerSessionId
+          ? { caller_session_id: scheduleItem.callerSessionId }
           : {
-              ...(oneOff.permissions.identity ? { identity: oneOff.permissions.identity } : {}),
+              ...(scheduleItem.permissions.identity ? { identity: scheduleItem.permissions.identity } : {}),
               ...(identityId !== undefined ? { identity_id: identityId } : {}),
-              ...(scheduled ? { executionContext: await oneOffContext(oneOff, resolved.action.agent?.agent) } : {}),
+              ...(scheduled ? { executionContext: await resolveAtScheduleAccess(scheduleItem, resolved.action.agent?.agent) } : {}),
             }),
-        schedule_id: oneOff.id,
-        trigger: oneOff.job ? "job" : "schedule",
+        schedule_id: scheduleItem.id,
+        trigger: scheduleItem.job ? "job" : "schedule",
       },
       bags,
       req.authPrincipal,
     );
     return res.status(result.status).json(result.body);
   } catch (error) {
-    log.error("schedules.once_run_error", { schedule: oneOff.id, error: error instanceof Error ? error.message : String(error) });
+    log.error("schedules.once_run_error", { schedule: scheduleItem.id, error: error instanceof Error ? error.message : String(error) });
     return res.status(500).json({ error: "internal_error", message: error instanceof Error ? error.message : String(error) });
   }
 });
@@ -233,7 +233,7 @@ schedulesRouter.post("/:bag/:name/run", async (req, res) => {
         ...(entry.schedule.inputs ? { inputs: entry.schedule.inputs } : {}),
         ...(entry.schedule.identity ? { identity: entry.schedule.identity } : {}),
         ...(identityId !== undefined ? { identity_id: identityId } : {}),
-        executionContext: await scheduleContext(entry, action.agent?.agent),
+        executionContext: await resolveScheduleAccess(entry, action.agent?.agent),
         schedule_id: id,
         trigger: parsed.data.trigger ?? "api",
       },

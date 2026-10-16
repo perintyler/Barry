@@ -10,7 +10,7 @@ import { FILE_OWNED_FIELDS, findIdentityDirectoryByName, updateIdentity } from "
  * Identities live in the identities store. See identities-db.ts
  * for why `actors` came along.
  *
- * Called per-query rather than captured once, matching traits.ts: the handle is
+ * Called per-query rather than captured once: the handle is
  * lazy, so binding it at module scope would materialise the database file in
  * every process that merely imports this bag.
  */
@@ -28,17 +28,16 @@ export interface IdentityMetadata {
   /** Extra command names this identity answers to. See `IdentityYaml.aliases`. */
   aliases?: string[];
   vault?: string;
-  traits?: import("@barry-rocks/sdk/internal/identities").IdentityEntries;
   bounds?: import("@barry-rocks/sdk/internal/identities").IdentityEntries;
   bags?: string[];
   bag_configs?: import("@barry-rocks/sdk/internal/identities").IdentityDefinition["bag_configs"];
   /**
-   * Deny rules written inline rather than referencing a `bounds` row. Set from
-   * a file-based Barry's `barry.yaml`, which has no id to point at one. Merges
-   * as one more source in the union of denials, alongside trait and named
+   * Deny rules written inline rather than referencing a `bounds` entry. Set from
+   * a file-based Barry's `identity.yaml`, which has no id to point at one. Merges
+   * as one more source in the union of denials, alongside named
    * bounds.
    */
-  bound?: Record<string, unknown>;
+  bound?: import("@barry-rocks/sdk/bounds").Bound & Record<string, unknown>;
   /** Legacy JSON key, read as a fallback — migration 028 renames it. */
   scope?: Record<string, unknown>;
   adapters?: import("@barry-rocks/sdk").IdentityAdapters;
@@ -65,19 +64,6 @@ export interface IdentityMetadata {
    *   tool_search and invokable via call_tool (works on any MCP client)
    */
   tool_discovery?: "provider" | "barry";
-  /**
-   * Whether packing a bag onto this barry GRANTS its tools to every session.
-   * - "session"  — it does not. A packed bag offers its auto-trait; a session
-   *   must select it. This is what the README means by "a loaded bag is
-   *   not itself a tool grant", and what the trait picker's answer implies.
-   * - "identity" — the pre-2026-09 behavior: every enabled bag's auto-trait is
-   *   unioned into every session, so unchecking every trait (and `--none`) still
-   *   leaves those tools granted.
-   *
-   * Absent means "session". Kept as a knob rather than a straight fix because
-   * the union was deliberate once — see composeTraitNames in engine.
-   */
-  bag_grant?: "session" | "identity";
   [key: string]: unknown;
 }
 

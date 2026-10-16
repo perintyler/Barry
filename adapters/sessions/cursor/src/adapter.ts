@@ -21,7 +21,7 @@ export default defineAdapter({
   vendor: "cursor",
   requirements: CURSOR_REQUIREMENTS,
   capabilities: CURSOR_CAPABILITIES,
-  nativeTools: NATIVE_TOOLS,
+  tools: NATIVE_TOOLS,
   defaultMode: "hosted",
   modes: {
     hosted: {

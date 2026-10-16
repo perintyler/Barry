@@ -56,7 +56,7 @@ describe("findSnapshotDrift", () => {
     /**
      * THE regression. Both sides agree the bag exists and agree where it is;
      * the directory is simply gone. Readers load nothing and the bag silently
-     * contributes no tools and no traits.
+     * contributes no tools and no bounds.
      */
     it("reports an entry whose directory does not exist", () => {
       const gone = local("/repos/barry/bags/deleted");

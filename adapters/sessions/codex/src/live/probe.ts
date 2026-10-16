@@ -26,11 +26,13 @@ export interface Probe {
   url: string;
   modelRequests: ModelRequest[];
   mcpCalls: Array<{ method: string; sessionId: string | null }>;
+  release(): void;
   close(): Promise<void>;
 }
 
 export async function startProbe(keys: Record<string, string>, options: { guidance: string; sentinel: string }): Promise<Probe> {
   const modelRequests: ModelRequest[] = [];
+  const held = new Set<() => void>();
   const mcpCalls: Probe["mcpCalls"] = [];
   const server = createServer((req, res) => {
     let raw = "";
@@ -48,12 +50,16 @@ export async function startProbe(keys: Record<string, string>, options: { guidan
         toolSpecs: Array.isArray(input.tools) ? input.tools : [],
         lastInput: JSON.stringify(history.at(-1) ?? "").slice(0, 400),
       });
-      reply(res, input, history, options.sentinel);
+      const respond = () => { held.delete(respond); if (!res.destroyed) reply(res, input, history, options.sentinel); };
+      if (JSON.stringify(history.at(-1)).includes("HOLD_PROBE")) {
+        held.add(respond);
+        res.once("close", () => held.delete(respond));
+      } else respond();
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
-  return { url: `http://127.0.0.1:${port}`, modelRequests, mcpCalls, close: () => new Promise((resolve) => server.close(() => resolve())) };
+  return { url: `http://127.0.0.1:${port}`, modelRequests, mcpCalls, release: () => { for (const respond of [...held]) respond(); }, close: () => new Promise((resolve) => server.close(() => resolve())) };
 }
 
 function credentialOf(req: IncomingMessage, keys: Record<string, string>): string {
@@ -70,7 +76,9 @@ function reply(res: ServerResponse, input: Record<string, unknown>, history: Arr
   const namespace = tools.find((tool) => tool.type === "namespace" && String(tool.name).includes("probe"));
   const flat = tools.find((tool) => String(tool.name ?? "").includes("probe_tool"));
   const call = (fields: Record<string, unknown>): Record<string, unknown> => ({ id: "fc_" + randomUUID(), call_id: "call_" + randomUUID(), ...fields });
-  const output = answered
+  const output = last.includes("Generate a concise, single-line task")
+    ? message("Probe task")
+    : answered
     ? message("Tool finished: " + last)
     : last.includes("NATIVE_PROBE:exec_command")
       ? call({ type: "function_call", name: "exec_command", arguments: JSON.stringify({ cmd: `touch ${sentinel}-shell` }) })

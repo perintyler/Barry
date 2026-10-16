@@ -37,8 +37,9 @@ function renderPermissions(value) {
   if (!grant) return node("p", {}, "Legacy run: no approved privileged execution scope.");
   const effective = new Set(value.effective?.allowedToolIds ?? []);
   const tools = Object.entries(grant.scope.tools);
+  const approvedBags = grant.scope.bags ?? grant.scope.traits ?? [];
   return node("div", {},
-    node("dl", { class: "metadata" }, [["Authorizer", grant.authorizer], ["Identity", grant.scope.identity ?? "None"], ["Approved traits", grant.scope.traits.join(", ") || "None"], ["Grant revision", grant.revision]].map(([key, text]) => node("div", {}, node("dt", {}, key), node("dd", {}, String(text))))),
+    node("dl", { class: "metadata" }, [["Authorizer", grant.authorizer], ["Identity", grant.scope.identity ?? "None"], ["Approved bags", approvedBags.join(", ") || "None"], ["Grant revision", grant.revision]].map(([key, text]) => node("div", {}, node("dt", {}, key), node("dd", {}, String(text))))),
     node("p", { class: value.currentPolicyAvailable ? "subtext" : "error-box" }, value.currentPolicyAvailable ? "Current policy observed. Each effect still requires destination and live-attempt checks." : "Current policy unavailable. This view is not evidence of permission to execute."),
     tools.length ? table(["Qualified tool", "Approved access", "Current policy"], tools.map(([id, access]) => node("tr", {}, node("td", { class: "code" }, id), node("td", {}, access), node("td", {}, !value.currentPolicyAvailable ? "Unknown" : effective.has(id) ? "Within ceiling" : "Restricted")))) : node("p", {}, "No approved tool capabilities."),
     payload("Grant evidence and bounds", value, "permission-evidence"));
@@ -71,7 +72,7 @@ function renderRuns(runs) {
   return node("div", { class: "panel" }, table(["Run", "Status", "Workflow", "Identity", "Started", "Deadline"], runs.map(run => node("tr", {},
     node("td", {}, node("a", { href: `#runs/${encodeURIComponent(run.id)}`, class: "run-link" }, run.id), node("div", { class: "subtext" }, run.owner.slice(0, 12))),
     node("td", {}, badge(run.status)), node("td", {}, run.type, node("div", { class: "subtext" }, `Version ${run.version}`)),
-    node("td", {}, run.job?.identity ?? "No session identity", node("div", { class: "subtext" }, run.job?.traits.join(", ") ?? "Legacy scope")), node("td", {}, date(run.startedAt)), node("td", {}, date(run.deadline)),
+    node("td", {}, run.job?.identity ?? "No session identity", node("div", { class: "subtext" }, (run.job?.bags ?? run.job?.traits)?.join(", ") ?? "Legacy scope")), node("td", {}, date(run.startedAt)), node("td", {}, date(run.deadline)),
   ))), node("div", { class: "pager" }, `Showing ${state.offset + 1}–${state.offset + runs.length}`, node("div", { class: "actions" },
     button("← Previous", () => { state.offset = Math.max(0, state.offset - 50); void refresh(); }, { disabled: state.offset === 0 }),
     button("Next →", () => { if (state.busy || !state.nextCursor) return; state.cursors[state.offset / 50 + 1] = state.nextCursor; state.offset += 50; void refresh(); }, { disabled: !state.nextCursor }),
@@ -162,7 +163,8 @@ function renderDetail() {
   const { run } = state.run;
   const blocked = run.status === "blocked" ? explainBlockedRun(run.error) : null;
   const live = run.status === "running" || run.status === "blocked";
-  const fields = [["Status", badge(run.status)], ["Workflow", `${run.type} · version ${run.version}`], ["Owner", run.owner], ["Started", date(run.startedAt)], ["Deadline", date(run.deadline)], ["Run ID", run.id], ["Initiator", run.principal], ["Identity", run.job?.identity ?? "No session identity"], ["Traits", run.job?.traits.join(", ") || "No approved tool capabilities"], ["Execution profile", run.job?.profile ?? "Portable (legacy)"], ["Grant revision", String(run.job?.grantRevision ?? "Legacy")], ["Pinned artifact", run.artifact ?? "Legacy definition"], ["Revision", String(run.revision)]];
+  const jobBags = run.job?.bags ?? run.job?.traits ?? [];
+  const fields = [["Status", badge(run.status)], ["Workflow", `${run.type} · version ${run.version}`], ["Owner", run.owner], ["Started", date(run.startedAt)], ["Deadline", date(run.deadline)], ["Run ID", run.id], ["Initiator", run.principal], ["Identity", run.job?.identity ?? "No session identity"], ["Bags", jobBags.join(", ") || "No approved tool capabilities"], ["Execution profile", run.job?.profile ?? "Portable (legacy)"], ["Grant revision", String(run.job?.grantRevision ?? "Legacy")], ["Pinned artifact", run.artifact ?? "Legacy definition"], ["Revision", String(run.revision)]];
   const metadata = node("div", { class: "panel" }, node("div", { class: "panel-head" }, node("h2", {}, "Execution"), node("div", { class: "actions" },
     live ? button("Send signal", () => { $("#signal-id").value = crypto.randomUUID(); $("#signal-id").readOnly = false; $("#signal-name").readOnly = false; $("#signal-dialog").dataset.runId = run.id; $("#signal-dialog").showModal(); }) : null,
     run.status === "blocked" ? button("Resume", () => void resume(run).catch(() => {}), { id: "resume-run" }) : null,
@@ -286,7 +288,8 @@ function openStart(entry) {
   if (entry && !definitions.some(item => item.type === entry.type && item.version === entry.version)) $("#definition").append(node("option", { value: JSON.stringify({ type: entry.type, version: entry.version }) }, `${entry.type} · v${entry.version} (original request)`));
   if (entry) { $("#definition").value = JSON.stringify({ type: entry.type, version: entry.version }); $("#run-input").value = ""; }
   $("#run-id").value = entry?.runId ?? crypto.randomUUID(); $("#run-id").readOnly = !!entry; $("#definition").disabled = !!entry;
-  $("#run-traits").value = entry?.job?.traits?.join(", ") ?? "";
+  $("#run-bags").value = (entry?.job?.bags ?? entry?.job?.traits)?.join(", ") ?? "";
+  $("#run-bounds").value = entry?.job?.bounds?.join(", ") ?? "";
   $("#run-identity").value = entry?.job?.identity ?? "";
   $("#run-harness").value = entry?.job?.harness ?? "";
   $("#start-form .form-error").textContent = entry ? "Re-enter the original input. Its fingerprint must match; no input was saved in your browser." : "";
@@ -294,11 +297,15 @@ function openStart(entry) {
 }
 function openReauthorize(run, entry) {
   const dialog = $("#reauthorize-dialog");
+  const currentBags = run.job.bags ?? run.job.traits ?? [];
+  const currentBounds = run.job.bounds ?? [];
   dialog.dataset.runId = run.id; dialog.dataset.requestId = entry?.id ?? crypto.randomUUID(); dialog.dataset.revision = entry?.expectedRevision ?? run.revision;
-  dialog.dataset.job = JSON.stringify(entry?.job ?? { traits: run.job.traits, ...(run.job.identity ? { identity: run.job.identity } : {}), ...(run.job.harness ? { harness: run.job.harness } : {}), profile: run.job.profile ?? "portable", ...(run.job.action ? { action: run.job.action } : {}) });
-  $("#reauthorize-traits").value = JSON.parse(dialog.dataset.job).traits.join(", ");
+  dialog.dataset.job = JSON.stringify(entry?.job ?? { bags: currentBags, ...(currentBounds.length ? { bounds: currentBounds } : {}), ...(run.job.identity ? { identity: run.job.identity } : {}), ...(run.job.harness ? { harness: run.job.harness } : {}), profile: run.job.profile ?? "portable", ...(run.job.action ? { action: run.job.action } : {}) });
+  const parsedJob = JSON.parse(dialog.dataset.job);
+  $("#reauthorize-bags").value = (parsedJob.bags ?? parsedJob.traits ?? []).join(", ");
+  $("#reauthorize-bounds").value = (parsedJob.bounds ?? []).join(", ");
   $("#reauthorize-reason").value = "";
-  $("#reauthorize-form .form-error").textContent = entry ? "Re-enter the original reason and selected traits to retry this request." : `Approved traits: ${run.job.traits.join(", ") || "none"}. Identity and profile remain fixed.`;
+  $("#reauthorize-form .form-error").textContent = entry ? "Re-enter the original reason and selected bags to retry this request." : `Approved bags: ${currentBags.join(", ") || "none"}. Identity and profile remain fixed.`;
   dialog.showModal();
 }
 function renderPending() {
@@ -339,8 +346,8 @@ $("#new-run").addEventListener("click", () => {
 });
 formSubmit($("#start-form"), async () => {
   const definition = JSON.parse($("#definition").value);
-  const traits = $("#run-traits").value.split(",").map(value => value.trim()).filter(Boolean), identity = $("#run-identity").value.trim(), harness = $("#run-harness").value.trim();
-  const body = { ...definition, id: $("#run-id").value, input: JSON.parse($("#run-input").value), job: { traits, ...(identity ? { identity } : {}), ...(harness ? { harness } : {}) } }, owner = state.overview.owner;
+  const bags = $("#run-bags").value.split(",").map(value => value.trim()).filter(Boolean), bounds = $("#run-bounds").value.split(",").map(value => value.trim()).filter(Boolean), identity = $("#run-identity").value.trim(), harness = $("#run-harness").value.trim();
+  const body = { ...definition, id: $("#run-id").value, input: JSON.parse($("#run-input").value), job: { bags, ...(bounds.length ? { bounds } : {}), ...(identity ? { identity } : {}), ...(harness ? { harness } : {}) } }, owner = state.overview.owner;
   const entry = await rememberOperation(owner, "start", body.id, body.id, body); renderPending();
   $("#run-id").readOnly = true; $("#definition").disabled = true;
   const run = await api("/api/runs", body);
@@ -356,7 +363,11 @@ formSubmit($("#signal-form"), async () => {
 formSubmit($("#cancel-form"), () => { const dialog = $("#cancel-dialog"); return control("cancel", dialog.dataset.runId, dialog.dataset.requestId, Number(dialog.dataset.revision)); });
 formSubmit($("#reauthorize-form"), async () => {
   const dialog = $("#reauthorize-dialog"), owner = state.overview.owner;
-  const body = { requestId: dialog.dataset.requestId, expectedRevision: Number(dialog.dataset.revision), job: { ...JSON.parse(dialog.dataset.job), traits: $("#reauthorize-traits").value.split(",").map(value => value.trim()).filter(Boolean) }, reason: $("#reauthorize-reason").value };
+  const bags = $("#reauthorize-bags").value.split(",").map(value => value.trim()).filter(Boolean), bounds = $("#reauthorize-bounds").value.split(",").map(value => value.trim()).filter(Boolean);
+  const baseJob = JSON.parse(dialog.dataset.job);
+  delete baseJob.traits;
+  delete baseJob.bounds;
+  const body = { requestId: dialog.dataset.requestId, expectedRevision: Number(dialog.dataset.revision), job: { ...baseJob, bags, ...(bounds.length ? { bounds } : {}) }, reason: $("#reauthorize-reason").value };
   const entry = await rememberOperation(owner, "reauthorize", dialog.dataset.runId, body.requestId, body); renderPending();
   const receipt = await api(`${path(dialog.dataset.runId)}/receipt?id=${encodeURIComponent(body.requestId)}`);
   if (!receipt) await mutate("reauthorize", body, dialog.dataset.runId);

@@ -68,7 +68,7 @@ describe("jobs: in bag.yaml", () => {
   it("qualifies the job's own bounds with the bag's name", () => {
     const manifest = parseManifestObject({
       ...base,
-      bounds: { "no-files": { description: "No files", bound: { files: { allowOnly: [] } } } },
+      bounds: { "no-files": { description: "No files", bound: { files: { allow: [] } } } },
       jobs: { x: { bounds: ["no-files", "other:bound"], runs: { using: "node", main: "src/x.mjs" } } },
     }, "demo");
     expect(manifest.jobs?.x?.bounds).toEqual(["demo:no-files", "other:bound"]);

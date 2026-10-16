@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseManifest } from "../manifest.js";
+import { buildBag } from "../build.js";
 import { loadBagToolSummaries } from "../tool-definitions.js";
 
 let bagDir: string;
@@ -46,6 +47,8 @@ describe("tool summaries", () => {
     // A long-lived service saw the first bundle. The bag is rebuilt with the
     // tool renamed; the summary it writes must describe the new bundle.
     writeTool("make", 5);
+    expect((await loadBagToolSummaries(bag()))?.map(tool => tool.toolName)).toEqual(["ask"]);
+    expect((await buildBag({ name: "summary-bag", bagDir, entry: join(bagDir, "tools.ts") })).ok).toBe(true);
     expect((await loadBagToolSummaries(bag()))?.map((tool) => tool.toolName)).toEqual(["make"]);
   });
 });

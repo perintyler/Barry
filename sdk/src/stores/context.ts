@@ -2,7 +2,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { STORE_BINDING_RESOLVER } from "../bags/store.js";
 import { resolveStoreBinding, type StoreOptions } from "./bindings.js";
 import type { StoreDeclaration } from "./registry.js";
-import type { ExecutionContext } from "../bounds/execution-context.js";
+import type { ToolCallBounds } from "../bounds/resolve-bound.js";
+import type { WorkflowActorContext } from "../auth/workflow-actor.js";
 export interface StoreBagConfiguration {
   stores: Readonly<Record<string, StoreDeclaration>>;
   overrides?: Readonly<Record<string, StoreOptions>>;
@@ -13,7 +14,7 @@ export interface StoreContext {
   root?: string;
   bags?: Readonly<Record<string, StoreBagConfiguration>>;
   identity?: string;
-  execution?: ExecutionContext;
+  execution?: WorkflowActorContext | ToolCallBounds;
   workflowActor?: (path: string, body?: unknown) => string | Promise<string>;
 }
 // Independently bundled bags must share the engine's execution context.

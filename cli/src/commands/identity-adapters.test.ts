@@ -26,7 +26,7 @@ function recordOf(adapter: Adapter): InstalledAdapter {
     ...(adapter.offeredModels ? { offeredModels: adapter.offeredModels.map((model) => ({ ...model })) } : {}),
     requirements: adapter.requirements,
     capabilities: adapter.capabilities,
-    nativeTools: [...adapter.nativeTools],
+    tools: [...adapter.tools],
     defaultMode: adapter.defaultMode,
     modes: { hosted: null, instrumented: null, guest: null },
     path: `/adapters/${adapter.id}`,
@@ -61,7 +61,7 @@ function readYaml(dir: string): Record<string, unknown> {
   return yamlParse(readFileSync(join(dir, "identity.yaml"), "utf-8")) as Record<string, unknown>;
 }
 
-// The vendor catalog, as the CLI's entry point installs it: what says which
+// The vendor model list, as the CLI's entry point installs it: what says which
 // vendor serves a model.
 installModels(createModels(VENDORS));
 
@@ -69,7 +69,7 @@ beforeAll(() => {
   Barry.use(identities);
   provisionOwner();
   // A registry naming none of the base identity's bags, so creating an
-  // identity does not load and build every one of them for their traits.
+  // identity does not load and build every one of them for their bounds.
   writeFileSync(
     join(process.env.BARRY_HOME!, "app-support", "bags.snapshot.json"),
     JSON.stringify({ bags: { "zz-unused": { type: "remote", url: "https://example.test/mcp" } } }),

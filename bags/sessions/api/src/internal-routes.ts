@@ -47,6 +47,7 @@ export const INTERNAL_ROUTES: readonly InternalRoute[] = [
   { method: "post", path: "/api/v1/schedules" },
   { method: "delete", path: "/api/v1/schedules/runtime/:name" },
   // prompts.ts — delivery surfaces read verbatim by the client (snake_case body).
+  { method: "post", path: "/api/v1/prompts/enqueue" },
   { method: "post", path: "/api/v1/prompts/wait" },
   { method: "post", path: "/api/v1/prompts/listeners" },
   { method: "post", path: "/api/v1/prompts/wake-budget" },

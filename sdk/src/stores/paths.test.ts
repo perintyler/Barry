@@ -5,10 +5,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import { barryStoresDir } from "../services/home.mjs";
 import { activeStoreRoot } from "./migration.js";
 import { storePath } from "./registry.js";
-import { sessionIdentity } from "./paths.js";
+import { sessionIdentity, forgetSessionIdentity } from "./paths.js";
 
 const root = barryStoresDir();
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => { forgetSessionIdentity(); rmSync(root, { recursive: true, force: true }); });
 function activate() { mkdirSync(root, { recursive: true }); writeFileSync(join(root, "active.json"), JSON.stringify({ id: "fixture" })); }
 function database(identity?: string) {
   const path = storePath({ node: "local", bag: "sessions", store: identity ? "sessions" : "catalog", identity }, identity ? "identity" : "node", activeStoreRoot());
@@ -28,7 +28,7 @@ it("resolves the committed WAL row while ignoring another connection's uncommitt
     expect(sessionIdentity("owned")).toBe("alice");
     db.exec("BEGIN IMMEDIATE; INSERT INTO sessions VALUES('pending')");
     expect(sessionIdentity("pending")).toBeUndefined();
-    db.exec("COMMIT"); expect(sessionIdentity("pending")).toBe("alice");
+    db.exec("COMMIT"); forgetSessionIdentity("pending"); expect(sessionIdentity("pending")).toBe("alice");
   } finally { db.close(); }
 });
 for (const second of ["bob", undefined]) {

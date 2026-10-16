@@ -1,6 +1,6 @@
 /**
  * The identities subject: this bag's answer to `Barry.identities()`,
- * `Barry.identity(ref)`, `Barry.traits()` and `Barry.bounds()`. Each call
+ * `Barry.identity(ref)`, and `Barry.bounds()`. Each call
  * carries its caller and decides what that caller may do: the owner anything,
  * a paired device only the identities it was granted, a session only its own
  * identity. Each write validates its input, writes `identity.yaml`, refreshes
@@ -15,17 +15,15 @@ import {
   type Identity,
   type IdentityReference,
   type IdentityUpdate,
-  type Trait,
   type Updated,
   type Warning,
 } from "@barry-rocks/sdk";
 import { hasIdentityGrant, hasScope } from "@barry-rocks/sdk/internal/auth";
-import { parseTraits, parseBounds, requiredNames, type IdentityChanges, type SecretBindings } from "@barry-rocks/sdk/internal/identities";
+import { parseBounds, requiredNames, type IdentityChanges, type SecretBindings } from "@barry-rocks/sdk/internal/identities";
 
 import { Identities as IdentityRows, type IdentityRecord } from "../store/identities.js";
 import { Users, type UserRecord } from "../store/users.js";
 import { bounds } from "./bounds.js";
-import { type TraitInfo } from "../config/traits.js";
 import {
   isReservedIdentityName,
   createIdentityDirectory,
@@ -39,10 +37,8 @@ import {
   type IdentityYaml,
 } from "../store/identity-files.js";
 import { getBuiltinIdentityDir, getIdentitiesDir, getIdentityDir } from "../paths.js";
-import { listSelectableTraits } from "../selectable-traits.js";
 import { devices } from "../devices.js";
 import { announceIdentity, refreshLiveSessions } from "./effects.js";
-import { grantsFromStore, identityTraitsFromStore } from "../config/session-bound.js";
 import {
   activeName,
   entries,
@@ -80,6 +76,10 @@ function secretSources(secrets: SecretBindings): Record<string, string> {
   return Object.fromEntries(Object.entries(secrets).map(([name, binding]) => [name, binding.reference.in]));
 }
 
+function safeRequiredBounds(raw: unknown): string[] {
+  try { return requiredNames(parseBounds(raw)); } catch { return []; }
+}
+
 /** An identity as `Barry` hands it out. */
 export function identityOf({ record, isDefault, source, dir }: IdentityEntry): Identity {
   const meta = record.metadata;
@@ -89,8 +89,7 @@ export function identityOf({ record, isDefault, source, dir }: IdentityEntry): I
     token: record.token,
     displayName: typeof meta.display_name === "string" ? meta.display_name : null,
     bags: Array.isArray(meta.bags) ? meta.bags : [],
-    traits: requiredNames(parseTraits(meta.traits)),
-    bounds: requiredNames(parseBounds(meta.bounds)),
+    bounds: safeRequiredBounds(meta.bounds),
     // Directory identities carry their deny rules inline instead of by id.
     bound: (meta.bound ?? meta.scope) ?? null,
     adapters: meta.adapters ?? {},
@@ -107,27 +106,9 @@ export function identityOf({ record, isDefault, source, dir }: IdentityEntry): I
   };
 }
 
-function traitOf(trait: TraitInfo): Trait {
-  return {
-    name: trait.name,
-    description: trait.description,
-    access: trait.access,
-    namespaces: trait.namespaces,
-    ...(trait.skills.length > 0 ? { skills: trait.skills } : {}),
-    ...(trait.tools.length > 0 ? { tools: trait.tools } : {}),
-    ...(trait.instructions.length > 0 ? { instructions: trait.instructions } : {}),
-    ...(Object.keys(trait.bound).length > 0 ? { bound: { ...trait.bound } } : {}),
-    ...(trait.boundNames.length > 0 ? { boundNames: trait.boundNames } : {}),
-    ...(trait.bag !== undefined ? { bag: trait.bag } : {}),
-    ...(trait.nativeTools ? { nativeTools: trait.nativeTools } : {}),
-    ...(trait.includes?.length ? { includes: trait.includes } : {}),
-    ...(trait.harnessTraits && Object.keys(trait.harnessTraits).length > 0 ? { harnessTraits: trait.harnessTraits } : {}),
-  };
-}
-
 /** An update in `identity.yaml`'s vocabulary: present keys change, `null` clears. */
 const UPDATE_FIELDS: ReadonlySet<string> = new Set<keyof IdentityUpdate>([
-  "displayName", "bags", "bagConfigs", "traits", "bounds", "adapters",
+  "displayName", "bags", "bagConfigs", "bounds", "adapters",
   "statusNotify", "githubInstallationId", "vault", "secrets", "aliases",
 ]);
 
@@ -137,7 +118,7 @@ export function changesOf(update: IdentityUpdate): IdentityChanges {
   if (unknown.length > 0) throw new BarryError("invalid", `Unknown identity fields: ${unknown.join(", ")}`);
   const changes: Record<string, unknown> = {};
   const keys: Array<[keyof IdentityUpdate, string]> = [
-    ["displayName", "display_name"], ["bags", "bags"], ["bagConfigs", "bag_configs"], ["traits", "traits"],
+    ["displayName", "display_name"], ["bags", "bags"], ["bagConfigs", "bag_configs"],
     ["bounds", "bounds"], ["adapters", "adapters"], ["statusNotify", "status_notify"],
     ["vault", "vault"], ["aliases", "aliases"],
   ];
@@ -167,7 +148,7 @@ async function write(user: UserRecord, ref: IdentityReference, changes: Identity
   await updateIdentity(found.record, prepared.metadata);
   const updated = loadIdentityFromDirectory(found.dir, { actorId: user.id });
   announceIdentity(updated.id, "updated");
-  if (Object.hasOwn(changes, "bags") || Object.hasOwn(changes, "traits") || Object.hasOwn(changes, "bounds")) refreshLiveSessions(updated, user.id);
+  if (Object.hasOwn(changes, "bags") || Object.hasOwn(changes, "bounds")) refreshLiveSessions(updated, user.id);
   return { ...identityOf(entry({ record: updated, dir: found.dir }, user)), warnings: prepared.warnings };
 }
 
@@ -268,45 +249,79 @@ export const identities: Identities = {
     await Users.updateSettings(user.id, { ...user.settings, defaultBarry: found.record.name });
   },
 
-  async traits(ref, caller) {
+  async bags(ref, caller) {
     const user = await userOf(caller);
     const found = await located(refOf(ref), user);
     mayRead(caller, found.record);
-    return (await identityTraitsFromStore(found.record)).map(({ trait, optional, name }) => ({ ...traitOf(trait), name, optional }));
+    const { bags: bagsSubject } = await import("./bags.js");
+    const allBags = await bagsSubject.list(caller);
+    const selected = new Set(found.record.metadata.bags ?? []);
+    return allBags.filter((bag) => selected.has(bag.name));
   },
 
-  /**
-   * Everything a session of this identity gets, given what the session selects
-   * on top: its effective traits and bound, its namespaces, and the tools,
-   * skills and instructions they grant. `null` asks for a session with no
-   * identity (a schedule that names only traits). One answer for every launch
-   * path, so none of them can leave the identity's own traits or the defaults out.
-   */
-  async grants(ref, selection, caller) {
+  async bound(ref, selectedBounds, caller) {
     let identity: IdentityRecord | undefined;
     if (ref !== null) {
       const user = await userOf(caller);
       const found = await located(refOf(ref), user);
-      if (caller.kind === "device" && !hasIdentityGrant(caller.principal, found.record.id)) {
-        throw new BarryError("forbidden", "This device was not granted that identity");
-      }
       mayRead(caller, found.record);
       identity = found.record;
     }
+    const { resolve: resolver } = await import("./resolve.js");
     try {
-      return await grantsFromStore(identity, selection);
+      return await resolver.bound(identity, { bounds: selectedBounds });
     } catch (error) {
       throw new BarryError("invalid", error instanceof Error ? error.message : String(error));
     }
   },
 
-  /** The traits sessions can select: those a reachable bag still backs, and the hand-authored ones. */
-  async allTraits(caller) {
-    if (caller.kind === "device") throw new BarryError("forbidden", "A device may not list traits");
-    return (await listSelectableTraits()).map(traitOf);
+  async tools(ref, selection, caller, servedTools) {
+    let identity: IdentityRecord | undefined;
+    if (ref !== null) {
+      const user = await userOf(caller);
+      const found = await located(refOf(ref), user);
+      mayRead(caller, found.record);
+      identity = found.record;
+    }
+    const { resolve: resolver } = await import("./resolve.js");
+    const isPinned =
+      selection.bounds !== undefined && selection.bounds !== null && !Array.isArray(selection.bounds);
+    try {
+      return await resolver.tools(identity, {
+        bags: selection.bags,
+        ...(isPinned
+          ? { bound: selection.bounds as import("@barry-rocks/sdk").Bound }
+          : { bounds: selection.bounds as readonly (import("@barry-rocks/sdk").Bound | string)[] | undefined }),
+        ...(selection.harness !== undefined ? { harness: selection.harness } : {}),
+        ...(selection.mode !== undefined ? { mode: selection.mode as import("@barry-rocks/sdk/ids").ModeId } : {}),
+        ...(selection.defaults !== undefined ? { defaults: selection.defaults } : {}),
+        ...(selection.identityDefaults !== undefined ? { identityDefaults: selection.identityDefaults } : {}),
+        ...(servedTools ? { tools: servedTools } : {}),
+      });
+    } catch (error) {
+      throw new BarryError("invalid", error instanceof Error ? error.message : String(error));
+    }
   },
 
-  async bounds(caller) {
+  async selectable(ref, caller) {
+    let identity: IdentityRecord | undefined;
+    if (ref !== null) {
+      const user = await userOf(caller);
+      const found = await located(refOf(ref), user);
+      mayRead(caller, found.record);
+      identity = found.record;
+    }
+    const { resolve: resolver } = await import("./resolve.js");
+    return resolver.selectable(identity);
+  },
+
+  async bounds(caller, ref) {
+    if (ref !== undefined) {
+      const user = await userOf(caller);
+      const found = await located(refOf(ref), user);
+      mayRead(caller, found.record);
+      return bounds.list(found.record);
+    }
     if (caller.kind === "device") throw new BarryError("forbidden", "A device may not list bounds");
     return bounds.list();
   },

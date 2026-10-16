@@ -155,7 +155,7 @@ const CASES: Case[] = [
       pluginDirs: ["/plugins/skills"],
       systemPrompt: "Follow the bags.",
       maxTurns: 12,
-      egressSandbox: { allowDomains: ["github.com"] },
+      egressSandbox: { allow: ["github.com"] },
     },
   },
   { name: "resumed", session: { resume: { harnessSessionId: "prior-claude-session" } } },

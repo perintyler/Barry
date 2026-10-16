@@ -25,6 +25,7 @@
  * records again.
  */
 
+import type { Bound } from "@barry-rocks/sdk";
 import type {
   SessionRecord,
   SessionMetadata,
@@ -59,10 +60,9 @@ export type CreateSession = (data: {
   identity_id?: number;
   status?: SessionRecord["status"];
   system_prompt?: string;
-  traits?: string[];
-  bounds?: string[];
-  bound?: Record<string, unknown> | null;
-  bound_id?: null;
+  bags?: string[];
+  bounds?: Array<string | Bound | Record<string, unknown>>;
+  bound?: Bound | Record<string, unknown> | null;
   metadata: SessionMetadata;
 }) => Promise<void>;
 
@@ -74,10 +74,9 @@ export type UpdateSession = (
     summary?: string;
     system_prompt?: string;
     identity_id?: number | null;
-    traits?: string[];
-  bounds?: string[];
-    bound?: Record<string, unknown> | null;
-    bound_id?: null;
+    bags?: string[];
+    bounds?: Array<string | Bound | Record<string, unknown>>;
+    bound?: Bound | Record<string, unknown> | null;
     started_at?: Date | null;
     completed_at?: Date;
     active?: boolean;
@@ -86,7 +85,10 @@ export type UpdateSession = (
   },
 ) => Promise<SessionRecord | undefined>;
 
-export type IssueWorkflowCredential = (id: string, expected: { actorId: number; identityId: number; scopeFingerprint: string }) => Promise<string | null>;
+export type IssueWorkflowCredential = (
+  id: string,
+  expected: { actorId: number; identityId: number; boundFingerprint: string },
+) => Promise<string | null>;
 
 export type EndSession = (id: string, endReason?: string | null) => Promise<void>;
 
@@ -118,7 +120,7 @@ export type CreateProviderSession = (data: {
   provider_session_id?: string | null;
 }) => Promise<ProviderSessionRecord>;
 
-export type EndProviderSessionByProviderId = (providerSessionId: string) => Promise<void>;
+export type EndProviderSessionByProviderId = (harnessSessionId: string) => Promise<void>;
 
 export type MarkCrashedSessions = (
   idleMs?: number,
@@ -133,10 +135,9 @@ export type CreateNamedSession = (data: {
   user_id?: number;
   system_prompt?: string;
   identity_id?: number;
-  traits?: string[];
-  bounds?: string[];
-  bound?: Record<string, unknown> | null;
-  bound_id?: null;
+  bags?: string[];
+  bounds?: Array<string | Bound | Record<string, unknown>>;
+  bound?: Bound | Record<string, unknown> | null;
   metadata?: SessionMetadata;
 }) => Promise<SessionRecord>;
 
@@ -151,10 +152,9 @@ export type CreateInertSession = (data: {
   user_id?: number;
   system_prompt?: string;
   identity_id?: number;
-  traits?: string[];
-  bounds?: string[];
-  bound?: Record<string, unknown> | null;
-  bound_id?: null;
+  bags?: string[];
+  bounds?: Array<string | Bound | Record<string, unknown>>;
+  bound?: Bound | Record<string, unknown> | null;
   metadata?: SessionMetadata;
 }) => Promise<SessionRecord>;
 
@@ -260,7 +260,7 @@ export type GetProviderSessionsBySession = (
 ) => Promise<ProviderSessionRecord[]>;
 
 export type GetSessionByProviderSessionId = (
-  providerSessionId: string,
+  harnessSessionId: string,
 ) => Promise<SessionRecord | undefined>;
 
 export type GetSessionMessages = (
@@ -342,6 +342,7 @@ export type QueuePrompt = (
   sessionId: string,
   content: string,
   options?: {
+    sequence?: number;
     clientMessageId?: string;
     source?: "web_prompt" | "session";
     fromSession?: string;
@@ -356,6 +357,7 @@ export type RecordPromptDelivery = (
   sessionId: string,
   content: string,
   options: {
+    sequence?: number;
     clientMessageId?: string;
     delivery: PromptDeliveryState;
     source?: "web_prompt" | "api_message";

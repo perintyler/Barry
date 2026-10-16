@@ -37,7 +37,7 @@ export default defineAdapter({
   vendor: "google",
   requirements: ANTIGRAVITY_REQUIREMENTS,
   capabilities: ANTIGRAVITY_CAPABILITIES,
-  nativeTools: NATIVE_TOOLS,
+  tools: NATIVE_TOOLS,
   defaultMode: "hosted",
   offeredModels: ANTIGRAVITY_OFFERED_MODELS,
   listModels: listAntigravityModels,

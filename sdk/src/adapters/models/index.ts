@@ -44,10 +44,12 @@ export {
   type OfferingHarness,
 } from "./offered.js";
 export * from "./vendors/index.js";
-export * from "./vendors/catalog.js";
-export * from "./vendors/vendor-catalog.js";
-export * from "./vendors/shipped-catalog.js";
+export * from "./vendors/models.js";
+export * from "./vendors/vendor-models.js";
+export * from "./vendors/shipped-models.js";
 export * from "./providers.js";
 export * from "./prompted-questions.js";
 export * from "../decisions/index.js";
 export * from "../../services/checks.js";
+export { executionBindingSchema } from "../../workflows/work-contracts.js";
+export type { WorkExecutionDelegation, WorkOwnerConnection } from "../../workflows/work-execution-delegation.js";

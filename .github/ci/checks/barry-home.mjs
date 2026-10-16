@@ -35,6 +35,14 @@ const INLINE_RESOLVER = new Map([
     "bags/sessions/src/disk-retention.ts",
     "removes the old shared worktree root under the real ~/.barry once it is empty; only when BARRY_HOME is unset, because a test or contributor instance never had one",
   ],
+  [
+    "cli/bin/entry.js",
+    "enables Node's compile cache before tsx/SDK modules are loaded; honours BARRY_HOME inline",
+  ],
+  [
+    "sdk/src/bounds/config-protection.ts",
+    "protects both ~/.barry/identities and BARRY_HOME/identities from unapproved file writes in portable bounds code",
+  ],
 ]);
 
 const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "sdk", "cli", "bags", "adapters"], { encoding: "utf8" })

@@ -4,10 +4,10 @@ import type { Server } from "http";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bounds, identityRecords, traits } from "@barry-rocks/identities-bag";
-import { Barry, BarryError } from "@barry-rocks/sdk";
+import { bounds, identityRecords } from "@barry-rocks/identities-bag";
+import { Barry, BarryError, type Tool } from "@barry-rocks/sdk";
+import { filterToolObjects, mergeBounds, type Bound } from "@barry-rocks/sdk/bounds";
 import { fakeIdentities, fakeSessions } from "@barry-rocks/sdk/testing";
-import { grantsOver } from "../test-helpers/identity-policy.js";
 
 // Everything the executor touches outside its own logic is mocked at module
 // level: catalog lookup, the one-shot agent, the DB rows, and the MCP config.
@@ -30,10 +30,6 @@ vi.mock("@barry-rocks/sdk/logging", async (importOriginal) => ({
 // creating its session, as the installation's owner (see the identity
 // regression test below for why), and stores the row id `rowId` gives it.
 // The catalog reads the resolved identity's packed bags to scope itself.
-// Explicit caller selections must exist in the trait catalog: the store
-// boundary stays synthetic while the real shared policy composition runs
-// over it, installed as the identities subject below (see
-// test-helpers/identity-policy).
 vi.mock("@barry-rocks/identities-bag", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@barry-rocks/identities-bag")>();
   const identityRecords = {
@@ -48,11 +44,7 @@ vi.mock("@barry-rocks/identities-bag", async (importOriginal) => {
     stored: vi.fn(async () => [{ id: 3, token: "fixture", name: "readonly", bound: {}, description: null }]),
     get: vi.fn(async (ref: { id: number } | { name: string }) => ("id" in ref ? { id: ref.id, name: "bound", bound: {} } : { id: 1, name: ref.name, bound: {} })),
   };
-  const traits = {
-    ...actual.traits,
-    list: vi.fn(async () => ["coding", "readonly", "barry-trait"].map(name => ({ name, namespaces: [], access: "read" as const, boundNames: [] }))),
-  };
-  return { ...actual, identityRecords, bounds, traits };
+  return { ...actual, identityRecords, bounds };
 });
 
 // The executor's credentials come from here; the real one reads vault and
@@ -92,7 +84,7 @@ vi.mock("@barry-rocks/sessions-bag/client", () => {
 vi.mock("../session-agent-guards.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../session-agent-guards.js")>()),
   resolveEgressSandbox: vi.fn(async () => undefined),
-  nativeToolPolicy: vi.fn(async () => ({ allowed: [], denied: ["Bash"], refused: {}, uncontrolled: {}, conflicts: {} })),
+  resolveSessionNativeTools: vi.fn(async () => ({ allowed: [], denied: ["Bash"], refused: {}, uncontrolled: {}, conflicts: {} })),
 }));
 
 // One mock per subpath the subject imports. A single vi.mock of the
@@ -181,7 +173,7 @@ import { runActionValidation, findAction, listAllActions, validateActionInputs }
 import type { ActionMeta, AdhocActionMeta } from "@barry-rocks/sdk/internal/actions";
 import type { ActionRunRecord } from "@barry-rocks/actions-bag";
 import { AdhocActions } from "@barry-rocks/actions-bag";
-import { nativeToolPolicy, resolveEgressSandbox } from "../session-agent-guards.js";
+import { resolveSessionNativeTools, resolveEgressSandbox } from "../session-agent-guards.js";
 import { detachedRunSlots, RUN_SLOT_LIMITS } from "../run-slots.js";
 import { composeActionPrompt } from "@barry-rocks/actions-bag";
 
@@ -244,8 +236,8 @@ function actionMeta(overrides: Partial<ActionMeta> = {}): ActionMeta {
 
 type CallerSession = NonNullable<Awaited<ReturnType<typeof Sessions.get>>>;
 
-// A session that starts a run: a barry, two traits, a named bound and an
-// inline one. Every one of these must reach the subagent's row.
+// A session that starts a run: a barry, two bags, a named bound and a
+// pinned bound. Every one of these must reach the subagent's row.
 function callerSession(overrides: Partial<CallerSession> = {}): CallerSession {
   return {
     id: "caller1",
@@ -258,10 +250,9 @@ function callerSession(overrides: Partial<CallerSession> = {}): CallerSession {
     status: "running",
     system_prompt: null,
     summary: null,
-    traits: ["coding", "readonly"],
+    bags: ["coding", "readonly"],
     bound: { network: { enforce: "sandbox", allow: ["github.com"] } },
     bounds: ["readonly"],
-    bound_id: null,
     metadata: { source: "cli", working_directory: "/work/repo" },
     created_at: "2026-09-29T00:00:00.000Z",
     started_at: null,
@@ -316,13 +307,49 @@ afterAll(() => {
 
 afterEach(() => Barry.reset());
 
-// The tools the registered bags declare, which a run's grants are decided
+// The tools the registered bags declare, which a run's tools are decided
 // over: the bash bag's shell, which a raw process needs.
-const DECLARED_TOOLS = [{ namespace: "bash", toolName: "Bash", access: "write" as const }];
+const BASH_TOOL: Tool = {
+  name: "Bash",
+  namespace: "bash",
+  bag: "bash",
+  description: "Execute shell command",
+  access: "write",
+};
+
+const NAMED_BOUNDS: Record<string, Bound> = {
+  readonly: { tools: { deny: ["*:write"] } },
+  "no-secrets": { files: { deny: ["**/.env"] } },
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
-  Barry.use(fakeIdentities({ grants: grantsOver({ identityRecords, traits, bounds }, DECLARED_TOOLS) }));
+  Barry.use(
+    fakeIdentities({
+      bound: async (_identity, boundsList) => {
+        const resolved = (boundsList ?? []).map((entry) => {
+          if (typeof entry !== "string") return entry;
+          const found = NAMED_BOUNDS[entry];
+          if (!found) throw new BarryError("not_found", `Unknown bound "${entry}"`);
+          return found;
+        });
+        return mergeBounds(...resolved);
+      },
+      tools: async (_identity, sel) => {
+        const bagNames = (sel?.bags ?? []).map((b) => (typeof b === "string" ? b : b.name));
+        const candidate = bagNames.includes("bash") ? [BASH_TOOL] : [];
+        const activeBound =
+          sel?.bounds && !Array.isArray(sel.bounds)
+            ? (sel.bounds as Bound)
+            : mergeBounds(
+                ...((sel?.bounds as readonly (Bound | string)[] | undefined) ?? []).map((entry) =>
+                  typeof entry === "string" ? (NAMED_BOUNDS[entry] ?? {}) : entry,
+                ),
+              );
+        return filterToolObjects(candidate, activeBound);
+      },
+    }),
+  );
   mockValidateInputs.mockReturnValue([]);
   mockCompose.mockResolvedValue({ prompt: "COMPOSED PROMPT", warnings: [] });
   mockValidation.mockResolvedValue({ passed: true, failures: [], skipped: true });
@@ -435,8 +462,8 @@ describe("POST /actions/:name/run", () => {
     [{ caller_session_id: "missing" }, 404, "unknown_caller_session"],
     [{ caller_session_id: "caller1", identity_id: 99 }, 400, "identity_not_allowed"],
     [{ caller_session_id: "caller1", identity: "other" }, 400, "identity_not_allowed"],
-    [{ caller_session_id: "caller1", traits: ["admin"] }, 422, "traits_not_held"],
-    [{ traits: ["admin"] }, 400, "no_caller_session"],
+    [{ caller_session_id: "caller1", bags: ["admin"] }, 422, "bags_not_held"],
+    [{ bags: ["admin"] }, 400, "no_caller_session"],
     [{ cwd: "/tmp" }, 400, "adhoc_only"],
   ])("rejects unauthorized script requests before recording or executing a run: %j", async (request, status, error) => {
     vi.mocked(Sessions.get).mockImplementation(async id => id === "caller1" ? callerSession() : undefined);
@@ -455,10 +482,13 @@ describe("POST /actions/:name/run", () => {
     expect(mockRunStructured).not.toHaveBeenCalled();
   });
 
-  it.each(["read", "readwrite"] as const)("requires a write-capable Bash grant for an unbounded caller (%s)", async access => {
-    vi.mocked(Sessions.get).mockResolvedValue(callerSession({ traits: ["selected"], identity_id: null, bound_id: null, bound: null }));
-    const selected = [{ name: "selected", description: null, namespaces: ["bash"], access, boundNames: [], tools: [], skills: [], instructions: [], bound: {}, bag: null }];
-    vi.mocked(traits.list).mockResolvedValueOnce(selected).mockResolvedValueOnce(selected);
+  it.each(["read", "readwrite"] as const)("requires an unrestricted Bash tool for an unbounded caller (%s)", async access => {
+    vi.mocked(Sessions.get).mockResolvedValue(callerSession({
+      bags: ["bash"],
+      identity_id: null,
+      bound: access === "read" ? { tools: { deny: ["*:write"] } } : null,
+      bounds: access === "read" ? ["readonly"] : [],
+    }));
     const dir = mkdtempSync(join(tmpdir(), "route-script-policy-"));
     try {
       writeFileSync(join(dir, "go.sh"), "echo permitted");
@@ -499,12 +529,10 @@ describe("POST /actions/:name/run", () => {
 
   it("runs a script under an explicitly selected identity with a Bash grant", async () => {
     vi.mocked(identityRecords.config).mockReturnValueOnce({
-      bag_configs: {}, secrets: {}, vault: undefined, traits: [{ name: "writer", optional: false }], bags: [],
+      bag_configs: {}, secrets: {}, vault: undefined, bags: ["bash"],
       bounds: [], bound: undefined, adapters: {},
       status_notify: undefined,
-      bag_grant: "session",
     });
-    vi.mocked(traits.list).mockResolvedValueOnce([{ name: "writer", description: null, namespaces: ["bash"], access: "readwrite", boundNames: [], tools: [], skills: [], instructions: [], bound: {}, bag: null }]);
     const dir = mkdtempSync(join(tmpdir(), "route-script-identity-"));
     try {
       writeFileSync(join(dir, "go.sh"), "echo selected");
@@ -571,15 +599,15 @@ describe("POST /actions/:name/run", () => {
     expect(call.prompt).toContain("COMPOSED PROMPT");
     expect(call.prompt).toContain("Do NOT call `run_action`");
     expect(call.config.cwd).toBe("/tmp/actions/extract-title");
-    // The MCP url must carry the synthetic session's id so trait filtering
+    // The MCP url must carry the synthetic session's id so bag/bound filtering
     // grants the bag's tools.
     const barry = call.config.mcpServers?.barry;
     expect(barry && "url" in barry ? barry.url : "").toContain("sessionId=");
 
-    // Session row: created with the owning bag's auto-trait, ended after.
+    // Session row: created with the owning bag alongside `actions`, ended after.
     expect(mockSessionsCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        traits: ["actions", "web"],
+        bags: ["actions", "web"],
         metadata: expect.objectContaining({
           source: "action-executor",
         }),
@@ -1255,8 +1283,8 @@ describe("POST /actions/trigger", () => {
     const created = mockCreateInert.mock.calls[0][0];
     // Without `actions` the seeded instruction names a tool the session cannot
     // invoke — a dead reference.
-    expect(created.traits).toContain("actions");
-    expect(created.traits).toContain("sessions");
+    expect(created.bags).toContain("actions");
+    expect(created.bags).toContain("sessions");
   });
 
   // REGRESSION: the session was created with no identity_id, and the spawn path
@@ -1638,15 +1666,12 @@ describe("POST /actions/:name/run — acting for a barry", () => {
       bag_configs: {},
       secrets: {},
       vault: undefined,
-      traits: [],
       bags: [],
       bounds: [],
       bound: undefined,
       adapters: { "claude-code": { default: true, model: "claude-opus-5" } },
 
       status_notify: undefined,
-
-      bag_grant: "session",
     });
     ok();
 
@@ -1694,26 +1719,23 @@ describe("POST /actions/:name/run — an ad-hoc action runs as its caller", () =
       bag_configs: {},
       secrets: {},
       vault: undefined,
-      traits: [{ name: "barry-trait", optional: false }],
       bags: [],
       bounds: [],
       bound: undefined,
       adapters: { "claude-code": { default: true } },
 
       status_notify: undefined,
-
-      bag_grant: "session",
     });
   });
 
-  it("gives the run's session the caller's barry, traits and both bounds", async () => {
+  it("gives the run's session the caller's barry, bags and both bounds", async () => {
     const res = await post("survey-auth", { caller_session_id: "caller1" });
 
     expect(res.status).toBe(200);
     expect(mockSessionsCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         identity_id: 7,
-        traits: ["coding", "readonly"],
+        bags: ["coding", "readonly"],
         bound: { network: { enforce: "sandbox", allow: ["github.com"] } },
         bounds: ["readonly"],
         metadata: expect.objectContaining({ source: "action-executor", caller_session_id: "caller1" }),
@@ -1728,7 +1750,7 @@ describe("POST /actions/:name/run — an ad-hoc action runs as its caller", () =
     await post("survey-auth", { caller_session_id: "caller1" });
 
     const config = mockRunStructured.mock.calls[0][0].config;
-    expect(config.deniedTools).toEqual((await nativeToolPolicy({ id: "test", provider: "claude" })).denied);
+    expect(config.deniedTools).toEqual((await resolveSessionNativeTools({ id: "test", provider: "claude" })).denied);
     expect(config.deniedTools).toContain("Bash");
     // And refuses them when a hosted harness asks before running one.
     await expect(config.decide?.({ id: "1", tool: "Bash", input: {} })).resolves.toMatchObject({ allow: false });
@@ -1736,14 +1758,14 @@ describe("POST /actions/:name/run — an ad-hoc action runs as its caller", () =
     expect(config.egressSandbox).toEqual(sandbox);
     expect(config.cwd).toBe(tmpdir());
     expect(config.maxTurns).toBe(50);
-    // Resolved against the subagent's own row, which carries the caller's barry and traits.
+    // Resolved against the subagent's own row, which carries the caller's barry and bags.
     expect(mockEgressSandbox).toHaveBeenCalledWith(
       { id: mockSessionsCreate.mock.calls[0][0].id },
       expect.objectContaining({ provider: "claude" }),
     );
   });
 
-  it("gives a caller with no barry no barry traits, rather than a default barry's", async () => {
+  it("gives a caller with no barry no barry bags, rather than a default barry's", async () => {
     mockSessionsGet.mockResolvedValue(callerSession({ identity_id: null }));
 
     await post("survey-auth", { caller_session_id: "caller1" });
@@ -1764,7 +1786,7 @@ describe("POST /actions/:name/run — an ad-hoc action runs as its caller", () =
           source: "adhoc",
           definition: expect.objectContaining({ prompt: "List every file that checks a token." }),
           caller_session_id: "caller1",
-          grant: expect.objectContaining({ traits: ["coding", "readonly"], bounds: ["readonly"], narrowed: false }),
+          grant: expect.objectContaining({ bags: ["coding", "readonly"], bounds: ["readonly"], narrowed: false }),
         }),
       }),
     );
@@ -1790,16 +1812,30 @@ describe("POST /actions/:name/run — an ad-hoc action runs as its caller", () =
     expect(created.metadata).not.toHaveProperty("job");
   });
 
-  it("narrows to a subset of the caller's traits", async () => {
-    await post("survey-auth", { caller_session_id: "caller1", traits: ["readonly"] });
-    expect(mockSessionsCreate).toHaveBeenCalledWith(expect.objectContaining({ traits: ["readonly"] }));
+  it("narrows to a subset of the caller's bags", async () => {
+    await post("survey-auth", { caller_session_id: "caller1", bags: ["readonly"] });
+    expect(mockSessionsCreate).toHaveBeenCalledWith(expect.objectContaining({ bags: ["readonly"] }));
   });
 
-  it("refuses a trait the caller does not hold, and creates nothing", async () => {
-    const res = await post("survey-auth", { caller_session_id: "caller1", traits: ["readonly", "admin"] });
+  it("narrows the caller's bound by merging requested subagent bounds via Barry.Bound.merge", async () => {
+    const res = await post("survey-auth", { caller_session_id: "caller1", bounds: ["no-secrets"] });
+    expect(res.status).toBe(200);
+    expect(mockSessionsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bounds: ["readonly", "no-secrets"],
+        bound: expect.objectContaining({
+          network: { enforce: "sandbox", allow: ["github.com"] },
+          files: { deny: ["**/.env"] },
+        }),
+      }),
+    );
+  });
+
+  it("refuses a bag the caller does not hold, and creates nothing", async () => {
+    const res = await post("survey-auth", { caller_session_id: "caller1", bags: ["readonly", "admin"] });
 
     expect(res.status).toBe(422);
-    expect((await res.json()).error).toBe("traits_not_held");
+    expect((await res.json()).error).toBe("bags_not_held");
     expect(mockSessionsCreate).not.toHaveBeenCalled();
     expect(mockRunsCreate).not.toHaveBeenCalled();
   });
@@ -1873,38 +1909,35 @@ describe("POST /actions/:name/run — an installed action a session starts runs 
       bag_configs: {},
       secrets: {},
       vault: undefined,
-      traits: [{ name: "barry-trait", optional: false }],
       bags: [],
       bounds: [],
       bound: undefined,
       adapters: { "claude-code": { default: true } },
 
       status_notify: undefined,
-
-      bag_grant: "session",
     });
   });
 
-  it("gets the caller's barry, traits, bounds and tool denials, not its bag's readwrite access", async () => {
+  it("gets the caller's barry, bags, bounds and tool denials, not its bag's readwrite access", async () => {
     const res = await post("extract-title", { caller_session_id: "caller1" });
 
     expect(res.status).toBe(200);
     expect(mockSessionsCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         identity_id: 7,
-        traits: ["coding", "readonly"],
+        bags: ["coding", "readonly"],
         bound: { network: { enforce: "sandbox", allow: ["github.com"] } },
         bounds: ["readonly"],
       }),
     );
     const config = mockRunStructured.mock.calls[0][0].config;
-    expect(config.deniedTools).toEqual((await nativeToolPolicy({ id: "test", provider: "claude" })).denied);
+    expect(config.deniedTools).toEqual((await resolveSessionNativeTools({ id: "test", provider: "claude" })).denied);
     // Still the installed action's own directory and turn budget.
     expect(config.cwd).toBe("/tmp/actions/extract-title");
     expect(config.maxTurns).toBe(15);
     expect(mockRunsCreate.mock.calls[0][0]).toMatchObject({
       bag: "web",
-      metadata: { caller_session_id: "caller1", grant: { traits: ["coding", "readonly"], bounds: ["readonly"] } },
+      metadata: { caller_session_id: "caller1", grant: { bags: ["coding", "readonly"], bounds: ["readonly"] } },
     });
   });
 
@@ -1932,7 +1965,7 @@ describe("POST /actions/:name/run — an installed action a session starts runs 
     await post("extract-title", {});
 
     const created = mockSessionsCreate.mock.calls[0][0];
-    expect(created.traits).toEqual(["actions", "web"]);
+    expect(created.bags).toEqual(["actions", "web"]);
     expect(created).not.toHaveProperty("bound");
     expect(created).not.toHaveProperty("bound_id");
     expect(mockRunStructured.mock.calls[0][0].config).not.toHaveProperty("deniedTools");
@@ -1941,8 +1974,8 @@ describe("POST /actions/:name/run — an installed action a session starts runs 
     expect(mockRunsCreate.mock.calls[0][0].metadata).not.toHaveProperty("grant");
   });
 
-  it("refuses `traits` without a calling session, since there is no access to narrow", async () => {
-    const res = await post("extract-title", { traits: ["readonly"] });
+  it("refuses `bags` without a calling session, since there is no access to narrow", async () => {
+    const res = await post("extract-title", { bags: ["readonly"] });
 
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("no_caller_session");

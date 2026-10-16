@@ -77,7 +77,7 @@ async function refresh() {
 
   const bad = data.schedules.filter((s) => s.consecutive_failures > 0 || s.overdue);
   $("bad").replaceChildren(...(bad.length ? bad.map(row) : [el("div", "empty", "Nothing failing or overdue.")]));
-  const oneOffs = (data.one_offs ?? []).map((o) => {
+  const atSchedules = (data.one_offs ?? []).map((o) => {
     const node = el("div", `sched${o.status === "failed" || o.status === "uncertain" ? " bad" : ""}`);
     const top = el("div", "top");
     top.append(el("span", "name", o.id), el("span", "trig", `once → ${o.action}`));
@@ -90,7 +90,7 @@ async function refresh() {
     if (o.reason) node.append(el("div", "why", o.reason));
     return node;
   });
-  $("oneoffs").replaceChildren(...(oneOffs.length ? oneOffs : [el("div", "empty", "Nothing waiting, running or failed.")]));
+  $("oneoffs").replaceChildren(...(atSchedules.length ? atSchedules : [el("div", "empty", "Nothing waiting, running or failed.")]));
 
   $("all").replaceChildren(...(data.schedules.length ? data.schedules.map(row) : [el("div", "empty", "No schedules declared.")]));
 }

@@ -3,9 +3,9 @@ import { migratedStorePath, assertScratchStoreUnderTest, migrateStore } from "@b
  * Core's config store: the bag registry (`bags`) and the port each service was
  * assigned (`service_ports`), in `<app support>/config.db`.
  *
- * The one writer of `bags` is bag-registry.ts beside this file, which also
+ * The one writer of `bags` is registration.ts beside this file, which also
  * publishes the snapshot every other reader uses; the service management owns
- * `service_ports`. Traits and bounds belong to the identities bag and live in
+ * `service_ports`. Identities and actors belong to the identities bag and live in
  * its store. A store is opened only by its owner's code.
  *
  * Kysely over better-sqlite3, the driver and WAL + busy_timeout settings every

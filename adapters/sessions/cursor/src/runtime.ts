@@ -1,5 +1,6 @@
+import { resolveHarnessCommand } from "@barry-rocks/sdk/adapters/harnesses";
 /**
- * Where every cursor session runs: a home of its own, the pinned
+ * Where every cursor session runs: a home of its own, the selected
  * cursor-agent, and an environment holding the identity's key and nothing
  * of the user's.
  *
@@ -9,12 +10,12 @@
  * written to the keychain, where it would replace the user's own login.
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { barryCacheDir } from "@barry-rocks/sdk/services";
 import type { SessionConfig } from "@barry-rocks/sdk/sessions";
-import { VERIFIED_ON, cursorAgentPaths } from "./modes.js";
+import { CURSOR_REQUIREMENTS, cursorAgentPaths } from "./modes.js";
 
 export const CREDENTIAL_ENV = "CURSOR_API_KEY";
 
@@ -85,23 +86,10 @@ export function keepUserHome(servers: SessionConfig["mcpServers"], home = homedi
   );
 }
 
-/** Flags every cursor-agent invocation carries: the pin holds only if nothing updates it. */
+/** Flags every cursor-agent invocation carries: keep the running executable stable for this session. */
 export const PINNED_LAUNCH = ["--disable-auto-update"];
 
-/**
- * The pinned build when it is installed, else the current one. The shared
- * install updates itself whenever the user runs cursor, so the pin is held by
- * running the verified build from its versions directory. Resolved with the
- * user's real home, before any session home applies.
- */
-export function resolveCursorAgent(home = homedir()): { command: string; pinned: boolean } {
-  const paths = cursorAgentPaths(home);
-  const command = paths.find(path => existsSync(path));
-  return { command: command ?? "cursor-agent", pinned: command === paths[0] };
-
-}
-
-/** Said when the pinned build is not installed, so an unverified build is not run silently. */
-export function unpinnedWarning(): string {
-  return `cursor-agent ${VERIFIED_ON} is not installed, so this session runs the current build, on which Barry's guarantees are unverified`;
+/** Resolve the current installation; version assessment happens centrally. */
+export function resolveCursorAgent(home = homedir(), env: Readonly<Record<string, string | undefined>> = process.env): { command: string; pinned: boolean } {
+  return { command: resolveHarnessCommand({ ...CURSOR_REQUIREMENTS, binary: { ...CURSOR_REQUIREMENTS.binary, paths: home === homedir() ? [] : cursorAgentPaths(home) } }, env), pinned: false };
 }

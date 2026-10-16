@@ -152,7 +152,7 @@ describe("poolKey", () => {
   });
 
   // Regression: bag connections are pooled process-wide, so two Barry
-  // sessions holding a browser trait drove the SAME browser tab — verified
+  // sessions packing the browser bag drove the SAME browser tab — verified
   // live, where session A set window.__barry_marker and navigated, and an
   // independent session B read back both. Stateful servers opt out.
   it("gives a session-scoped bag a distinct key per session", () => {
@@ -466,6 +466,18 @@ describe("BagConnectionPool", () => {
   });
 
   describe("getToolsForSession", () => {
+    it("connects four bags concurrently and returns their tools in input order", async () => {
+      const releases = new Map<string, (value: ConnectedBagProxy | null) => void>();
+      const names = ["one", "two", "three", "four", "five"];
+      for (const name of names) pool.deferredConfigs[name] = makeConfig({ name, env: ["KEY"] });
+      connector.mockImplementation(config => new Promise(resolve => releases.set(config.name, resolve)));
+      const pending = pool.getToolsForSession(names, { KEY: "credential" });
+      await vi.waitFor(() => expect(releases.size).toBe(4));
+      releases.get("four")!(makeFakeProxy("four", ["four_read"]));
+      await vi.waitFor(() => expect(releases.has("five")).toBe(true));
+      for (const name of ["five", "three", "two", "one"]) releases.get(name)!(makeFakeProxy(name, [`${name}_read`]));
+      expect((await pending).map(tool => tool.name)).toEqual(names.map(name => `${name}_read`));
+    });
     it("returns shared tools plus credential bag tools", async () => {
       const linearConfig = makeConfig({ name: "linear", env: ["LINEAR_API_KEY"] });
       pool.deferredConfigs["linear"] = linearConfig;
@@ -1581,5 +1593,243 @@ describe("patchServerWithProxiedTools mailbox delivery", () => {
     await handler!({ method: "tools/call", params: { name: "echo", arguments: {} } }, {});
 
     expect(popPrompts).not.toHaveBeenCalled();
+  });
+});
+
+describe("patchServerWithProxiedTools bound guards, schema narrowing, and implements replacement", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("blocks disallowed proxied tools/call invocations under bound.inputs, bound.files, bound.network, and bound.nodes before live.client.callTool", async () => {
+    const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js");
+    const { getRequestHandler } = await import("./sdk-internals.js");
+    const { patchServerWithProxiedTools } = await import("./bag-proxy.js");
+
+    const callTool = vi.fn(async () => ({
+      content: [{ type: "text", text: "proxied-ok" }],
+    }));
+
+    const proxied = [
+      {
+        name: "send_slack_message",
+        description: "send slack message",
+        inputSchema: {
+          type: "object",
+          properties: {
+            channel: { type: "string" },
+            file_path: { type: "string" },
+            url: { type: "string" },
+          },
+        },
+        bag: "slack",
+        namespace: "slack",
+        access: "write" as const,
+        proxy: { name: "slack", client: { callTool } as never, tools: [] },
+      },
+    ];
+
+    const bound = {
+      inputs: {
+        "slack:send_slack_message": {
+          channel: { allow: ["#alerts", "#ops"], deny: ["#ops-secret"] },
+        },
+      },
+      files: {
+        deny: ["/etc/passwd"],
+      },
+      network: {
+        deny: ["evil.example"],
+      },
+      nodes: {
+        allow: ["mac-studio"],
+      },
+    };
+
+    // 1. Node bound blocks when nodeId does not match
+    const badNodeServer = new McpServer({ name: "t", version: "1" });
+    badNodeServer.tool("noop", "noop", {}, async () => ({ content: [] }));
+    patchServerWithProxiedTools(badNodeServer, proxied, undefined, {
+      bound,
+      nodeId: "wrong-node",
+    });
+    const badNodeCall = getRequestHandler(badNodeServer.server, "tools/call")!;
+    const nodeRes = await badNodeCall(
+      {
+        method: "tools/call",
+        params: { name: "send_slack_message", arguments: { channel: "#alerts" } },
+      },
+      {},
+    ) as { isError?: boolean; content: Array<{ text: string }> };
+    expect(nodeRes.isError).toBe(true);
+    expect(callTool).not.toHaveBeenCalled();
+
+    // 2. Allowed node: test inputs, files, network, and allowed invocation
+    const server = new McpServer({ name: "t", version: "1" });
+    server.tool("noop", "noop", {}, async () => ({ content: [] }));
+    patchServerWithProxiedTools(server, proxied, undefined, {
+      bound,
+      nodeId: "mac-studio",
+    });
+    const callHandler = getRequestHandler(server.server, "tools/call")!;
+
+    const deniedInput = await callHandler(
+      {
+        method: "tools/call",
+        params: { name: "send_slack_message", arguments: { channel: "#general" } },
+      },
+      {},
+    ) as { isError?: boolean };
+    expect(deniedInput.isError).toBe(true);
+    expect(callTool).not.toHaveBeenCalled();
+
+    const deniedFile = await callHandler(
+      {
+        method: "tools/call",
+        params: {
+          name: "send_slack_message",
+          arguments: { channel: "#alerts", file_path: "/etc/passwd" },
+        },
+      },
+      {},
+    ) as { isError?: boolean };
+    expect(deniedFile.isError).toBe(true);
+    expect(callTool).not.toHaveBeenCalled();
+
+    const deniedNetwork = await callHandler(
+      {
+        method: "tools/call",
+        params: {
+          name: "send_slack_message",
+          arguments: { channel: "#alerts", url: "https://evil.example/hook" },
+        },
+      },
+      {},
+    ) as { isError?: boolean };
+    expect(deniedNetwork.isError).toBe(true);
+    expect(callTool).not.toHaveBeenCalled();
+
+    const allowed = await callHandler(
+      {
+        method: "tools/call",
+        params: { name: "send_slack_message", arguments: { channel: "#alerts" } },
+      },
+      {},
+    ) as { isError?: boolean; content: Array<{ text: string }> };
+    expect(allowed.isError).toBeFalsy();
+    expect(callTool).toHaveBeenCalledOnce();
+    expect(allowed.content[0]?.text).toBe("proxied-ok");
+  });
+
+  it("narrows proxied tool inputSchema properties to enum/const for literal bound.inputs rules in tools/list", async () => {
+    const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js");
+    const { getRequestHandler } = await import("./sdk-internals.js");
+    const { patchServerWithProxiedTools } = await import("./bag-proxy.js");
+
+    const proxied = [
+      {
+        name: "send_slack_message",
+        description: "send slack message",
+        inputSchema: {
+          type: "object",
+          properties: {
+            channel: { type: "string" },
+            team: { type: "string" },
+            wildcard_field: { type: "string" },
+          },
+        },
+        bag: "slack",
+        namespace: "slack",
+        access: "write" as const,
+        proxy: { name: "slack", client: {} as never, tools: [] },
+      },
+    ];
+
+    const bound = {
+      inputs: {
+        "slack:send_slack_message": {
+          channel: { allow: ["#alerts", "#ops", "#ops-secret"], deny: ["*-secret"] },
+          team: { allow: ["core"] },
+          wildcard_field: { allow: ["prefix-*"] },
+        },
+      },
+    };
+
+    const server = new McpServer({ name: "t", version: "1" });
+    server.tool("noop", "noop", {}, async () => ({ content: [] }));
+    patchServerWithProxiedTools(server, proxied, undefined, { bound });
+
+    const listHandler = getRequestHandler(server.server, "tools/list")!;
+    const listed = await listHandler({ method: "tools/list", params: {} }, {}) as {
+      tools: Array<{
+        name: string;
+        inputSchema: {
+          properties?: Record<string, { enum?: string[]; const?: string }>;
+          required?: string[];
+        };
+      }>;
+    };
+    const slackTool = listed.tools.find((t) => t.name === "send_slack_message")!;
+    expect(slackTool.inputSchema.properties?.channel?.enum).toEqual(["#alerts", "#ops"]);
+    expect(slackTool.inputSchema.properties?.channel?.const).toBeUndefined();
+    expect(slackTool.inputSchema.properties?.team?.enum).toEqual(["core"]);
+    expect(slackTool.inputSchema.properties?.team?.const).toBe("core");
+    expect(slackTool.inputSchema.properties?.wildcard_field?.enum).toBeUndefined();
+    expect(slackTool.inputSchema.required).toEqual(expect.arrayContaining(["channel", "team"]));
+    expect(slackTool.inputSchema.required).not.toContain("wildcard_field");
+  });
+
+  it("omits proxied tools replaced via implements: { tools: ['<namespace>:<name>'] } so the in-process replacement handles the call", async () => {
+    const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js");
+    const { getRequestHandler } = await import("./sdk-internals.js");
+    const { patchServerWithProxiedTools } = await import("./bag-proxy.js");
+
+    const proxiedCall = vi.fn(async () => ({
+      content: [{ type: "text", text: "from-proxy" }],
+    }));
+
+    const proxied = [
+      {
+        name: "create_issue",
+        description: "proxied create_issue",
+        inputSchema: { type: "object", properties: {} },
+        bag: "linear",
+        namespace: "linear",
+        access: "write" as const,
+        replaced: true,
+        proxy: { name: "linear", client: { callTool: proxiedCall } as never, tools: [] },
+      },
+      {
+        name: "list_issues",
+        description: "proxied list_issues",
+        inputSchema: { type: "object", properties: {} },
+        bag: "linear",
+        namespace: "linear",
+        access: "read" as const,
+        proxy: { name: "linear", client: { callTool: proxiedCall } as never, tools: [] },
+      },
+    ];
+
+    const server = new McpServer({ name: "t", version: "1" });
+    server.tool("create_issue", "in-process replacement create_issue", {}, async () => ({
+      content: [{ type: "text", text: "from-in-process-replacement" }],
+    }));
+    patchServerWithProxiedTools(server, proxied, undefined, {});
+
+    const listHandler = getRequestHandler(server.server, "tools/list")!;
+    const listed = await listHandler({ method: "tools/list", params: {} }, {}) as {
+      tools: Array<{ name: string; description?: string }>;
+    };
+    const createTools = listed.tools.filter((t) => t.name === "create_issue");
+    expect(createTools).toHaveLength(1);
+    expect(createTools[0]?.description).toContain("in-process replacement");
+
+    const callHandler = getRequestHandler(server.server, "tools/call")!;
+    const callRes = await callHandler(
+      { method: "tools/call", params: { name: "create_issue", arguments: {} } },
+      {},
+    ) as { content: Array<{ text: string }> };
+    expect(callRes.content[0]?.text).toBe("from-in-process-replacement");
+    expect(proxiedCall).not.toHaveBeenCalled();
   });
 });

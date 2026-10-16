@@ -4,8 +4,8 @@
  * Nothing else answers "is this bag valid?" for an arbitrary path. `install`
  * mutates the registry and builds; `bag doctor` needs a registered bag; the
  * manifest-schema test sweep sees only whatever is registered on the machine
- * running it. So a bag with a dangling hook script, a trait granting a skill
- * that does not exist, or a tools entry that throws on import ships silent:
+ * running it. So a bag with a dangling hook script, a schedule referencing an
+ * action that does not exist, or a tools entry that throws on import ships silent:
  * the loader degrades it to a husk with a warn, and the missing features are
  * discovered by whoever notices them gone.
  *
@@ -204,7 +204,7 @@ function checkReferencedPaths(manifest: BagManifest, dir: string, findings: Find
   // action must be one this bag ships that a job can run — detached, so
   // `context: none`, and a prompt. `bag:name` refs are another bag's, which a
   // single-path check does not chase (checkJobLinks covers the assembled
-  // catalog).
+  // registry).
   for (const [name, job] of Object.entries(manifest.jobs ?? {})) {
     const runs = job.runs;
     if (runs.using === "node" && !existsSync(join(dir, runs.main))) {
@@ -225,23 +225,6 @@ function checkReferencedPaths(manifest: BagManifest, dir: string, findings: Find
       else if (action.context !== "none") findings.push({ severity: "error", check: "jobs", message: `job ${name} runs action "${runs.action}", which needs a calling conversation; a job runs it detached (context: none)` });
     } catch {
       // An action that does not parse is reported by the actions check.
-    }
-  }
-
-  // Traits grant by name, so a typo silently grants nothing: the trait parses,
-  // the session starts, and the skill or instruction is just not there.
-  const skillsDirs = getSkillsDirs(dir);
-  for (const [name, trait] of Object.entries(manifest.traits ?? {})) {
-    for (const skill of trait.skills ?? []) {
-      const found = skillsDirs.some((skillsDir) => existsSync(join(skillsDir, skill)));
-      if (!found) {
-        findings.push({ severity: "error", check: "traits", message: `trait ${name} grants skill "${skill}", which no skills/ dir has` });
-      }
-    }
-    for (const instruction of trait.instructions ?? []) {
-      if (!existsSync(join(dir, "instructions", `${instruction}.md`))) {
-        findings.push({ severity: "error", check: "traits", message: `trait ${name} points at instruction "${instruction}", which is not instructions/${instruction}.md` });
-      }
     }
   }
 

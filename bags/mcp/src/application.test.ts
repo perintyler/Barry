@@ -13,7 +13,7 @@ import { sessions } from "@barry-rocks/sessions-bag";
 import { closeIdentitiesStore, identitiesSqlite } from "@barry-rocks/identities-bag/testing";
 import { closeSessionsDb, getSessionsSqlite } from "@barry-rocks/sessions-bag/store/sessions-db";
 import { withStoreContext } from "@barry-rocks/sdk/internal/stores";
-import { approveExecutionScope } from "@barry-rocks/sdk/bounds";
+import { approveWorkflowBounds } from "@barry-rocks/sdk/bounds";
 import { mintWorkflowSessionCredential } from "@barry-rocks/sdk/internal/auth";
 import { installationRegistry } from "@barry-rocks/sdk/internal/nodes";
 import * as sessionsClient from "@barry-rocks/sessions-bag/client";
@@ -257,11 +257,11 @@ it.each(["secret", "scope", "session-owner", "identity-owner", "identity-binding
   identities.prepare("INSERT INTO identities(id,token,actor_id,name) VALUES(1,'workflow-identity',1,'Workflow'),(2,'other-identity',1,'Other')").run();
   owner.installation().bind({ actorId: 1, actorToken: "one" });
   const port = await reservePort(); handles.push(await startMcpApplication({ port, snapshot }));
-  const scope = await approveExecutionScope({ identity: installationRegistry().identityId(1), traitNames: [], traits: {}, tools: [], boundByName: async () => undefined });
-  const metadata = { workflow_scope: scope, workflow_identity_id: 1 };
+  const scope = await approveWorkflowBounds({ identity: installationRegistry().identityId(1), bags: [], tools: [], boundByName: async () => undefined });
+  const metadata = { workflow_bound: scope, workflow_identity_id: 1 };
   const sessions = withStoreContext({ identity: "workflow" }, () => getSessionsSqlite());
   sessions.prepare("INSERT INTO sessions(id,user_id,identity_id,workflow_credential_id,metadata) VALUES('workflow',1,1,'11111111-1111-4111-8111-111111111111',?)").run(JSON.stringify(metadata));
-  let token = mintWorkflowSessionCredential(secret, { credentialId: "11111111-1111-4111-8111-111111111111", actorId: 1, identityId: 1, sessionId: "workflow", identity: scope.identity!, scopeFingerprint: scope.fingerprint, expiresAt: Date.now() + (change === "expiry" ? 1500 : 60_000) });
+  let token = mintWorkflowSessionCredential(secret, { credentialId: "11111111-1111-4111-8111-111111111111", actorId: 1, identityId: 1, sessionId: "workflow", identity: scope.identity!, boundFingerprint: scope.fingerprint, expiresAt: Date.now() + (change === "expiry" ? 1500 : 60_000) });
   const url = `http://127.0.0.1:${port}/mcp?sessionId=workflow`;
   const post = (body: unknown, id?: string, signal?: AbortSignal) => fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream", ...(id ? { "mcp-session-id": id } : {}) }, body: JSON.stringify(body), signal });
   const initialize = { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "workflow-fixture", version: "1" } } };
@@ -295,7 +295,7 @@ it.each(["secret", "scope", "session-owner", "identity-owner", "identity-binding
   expect(stream.status).toBe(200);
   const changedAt = performance.now();
   if (change === "secret") vi.stubEnv("BARRY_SECRET", "rotated_workflow_secret_with_enough_entropy");
-  else if (change === "scope") sessions.prepare("UPDATE sessions SET metadata=? WHERE id='workflow'").run(JSON.stringify({ ...metadata, workflow_scope: { ...scope, tools: { "filesystem:write": "write" } } }));
+  else if (change === "scope") sessions.prepare("UPDATE sessions SET metadata=? WHERE id='workflow'").run(JSON.stringify({ ...metadata, workflow_bound: { ...scope, tools: { "filesystem:write": "write" } } }));
   else if (change === "session-owner") sessions.prepare("UPDATE sessions SET user_id=2 WHERE id='workflow'").run();
   else if (change === "identity-owner") identities.prepare("UPDATE identities SET actor_id=2 WHERE id=1").run();
   else if (change === "identity-binding") sessions.prepare("UPDATE sessions SET identity_id=2,metadata=? WHERE id='workflow'").run(JSON.stringify({ ...metadata, workflow_identity_id: 2 }));
@@ -312,9 +312,9 @@ it.each(["secret", "scope", "session-owner", "identity-owner", "identity-binding
   expect(denied.status).toBe(401); expect(await denied.text()).not.toContain(token);
   if (change === "end" || change === "resume" || change === "run") {
     sessions.prepare("UPDATE sessions SET state='open',ended_at=NULL WHERE id='workflow'").run();
-    const credentialId = await withStoreContext({ identity: "workflow" }, () => sessionsClient.issueWorkflowCredential("workflow", { actorId: 1, identityId: 1, scopeFingerprint: scope.fingerprint }));
+    const credentialId = await withStoreContext({ identity: "workflow" }, () => sessionsClient.issueWorkflowCredential("workflow", { actorId: 1, identityId: 1, boundFingerprint: scope.fingerprint }));
     expect(credentialId).not.toBeNull();
-    token = mintWorkflowSessionCredential(secret, { credentialId: credentialId!, actorId: 1, identityId: 1, sessionId: "workflow", identity: scope.identity!, scopeFingerprint: scope.fingerprint, expiresAt: Date.now() + 60_000 });
+    token = mintWorkflowSessionCredential(secret, { credentialId: credentialId!, actorId: 1, identityId: 1, sessionId: "workflow", identity: scope.identity!, boundFingerprint: scope.fingerprint, expiresAt: Date.now() + 60_000 });
     const resumed = await post(initialize);
     expect(resumed.status).toBe(200); await resumed.text();
   }

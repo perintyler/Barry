@@ -573,7 +573,7 @@ app.delete("/api/items/:id", (req, res) => {
 });
 
 
-setupMcp(app, signingKey, {
+await setupMcp(app, signingKey, {
   ...daemonConfiguration.secrets,
   VAULT_EMAIL: daemonConfiguration.mcp?.email,
   VAULT_CLIENT_ID: daemonConfiguration.mcp?.client_id,

@@ -40,7 +40,7 @@ export function encodeCwdToPiSessionDir(cwd: string, home = homedir()): string {
 /**
  * Locate the transcript file for a Pi session.
  */
-export function findPiTranscriptFile(providerSessionId: string, cwd: string, home = homedir()): string | null {
+export function findPiTranscriptFile(harnessSessionId: string, cwd: string, home = homedir()): string | null {
   const dir = encodeCwdToPiSessionDir(cwd, home);
   if (!existsSync(dir)) return null;
 
@@ -48,7 +48,7 @@ export function findPiTranscriptFile(providerSessionId: string, cwd: string, hom
     const files = readdirSync(dir);
     for (const file of files) {
       if (!file.endsWith(".jsonl")) continue;
-      if (file.includes(providerSessionId)) {
+      if (file.includes(harnessSessionId)) {
         return join(dir, file);
       }
     }

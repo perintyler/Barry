@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildActionsIndex } from "../action-index.js";
-import type { ActionMeta } from "../action-catalog.js";
+import type { ActionMeta } from "../action-registry.js";
 
 function action(name: string, description = "Does a thing", shadowed = false): ActionMeta {
   return {

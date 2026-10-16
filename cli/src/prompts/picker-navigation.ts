@@ -1,18 +1,18 @@
 /**
- * Cursor and layout maths for the trait picker's two zones.
+ * Cursor and layout maths for the session picker's two zones.
  *
- * The picker shows selected traits in a pinned block above the filterable list,
+ * The picker shows selected items in a pinned block above the filterable list,
  * and the cursor moves through both as one column. That is the whole reason this
  * module exists: a single integer index cannot survive the picker's own
  * behaviour, because both zones resize on the keystrokes the user is most likely
- * to press. Selecting a trait moves it from the list to the region, shrinking one
+ * to press. Selecting an item moves it from the list to the region, shrinking one
  * and growing the other in the same frame; typing rewrites the list wholesale.
- * An integer that meant "row 4" before a keystroke means a different trait after
+ * An integer that meant "row 4" before a keystroke means a different item after
  * it, so position is modelled as a zone plus an index within that zone and
  * re-resolved against current contents on every render.
  *
  * Kept apart from the prompt so it can be tested without a TTY. The render
- * closure in trait-picker.ts is unreachable from a test: inquirer drives it
+ * closure in session-picker.ts is unreachable from a test: inquirer drives it
  * through a real readline interface, so anything living inside it can only be
  * exercised by simulating keypresses against a pseudo-terminal. These rules are
  * where the edge cases actually are, so they live where a test can reach them.
@@ -35,7 +35,7 @@ export interface Cursor {
  *
  * Called on every render because both zone sizes are derived state: a filter
  * keystroke can empty the list under a cursor that was in it, and unselecting
- * the last trait can empty the region the same way. Rather than have each
+ * the last item can empty the region the same way. Rather than have each
  * caller remember to check, every path funnels through here.
  *
  * A cursor in an empty zone falls through to the other one instead of clamping
@@ -132,13 +132,13 @@ export const jumpCursor = (
 };
 
 /**
- * The trait the cursor is on, or null when nothing is selectable.
+ * The item the cursor is on, or null when nothing is selectable.
  *
  * Returns the name rather than an index because name is the picker's selection
  * identity — indices into either zone stop being meaningful the moment the
  * frame is rebuilt, which happens on the very keystroke that uses this.
  */
-export const traitAtCursor = (
+export const itemAtCursor = (
   cursor: Cursor,
   regionNames: readonly string[],
   listNames: readonly string[],
@@ -167,38 +167,38 @@ export const traitAtCursor = (
 export const cursorAfterToggle = (cursor: Cursor): Cursor => cursor;
 
 /**
- * Split traits into the pinned region and the filterable list.
+ * Split items into the pinned region and the filterable list.
  *
- * Selected traits leave the list entirely rather than staying in place with a
+ * Selected items leave the list entirely rather than staying in place with a
  * checked marker. With them in both zones every pick renders twice, and at a
- * realistic number of selections most of the list is traits the user has already
+ * realistic number of selections most of the list is items the user has already
  * chosen — the list stops being a list of choices. Here every row in the list is
  * something still pickable, and the pool visibly drains as the user works.
  *
- * The cost is accepted knowingly: the list reflows the moment a trait is picked,
+ * The cost is accepted knowingly: the list reflows the moment an item is picked,
  * so a row's screen position is not stable across a selection. Selecting clears
  * the filter anyway, which reflows the list regardless, so the reflow is not an
  * extra surprise on the path where it would be most disorienting.
  *
  * Region order is selection order, NOT the list's ranked order: the region is a
  * record of what the user did, and re-sorting it under them would make a block
- * they are trying to read from shuffle on every pick. Resumed traits keep the
+ * they are trying to read from shuffle on every pick. Resumed items keep the
  * order they were given, which is the previous session's selection order.
  */
-export const partitionTraits = <T extends { name: string }>(
+export const partitionItems = <T extends { name: string }>(
   all: readonly T[],
   selected: readonly string[],
 ): { region: T[]; list: T[] } => {
   const chosen = new Set(selected);
-  const byName = new Map(all.map((trait) => [trait.name, trait]));
+  const byName = new Map(all.map((item) => [item.name, item]));
 
   // Driven by `selected` rather than by filtering `all`, so the region comes out
-  // in selection order. Names with no matching trait are dropped: a trait can
+  // in selection order. Names with no matching item are dropped: an item can
   // disappear between sessions, and a stale name must not render as a row the
   // user cannot act on.
   const region = selected
     .map((name) => byName.get(name))
-    .filter((trait): trait is T => trait !== undefined);
+    .filter((item): item is T => item !== undefined);
 
-  return { region, list: all.filter((trait) => !chosen.has(trait.name)) };
+  return { region, list: all.filter((item) => !chosen.has(item.name)) };
 };

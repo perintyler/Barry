@@ -5,12 +5,19 @@ import {serve} from "@barry-rocks/sdk/services/http";
 import {sessionIdentity} from "@barry-rocks/sdk/stores";
 import {createLogger} from "@barry-rocks/sdk/logging";
 import {readProcessStartTime} from "@barry-rocks/sessions-bag/process-liveness";
-import {Router} from "express";
+import {Router, type Request, type Response} from "express";
+import {actionWorkflowAuthority} from "../session-workflow-control.js";
+import {startSessionWorkflowAgentAction, startSessionWorkflowAction, lookupSessionWorkflowAction, sessionWorkAdmissionRefused} from "../session-workflow-admission.js";
+import {readSessionWorkflowWork, readSessionWorkflowWorkResult, stopSessionWorkflowWork, listSessionWorkflowSelections, sessionWorkflowCatalog, sessionWorkflowStopRefused} from "../session-workflow-read.js";
+import {currentStoreContext} from "@barry-rocks/sdk/internal/stores";
+import {WorkflowError} from "@barry-rocks/sdk/internal/workflows";
+import {actionWorkflowLink, stopWorkflowAction, wantsWorkflowReference} from "./actions-work-control.js";
 import {hostname} from "node:os";
 import {z} from "zod";
 // Action-run persistence belongs to the actions bag.
 // See docs/decisions/0035-session-route-and-summary-rationale.md.
 import {ActionRuns, AmbiguousActionError, BeginActionError, abandonOrphanedActionRuns, beginActionRun, resolveRunnableAction} from "@barry-rocks/actions-bag";
+import type { ActionRunRecord } from "@barry-rocks/actions-bag";
 import type { ActionMeta } from "@barry-rocks/sdk/internal/actions";
 import {findAction, listAllActions, validateActionInputs, renderActionInstruction} from "@barry-rocks/sdk/internal/actions";
 
@@ -72,10 +79,119 @@ const ListRunsQuerySchema = z.strictObject({
  * finished, was never a detached run, or the API restarted (which ended its
  * agent with it). The caller decides what to do with the row in that case.
  */
-actionsRouter.post("/runs/:id/cancel", async (req, res) => {
+async function stopOwnedWork(req: Request, res: Response, owned: ActionRunRecord) {
+  try {
+    const ack = await stopWorkflowAction(owned, req.body, actionWorkflowAuthority(req, currentStoreContext()));
+    return res.status(202).json(ack);
+  } catch (error) {
+    if (error instanceof WorkflowError) return res.status(error.status).json({ error: error.code, message: error.message, retryable: error.retryable,
+      request_id: req.body?.request_id, workflow: actionWorkflowLink(owned) });
+    return res.status(503).json({ error: "WorkStopUnknown", message: "Workflow Stop was not confirmed; preserve its request ID, revision and reason.", request_id: req.body?.request_id, retryable: true });
+  }
+}
+
+routes.route(actionsRoutes.listWorkflowWorkSessions, async (req, res) => {
+  if (!actionsRoutes.listWorkflowWorkSessions.query.safeParse(req.query).success) return res.status(422).json({ error: "InvalidInputs", message: "The owned-session picker does not accept partition overrides." });
+  try { return res.json(await listSessionWorkflowSelections(req.authPrincipal)); }
+  catch (error) {
+    if (error instanceof WorkflowError) return res.status(error.status).json({ error: error.code, message: error.message, retryable: error.retryable });
+    return res.status(503).json({ error: "WorkReadUnknown", message: "Owned workflow sessions are unavailable.", retryable: true });
+  }
+});
+routes.route(actionsRoutes.getWorkflowWorkCatalog, async (req, res) => {
+  const selection = actionsRoutes.getWorkflowWorkCatalog.query.safeParse(req.query);
+  if (!selection.success) return res.status(422).json({ error: "InvalidInputs", message: "An explicit session_id is required for the selected workflow catalog." });
+  try { return res.json(await sessionWorkflowCatalog(selection.data.session_id, req.authPrincipal, currentStoreContext()?.identity)); }
+  catch (error) {
+    if (error instanceof WorkflowError) return res.status(error.status).json({ error: error.code, message: error.message, retryable: error.retryable });
+    return res.status(503).json({ error: "WorkReadUnknown", message: "Selected workflow catalog is unavailable.", retryable: true });
+  }
+});
+
+for (const [declaration, read] of [
+  [actionsRoutes.getSessionWorkflowWork, readSessionWorkflowWork],
+  [actionsRoutes.getSessionWorkflowWorkResult, readSessionWorkflowWorkResult],
+] as const) {
+  routes.route(declaration, async (req, res) => {
+    const selection = declaration.query.safeParse(req.query), params = declaration.params.safeParse(req.params);
+    if (!selection.success || !params.success) return res.status(422).json({ error: "InvalidInputs", message: "Canonical work reads require an explicit session_id and work ID." });
+    try { return res.json(await read(params.data.id, selection.data.session_id, req.authPrincipal, currentStoreContext()?.identity)); }
+    catch (error) {
+      if (error instanceof WorkflowError) return res.status(error.status).json({ error: error.code, message: error.message, retryable: error.retryable });
+      return res.status(503).json({ error: "WorkReadUnknown", message: "Workflow inspection is unavailable; preserve the selected session and work ID.", retryable: true });
+    }
+  });
+}
+routes.route(actionsRoutes.stopSessionWorkflowWork, async (req, res) => {
+  const declaration = actionsRoutes.stopSessionWorkflowWork, selection = declaration.query.safeParse(req.query), params = declaration.params.safeParse(req.params), body = declaration.body.safeParse(req.body);
+  if (!selection.success || !params.success || !body.success) return res.status(422).json({ error: "InvalidInputs", message: "Canonical workflow Stop requires an explicit session, work ID, request ID, revision and reason.", stop_disposition: "refused" });
+  try { return res.status(202).json(await stopSessionWorkflowWork(params.data.id, body.data, selection.data.session_id, req.authPrincipal, currentStoreContext()?.identity)); }
+  catch (error) {
+    const disposition = sessionWorkflowStopRefused(error) ? { stop_disposition: "refused" as const } : {};
+    if (error instanceof WorkflowError) return res.status(error.status).json({ error: error.code, message: error.message, retryable: error.retryable, ...disposition });
+    return res.status(503).json({ error: "WorkStopUnknown", message: "Workflow Stop is unconfirmed; preserve the selected session, work ID, request ID, revision and reason.", retryable: true, ...disposition });
+  }
+});
+
+routes.route(actionsRoutes.startSessionWorkflowAction, async (req, res) => {
+  const selection = actionsRoutes.startSessionWorkflowAction.query.safeParse(req.query);
+  const body = actionsRoutes.startSessionWorkflowAction.body.safeParse(req.body);
+  const params = actionsRoutes.startSessionWorkflowAction.params.safeParse(req.params);
+  if (!selection.success || !body.success || !params.success) return res.status(422).json({ error: "InvalidInputs", message: "Workflow admission requires an explicit session, stable request ID, key and inputs.", admission_disposition: "refused" });
+  try {
+    const ack = await startSessionWorkflowAction(req.params.name, body.data, selection.data.session_id, req.authPrincipal, currentStoreContext()?.identity);
+    return res.status(ack.created ? 201 : 200).json(ack);
+  } catch (error) {
+    const disposition = sessionWorkAdmissionRefused(error) ? { admission_disposition: "refused" as const } : {};
+    if (error instanceof WorkflowError) return res.status(error.status).json({ error: error.code, message: error.message, retryable: error.retryable, ...disposition });
+    return res.status(503).json({ error: "WorkAdmissionUnknown", message: "Admission is unconfirmed; preserve the original session, key and inputs for lookup or retry.", retryable: true, ...disposition });
+  }
+});
+
+routes.route(actionsRoutes.startSessionWorkflowAgentAction, async (req, res) => {
+  const selection = actionsRoutes.startSessionWorkflowAgentAction.query.safeParse(req.query);
+  const body = actionsRoutes.startSessionWorkflowAgentAction.body.safeParse(req.body);
+  const params = actionsRoutes.startSessionWorkflowAgentAction.params.safeParse(req.params);
+  if (!selection.success || !body.success || !params.success) return res.status(422).json({ error: "InvalidInputs", message: "Workflow admission requires an explicit session, stable request ID, key and inputs.", admission_disposition: "refused" });
+  try {
+    const ack = await startSessionWorkflowAgentAction(req.params.name, body.data, selection.data.session_id, req.authPrincipal, currentStoreContext()?.identity);
+    return res.status(ack.created ? 201 : 200).json(ack);
+  } catch (error) {
+    const disposition = sessionWorkAdmissionRefused(error) ? { admission_disposition: "refused" as const } : {};
+    if (error instanceof WorkflowError) return res.status(error.status).json({ error: error.code, message: error.message, retryable: error.retryable, ...disposition });
+    return res.status(503).json({ error: "WorkAdmissionUnknown", message: "Admission is unconfirmed; preserve the original session, key and inputs for lookup or retry.", retryable: true, ...disposition });
+  }
+});
+
+routes.route(actionsRoutes.lookupSessionWorkflowAction, async (req, res) => {
+  const selection = actionsRoutes.lookupSessionWorkflowAction.query.safeParse(req.query);
+  if (!selection.success) return res.status(422).json({ error: "InvalidInputs", message: "Operation lookup requires an explicit session." });
+  try { return res.json(await lookupSessionWorkflowAction(req.params.key, selection.data.session_id, req.authPrincipal, currentStoreContext()?.identity)); }
+  catch (error) {
+    if (error instanceof WorkflowError) return res.status(error.status).json({ error: error.code, message: error.message, retryable: error.retryable });
+    return res.status(503).json({ error: "WorkLookupUnknown", message: "Operation lookup is unconfirmed; preserve the original key and inputs.", retryable: true });
+  }
+});
+
+routes.route(actionsRoutes.stopSessionWorkflowAction, async (req, res) => {
+  const selected = actionsRoutes.stopSessionWorkflowAction.query.safeParse(req.query);
+  if (!selected.success) return res.status(422).json({ error: "InvalidInputs", message: "An explicit session_id is required for session workflow Stop." });
+  const owned = await ActionRuns.get(req.params.id);
+  if (!owned?.workflow) return res.status(owned ? 409 : 404).json({ error: owned ? "ActionIsLegacy" : "unknown_run" });
+  return stopOwnedWork(req, res, owned);
+});
+
+routes.route(actionsRoutes.stopWorkflowAction, async (req, res) => {
   const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
   if (!reason) {
     return res.status(422).json({ error: "invalid_inputs", details: ["reason: required"] });
+  }
+  const owned = await ActionRuns.get(req.params.id);
+  if (owned?.workflow) {
+    return stopOwnedWork(req, res, owned);
+  }
+  if (req.body?.request_id !== undefined || req.body?.expected_revision !== undefined) {
+    return res.status(owned ? 409 : 404).json({ error: owned ? "ActionIsLegacy" : "unknown_run", message: "Workflow Stop cannot control a legacy run." });
   }
   const stop = runningAgents.get(req.params.id);
   if (!stop) {
@@ -121,8 +237,10 @@ routes.route(actionsRoutes.getActionRun, async (req, res) => {
     }
   }
 
+  res.vary("Accept");
   return res.status(200).json({
     run_id: run.id,
+    ...(run.workflow && wantsWorkflowReference(req.get("Accept")) ? { workflow: actionWorkflowLink(run) } : {}),
     action: run.action,
     bag: run.bag,
     session_id: run.session_id,
@@ -166,8 +284,8 @@ function toCatalogEntry(action: ActionMeta) {
   };
 }
 
-/** Expand the identity's composed action catalog and report resolution scope; see docs/decisions/0020-session-route-catalog-and-cache-invariants.md. */
-routes.route(actionsRoutes.listActionCatalog, async (req, res) => {
+/** Expand the identity's composed actions and report resolution scope; see docs/decisions/0020-session-route-and-cache-invariants.md. */
+routes.route(actionsRoutes.listActions, async (req, res) => {
   if (req.query.session_id !== undefined) {
     const sessionId = typeof req.query.session_id === "string" ? req.query.session_id : "";
     const identity = sessionIdentity(sessionId);
@@ -283,16 +401,18 @@ routes.route(actionsRoutes.triggerAction, async (req, res) => {
     const identityId = (await identityRecords.rowId(selection.barry)) ?? undefined;
 
     // The session is granted the action's own bag, matching what the detached
-    // executor does: the bag's auto-trait is the closest thing to "the tools
-    // this action's prompt plausibly calls". `actions` is granted too, because
-    // without begin_action the seeded instruction is a dead reference.
+    // executor does: the bag's tools are what this action's prompt plausibly
+    // calls. `actions` is granted too, because without begin_action the seeded
+    // instruction is a dead reference.
     // Inert ON PURPOSE: this route hands the prompt BACK rather than sending it,
     // so the caller can subscribe to the session's socket before the agent emits
     // anything. `POST /sessions` with a `prompt` would start it here and lose that
     // first output — which is exactly why an inert create survived the removal of
     // the draft concept.
+    const pinnedBound = await Barry.as(requestCaller(req.authPrincipal)).bound(identityId ?? null, []);
     const session = await Sessions.createInert({
-      traits: [...new Set(["actions", action.bag])],
+      bags: [...new Set(["actions", action.bag])],
+      bound: pinnedBound,
       ...(identityId !== undefined ? { identity_id: identityId } : {}),
       metadata: {
         working_directory: validated.path,
@@ -378,10 +498,12 @@ routes.route(actionsRoutes.listActionRuns, async (req, res) => {
     ...(limit ? { limit } : {}),
   });
 
+  res.vary("Accept");
   return res.status(200).json({
     count: runs.length,
     runs: runs.map((run) => ({
       run_id: run.id,
+      ...(run.workflow && wantsWorkflowReference(req.get("Accept")) ? { workflow: actionWorkflowLink(run) } : {}),
       action: run.action,
       bag: run.bag,
       session_id: run.session_id,

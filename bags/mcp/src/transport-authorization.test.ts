@@ -9,7 +9,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 it("keeps verified workflow grants separate from operators and differently scoped workflow grants", async () => {
   const secret = "fixture-workflow-signing-secret-at-least-32";
-  const claims = { credentialId: "11111111-1111-4111-8111-111111111111", actorId: 1, identityId: 1, sessionId: "work-a", identity: "identity-a", scopeFingerprint: "a".repeat(64), expiresAt: Date.now() + 60_000 };
+  const claims = { credentialId: "11111111-1111-4111-8111-111111111111", actorId: 1, identityId: 1, sessionId: "work-a", identity: "identity-a", boundFingerprint: "a".repeat(64), expiresAt: Date.now() + 60_000 };
   const workflow = new WeakMap<Request, WorkflowSessionCredential>();
   let workflowValid = true;
   let invalidateBeforeDispatch = false;
@@ -44,7 +44,7 @@ it("keeps verified workflow grants separate from operators and differently scope
     const token = mintWorkflowSessionCredential(secret, claims);
     const initial = await request(token, undefined, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "fixture", version: "1" } } });
     expect(initial.status).toBe(200); await initial.text();
-    for (const credential of ["operator", mintWorkflowSessionCredential(secret, { ...claims, credentialId: "22222222-2222-4222-8222-222222222222" }), mintWorkflowSessionCredential(secret, { ...claims, actorId: 2 }), mintWorkflowSessionCredential(secret, { ...claims, identityId: 2 }), mintWorkflowSessionCredential(secret, { ...claims, identity: "identity-b" }), mintWorkflowSessionCredential(secret, { ...claims, scopeFingerprint: "b".repeat(64) }), mintWorkflowSessionCredential(secret, { ...claims, expiresAt: claims.expiresAt + 1000 })]) {
+    for (const credential of ["operator", mintWorkflowSessionCredential(secret, { ...claims, credentialId: "22222222-2222-4222-8222-222222222222" }), mintWorkflowSessionCredential(secret, { ...claims, actorId: 2 }), mintWorkflowSessionCredential(secret, { ...claims, identityId: 2 }), mintWorkflowSessionCredential(secret, { ...claims, identity: "identity-b" }), mintWorkflowSessionCredential(secret, { ...claims, boundFingerprint: "b".repeat(64) }), mintWorkflowSessionCredential(secret, { ...claims, expiresAt: claims.expiresAt + 1000 })]) {
       const denied = await request(credential, "transport-1"); expect(denied.status).toBe(403); await denied.text();
     }
     expect(effects).toBe(0);

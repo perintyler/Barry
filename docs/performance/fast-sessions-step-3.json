@@ -1,0 +1,75 @@
+{
+  "step": 3,
+  "date": "2026-10-14",
+  "before": {
+    "message_prepare_total_ms": 6171.5,
+    "warm": 0,
+    "note": "Step 0 first-message response; no eager harness process existed."
+  },
+  "after": {
+    "id": "warm-probe-1791974931928",
+    "port": 58505,
+    "readyMs": 4796.428458,
+    "pidsBefore": [
+      15336
+    ],
+    "pidsAfter": [
+      15336
+    ],
+    "timingsBefore": {
+      "warm_hit": 0,
+      "identity_resolve_ms": 36.14316699999995,
+      "bag_status_ms": 1341.8511660000001,
+      "bags_ms": 1505.434125,
+      "native_policy_ms": 35.584292000000005,
+      "prepare_total_ms": 1626.5742920000002,
+      "env_ms": 162.28654199999983,
+      "skills_ms": 90.90145900000016,
+      "sandbox_ms": 8.677041999999801,
+      "harness_create_ms": 5.795375000000149,
+      "harness_ready_ms": 2548.067292
+    },
+    "header": "warm=1;identity_resolve=36.1;bag_status=1341.9;bags=1505.4;native_policy=35.6;prepare_total=1626.6;env=162.3;skills=90.9;sandbox=8.7",
+    "timingsAfter": {
+      "warm_hit": 1,
+      "identity_resolve_ms": 36.14316699999995,
+      "bag_status_ms": 1341.8511660000001,
+      "bags_ms": 1505.434125,
+      "native_policy_ms": 35.584292000000005,
+      "prepare_total_ms": 1626.5742920000002,
+      "env_ms": 0.33191700000043056,
+      "skills_ms": 90.90145900000016,
+      "sandbox_ms": 8.677041999999801,
+      "deliver_at": 5834.157375,
+      "first_event_ms": 670.314625,
+      "first_token_ms": 1923.3460420000001,
+      "turn_done_ms": 1978.72775
+    },
+    "startedAt": "2026-10-14T10:48:56.947Z"
+  },
+  "TTL": {
+    "id": "ttl-probe-1791974938996",
+    "resident": false,
+    "row": false
+  },
+  "validation": {
+    "API_full": "754 tests passed",
+    "Claude_full": "125 passed, 7 skipped",
+    "CLI_focused": "54 tests passed; goldens unchanged",
+    "contracts": "in sync; diff limited to prepare route, pending status and PATCH prepare",
+    "typechecks": [
+      "SDK",
+      "CLI",
+      "sessions API",
+      "Claude",
+      "MCP"
+    ]
+  },
+  "probe_scope": "Private-port API assembled with real installed subjects, real session store and MCP service, and the current Claude adapter through its normal hosted SPI. No maintenance jobs or global service configuration changed by the probe. Its used session was stopped and its unused TTL row deleted.",
+  "remaining_steps": [
+    4,
+    5,
+    6,
+    7
+  ]
+}

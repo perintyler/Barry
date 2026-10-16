@@ -34,7 +34,7 @@ it("records real SQLite digests/row counts and rejects changed retained data", (
   const db = new DatabaseSync(path); db.exec("UPDATE entries SET value='changed'"); db.close();
   expect(() => compareStores(before, captureStores(root), true)).toThrow("logical data changed");
 });
-it("permits catalog migrations only while the retained fixture is preserved", () => {
+it("permits schema migrations only while the retained fixture is preserved", () => {
   const { root, path } = fixture(), before = captureStores(root, true);
   const db = new DatabaseSync(path); db.exec("ALTER TABLE entries ADD COLUMN updated TEXT;CREATE TABLE migrated(id INTEGER)"); db.close();
   expect(() => compareStores(before, captureStores(root), false)).not.toThrow();
@@ -49,30 +49,23 @@ it("rejects migration loss of original application rows or tables with an intact
   const missing = new DatabaseSync(path); missing.exec("DROP TABLE entries"); missing.close();
   expect(() => compareStores(before, captureStores(root), false)).toThrow("retained table disappeared after migration: entries");
 });
-it("normalizes only nullable trait metadata representation and preserves real values", () => {
+it("allows retired traits and bounds tables in identities.db to be dropped when migrations advance", () => {
   const { root, path } = fixture(true);
   const db = new DatabaseSync(path);
-  db.exec("CREATE TABLE traits(id INTEGER PRIMARY KEY,metadata TEXT)");
-  db.prepare("INSERT INTO traits VALUES(1,?)").run(JSON.stringify({ boundNames: [], includes: [], harnessTraits: null, nativeTools: null })); db.close();
-  const before = captureStores(root, true), changed = new DatabaseSync(path);
-  changed.prepare("UPDATE traits SET metadata=?").run(JSON.stringify({ boundNames: [], includes: [] })); changed.close();
-  const normalized = captureStores(root);
-  expect(Object.values(normalized)[0].tables.traits.rawSha256).not.toBe(Object.values(before)[0].tables.traits.rawSha256);
-  expect(() => compareStores(before, normalized, true)).not.toThrow();
-  const substantive = new DatabaseSync(path);
-  substantive.prepare("UPDATE traits SET metadata=?").run(JSON.stringify({ boundNames: [], includes: [], nativeTools: { shell: ["read"] } })); substantive.close();
-  expect(() => compareStores(before, captureStores(root), true)).toThrow("logical data changed");
-  const missing = new DatabaseSync(path);
-  missing.prepare("UPDATE traits SET metadata=?").run(JSON.stringify({ boundNames: [] })); missing.close();
-  expect(() => compareStores(before, captureStores(root), true)).toThrow("logical data changed");
-  const removed = new DatabaseSync(path); removed.exec("DELETE FROM traits"); removed.close();
-  expect(() => compareStores(before, captureStores(root), true)).toThrow("logical data changed");
+  db.exec("CREATE TABLE traits(id INTEGER PRIMARY KEY);CREATE TABLE bounds(id INTEGER PRIMARY KEY);INSERT INTO traits VALUES(1);INSERT INTO bounds VALUES(1)");
+  db.close();
+  const before = captureStores(root, true);
+  const migrated = new DatabaseSync(path);
+  migrated.exec("DROP TABLE traits;DROP TABLE bounds");
+  migrated.close();
+  const after = captureStores(root);
+  expect(() => compareStores(before, after, false)).not.toThrow();
+  expect(() => compareStores(before, after, true)).toThrow("logical data changed");
 });
-it("compares similarly named traits in unrelated stores without normalization", () => {
+it("rejects dropping tables in unrelated stores even when named traits or bounds", () => {
   const { root, path } = fixture(), db = new DatabaseSync(path);
-  db.exec("CREATE TABLE traits(id INTEGER PRIMARY KEY,metadata TEXT)");
-  db.prepare("INSERT INTO traits VALUES(1,?)").run(JSON.stringify({ nativeTools: null })); db.close();
+  db.exec("CREATE TABLE bounds(id INTEGER PRIMARY KEY);INSERT INTO bounds VALUES(1)"); db.close();
   const before = captureStores(root, true), changed = new DatabaseSync(path);
-  changed.prepare("UPDATE traits SET metadata=?").run("{}"); changed.close();
-  expect(() => compareStores(before, captureStores(root), true)).toThrow("logical data changed");
+  changed.exec("DROP TABLE bounds"); changed.close();
+  expect(() => compareStores(before, captureStores(root), false)).toThrow("retained table disappeared after migration: bounds");
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { discoverFromClient } from "../remote.js";
+import { discoverFromClient, classifyRemoteToolAccess } from "../remote.js";
 import { clearBagCache, getBagCacheDir } from ".././cache.js";
 import type { RemoteBagSource } from "../../bags/types.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -9,7 +9,11 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 const bagName = `test-remote-${Date.now()}`;
 const source: RemoteBagSource = { type: "remote", url: "http://localhost:9999/mcp", resources: true };
 
-function createMockClient(resources: Array<{ uri: string; name: string }>, contents: Record<string, string>) {
+function createMockClient(
+  resources: Array<{ uri: string; name: string }>,
+  contents: Record<string, string>,
+  tools?: Array<{ name: string; annotations?: { readOnlyHint?: boolean } }>,
+) {
   return {
     listResources: async () => ({ resources }),
     readResource: async ({ uri }: { uri: string }) => {
@@ -17,11 +21,24 @@ function createMockClient(resources: Array<{ uri: string; name: string }>, conte
       if (!text) throw new Error(`No resource: ${uri}`);
       return { contents: [{ uri, text, mimeType: "application/json" }] };
     },
-  } as Client;
+    ...(tools ? { listTools: async () => ({ tools }) } : {}),
+  } as unknown as Client;
 }
 
 afterEach(() => {
   clearBagCache(bagName);
+});
+
+describe("classifyRemoteToolAccess", () => {
+  it("classifies tools with annotations.readOnlyHint === true as read", () => {
+    expect(classifyRemoteToolAccess({ annotations: { readOnlyHint: true } })).toBe("read");
+  });
+
+  it("defaults fail-closed to write when annotations are missing or readOnlyHint is false", () => {
+    expect(classifyRemoteToolAccess({})).toBe("write");
+    expect(classifyRemoteToolAccess({ annotations: {} })).toBe("write");
+    expect(classifyRemoteToolAccess({ annotations: { readOnlyHint: false } })).toBe("write");
+  });
 });
 
 describe("discoverFromClient", () => {
@@ -64,7 +81,7 @@ describe("discoverFromClient", () => {
     expect(readFileSync(cachedSkill, "utf-8")).toBe(skillContent);
   });
 
-  it("discovers traits", async () => {
+  it("ignores retired barry://traits/ resources and classifies remote tools fail-closed from readOnlyHint", async () => {
     const client = createMockClient(
       [
         { uri: "barry://manifest", name: "manifest" },
@@ -79,27 +96,20 @@ describe("discoverFromClient", () => {
           namespaces: ["sentry"],
         }),
       },
+      [
+        { name: "list_issues", annotations: { readOnlyHint: true } },
+        { name: "delete_issue", annotations: { readOnlyHint: false } },
+        { name: "unannotated_tool" },
+      ],
     );
 
     const bag = await discoverFromClient(bagName, source, client);
-    expect(bag.traits).toHaveLength(1);
-    // Input above uses the legacy `namespaces` spelling on purpose — the
-    // normalized output must come back under the renamed `bags` key.
-    expect(bag.traits[0]).toEqual({
-      name: "debug",
-      description: "Debug trait",
-      access: "read",
-      bags: ["sentry"],
-      // Always empty for a remote trait: instructions become prompt text and
-      // there is no published set to contain them to, so remote traits carry
-      // none even when the manifest names some.
-      instructions: [],
-      skills: [],
-      // Carried through where instructions are not: a scope can only DENY, so
-      // honoring a remote's cannot widen what the session reaches, while
-      // dropping it would publish a read-only trait as an unrestricted one.
-      boundNames: [],
-    });
+    expect(bag).not.toHaveProperty("traits");
+    expect(bag.tools).toEqual([
+      { toolName: "list_issues", namespace: bagName, access: "read" },
+      { toolName: "delete_issue", namespace: bagName, access: "readwrite" },
+      { toolName: "unannotated_tool", namespace: bagName, access: "readwrite" },
+    ]);
   });
 
   it("discovers additional MCP servers", async () => {
@@ -145,7 +155,7 @@ describe("discoverFromClient", () => {
     const bag = await discoverFromClient(bagName, source, client);
     expect(bag.name).toBe(bagName);
     expect(bag.description).toBe("");
-    expect(bag.traits).toEqual([]);
+    expect(bag).not.toHaveProperty("traits");
     expect(bag.skillsDirs).toEqual([]);
   });
 });
@@ -158,7 +168,6 @@ describe("discoverFromClient — full manifest over the wire", () => {
     instructions: "Always greet the user first.",
     verbs: { deploy: { instruction: "Use rich_deploy to ship a release." } },
     nouns: { release: { description: "a release", getters: ["rich_get"] } },
-    traits: { ops: { description: "ops tools", access: "read", namespaces: ["rich"], skills: ["greet"] } },
   };
 
   it("parses a whole bag.yaml sent as JSON", async () => {
@@ -166,34 +175,18 @@ describe("discoverFromClient — full manifest over the wire", () => {
       [
         { uri: "barry://manifest", name: "manifest" },
         { uri: "barry://skills/greet", name: "skill-greet" },
-        { uri: "barry://traits/ops", name: "trait-ops" },
       ],
       {
         "barry://manifest": JSON.stringify(fullManifest),
         "barry://skills/greet": JSON.stringify({ name: "greet", prompt: "# Greet" }),
-        "barry://traits/ops": JSON.stringify({
-          name: "ops",
-          description: "ops tools",
-          access: "read",
-          namespaces: ["rich"],
-          skills: ["greet"],
-        }),
       },
     );
 
     const bag = await discoverFromClient(bagName, source, client);
 
-    // Previously `manifest` was hardcoded null, so none of this could cross.
     expect(bag.manifest).not.toBeNull();
     expect(bag.manifest?.instructions).toBe("Always greet the user first.");
-    // The retired verbs/nouns keys are still accepted-but-ignored, so a remote
-    // bag that has not caught up keeps everything else. Dropping them from
-    // the strict schema instead would fail the whole manifest and silently lose
-    // this bag's instructions and traits.
     expect(bag.description).toBe("carries capability metadata");
-
-    // Previously hardcoded to [].
-    expect(bag.traits[0]?.skills).toEqual(["greet"]);
   });
 
   it("parses the three-field shape as a real manifest", async () => {
@@ -227,28 +220,6 @@ describe("discoverFromClient — full manifest over the wire", () => {
 
     expect(bag.manifest).toBeNull();
     expect(bag.description).toBe("unknown keys are rejected by the strict schema");
-  });
-
-  it("only grants trait skills the bag actually published", async () => {
-    const client = createMockClient(
-      [
-        { uri: "barry://skills/greet", name: "skill-greet" },
-        { uri: "barry://traits/ops", name: "trait-ops" },
-      ],
-      {
-        "barry://skills/greet": JSON.stringify({ name: "greet", prompt: "# Greet" }),
-        "barry://traits/ops": JSON.stringify({
-          name: "ops",
-          description: "ops",
-          access: "read",
-          namespaces: ["rich"],
-          skills: ["greet", "someone-elses-skill"],
-        }),
-      },
-    );
-
-    const bag = await discoverFromClient(bagName, source, client);
-    expect(bag.traits[0]?.skills).toEqual(["greet"]);
   });
 
   // A remote bag naming a local command would be arbitrary code execution.

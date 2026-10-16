@@ -1,17 +1,14 @@
 /**
  * Merge bag capabilities into session config.
  *
- * Combines traits, MCP servers, tool metadata, and skill dirs
+ * Combines MCP servers, tool metadata, and skill dirs
  * from multiple bags into a unified session configuration.
  */
 
-import type { Bag, BagTrait, BagMcpServer, BagToolMeta, BagService, ResolvedBagHook } from "./types.js";
+import type { Bag, BagMcpServer, BagToolMeta, BagService, ResolvedBagHook } from "./types.js";
 import type { BagSchedule } from "../schedules/schedule-manifest.js";
-import { generateAutoTraits } from "../traits/auto-traits.js";
-
 
 export interface MergedBagConfig {
-  traits: BagTrait[];
   mcpServers: Record<string, BagMcpServer>;
   tools: BagToolMeta[];
   skillsDirs: string[];
@@ -25,22 +22,6 @@ export interface MergedBagConfig {
   schedules: Array<BagSchedule & { name: string; bag: string; dir: string }>;
   /** Agent hooks from all bags, in registration order. */
   hooks: ResolvedBagHook[];
-}
-
-/**
- * Get all traits for a bag (auto-generated + custom).
- *
- * A manifest trait may reuse an auto-trait's name to refine it — typically to
- * narrow its bags or bind a specific subset of
- * skills. The manifest wins, matching how mergeBags resolves the same
- * collision; returning both would register the trait twice and print it twice
- * in `bag show`.
- */
-export function getAllTraits(bag: Bag, bagsByName?: ReadonlyMap<string, Bag>): BagTrait[] {
-  const byName = new Map<string, BagTrait>();
-  for (const trait of generateAutoTraits(bag, bagsByName)) byName.set(trait.name, trait);
-  for (const trait of bag.traits) byName.set(trait.name, trait);
-  return [...byName.values()];
 }
 
 /** Merge MCP servers from multiple bags into a single config */
@@ -59,7 +40,6 @@ export function mergeBagMcpServers(
 
 /** Merge all capabilities from multiple bags */
 export function mergeBags(bags: Bag[]): MergedBagConfig {
-  const traitMap = new Map<string, BagTrait>();
   const mcpServers: Record<string, BagMcpServer> = {};
   const tools: BagToolMeta[] = [];
   const skillsDirs: string[] = [];
@@ -69,19 +49,7 @@ export function mergeBags(bags: Bag[]): MergedBagConfig {
   const schedules: Array<BagSchedule & { name: string; bag: string; dir: string }> = [];
   const hooks: ResolvedBagHook[] = [];
 
-  const bagsByName = new Map(bags.map((b) => [b.name, b]));
-  const traitOwners = new Map<string, string>();
-
   for (const bag of bags) {
-    // Traits (auto + custom, dedup by name; sub-bag namespaces absorbed
-    // when the sub-bag is part of this merge set)
-    for (const trait of getAllTraits(bag, bagsByName)) {
-      const owner = traitOwners.get(trait.name);
-      if (owner && owner !== bag.name) throw new Error(`trait ${trait.name} is claimed by bags ${owner} and ${bag.name}`);
-      traitOwners.set(trait.name, bag.name);
-      traitMap.set(trait.name, trait);
-    }
-
     // MCP servers (dedup by name, last wins)
     for (const [name, server] of Object.entries(bag.mcpServers)) {
       mcpServers[name] = server;
@@ -94,7 +62,6 @@ export function mergeBags(bags: Bag[]): MergedBagConfig {
     instructionsDirs.push(...bag.instructionsDirs);
     hooks.push(...bag.hooks);
 
-
     // Services & schedules (append all, tagged with bag)
     for (const svc of bag.services) {
       services.push({ ...svc, bag: bag.name });
@@ -105,7 +72,6 @@ export function mergeBags(bags: Bag[]): MergedBagConfig {
   }
 
   return {
-    traits: [...traitMap.values()],
     mcpServers,
     tools,
     skillsDirs,

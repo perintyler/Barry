@@ -22,20 +22,22 @@ const { UnregisteredBagError } = await vi.importActual<typeof import("../store/i
 vi.mock("../store/identity-bags.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../store/identity-bags.js")>();
   const registered = new Set(["linear", "github"]);
+  const mockResolve = vi.fn(async (bags: string[], options: { strict?: boolean } = {}) => {
+    const unknown = bags.filter((bag) => !registered.has(bag));
+    if (options.strict && unknown.length > 0) throw new actual.UnregisteredBagError(unknown);
+    return {
+      bags,
+      composedBags: bags,
+      addedSubBags: [],
+      syncedTraits: [],
+      timedOut: false,
+      warnings: unknown.map((bag) => ({ kind: "unregistered", bag, message: `bag "${bag}" is not registered` })),
+    };
+  });
   return {
     ...actual,
-    resolveAndSyncBags: vi.fn(async (bags: string[], options: { strict?: boolean } = {}) => {
-      const unknown = bags.filter((bag) => !registered.has(bag));
-      if (options.strict && unknown.length > 0) throw new actual.UnregisteredBagError(unknown);
-      return {
-        bags,
-        composedBags: bags,
-        addedSubBags: [],
-        syncedTraits: [],
-        timedOut: false,
-        warnings: unknown.map((bag) => ({ kind: "unregistered", bag, message: `bag "${bag}" is not registered` })),
-      };
-    }),
+    resolveBags: mockResolve,
+    resolveAndSyncBags: mockResolve,
     resolveAndSyncBagsIfChanged: vi.fn(async () => undefined),
   };
 });
@@ -49,7 +51,6 @@ const { fakeSessions } = await import("@barry-rocks/sdk/testing");
 const { installationOwner } = await import("../installation-owner.js");
 const { Identities } = await import("../store/identities.js");
 const { Users } = await import("../store/users.js");
-const { Traits } = await import("../config/traits.js");
 const { closeIdentitiesDb } = await import("../store/identities-db.js");
 const { getIdentitiesDir } = await import("../paths.js");
 const { registerIdentityDirectory, readIdentitiesRegistry } = await import("../store/identity-files.js");
@@ -62,7 +63,6 @@ let counter = 0;
 beforeAll(async () => {
   Barry.use(identities, fakeSessions({ removeAll: vi.fn(async () => 0) }));
   actorId = installationOwner().provision({ username: "owner" }).actorId;
-  await Traits.upsertTrait({ name: "reviewer", description: null, namespaces: ["github"], access: "read" });
 });
 afterAll(() => {
   Barry.reset();
@@ -105,14 +105,14 @@ describe("identities.update", () => {
     expect(yamlOf(identity.directory!)).not.toHaveProperty("bound");
   });
 
-  it("refuses an unknown trait and a newly added unregistered bag, and tolerates one already there", async () => {
+  it("refuses an unknown bound and a newly added unregistered bag, and tolerates one already there", async () => {
     const identity = await created({ bags: ["linear"] });
-    await expect(Barry.identity(identity.name).update({ traits: ["nope"] })).rejects.toMatchObject({ reason: "invalid" });
+    await expect(Barry.identity(identity.name).update({ bounds: ["nope"] })).rejects.toMatchObject({ reason: "invalid" });
     await expect(Barry.identity(identity.name).update({ bags: ["linear", "nope"] })).rejects.toMatchObject({ reason: "invalid", message: "Unknown bags: nope" });
     expect(UnregisteredBagError).toBeDefined();
 
     writeFileSync(join(identity.directory!, "identity.yaml"), `name: ${identity.name}\ninherits: barry\nbags:\n  - linear\n  - retired\n`);
-    const kept = await Barry.identity(identity.name).update({ bags: ["linear", "retired", "github"], traits: ["reviewer"] });
+    const kept = await Barry.identity(identity.name).update({ bags: ["linear", "retired", "github"], bounds: ["readonly"] });
     expect(kept.warnings.map((w) => w.bag)).toEqual(["retired"]);
   });
 
@@ -125,12 +125,12 @@ describe("identities.update", () => {
     expect(yamlOf(identity.directory!)).not.toHaveProperty("default_coding_agent");
   });
 
-  it("tells live sessions when grants change, and announces every change", async () => {
+  it("tells live sessions when bags or bounds change, and announces every change", async () => {
     const identity = await created();
     vi.mocked(refreshLiveSessions).mockClear();
     await Barry.identity(identity.name).update({ adapters: { "claude-code": { model: "opus" } } });
     expect(refreshLiveSessions).not.toHaveBeenCalled();
-    await Barry.identity(identity.name).update({ traits: ["reviewer"] });
+    await Barry.identity(identity.name).update({ bounds: ["readonly"] });
     expect(refreshLiveSessions).toHaveBeenCalledTimes(1);
     expect(announceIdentity).toHaveBeenCalledWith(expect.anything(), "updated");
   });
@@ -162,9 +162,9 @@ describe("identities.update", () => {
 
 describe("identities.create", () => {
   it("makes a directory and its row, with the configuration written as an edit would write it", async () => {
-    const identity = await created({ traits: ["reviewer"], displayName: "Reviewer" });
+    const identity = await created({ bounds: ["readonly"], displayName: "Reviewer" });
     expect(identity.source).toBe("file");
-    expect(yamlOf(identity.directory!)).toMatchObject({ name: identity.name, inherits: "base", traits: expect.arrayContaining(["reviewer"]), displayName: "Reviewer" });
+    expect(yamlOf(identity.directory!)).toMatchObject({ name: identity.name, inherits: "base", bounds: expect.arrayContaining(["readonly"]), displayName: "Reviewer" });
     expect(await Identities.getByName(actorId, identity.name)).toBeDefined();
     expect(announceIdentity).toHaveBeenCalledWith(expect.anything(), "created");
   });

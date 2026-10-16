@@ -1,131 +1,32 @@
 name: claude
-description: Native tools and traits for claude
+description: Native tool bounds for claude
 credentials:
   ANTHROPIC_API_KEY: { source: vault, item: anthropic-api-key, field: password }
 bounds:
   no-shell:
     description: Disable native shell
-    bound:
-      nativeTools:
-        claude-code:
-          - Bash
-          - PowerShell
-          - Monitor
+    tools:
+      deny:
+        - "claude-code:Bash"
+        - "claude-code:PowerShell"
+        - "claude-code:Monitor"
   no-file-reads:
     description: Disable native file-reads
-    bound:
-      nativeTools:
-        claude-code:
-          - Read
-          - Glob
-          - Grep
+    tools:
+      deny:
+        - "claude-code:Read"
+        - "claude-code:Glob"
+        - "claude-code:Grep"
   no-file-writes:
     description: Disable native file-writes
-    bound:
-      nativeTools:
-        claude-code:
-          - Write
-          - Edit
-          - NotebookEdit
+    tools:
+      deny:
+        - "claude-code:Write"
+        - "claude-code:Edit"
+        - "claude-code:NotebookEdit"
   no-network:
     description: Disable native network
-    bound:
-      nativeTools:
-        claude-code:
-          - WebFetch
-          - WebSearch
-  no-questions:
-    description: Disable native questions
-    bound:
-      nativeTools:
-        claude-code:
-          - AskUserQuestion
-  no-tasks:
-    description: Disable native tasks
-    bound:
-      nativeTools:
-        claude-code:
-          - TodoWrite
-          - TaskCreate
-          - TaskUpdate
-          - TaskList
-          - TaskGet
-          - TaskStop
-          - Agent
-  no-discovery:
-    description: Disable native discovery
-    bound:
-      nativeTools:
-        claude-code:
-          - ToolSearch
-          - Skill
-          - LSP
-          - ListMcpResourcesTool
-          - ReadMcpResourceTool
-          - ReadMcpResourceDirTool
-          - WaitForMcpServers
-          - RefreshMcpTools
-  no-worktrees:
-    description: Disable native worktrees
-    bound:
-      nativeTools:
-        claude-code:
-          - EnterWorktree
-          - ExitWorktree
-  no-planning:
-    description: Disable native planning
-    bound:
-      nativeTools:
-        claude-code:
-          - EnterPlanMode
-          - ExitPlanMode
-          - SendUserMessage
-          - ReportFindings
-          - Workflow
-  no-agents:
-    description: Disable native agents
-    bound:
-      nativeTools:
-        claude-code:
-          - SendMessage
-          - Agent
-          - ListAgents
-  no-schedules:
-    description: Disable native schedules
-    bound:
-      nativeTools:
-        claude-code:
-          - CronCreate
-          - CronDelete
-          - CronList
-          - ScheduleWakeup
-traits:
-  native-shell:
-    description: Grant native shell
-    access: readwrite
-    nativeTools:
-      claude-code:
-        - Bash
-  native-file-reads:
-    description: Grant native file-reads
-    access: read
-    nativeTools:
-      claude-code:
-        - Read
-        - Glob
-        - Grep
-  native-file-writes:
-    description: Grant native file-writes
-    access: readwrite
-    nativeTools:
-      claude-code:
-        - Write
-        - Edit
-        - NotebookEdit
-  native-network:
-    description: Grant native network
-    access: read
-    nativeTools:
-      claude-code:
-        - WebFetch
-        - WebSearch
+    tools:
+      deny:
+        - "claude-code:WebFetch"
+        - "claude-code:WebSearch"

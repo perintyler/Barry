@@ -46,7 +46,7 @@ const PORT = assignedPort();
 const STATIC_ASSETS: Record<string, { file: string; type: string }> = {
   "/app.css": { file: "app.css", type: "text/css; charset=utf-8" },
   "/spark.js": { file: "spark.js", type: "text/javascript; charset=utf-8" },
-  "/catalog.js": { file: "catalog.js", type: "text/javascript; charset=utf-8" },
+  "/metrics.js": { file: "metrics.js", type: "text/javascript; charset=utf-8" },
   "/jobs.js": { file: "jobs.js", type: "text/javascript; charset=utf-8" },
   "/panels.js": { file: "panels.js", type: "text/javascript; charset=utf-8" },
 };

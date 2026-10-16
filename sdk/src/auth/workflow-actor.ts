@@ -1,14 +1,38 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import type { ExecutionContext } from "../bounds/execution-context.js";
+import type { ToolCallBounds } from "../bounds/resolve-bound.js";
 import { z } from "zod";
-import { BoundSchema } from "../bounds/types.js";
-const executionSchema = z.strictObject({
-  identity: z.string().min(1).max(200).optional(),
-  traits: z.array(z.string().max(200)).max(100),
-  bound: BoundSchema.nullable(),
-  allowedToolIds: z.array(z.string().max(200)).max(1000),
-  harness: z.string().max(200).optional(),
-});
+import { BoundSchema, type Bound } from "../bounds/types.js";
+
+export interface WorkflowActorContext {
+  identity?: string;
+  bags: string[];
+  bounds?: string[];
+  bound: Bound | null;
+  allowedToolIds: string[];
+  harness?: string;
+}
+
+const executionSchema = z.preprocess(
+  (val) => {
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      const rec = { ...(val as Record<string, unknown>) };
+      if (!Array.isArray(rec.bags) && Array.isArray(rec.traits)) {
+        rec.bags = rec.traits;
+      }
+      delete rec.traits;
+      return rec;
+    }
+    return val;
+  },
+  z.strictObject({
+    identity: z.string().min(1).max(200).optional(),
+    bags: z.array(z.string().max(200)).max(100),
+    bounds: z.array(z.string().max(200)).max(100).optional(),
+    bound: BoundSchema.nullable(),
+    allowedToolIds: z.array(z.string().max(200)).max(1000),
+    harness: z.string().max(200).optional(),
+  }),
+);
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -21,7 +45,15 @@ function canonical(value: unknown): string {
 }
 function operation(path: string, body: unknown): string {
   const url = new URL(path, "http://workflows.invalid");
-  if (url.pathname === "/api/v2/runs") return "list";
+  if (url.pathname === "/api/v2/runs" || url.pathname === "/api/v2/work") return "list";
+  if (
+    /^\/api\/v2\/work\/[^/]+(?:\/(?:result|reconciliation))?$/.test(url.pathname) &&
+    body === undefined
+  )
+    return "get";
+  if (/^\/api\/v2\/work\/[^/]+\/reconciliation$/.test(url.pathname) && body !== undefined)
+    return "resume";
+  if (/^\/api\/v2\/work\/[^/]+\/stop$/.test(url.pathname) && body !== undefined) return "cancel";
   if (url.pathname === "/api/runs") return body === undefined ? "list" : "start";
   if (/^\/api\/runs\/[^/]+$/.test(url.pathname)) return "get";
   const action =
@@ -40,11 +72,11 @@ export interface WorkflowActor {
   operation: string;
   policyHash: string;
   expiresAt: number;
-  execution?: ExecutionContext;
+  execution?: WorkflowActorContext;
 }
 /** Called by the engine after tool/bound authorization, never by application executors. */
 export function workflowActorSigner(
-  context: ExecutionContext,
+  context: WorkflowActorContext | ToolCallBounds,
   key: string | undefined,
 ): (path: string, body?: unknown) => string {
   return (path, body) => {
@@ -55,7 +87,7 @@ export function workflowActorSigner(
       throw new Error("workflow operation is outside the execution bound");
     const execution = JSON.parse(
       JSON.stringify(executionSchema.parse(context)),
-    ) as ExecutionContext;
+    ) as WorkflowActorContext;
     const actor = {
       audience: "workflows.runtime",
       principal: context.identity,

@@ -11,7 +11,17 @@
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { SessionEvent } from "@barry-rocks/sdk/sessions";
 
-export function* processSDKMessage(message: SDKMessage): Generator<SessionEvent> {
+export interface SDKStreamState { sdk: { ttft_ms?: number; ttft_stream_ms?: number; time_to_request_ms?: number }; tools: Map<string, string> }
+export function createSDKMessageMapper(): (message: SDKMessage) => Generator<SessionEvent> {
+  const state: SDKStreamState = { sdk: {}, tools: new Map() };
+  return message => processSDKMessage(message, state);
+}
+export function* processSDKMessage(message: SDKMessage, state: SDKStreamState = { sdk: {}, tools: new Map() }): Generator<SessionEvent> {
+  const raw:Record<string,unknown> = {...message};
+  if(message.type==="stream_event" && message.event.type==="message_start") {state.sdk={};state.tools.clear();}
+  for (const key of ["ttft_ms", "ttft_stream_ms", "time_to_request_ms"] as const) {
+    if (typeof raw[key] === "number" && Number.isFinite(raw[key])) state.sdk[key] = raw[key];
+  }
   // The SDK marks every message produced inside a Task-tool sidechain with the
   // id of the tool call that spawned it. Stamping it here — the one point where
   // raw SDK messages enter the system — is what lets downstream consumers tell
@@ -21,12 +31,13 @@ export function* processSDKMessage(message: SDKMessage): Generator<SessionEvent>
       ? message.parent_tool_use_id
       : undefined;
 
-  for (const event of processSDKMessageInner(message)) {
+  for (const event of processSDKMessageInner(message, state)) {
     yield parentToolUseId ? { ...event, parentToolUseId } : event;
   }
+  if (message.type === "result") { state.sdk = {}; state.tools.clear(); }
 }
 
-function* processSDKMessageInner(message: SDKMessage): Generator<SessionEvent> {
+function* processSDKMessageInner(message: SDKMessage, state: SDKStreamState): Generator<SessionEvent> {
   switch (message.type) {
     case "system":
       if (message.subtype === "init") {
@@ -34,14 +45,22 @@ function* processSDKMessageInner(message: SDKMessage): Generator<SessionEvent> {
       }
       break;
 
-    case "stream_event":
-      if (message.event.type === "content_block_delta") {
-        const delta = message.event.delta;
-        if ("text" in delta) {
-          yield { type: "partial", text: (delta as { text: string }).text };
+    case "stream_event": {
+      const event = message.event;
+      const key = `${message.parent_tool_use_id ?? ""}:${"index" in event ? event.index : -1}`;
+      if (event.type === "content_block_start" && event.content_block.type === "tool_use") state.tools.set(key, event.content_block.id);
+      if (event.type === "content_block_stop") state.tools.delete(key);
+      if (event.type === "content_block_delta") {
+        const delta = event.delta;
+        if (delta.type === "text_delta") yield { type: "partial", text: delta.text };
+        else if (delta.type === "thinking_delta") yield { type: "thinking", text: delta.thinking };
+        else if (delta.type === "input_json_delta" && process.env.BARRY_TOOL_INPUT_STREAMING === "1") {
+          const id = state.tools.get(key);
+          if (id) yield { type: "tool_input_delta", id, text: delta.partial_json };
         }
       }
       break;
+    }
 
     case "assistant": {
       const textParts: string[] = [];
@@ -50,7 +69,7 @@ function* processSDKMessageInner(message: SDKMessage): Generator<SessionEvent> {
           textParts.push(block.text);
         }
       }
-      const fullText = textParts.join("\n");
+      const fullText = textParts.join("");
       if (fullText) {
         yield { type: "text", text: fullText, role: "assistant" };
       }
@@ -105,6 +124,7 @@ function* processSDKMessageInner(message: SDKMessage): Generator<SessionEvent> {
       break;
 
     case "result": {
+      const sdk = { ...state.sdk };
       const usage = message.usage
         ? {
             inputTokens: message.usage.input_tokens ?? 0,
@@ -129,7 +149,7 @@ function* processSDKMessageInner(message: SDKMessage): Generator<SessionEvent> {
             ? { structured: message.structured_output }
             : {}),
         };
-        yield { type: "done", usage };
+        yield { type: "done", ...(Object.keys(sdk).length ? { sdk } : {}), usage };
       } else if (message.subtype === "error_max_structured_output_retries") {
         // Kept distinct from the generic join(): this failure means the model
         // repeatedly produced schema-invalid output, which callers (e.g.
@@ -140,10 +160,10 @@ function* processSDKMessageInner(message: SDKMessage): Generator<SessionEvent> {
             "structured output failed validation after the SDK's retry limit" +
             (message.errors.length ? `: ${message.errors.join(", ")}` : ""),
         };
-        yield { type: "done", usage };
+        yield { type: "done", ...(Object.keys(sdk).length ? { sdk } : {}), usage };
       } else {
         yield { type: "result", error: message.errors.join(", ") || "Unknown error" };
-        yield { type: "done", usage };
+        yield { type: "done", ...(Object.keys(sdk).length ? { sdk } : {}), usage };
       }
       break;
     }

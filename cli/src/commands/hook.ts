@@ -46,12 +46,12 @@ export interface HookDeps {
    * is killed mid-wait, which loses the message it was holding rather than
    * leaving it queued.
    */
-  waitForMessage?(providerSessionId: string, payload: Record<string, unknown>): Promise<string | null>;
+  waitForMessage?(harnessSessionId: string, payload: Record<string, unknown>): Promise<string | null>;
 }
 
 export interface ForeignEvent {
   vendor: TrackableVendor;
-  providerSessionId: string;
+  harnessSessionId: string;
   /** The vendor's own event name, as it appeared in the payload. */
   event: string;
   payload: Record<string, unknown>;
@@ -99,15 +99,15 @@ export async function runHook(deps: HookDeps, vendorHint?: string): Promise<numb
   // Shape first, hint second. See the note on R8 above: the file a payload
   // arrived through does not identify the vendor that sent it.
   const vendor = deps.vendorOf(payload) ?? asTrackableVendor(vendorHint);
-  const providerSessionId = deps.providerSessionIdOf(payload);
+  const harnessSessionId = deps.providerSessionIdOf(payload);
 
-  if (!vendor || !providerSessionId) {
+  if (!vendor || !harnessSessionId) {
     // Counted rather than guessed. An unrecognised payload that Barry filed
     // under a vendor anyway would corrupt exactly the provenance this exists
     // to record — and coverage counters are how a broken reader is told apart
     // from a quiet agent.
     deps.warn(
-      `barry hook: unrecognised payload (vendor=${vendor ?? "?"}, session=${providerSessionId ?? "?"}), not recorded`,
+      `barry hook: unrecognised payload (vendor=${vendor ?? "?"}, session=${harnessSessionId ?? "?"}), not recorded`,
     );
     deps.emit(CARRY_ON);
     return 0;
@@ -116,7 +116,7 @@ export async function runHook(deps: HookDeps, vendorHint?: string): Promise<numb
   const event = eventNameOf(payload);
 
   try {
-    await deps.record({ vendor, providerSessionId, event, payload });
+    await deps.record({ vendor, harnessSessionId, event, payload });
   } catch (err) {
     // Barry being down must not degrade the user's agent. The turn proceeds;
     // the row is lost; the counters will show the gap.
@@ -136,7 +136,7 @@ export async function runHook(deps: HookDeps, vendorHint?: string): Promise<numb
   // immediately. Declared, not hoped for.
   if (vendor !== "antigravity" && isTurnEnd(event) && deps.waitForMessage) {
     try {
-      const message = await deps.waitForMessage(providerSessionId, payload);
+      const message = await deps.waitForMessage(harnessSessionId, payload);
       if (message) {
         deps.emit(JSON.stringify({ followup_message: message }));
         return 0;

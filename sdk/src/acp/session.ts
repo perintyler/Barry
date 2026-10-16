@@ -80,6 +80,7 @@ export async function openAcpSession(options: AcpSessionOptions): Promise<Sessio
   let loading = false;
   let closed = false;
   let messageCount = 0;
+  let turnNumber=0;
   let permissionCount = 0;
   let turnText = "";
   let turnCost: number | undefined;
@@ -204,6 +205,7 @@ export async function openAcpSession(options: AcpSessionOptions): Promise<Sessio
   }
 
   function startTurn(content: string): void {
+    turnNumber++;
     status = "active";
     turnText = "";
     turnCost = undefined;
@@ -214,6 +216,7 @@ export async function openAcpSession(options: AcpSessionOptions): Promise<Sessio
   }
 
   function endTurn(response: PromptResponse): void {
+    if(closed || status!=="active")return;
     if (turnText) events.push({ type: "text", text: turnText, role: "assistant" });
     status = "idle";
     events.push({ type: "status", status: "idle" });
@@ -228,6 +231,7 @@ export async function openAcpSession(options: AcpSessionOptions): Promise<Sessio
   }
 
   function failTurn(err: unknown): void {
+    if(closed || status!=="active")return;
     status = "error";
     events.push({ type: "error", error: err instanceof Error ? err.message : String(err) });
     events.push({ type: "done" });
@@ -296,10 +300,12 @@ export async function openAcpSession(options: AcpSessionOptions): Promise<Sessio
 
   void connection.closed.then(() => {
     if (closed) return;
+    const wasActive=status==="active";
     closed = true;
     status = "error";
     cancelOpenPermissions();
     events.push({ type: "error", error: "the harness closed the connection" });
+    if(wasActive)events.push({type:"done"});
     events.end();
   });
 
@@ -325,11 +331,12 @@ export async function openAcpSession(options: AcpSessionOptions): Promise<Sessio
 
     async interrupt(): Promise<void> {
       if (status !== "active") return;
+      const number=turnNumber;const ended=turnEnded;
       await agent.notify(methods.agent.session.cancel, { sessionId: acpSessionId });
       // The spec has the client answer anything still pending as cancelled;
       // the harness then ends the turn with stopReason "cancelled".
-      cancelOpenPermissions();
-      await turnEnded;
+      if(number===turnNumber)cancelOpenPermissions();
+      await ended;
     },
 
     async answer(request, decision): Promise<void> {
@@ -343,7 +350,8 @@ export async function openAcpSession(options: AcpSessionOptions): Promise<Sessio
 
     async close(): Promise<void> {
       if (closed) return;
-      closed = true;
+      if(status==="active")events.push({type:"done"});
+      status="idle";closed = true;
       queued.length = 0;
       cancelOpenPermissions();
       events.end();

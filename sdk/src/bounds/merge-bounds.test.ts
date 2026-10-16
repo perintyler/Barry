@@ -1,20 +1,20 @@
 import { parseManifest } from "../bags/manifest.js";
-import { resolveNativePolicy, nativeToolsTakenBack } from "./native-policy.js";
+import { resolveNativeTools, nativeToolsTakenBack } from "./native-tools.js";
+import { NATIVE_TOOLS } from "../../../adapters/sessions/claude/src/native-tools.js";
 const manifest = parseManifest(new URL("../../../adapters/sessions/claude", import.meta.url).pathname)!;
-const harness = { id: "claude-code", nativeTools: [...new Set(Object.values(manifest.bounds!).flatMap((b) => b.bound.nativeTools?.["claude-code"] ?? []))], bag: { path: "", manifest } };
+const harness = { id: "claude-code", tools: NATIVE_TOOLS, bag: { path: "", manifest } };
 const boundNeedsNativeToolDenial = (bound?: import("./types.js").Bound) => nativeToolsTakenBack(bound, harness).includes("Bash");
 const boundNeedsNativeFileToolDenial = (bound?: import("./types.js").Bound) => nativeToolsTakenBack(bound, harness).includes("Read");
 import { describe, it, expect } from "vitest";
 import { mergeBounds, mergeNetwork, boundHasContent } from "./merge-bounds.js";
 
 describe("mergeNetwork", () => {
-  it("unions actions and domains", () => {
+  it("unions deny rules across actions and domains", () => {
     const merged = mergeNetwork(
-      { actions: ["write"], domains: ["a.com"] },
-      { actions: ["dns"], domains: ["b.com"] },
+      { deny: ["write", "a.com"] },
+      { deny: ["dns", "b.com"] },
     );
-    expect(merged?.actions?.sort()).toEqual(["dns", "write"]);
-    expect(merged?.domains?.sort()).toEqual(["a.com", "b.com"]);
+    expect(merged?.deny?.sort()).toEqual(["a.com", "b.com", "dns", "write"]);
   });
 
   it("escalates enforce to sandbox from either side", () => {
@@ -30,112 +30,102 @@ describe("mergeNetwork", () => {
     expect(mergeNetwork(undefined, undefined)).toBeUndefined();
   });
 
-  describe("allowDomains — intersects, unlike every other field", () => {
+  describe("network.allow — intersects", () => {
     it("keeps only hosts BOTH sources permit", () => {
       const merged = mergeNetwork(
-        { allowDomains: ["a.com", "b.com"] },
-        { allowDomains: ["b.com", "c.com"] },
+        { allow: ["a.com", "b.com"] },
+        { allow: ["b.com", "c.com"] },
       );
-      expect(merged?.allowDomains).toEqual(["b.com"]);
+      expect(merged?.allow).toEqual(["b.com"]);
     });
 
     it("treats an absent list as no-opinion, not as deny-all", () => {
-      // undefined is the identity element: a scope that says nothing about
-      // allowed hosts must not silently revoke another scope's allowances.
-      expect(mergeNetwork({ allowDomains: ["a.com"] }, {})?.allowDomains).toEqual(["a.com"]);
-      expect(mergeNetwork({}, { allowDomains: ["a.com"] })?.allowDomains).toEqual(["a.com"]);
+      expect(mergeNetwork({ allow: ["a.com"] }, {})?.allow).toEqual(["a.com"]);
+      expect(mergeNetwork({}, { allow: ["a.com"] })?.allow).toEqual(["a.com"]);
     });
 
-    it("an explicit empty list does mean deny-all and wins", () => {
-      expect(mergeNetwork({ allowDomains: ["a.com"] }, { allowDomains: [] })?.allowDomains)
+    it("an explicit empty list means allow-nothing and wins", () => {
+      expect(mergeNetwork({ allow: ["a.com"] }, { allow: [] })?.allow)
         .toEqual([]);
     });
 
     it("disjoint allowlists collapse to nothing permitted", () => {
-      expect(mergeNetwork({ allowDomains: ["a.com"] }, { allowDomains: ["b.com"] })?.allowDomains)
+      expect(mergeNetwork({ allow: ["a.com"] }, { allow: ["b.com"] })?.allow)
         .toEqual([]);
     });
 
     it("never widens: merging cannot introduce a host neither side allowed", () => {
-      const merged = mergeNetwork({ allowDomains: ["a.com"] }, { allowDomains: ["b.com"] });
-      expect(merged?.allowDomains).not.toContain("c.com");
+      const merged = mergeNetwork({ allow: ["a.com"] }, { allow: ["b.com"] });
+      expect(merged?.allow).not.toContain("c.com");
     });
   });
 });
 
 describe("mergeBounds", () => {
   it("is a union of denials, not an override", () => {
-    // The API server previously used `inline ?? named`, which DISCARDED the
-    // named bound whenever an inline network bag existed — silently dropping
-    // enforce: "sandbox". Merging must preserve both sides.
-    const named = { network: { actions: ["all"], enforce: "sandbox" as const } };
-    const inline = { network: { domains: ["evil.com"] } };
+    const named = { network: { deny: ["all"], enforce: "sandbox" as const } };
+    const inline = { network: { deny: ["evil.com"] } };
     const merged = mergeBounds(named, inline);
     expect(merged?.network?.enforce).toBe("sandbox");
-    expect(merged?.network?.actions).toEqual(["all"]);
-    expect(merged?.network?.domains).toEqual(["evil.com"]);
+    expect(merged?.network?.deny).toEqual(["all", "evil.com"]);
   });
 
   it("unions every dimension", () => {
     const merged = mergeBounds(
-      { deniedTools: ["Bash"], files: { deny: ["*.env"] } },
-      { deniedTools: ["Write"], bash: { denyPrograms: ["git"] } },
+      { tools: { deny: ["*:Bash"] }, files: { deny: ["*.env"] } },
+      { tools: { deny: ["*:Write"] }, bash: { deny: ["git *"] } },
     );
-    expect(merged?.deniedTools?.sort()).toEqual(["Bash", "Write"]);
+    expect(merged?.tools?.deny?.sort()).toEqual(["*:Bash", "*:Write"]);
     expect(merged?.files?.deny).toEqual(["*.env"]);
-    expect(merged?.bash?.denyPrograms).toEqual(["git"]);
+    expect(merged?.bash?.deny).toEqual(["git *"]);
   });
 
   it("passes through when one side is null", () => {
-    const bound = { deniedTools: ["Bash"] };
+    const bound = { tools: { deny: ["*:Bash"] } };
     expect(mergeBounds(null, bound)).toEqual(bound);
     expect(mergeBounds(bound, null)).toEqual(bound);
     expect(mergeBounds(null, null)).toBeNull();
   });
 
-  describe("files.allowOnly — intersects, like allowDomains", () => {
+  describe("files.allow — intersects", () => {
     it("keeps only paths BOTH sources permit", () => {
       const merged = mergeBounds(
-        { files: { allowOnly: ["/repos/vantage/**", "/repos/bags/**"] } },
-        { files: { allowOnly: ["/repos/vantage/**"] } },
+        { files: { allow: ["/repos/vantage/**", "/repos/bags/**"] } },
+        { files: { allow: ["/repos/vantage/**"] } },
       );
-      expect(merged?.files?.allowOnly).toEqual(["/repos/vantage/**"]);
+      expect(merged?.files?.allow).toEqual(["/repos/vantage/**"]);
     });
 
     it("treats an absent list as no-opinion, not as deny-all", () => {
-      expect(mergeBounds({ files: { allowOnly: ["/a/**"] } }, {})?.files?.allowOnly).toEqual(["/a/**"]);
-      expect(mergeBounds({}, { files: { allowOnly: ["/a/**"] } })?.files?.allowOnly).toEqual(["/a/**"]);
+      expect(mergeBounds({ files: { allow: ["/a/**"] } }, {})?.files?.allow).toEqual(["/a/**"]);
+      expect(mergeBounds({}, { files: { allow: ["/a/**"] } })?.files?.allow).toEqual(["/a/**"]);
     });
 
-    it("an explicit empty list does mean allow-nothing and wins", () => {
-      expect(mergeBounds({ files: { allowOnly: ["/a/**"] } }, { files: { allowOnly: [] } })?.files?.allowOnly)
+    it("an explicit empty list means allow-nothing and wins", () => {
+      expect(mergeBounds({ files: { allow: ["/a/**"] } }, { files: { allow: [] } })?.files?.allow)
         .toEqual([]);
     });
 
     it("disjoint allowlists collapse to nothing permitted", () => {
-      expect(mergeBounds({ files: { allowOnly: ["/a/**"] } }, { files: { allowOnly: ["/b/**"] } })?.files?.allowOnly)
+      expect(mergeBounds({ files: { allow: ["/a/**"] } }, { files: { allow: ["/b/**"] } })?.files?.allow)
         .toEqual([]);
     });
 
     it("deny unions alongside a surviving allowlist", () => {
       const merged = mergeBounds(
-        { files: { deny: ["*.env"], allowOnly: ["/a/**"] } },
+        { files: { deny: ["*.env"], allow: ["/a/**"] } },
         { files: { deny: [".ssh/**"] } },
       );
       expect(merged?.files?.deny?.sort()).toEqual(["*.env", ".ssh/**"]);
-      expect(merged?.files?.allowOnly).toEqual(["/a/**"]);
+      expect(merged?.files?.allow).toEqual(["/a/**"]);
     });
   });
 
   describe("undefined-when-empty (SDK-17)", () => {
-    // Every merger must agree on the empty case: two bounds that both carry
-    // empty sub-objects must produce the SAME shape as a bound that omits them,
-    // or `scopeFingerprint` hashes `{bash:{}}` and absent-bash differently and
-    // two equivalent scopes look distinct.
     it("mergeBash yields undefined, not {}, when both sides are empty arrays", () => {
       const merged = mergeBounds(
-        { bash: { deny: [], denyPrograms: [] } },
-        { bash: { deny: [], denyPrograms: [] } },
+        { bash: { deny: [] } },
+        { bash: { deny: [] } },
       );
       expect(merged?.bash).toBeUndefined();
     });
@@ -151,10 +141,7 @@ describe("mergeBounds", () => {
     });
 
     it("omits nodes entirely when neither side carries a node rule", () => {
-      // Previously emitted `{ allow: undefined, deny: undefined }` whenever
-      // either side merely mentioned nodes, so a touched-but-empty nodes field
-      // serialized differently from an absent one.
-      const merged = mergeBounds({ nodes: {} }, { deniedTools: ["Bash"] });
+      const merged = mergeBounds({ nodes: {} }, { tools: { deny: ["*:Bash"] } });
       expect(merged?.nodes).toBeUndefined();
       expect("nodes" in merged! ? merged!.nodes : undefined).toBeUndefined();
     });
@@ -172,28 +159,26 @@ describe("mergeBounds", () => {
 
 describe("boundHasContent", () => {
   it("counts an enforce-only network bound as content", () => {
-    // Omitting this dropped `{network:{enforce:"sandbox"}}` trait bounds
-    // before they ever reached the merge, silently losing the escalation.
     expect(boundHasContent({ network: { enforce: "sandbox" } })).toBe(true);
   });
 
   it("counts each dimension", () => {
-    expect(boundHasContent({ deniedTools: ["Bash"] })).toBe(true);
-    expect(boundHasContent({ deniedAccess: ["write"] })).toBe(true);
+    expect(boundHasContent({ tools: { deny: ["*:Bash"] } })).toBe(true);
+    expect(boundHasContent({ tools: { deny: ["*:write"] } })).toBe(true);
     expect(boundHasContent({ files: { deny: ["*.env"] } })).toBe(true);
-    expect(boundHasContent({ bash: { denyPrograms: ["git"] } })).toBe(true);
-    expect(boundHasContent({ network: { actions: ["all"] } })).toBe(true);
-    expect(boundHasContent({ network: { domains: ["a.com"] } })).toBe(true);
+    expect(boundHasContent({ bash: { deny: ["git *"] } })).toBe(true);
+    expect(boundHasContent({ network: { deny: ["all"] } })).toBe(true);
+    expect(boundHasContent({ network: { deny: ["a.com"] } })).toBe(true);
   });
 
-  it("counts an empty allowDomains as content (it means deny-all)", () => {
-    expect(boundHasContent({ network: { allowDomains: [] } })).toBe(true);
-    expect(boundHasContent({ network: { allowDomains: ["a.com"] } })).toBe(true);
+  it("counts an empty network.allow as content (it means allow-nothing)", () => {
+    expect(boundHasContent({ network: { allow: [] } })).toBe(true);
+    expect(boundHasContent({ network: { allow: ["a.com"] } })).toBe(true);
   });
 
-  it("counts files.allowOnly as content, empty or not (it means allow-nothing)", () => {
-    expect(boundHasContent({ files: { allowOnly: [] } })).toBe(true);
-    expect(boundHasContent({ files: { allowOnly: ["/a/**"] } })).toBe(true);
+  it("counts files.allow as content, empty or not (it means allow-nothing)", () => {
+    expect(boundHasContent({ files: { allow: [] } })).toBe(true);
+    expect(boundHasContent({ files: { allow: ["/a/**"] } })).toBe(true);
   });
 
   it("rejects empty bounds", () => {
@@ -203,26 +188,26 @@ describe("boundHasContent", () => {
   });
 });
 
-describe("explicit native policies", () => {
+describe("explicit native tool bounds", () => {
   it("blocks native tools even without MCP restrictions", () => {
-    expect(boundNeedsNativeToolDenial({ bash: { denyPrograms: ["git"] } })).toBe(true);
-    expect(boundNeedsNativeToolDenial({ network: { actions: ["all"] } })).toBe(true);
-    expect(boundNeedsNativeFileToolDenial({ files: { allowOnly: ["/a/**"] } })).toBe(true);
-    expect(resolveNativePolicy({ bound: null, tools: [] }, harness, "guest").denied).toEqual([...new Set(harness.nativeTools)]);
-    expect(resolveNativePolicy({ bound: null, tools: [] }, harness, "hosted").denied).toEqual([...new Set(harness.nativeTools)]);
+    expect(boundNeedsNativeToolDenial({ bash: { deny: ["git *"] } })).toBe(true);
+    expect(boundNeedsNativeToolDenial({ network: { deny: ["all"] } })).toBe(true);
+    expect(boundNeedsNativeFileToolDenial({ files: { allow: ["/a/**"] } })).toBe(true);
+    expect(resolveNativeTools({ bound: null, tools: [] }, harness, "guest").denied).toEqual([...new Set(harness.tools)]);
+    expect(resolveNativeTools({ bound: null, tools: [] }, harness, "hosted").denied).toEqual([...new Set(harness.tools)]);
   });
   it("honors explicitly selected native bounds in both launch lanes", () => {
-    const bound = { nativeTools: { "claude-code": ["Bash", "Read"] } };
+    const bound = { tools: { deny: ["claude-code:Bash", "claude-code:Read"] } };
     expect(boundNeedsNativeToolDenial(bound)).toBe(true);
     expect(boundNeedsNativeFileToolDenial(bound)).toBe(true);
-    expect(resolveNativePolicy({ bound, tools: [] }, harness, "hosted").denied).toContain("Bash");
+    expect(resolveNativeTools({ bound, tools: [] }, harness, "hosted").denied).toContain("Bash");
   });
 });
 
-it("removes names and descriptions from every effective merge", () => {
-  const named = { name: "quiet", description: "No shell", deniedTools: ["Bash"] };
-  expect(mergeBounds(null, named)).toEqual({ deniedTools: ["Bash"] });
-  expect(mergeBounds(named, null)).toEqual({ deniedTools: ["Bash"] });
+it("removes names and descriptions from every merged bound", () => {
+  const named = { name: "quiet", description: "No shell", tools: { deny: ["*:Bash"] } };
+  expect(mergeBounds(null, named)).toEqual({ tools: { deny: ["*:Bash"] } });
+  expect(mergeBounds(named, null)).toEqual({ tools: { deny: ["*:Bash"] } });
   expect(mergeBounds(named, named)).not.toHaveProperty("name");
   expect(mergeBounds(named, named)).not.toHaveProperty("description");
 });

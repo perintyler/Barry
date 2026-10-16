@@ -5,7 +5,7 @@ import { packageNameFor, packageNameProblems } from "./package-names.mjs";
 test("bag, adapter and composition-root roles have deterministic names", () => {
   equal(packageNameFor("bags/sessions"), "@barry-rocks/sessions-bag");
   equal(packageNameFor("bags/filesystem/tracker"), "@barry-rocks/tracker-bag");
-  equal(packageNameFor("bags/sessions/extensions/search"), "@barry-rocks/search-bag");
+  equal(packageNameFor("bags/session-vector-search"), "@barry-rocks/session-vector-search-bag");
   equal(packageNameFor("adapters/sessions/codex"), "@barry-rocks/session-codex");
   equal(packageNameFor("adapters/completions/anthropic"), "@barry-rocks/completion-anthropic");
   equal(packageNameFor("bags/identities/server"), "@barry-rocks/identities-service");

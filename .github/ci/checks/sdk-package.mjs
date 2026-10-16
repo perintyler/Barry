@@ -14,7 +14,7 @@ const stableEntries = [
 const internalEntries = [
   "actions", "adapters", "auth", "bags", "client", "env", "hooks", "identities",
   "instructions", "jobs", "mcp", "nodes", "routes", "schedules", "services",
-  "sessions", "stores", "tools", "traits", "vault", "workflows",
+  "sessions", "stores", "tools", "vault", "workflows",
 ].map(subject => `./internal/${subject}`);
 const sideEffects = [
   "./dist/workflows/executor-child.js",
@@ -76,33 +76,33 @@ void Barry.services(); void Barry.service('x').start();
 Barry.use(fakeIdentities({ get: async () => { throw new BarryError('not_found', 'no such identity'); } }));
 Barry.reset();
 void Barry.at(options).identity('bux').start({prompt:'Begin'});
-void Barry.at(options).scheduleOnce({action:'bag:script',dueAt:new Date(),attempts:3});
+void Barry.at(options).scheduleAt({action:'bag:script',dueAt:new Date(),attempts:3});
 `);
   run(process.execPath, ["node_modules/typescript/bin/tsc", "--noEmit", "--strict", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ES2023", "consumer.ts"]);
-  writeFileSync(join(scratch, "consumer-providers.ts"), `
-import { loadModelProviders, type ModelProviders, type InstalledModelProvider } from '@barry-rocks/sdk/adapters/models';
+  writeFileSync(join(scratch, "consumer-vendors.ts"), `
+import { loadModelVendors, type ModelVendors, type InstalledModelVendor } from '@barry-rocks/sdk/adapters/models';
 import type { VendorFactories } from '@barry-rocks/sdk/adapters/models';
-const providers: ModelProviders = loadModelProviders({file:'./model-providers.json'});
-const selected: InstalledModelProvider[] = providers.installed();
-const factories: Promise<VendorFactories> = providers.load();
+const vendors: ModelVendors = loadModelVendors({file:'./model-vendors.json'});
+const selected: InstalledModelVendor[] = vendors.installed();
+const factories: Promise<VendorFactories> = vendors.load();
 void selected; void factories;
 `);
-  run(process.execPath, ["node_modules/typescript/bin/tsc", "--noEmit", "--strict", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ES2023", "consumer-providers.ts"]);
+  run(process.execPath, ["node_modules/typescript/bin/tsc", "--noEmit", "--strict", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ES2023", "consumer-vendors.ts"]);
   writeFileSync(join(scratch, "consumer-auth.ts"), `
 import type { Request } from 'express';
 import { authorizeRequest, revalidateRequestAuthorization } from '@barry-rocks/sdk/internal/auth';
-import { authenticateCredential, type CredentialAuthorization, type CredentialPolicy } from '@barry-rocks/sdk/internal/auth';
+import { authenticateCredential, type CredentialAuthorization } from '@barry-rocks/sdk/internal/auth';
 import { mintWorkflowSessionCredential, verifyWorkflowSessionCredential, type WorkflowSessionCredential } from '@barry-rocks/sdk/internal/auth';
 const workflowSecret = 'workflow_packed_fixture_signing_secret';
-const workflow: WorkflowSessionCredential = verifyWorkflowSessionCredential(mintWorkflowSessionCredential(workflowSecret,{credentialId:'11111111-1111-4111-8111-111111111111',actorId:1,identityId:7,sessionId:'job',identity:'fixture',scopeFingerprint:'a'.repeat(64),expiresAt:Date.now()+60000}),workflowSecret);
+const workflow: WorkflowSessionCredential = verifyWorkflowSessionCredential(mintWorkflowSessionCredential(workflowSecret,{credentialId:'11111111-1111-4111-8111-111111111111',actorId:1,identityId:7,sessionId:'job',identity:'fixture',boundFingerprint:'a'.repeat(64),expiresAt:Date.now()+60000}),workflowSecret);
 const workflowActor: number = workflow.actorId;
 const workflowIdentity: number = workflow.identityId;
 void workflowActor; void workflowIdentity;
 const middleware = authorizeRequest({verifyCredential:async () => ({kind:'installation',actorId:1,credentialId:'installation'}),policy:() => null});
 const recheck: (request: Request, signal?: AbortSignal) => Promise<boolean> = revalidateRequestAuthorization;
 const authorization: CredentialAuthorization | null = await authenticateCredential('fixture',{verifyCredential:async () => ({kind:'device',actorId:1,credentialId:'device',scopes:['sessions:read'],identityIds:[1]})});
-const policy: CredentialPolicy = {scopes:['sessions:read'],authorize:(principal,signal) => {signal.throwIfAborted(); return principal.actorId === 1;}};
-if (authorization) {const permitted: boolean = await authorization.authorize(policy); void permitted; authorization.dispose();}
+const accessCheck = {scopes:['sessions:read'] as const,authorize:(principal: { actorId: number },signal: AbortSignal) => {signal.throwIfAborted(); return principal.actorId === 1;}};
+if (authorization) {const permitted: boolean = await authorization.authorize(accessCheck); void permitted; authorization.dispose();}
 void middleware; void recheck;
 `);
   run(process.execPath, ["node_modules/typescript/bin/tsc", "--noEmit", "--strict", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ES2023", "consumer-auth.ts"]);
@@ -260,12 +260,12 @@ import express from 'express';
 import { authorizeRequest, revalidateRequestAuthorization } from '@barry-rocks/sdk/internal/auth';
 import { authenticateCredential, requestCredential } from '@barry-rocks/sdk/internal/auth';
 import { mintWorkflowSessionCredential, verifyWorkflowSessionCredentialForSession } from '@barry-rocks/sdk/internal/auth';
-import { scopeFingerprint } from '@barry-rocks/sdk/bounds';
+import { boundFingerprint } from '@barry-rocks/sdk/bounds';
 const workflowSecret = 'workflow_packed_fixture_signing_secret';
-const evidence = {identity:'fixture',traits:[],bound:null,tools:{}};
-const scope = {...evidence,fingerprint:scopeFingerprint(evidence)};
-const workflow = mintWorkflowSessionCredential(workflowSecret,{credentialId:'11111111-1111-4111-8111-111111111111',actorId:1,identityId:7,sessionId:'job',identity:'fixture',scopeFingerprint:scope.fingerprint,expiresAt:Date.now()+60000});
-const record = {id:'job',state:'open',ended_at:null,workflow_credential_id:'11111111-1111-4111-8111-111111111111',user_id:1,identity_id:7,metadata:{workflow_scope:scope,workflow_identity_id:7}};
+const evidence = {version:2,identity:'fixture',bags:[],bounds:[],bound:null,tools:{}};
+const approved = {...evidence,fingerprint:boundFingerprint(evidence)};
+const workflow = mintWorkflowSessionCredential(workflowSecret,{credentialId:'11111111-1111-4111-8111-111111111111',actorId:1,identityId:7,sessionId:'job',identity:'fixture',boundFingerprint:approved.fingerprint,expiresAt:Date.now()+60000});
+const record = {id:'job',state:'open',ended_at:null,workflow_credential_id:'11111111-1111-4111-8111-111111111111',user_id:1,identity_id:7,metadata:{workflow_bound:approved,workflow_identity_id:7}};
 assert.equal(verifyWorkflowSessionCredentialForSession(workflow,workflowSecret,'job',record).actorId,1);
 assert.throws(() => verifyWorkflowSessionCredentialForSession(workflow,workflowSecret,'job',{...record,user_id:2}));
 assert.throws(() => verifyWorkflowSessionCredentialForSession(workflow,workflowSecret,'job',{...record,identity_id:8}));

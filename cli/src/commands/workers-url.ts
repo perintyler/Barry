@@ -1,5 +1,5 @@
 import { loadAllBags } from "@barry-rocks/sdk/internal/bags";
-import { readHostingPolicy, hostingPolicyPath, readApplied, readServiceRegistry } from "@barry-rocks/sdk/services";
+import { readHostingConfig, hostingConfigPath, readApplied, readServiceRegistry } from "@barry-rocks/sdk/services";
 import { resolveHosting, type HostedService } from "../services/hosting/resolve.js";
 import type { AppliedFile } from "@barry-rocks/sdk/services";
 
@@ -13,12 +13,12 @@ export interface WorkflowsRoute { url: string; reach: string; gate: string }
 /**
  * Every address hosting.yaml publishes the workflows runtime at.
  *
- * Recomputed from the policy the way `barry hosting status` does it, so an
+ * Recomputed from the hosting config the way `barry hosting status` does it, so an
  * invite names the address the tunnel actually serves rather than a guess.
  */
 export async function workflowsRoutes(): Promise<WorkflowsRoute[]> {
-  const policy = readHostingPolicy();
-  if (!policy) return [];
+  const config = readHostingConfig();
+  if (!config) return [];
   const registry = readServiceRegistry();
   const bags = await loadAllBags();
   const localOnly = new Set(bags.flatMap((b) => (b.services ?? []).filter((s) => s.localOnly).map((s) => `${b.name}.${s.name}`)));
@@ -26,7 +26,7 @@ export async function workflowsRoutes(): Promise<WorkflowsRoute[]> {
     .filter(([, e]) => e.kind === "service")
     .map(([key, e]) => ({ key, bag: e.bag, name: e.name, ...(e.url ? { url: e.url } : {}), localOnly: localOnly.has(key) }));
   const providers = bags.flatMap((b) => (b.manifest?.provides ? [{ bag: b.name, provides: b.manifest.provides }] : []));
-  return routesFor(resolveHosting(policy, services, providers), readApplied);
+  return routesFor(resolveHosting(config, services, providers), readApplied);
 }
 
 /** The workflows routes in a resolved hosting plan, as https addresses a worker can call. */
@@ -67,7 +67,7 @@ export function chooseWorkflowsUrl(routes: WorkflowsRoute[]): string {
     throw new Error(`${WORKFLOWS_SERVICE} is published at ${usable.length} addresses (${usable.map((route) => route.url).join(", ")}); pass the one this worker should use with --url`);
   }
   if (routes.length) {
-    throw new Error(`${WORKFLOWS_SERVICE} is only published behind an interactive login gate (${routes.map((route) => route.url).join(", ")}), which a worker cannot pass. Add a private route for it in ${hostingPolicyPath()}, or pass --url`);
+    throw new Error(`${WORKFLOWS_SERVICE} is only published behind an interactive login gate (${routes.map((route) => route.url).join(", ")}), which a worker cannot pass. Add a private route for it in ${hostingConfigPath()}, or pass --url`);
   }
-  throw new Error(`${WORKFLOWS_SERVICE} is not published beyond this machine. Add a route for it to a private tunnel in ${hostingPolicyPath()} (published on the next \`barry up\`; check with \`barry hosting status\`), or pass --url`);
+  throw new Error(`${WORKFLOWS_SERVICE} is not published beyond this machine. Add a route for it to a private tunnel in ${hostingConfigPath()} (published on the next \`barry up\`; check with \`barry hosting status\`), or pass --url`);
 }

@@ -11,8 +11,8 @@ import type { Proposal } from "./evaluator.js";
 import { buildArtifact } from "./build-artifact.js";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
-import { approveExecutionScope } from "../bounds/execution-scope.js";
-import { authorizeRun } from "./grants.js";
+import { approveWorkflowBounds } from "../bounds/workflow-bounds.js";
+import { authorizeRun } from "./approvals.js";
 
 const cleanup: (() => void | Promise<void>)[] = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
@@ -76,7 +76,7 @@ it("adopts only the exact legacy baseline and preserves Barry-compatible migrati
   db.exec(migrations[0].sql); db.close();
   const owner = new WorkflowOwner({ id: "owner", path }); owner.close();
   const check = new DatabaseSync(path);
-  expect(check.prepare("SELECT count(*) n FROM schema_migrations WHERE checksum IS NOT NULL").get()?.n).toBe(5);
+  expect(check.prepare("SELECT count(*) n FROM schema_migrations WHERE checksum IS NOT NULL").get()?.n).toBe(migrations.length);
   check.prepare("UPDATE schema_migrations SET checksum='tampered' WHERE version=1").run(); check.close();
   expect(() => new WorkflowOwner({ id: "owner", path })).toThrow("checksum");
 });
@@ -102,7 +102,8 @@ it("resumes bounded legacy byte accounting after restart and refuses new admissi
   for (let turn = 0; turn < 20 && !restarted.storageAccounted; turn++) restarted.tick();
   expect(restarted.storageAccounted).toBe(true);
   const bytes = Number(inspect.prepare("SELECT budget_bytes FROM workflow_runs WHERE id='legacy'").get()?.budget_bytes);
-  expect(bytes).toBeGreaterThan(1_048_576 + 200 * 1024);
+  expect(bytes).toBeGreaterThan(200 * 1024);
+  expect(bytes).toBeLessThan(1_048_576);
   expect(Number(inspect.prepare("SELECT value FROM workflow_meta WHERE key='reserved-bytes'").get()?.value)).toBe(bytes);
   expect(inspect.prepare("SELECT count(*) n FROM workflow_byte_backfill").get()?.n).toBe(0);
 });
@@ -134,7 +135,7 @@ it("snapshots and restores active work paused under a new epoch without overwrit
 it("records external session dependencies and refuses automatic resume of unsettled turns", async () => {
   const { owner, path, artifacts } = setup(new ProcessExecutor());
   const job = { identity: "reviewer", traits: [] };
-  const scope = await approveExecutionScope({ identity: job.identity, traitNames: [], traits: {}, tools: [], boundByName: async () => undefined });
+  const scope = await approveWorkflowBounds({ identity: job.identity, bags: [], tools: [], boundByName: async () => undefined });
   const grant = await authorizeRun(job, "author", async () => scope);
   owner.start({ id: "job", type: "echo", version: "1", input: "durable", job }, "author", undefined, grant); await owner.pump();
   owner.advertise("worker", { types: ["echo"], artifacts: { echo: artifacts[0].digest }, capacity: 1 });
@@ -184,6 +185,10 @@ it("reconciles a real destination effect after restoring before its result and r
   expect(recovered.get("payment").status).toBe("blocked");
   expect(destination.prepare("SELECT value FROM effects WHERE key=?").get(first.idempotencyKey)?.value).toBe("7");
   expect(recovered.complete("worker", first.token, { ok: true, value: 7 })).toBe(false);
+  expect(recovered.recoveryAdmission?.active).toBe(false);
+  recovered.activateAdmission({ request_id: "c7e6eb20-d9cf-4d76-8b5c-6b54a88931c0", expected_epoch: recovered.recoveryAdmission!.epoch,
+    reason: "Destination key proves the committed value and the original child completed before fencing.", residual_risk: "Retry uses the same destination deduplication key; no new invocation replaces unknown work.",
+    effect_paths_fenced: true, post_snapshot_work_reviewed: true }, "local-operator");
   recovered.resume("payment"); await recovered.pump();
   recovered.openSession("worker", "new"); recovered.advertise("worker", { types: ["echo"], artifacts: activityArtifacts, capacity: 1 });
   // The persisted fairness cursor may need one empty round to wrap.

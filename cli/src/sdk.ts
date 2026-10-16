@@ -1,11 +1,11 @@
 import { hostEnvironment, barryRunDir } from "@barry-rocks/sdk/services";
-import { resolveNativePolicy } from "@barry-rocks/sdk/bounds";
+import { resolveNativeTools } from "@barry-rocks/sdk/bounds";
 import { configureSession, refuseDeniedTools, runStructured, structuredOutputFor, type SessionConfig } from "@barry-rocks/sdk/sessions";
 import { trackSession } from "./tracked-session.js";
 import { rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 // The CLI is a composition root: the harness a run uses is loaded from the
-// installed adapter records, and its model routed over the vendor catalog.
+// installed adapter records, and its model routed over the vendor list.
 import type { StartEngine } from "@barry-rocks/sdk/adapters/harnesses";
 import {
   installedModels,
@@ -14,18 +14,18 @@ import {
   routeModel,
 } from "@barry-rocks/sdk/adapters/models";
 
-
 import { ownedEngines } from "@barry-rocks/sessions-bag/engines";
 import { sessionModelRef } from "./sessions/launch.js";
-import { loadBags, expandCompositionFromSnapshot, loadBagRegistrySnapshot, mergeBags } from "@barry-rocks/sdk/internal/bags";
+import { parseBagFlagTokens } from "./sessions/prepare.js";
+import { defaultBags, loadBags, expandCompositionFromSnapshot, loadBagRegistrySnapshot, mergeBags } from "@barry-rocks/sdk/internal/bags";
 // Remote discovery is installed when the explicit query operation starts.
 import { installRemoteBagLoader } from "@barry-rocks/sdk/internal/mcp";
 
 import { buildSkillsPlugin, resolveSkillDirs } from "@barry-rocks/sdk/internal/actions";
-import { listAllInstructions, joinAlwaysInstructions, buildInstructionsIndex, buildTraitInstructionPointer } from "@barry-rocks/sdk/internal/instructions";
+import { listAllInstructions, joinAlwaysInstructions, buildInstructionsIndex, buildBagInstructionPointer } from "@barry-rocks/sdk/internal/instructions";
 
 import { Barry } from "@barry-rocks/sdk";
-import { adapterSettings, defaultHarness, FALLBACK_HARNESS, type IdentityAdapters } from "@barry-rocks/sdk/internal/identities";
+import { adapterSettings, defaultHarness, FALLBACK_HARNESS, requiredIdentityBags, requiredNames, type IdentityAdapters } from "@barry-rocks/sdk/internal/identities";
 import { identityRecords } from "@barry-rocks/identities-bag";
 import { Sessions } from "@barry-rocks/sessions-bag/client";
 import { identityEnvironment, requiredCredentials } from "@barry-rocks/sdk/internal/env";
@@ -39,17 +39,20 @@ export interface QueryOptions {
   cwd?: string;
   /** Barry whose bags, env and default model the run should use. */
   barry?: string;
-  /** Trait names granting tools and skills, e.g. ["slack", "git-read"]. */
-  traits?: string[];
+  /** Bag names granting tools and skills, e.g. ["slack", "git:read"]. */
+  bags?: string[];
+  /** Bound names restricting the run, e.g. ["readonly", "git:no-push"]. */
+  bounds?: string[];
   model?: string;
   /**
-   * Agent id from the registry ("claude", "codex", ...). Defaults to "claude".
+   * Harness id from the registry ("claude", "codex", ...). Defaults to "claude".
    * The retired "claude-sdk"/"codex-sdk" ids are still accepted and mapped.
    */
+  harness?: string;
   provider?: string;
   /**
    * JSON Schema the answer must conform to. When set, the run goes through
-   * runStructured — native enforcement where the provider supports it, the
+   * runStructured — native enforcement where the harness supports it, the
    * prompted fallback elsewhere — and `structured` carries the validated value.
    */
   schema?: Record<string, unknown>;
@@ -66,7 +69,7 @@ export interface QueryResult {
  * Run a single prompt to completion, non-interactively.
  *
  * This is the headless counterpart to `barry start`, and the path a scheduled
- * job takes. It resolves the same barry, traits, bags and skills a CLI
+ * job takes. It resolves the same identity, bags, bounds and skills a CLI
  * session gets — without that, a prompt naming a bag skill has nothing to
  * load and the run silently does the wrong thing.
  */
@@ -76,27 +79,55 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
 
   const {
     bagNames,
+    requiredBagNames,
+    boundNames,
     env: identityEnv,
     adapters,
     identityId,
   } = await resolveIdentity(options.barry ?? process.env.BARRY_IDENTITY);
 
-  // The MCP server grants tools by the *session's* traits and identity, read
+  // The MCP server grants tools by the *session's* bags, bounds and identity, read
   // from the sessions table via `?sessionId=`. Without a session row the run
-  // is anonymous and gets only untraited tools, so every run gets one -- with
+  // is anonymous and gets only base default tools, so every run gets one -- with
   // the barry attached, so `--name` reaches the tool grant and not just the
   // environment.
-  const requested = options.provider ?? defaultHarness(adapters) ?? FALLBACK_HARNESS;
+  const requested = options.harness ?? options.provider ?? defaultHarness(adapters) ?? FALLBACK_HARNESS;
   const { harnessAdapter, adapterStore } = await import("./adapters/installed.js");
   const adapter = await harnessAdapter(requested === "claude-sdk" ? "claude" : requested === "codex-sdk" ? "codex" : requested);
-  const sessionProvider = adapter.id;
-  // Everything the run is granted, from the identity and the traits asked for:
-  // the traits recorded on its session, its namespaces, skills, instructions and bound.
-  const selection = { traits: options.traits ?? [], harness: sessionProvider, mode: "hosted" as const };
-  const granted = identityId !== undefined
-    ? await Barry.identity(identityId).grants(selection)
-    : await Barry.grants(selection);
-  const traitNames = granted.traits;
+  const sessionHarness = adapter.id;
+
+  // Everything the run is granted, from the identity and the bags and bounds asked for:
+  // the bags and bounds recorded on its session, its namespaces, skills, instructions and bound.
+  const parsedBags = parseBagFlagTokens((options.bags ?? []).join(","));
+  const selectedBags = [...new Set([...defaultBags(), ...requiredBagNames, ...parsedBags.bags])];
+  const selectedBounds = [...new Set([...boundNames, ...(options.bounds ?? []), ...parsedBags.readBounds])];
+  const selection = {
+    bags: selectedBags,
+    bounds: selectedBounds,
+    harness: sessionHarness,
+    mode: "hosted" as const,
+  };
+
+  const [resolvedBound, resolvedTools, resolvedSkills, resolvedInstructions] = await Promise.all([
+    identityId !== undefined
+      ? Barry.identity(identityId).bound(selectedBounds)
+      : Barry.bound(null, selectedBounds),
+    identityId !== undefined
+      ? Barry.identity(identityId).tools(selection)
+      : Barry.tools(null, selectedBags, selectedBounds),
+    Barry.skills(identityId ?? undefined, selectedBags).catch(() => []),
+    Barry.instructions(identityId ?? undefined, selectedBags).catch(() => []),
+  ]);
+
+  const namespaces = [
+    ...new Set([
+      ...selectedBags,
+      ...resolvedTools
+        .filter((tool) => tool.bag !== null && tool.namespace)
+        .map((tool) => tool.namespace),
+    ]),
+  ];
+
   const adapterRecord = (await adapterStore()).adapters.installed().find(record => record.id === adapter.id);
   const barrySessionId: string | undefined = randomUUID()
     .replace(/-/g, "")
@@ -127,12 +158,14 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         id: barrySessionId,
         // A one-shot run belongs to no agent actor.
         agent_token: null,
-        traits: traitNames,
+        bags: selectedBags,
+        bounds: selectedBounds,
+        ...(resolvedBound && Object.keys(resolvedBound).length > 0 ? { bound: resolvedBound } : {}),
         ...(identityId !== undefined ? { identity_id: identityId } : {}),
         metadata: {
           working_directory: options.cwd ?? process.cwd(),
           source: "cli-run",
-          provider: sessionProvider,
+          provider: sessionHarness,
         },
       });
     } catch (error) {
@@ -142,9 +175,9 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     // The same servers `barry start` connects: the barry aggregate plus one
     // endpoint per namespace the session is granted.
     const sessionConfig = await sessionMcpConfig(
-      granted.namespaces,
+      namespaces,
       barrySessionId,
-      granted.namespaces,
+      namespaces,
     );
 
     type McpServerConfig =
@@ -157,9 +190,6 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
       if (server.command) {
         mcpServers[name] = { command: server.command, args: server.args };
       } else if (server.url) {
-        // The barry MCP server requires BARRY_SECRET as a bearer token. Without
-        // it the connection 401s and the SDK reports "no tools" rather than an
-        // auth error — indistinguishable from a bag that exposes nothing.
         const configured = "headers" in server ? server.headers : undefined;
         const headers =
           configured ??
@@ -174,20 +204,14 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
       }
     }
 
-    // Trait-granted skills are resolved by name against the bag registry, so a
-    // trait can grant a skill from a bag the barry does not enable.
-    const traitSkillNames = granted.skills.map((skill) => skill.name);
-    // Every registered bag, not just this barry's: the comment above is the
-    // reason — a trait may grant a skill from a bag the barry never enables.
-    const traitSkillDirs = traitSkillNames.length
+    const bagSkillNames = resolvedSkills.map((skill) => skill.name);
+    const bagSkillDirs = bagSkillNames.length
       ? await resolveSkillDirs(
           (await loadBagRegistrySnapshot()).bags,
-          traitSkillNames,
+          bagSkillNames,
         )
       : [];
 
-    // Resolve `bags:` composition at load time so a parent's children reach the
-    // run even when only the parent is packed.
     const loadNames = bagNames.length
       ? await expandCompositionFromSnapshot(bagNames)
       : [];
@@ -200,23 +224,11 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
       }
     }
 
-    // Skills reach the agent as a temp plugin dir, the same mechanism `barry
-    // start` and the API server use. Removed in `finally` — nothing else cleans
-    // it up in a one-shot run.
     skillsPluginDir = buildSkillsPlugin(
       merged?.skillsDirs ?? [],
-      traitSkillDirs,
+      bagSkillDirs,
     );
 
-    // Resolved through the instruction catalog, not from the deprecated manifest
-    // `instructions:` string. That string was the pre-primitive form; reading it
-    // alone meant this path saw nothing from any bag that had migrated to an
-    // instructions/ dir — and every in-repo bag has.
-    //
-    // Always-on bodies AND the index here, unlike `barry start`: a one-shot SDK
-    // run has no chance to fetch on demand, so guidance that arrives only when
-    // asked for never arrives at all.
-    //
     // Best-effort: prose must never fail a run. Falls back to the legacy string
     // so a bag that has not migrated keeps working.
     let instructions = "";
@@ -225,11 +237,11 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
       const resolved = await listAllInstructions(allBags, {
         bagNames: loadNames,
       });
-      const traitInstructionNames = granted.instructions.map((instruction) => instruction.name);
+      const bagInstructionNames = resolvedInstructions.map((instruction) => instruction.name);
       const sections = [
         joinAlwaysInstructions(resolved),
-        buildInstructionsIndex(resolved, { exclude: traitInstructionNames }),
-        buildTraitInstructionPointer(traitInstructionNames, resolved),
+        buildInstructionsIndex(resolved, { exclude: bagInstructionNames }),
+        buildBagInstructionPointer(bagInstructionNames, resolved),
       ].filter((text): text is string => Boolean(text));
       instructions = sections.join("\n\n");
     } catch {
@@ -241,18 +253,18 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
 
     const runEnv = queryEnvironment({});
 
-    // One registry id per agent now: "claude-sdk"/"codex-sdk" were the SDK
-    // halves of agents that used to register twice, and the registry no longer
+    // One registry id per harness now: "claude-sdk"/"codex-sdk" were the SDK
+    // halves of harnesses that used to register twice, and the registry no longer
     // knows them. Defaulting to "claude-sdk" failed every `barry session run`
     // with "Unknown agent: claude-sdk". The legacy ids are still accepted from
     // callers and mapped, so an old caller keeps working instead of failing.
-    // The barry's model applies only on the barry's own provider, so the same
+    // The barry's model applies only on the barry's own harness, so the same
     // normalised id is what the model check compares against.
 
     const hosted = adapter.modes.hosted;
     if (!hosted)
       throw new Error(
-        `${sessionProvider} has no hosted mode, so \`barry session run\` cannot run it`,
+        `${sessionHarness} has no hosted mode, so \`barry session run\` cannot run it`,
       );
 
     const vendors = installedModels().vendors();
@@ -269,12 +281,13 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
 
     const model = sessionModel
       ? sessionModelRef(
-          sessionProvider,
+          sessionHarness,
           sessionModel,
           modelProvider ?? adapter.vendor,
         )
       : undefined;
-    const credentialNames = requiredCredentials({ harness: { id: adapter.id, credentials: adapterRecord?.bag?.manifest.credentials },
+    const credentialNames = requiredCredentials({
+      harness: { id: adapter.id, credentials: adapterRecord?.bag?.manifest.credentials },
       routedVendors: modelProvider && modelProvider !== adapter.vendor ? vendors.filter(vendor => vendor.id === modelProvider) : [],
     }).map(credential => credential.env);
     for (const name of credentialNames) {
@@ -284,8 +297,8 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     const keyless = keylessRouteRefusal(adapter, route, vendors, runEnv);
     if (keyless) throw new Error(keyless);
     const endpoint = routedEndpoint(adapter, model, vendors, runEnv);
-    if (!adapterRecord) throw new Error(`no installed adapter policy for ${adapter.id}`);
-    const native = resolveNativePolicy(granted, adapterRecord, "hosted");
+    if (!adapterRecord) throw new Error(`no installed adapter record for ${adapter.id}`);
+    const native = resolveNativeTools(resolvedBound, resolvedTools, adapterRecord, "hosted");
     if (Object.keys(native.conflicts).length) throw new Error(`session bounds cannot take back ${Object.keys(native.conflicts).join(", ")} on ${adapter.id} (hosted)`);
     const deniedNativeTools = native.denied;
     const config: SessionConfig = configureSession({
@@ -305,11 +318,11 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
       allowedNativeTools: native.allowed,
       decide: refuseDeniedTools(deniedNativeTools),
     });
-    await Sessions.updateMetadata(barrySessionId, { provider: sessionProvider, model, model_provider: modelProvider });
+    await Sessions.updateMetadata(barrySessionId, { provider: sessionHarness, model, model_provider: modelProvider });
     // Apply the declared guidance fallback to one-shot and structured callers too.
     const prompt = adapter.capabilities.systemPromptFormat === "unsupported" && instructions.trim()
       ? `${instructions}\n\n---\n\n${options.prompt}` : options.prompt;
-    const start = async () => trackSession(await hosted.start(config, startHarnessEngine), sessionProvider, model);
+    const start = async () => trackSession(await hosted.start(config, startHarnessEngine), sessionHarness, model);
 
     if (options.schema) {
       const structuredRun = await runStructured({
@@ -321,7 +334,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
           models: installedModels(),
         }),
         // One structured answer, never resumed: nothing of it need outlive the run.
-        start: async () => trackSession(await hosted.start({ ...config, ephemeral: true }, startHarnessEngine), sessionProvider, model),
+        start: async () => trackSession(await hosted.start({ ...config, ephemeral: true }, startHarnessEngine), sessionHarness, model),
       });
       return {
         result: structuredRun.raw,
@@ -378,6 +391,8 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
 
 interface ResolvedIdentity {
   bagNames: string[];
+  requiredBagNames: string[];
+  boundNames: string[];
   env: Record<string, string>;
   adapters: IdentityAdapters;
   /** The `identities` row id to put on the run's session, so the tool grant sees the identity. */
@@ -391,7 +406,7 @@ interface ResolvedIdentity {
  * tools should still run on a machine with no database reachable.
  */
 async function resolveIdentity(name?: string): Promise<ResolvedIdentity> {
-  if (!name) return { bagNames: [], env: {}, adapters: {} };
+  if (!name) return { bagNames: [], requiredBagNames: [], boundNames: [], env: {}, adapters: {} };
 
   try {
     const user = await getCurrentUser();
@@ -409,6 +424,8 @@ async function resolveIdentity(name?: string): Promise<ResolvedIdentity> {
 
     return {
       bagNames: resolved.bags ?? [],
+      requiredBagNames: requiredIdentityBags(resolved.bags ?? [], resolved.bag_configs ?? {}),
+      boundNames: requiredNames(resolved.bounds ?? []),
       env,
       adapters: resolved.adapters,
       ...(identityId !== undefined ? { identityId } : {}),
@@ -419,7 +436,7 @@ async function resolveIdentity(name?: string): Promise<ResolvedIdentity> {
       `Warning: could not resolve barry "${name}" — continuing without it ` +
         `(${error instanceof Error ? error.message : String(error)})`,
     );
-    return { bagNames: [], env: {}, adapters: {} };
+    return { bagNames: [], requiredBagNames: [], boundNames: [], env: {}, adapters: {} };
   }
 }
 

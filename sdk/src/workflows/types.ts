@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { runRequestSchema, type RunRequest } from "./grants.js";
+import { runRequestSchema, type RunRequest } from "./approvals.js";
+import type { WorkExecutionStart } from "./work-contracts.js";
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export const identifier = z.string().min(1).max(200);
@@ -63,6 +64,8 @@ export const jobContractSchema = z.strictObject({
   type: identifier, digest: z.string().regex(/^[a-f0-9]{64}$/),
   inputSchema: z.record(z.string(), z.unknown()).optional(), outputSchema: z.record(z.string(), z.unknown()).optional(),
   timeoutMs: duration.optional(),
+  /** Absent in legacy contracts: owner restricts them to its local worker. */
+  nodes: nodeBoundSchema.optional(),
 });
 export type JobContract = z.infer<typeof jobContractSchema>;
 /** Input of the built-in `job@1` workflow: one step that runs one job. */
@@ -71,6 +74,7 @@ export const startSchema = z.strictObject({
   id: identifier, type: identifier, version: identifier, input: json,
   timeoutMs: duration.default(7 * 86_400_000),
   job: runRequestSchema.optional(),
+  recoveryEpoch: z.uuid().optional(),
 });
 export type StartWorkflow = z.input<typeof startSchema>;
 export type WorkflowStatus = "running" | "blocked" | "completed" | "failed" | "cancelled" | "timed_out";
@@ -88,6 +92,7 @@ export const advertisementSchema = z.strictObject({
 });
 export type WorkerAdvertisement = z.input<typeof advertisementSchema>;
 export interface ActivityTask {
+  work?: WorkExecutionStart;
   owner: string; runId: string; activityId: string; idempotencyKey: string;
   type: string; input: Json; attempt: number; token: string; deadline: number; timeoutMs: number; heartbeatMs: number;
   artifact?: string;

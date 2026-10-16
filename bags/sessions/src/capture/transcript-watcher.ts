@@ -10,7 +10,7 @@ export interface WatchableSession {
   id: string;
   /** Which adapter ran it. */
   provider: string;
-  providerSessionId?: string | null;
+  harnessSessionId?: string | null;
   cwd?: string | null;
   metadata?: Record<string, unknown>;
   /**
@@ -110,7 +110,7 @@ export async function sweepTranscripts(deps: WatcherDeps): Promise<SweepResult> 
 
     try {
       const path = await reader.locate({
-        harnessSessionId: session.providerSessionId ?? null,
+        harnessSessionId: session.harnessSessionId ?? null,
         cwd: session.cwd ?? null,
         ...(session.metadata ? { metadata: session.metadata } : {}),
       });

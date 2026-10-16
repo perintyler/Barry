@@ -153,7 +153,7 @@ describe("/api/catalog", () => {
  * `join(webDir, url.pathname)` would serve any file on the box.
  */
 describe("static assets", () => {
-  it.each(["/app.css", "/spark.js", "/catalog.js"])("serves %s", async (path) => {
+  it.each(["/app.css", "/spark.js", "/metrics.js"])("serves %s", async (path) => {
     expect((await fetch(`${base}${path}`)).status).toBe(200);
   });
 

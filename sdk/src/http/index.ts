@@ -21,13 +21,14 @@ export interface JsonRequest {
   body: unknown;
   headers?: Record<string, string>;
   timeoutMs: number;
+  signal?: AbortSignal;
   /**
    * Turns a non-OK response into a message. Return undefined to fall through
    * to the generic one. Lets an adapter name its own setup problems — a 404
    * from Ollama means "run `ollama pull`", a 401 from a hosted API means the
    * key is wrong — while the transport stays shared.
    */
-  describeHttpError?: (status: number, body: string) => string | undefined;
+  describeHttpError?: (status: number, body: string, headers?: Headers) => string | undefined;
   /**
    * Statuses that mean the backend cannot serve at all, so a sweep should stop
    * rather than retry per item. Anything else raises an ordinary Error.
@@ -46,6 +47,9 @@ export interface JsonRequest {
 export async function postJson<T>(opts: JsonRequest): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+  const onExternalAbort = () => controller.abort();
+  if (opts.signal?.aborted) controller.abort();
+  else opts.signal?.addEventListener("abort", onExternalAbort, { once: true });
   const timeout = new Promise<never>((_resolve, reject) => {
     controller.signal.addEventListener("abort", () => {
       reject(Object.assign(new Error("This operation was aborted"), { name: "AbortError" }));
@@ -71,7 +75,7 @@ export async function postJson<T>(opts: JsonRequest): Promise<T> {
           throw error;
         }
       }
-      const described = opts.describeHttpError?.(res.status, text);
+      const described = opts.describeHttpError?.(res.status, text, res.headers);
       const message = described ?? `HTTP ${res.status} from ${opts.url}: ${text.slice(0, 200)}`;
       if (described !== undefined || (opts.unavailableStatuses ?? []).includes(res.status)) {
         throw new ModelUnavailableError(message);
@@ -90,5 +94,6 @@ export async function postJson<T>(opts: JsonRequest): Promise<T> {
     throw new ModelUnavailableError(describeFetchFailure(err, opts.url, opts.timeoutMs), err);
   } finally {
     clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onExternalAbort);
   }
 }

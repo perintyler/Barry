@@ -9,3 +9,7 @@ export { runScriptAction } from "./execute-script.js";
 export type { RunScriptOptions, ScriptRunResult } from "./execute-script.js";
 export { abandonOrphanedActionRuns } from "./orphaned-runs.js";
 export { getDbPath, setDb, closeDb } from "./db.js";
+
+export { createActionWorkProjection, prepareActionWorkProjectionGeneration } from "./work-projection.js";
+export { openActionWorkProjectionStore } from "./db.js";
+export { actionWorkflowView } from "./workflow-view.js";

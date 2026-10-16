@@ -1,3 +1,5 @@
+import { resolveHarnessCommand } from "@barry-rocks/sdk/adapters/harnesses";
+import { CODEX_REQUIREMENTS } from "../modes.js";
 /**
  * The engine a hosted codex session runs on.
  *
@@ -7,7 +9,7 @@
  * `hosted/app-server-session.ts`.
  */
 
-import { toolPolicyConfig } from "../tool-policy.js";
+import { toolGateConfig } from "../tool-gate.js";
 import type { EngineSpec } from "@barry-rocks/sdk/adapters/harnesses";
 
 /**
@@ -17,7 +19,7 @@ import type { EngineSpec } from "@barry-rocks/sdk/adapters/harnesses";
  * "never the shared daemon" check is about the command line, and asserting it
  * by spawning a real engine would need a vendor login.
  */
-export function codexEngineSpec(sessionId: string, codexHome: string, cwd: string, config: Parameters<typeof toolPolicyConfig>[0] = {}): EngineSpec {
+export function codexEngineSpec(sessionId: string, codexHome: string, cwd: string, config: Parameters<typeof toolGateConfig>[0] = {}, env: Readonly<Record<string, string | undefined>> = process.env): EngineSpec {
   return {
     sessionId,
     kind: "codex",
@@ -29,8 +31,8 @@ export function codexEngineSpec(sessionId: string, codexHome: string, cwd: strin
       // `codex app-server` DIRECTLY. Never `codex agents` or `remote-control`:
       // those reach a managed, self-updating package, so Barry would hold a
       // handle to a process able to replace its own build.
-      command: "codex",
-      args: ["app-server", ...Object.entries(toolPolicyConfig(config)).flatMap(([key, value]) => ["-c", `${key}=${JSON.stringify(value)}`]), "--listen", `unix://${address}`],
+      command: resolveHarnessCommand(CODEX_REQUIREMENTS, env),
+      args: ["app-server", ...Object.entries(toolGateConfig(config)).flatMap(([key, value]) => ["-c", `${key}=${JSON.stringify(value)}`]), "--listen", `unix://${address}`],
       env: { CODEX_HOME: codexHome },
     }),
   };

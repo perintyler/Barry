@@ -26,7 +26,6 @@ process.env.BARRY_BAGS_SNAPSHOT = join(scratch, "bags.snapshot.json");
 const { Identities, setIdentityMetadataFieldInRow } = await import("./identities.js");
 const { closeIdentitiesDb } = await import("./identities-db.js");
 const { Users } = await import("./users.js");
-const { Bounds } = await import("../config/bounds.js");
 const { loadIdentityFromDirectory: realLoadIdentityFromDirectory, syncIdentityToDb, writeIdentityYaml, findIdentityDirectoryById } = await import("./identity-files.js");
 
 let actorId: number;
@@ -107,9 +106,9 @@ describe("Identities.update on a directory-backed identity", () => {
   });
 
   it("writes required bounds by name without copying rules", async () => {
-    const named = await Bounds.create({ name: `ro-${counter}`, bound: { deniedTools: ["Write"] } });
-    await Identities.update(id.row, { bounds: [named.name] });
-    expect(id.yaml().bounds).toEqual([named.name]);
+    const boundName = `ro-${counter}`;
+    await Identities.update(id.row, { bounds: [boundName] });
+    expect(id.yaml().bounds).toEqual([boundName]);
     expect(id.yaml().bound).toBeUndefined();
     await Identities.update(id.row, { bounds: undefined });
     expect(id.yaml().bounds).toEqual([]);
@@ -128,11 +127,11 @@ describe("Identities.update on an identity that inherits", () => {
     expect(loadIdentityFromDirectory(child.dir).metadata.bags).toEqual(["linear", "memory", "slack", "github"]);
   });
 
-  it("stores only the traits its parent does not already provide", async () => {
-    const parent = await fileIdentity("traits:\n  - coding\n");
+  it("stores only the bounds its parent does not already provide", async () => {
+    const parent = await fileIdentity("bounds:\n  - readonly\n");
     const child = await fileIdentity(`inherits: ${parent.name}\n`);
-    await Identities.update(child.row, { traits: ["coding", "no-bash"] });
-    expect(child.yaml().traits).toEqual(["no-bash"]);
+    await Identities.update(child.row, { bounds: ["readonly", "no-bash"] });
+    expect(child.yaml().bounds).toEqual(["no-bash"]);
   });
 
   it("keeps an inherited bag listed when the child configures it", async () => {
@@ -163,7 +162,7 @@ describe("syncing a field the yaml dropped", () => {
   // config read, so the identity's sessions could not be scoped on alternate
   // syncs: the next one removed the key again.
   it("never stores an absent value as null, however many times it syncs", async () => {
-    const parent = await fileIdentity("traits:\n  - coding\n");
+    const parent = await fileIdentity("bounds:\n  - readonly\n");
     const child = await fileIdentity(`inherits: ${parent.name}\n`);
     for (let sync = 0; sync < 3; sync++) {
       await syncIdentityToDb(child.dir, { actorId });
@@ -218,7 +217,7 @@ describe("the row writers refuse what identity.yaml owns", () => {
 });
 
 it("pins a file identity to its durable row so renames preserve resource ownership", async () => {
-  const identity = await fileIdentity("traits: []\n");
+  const identity = await fileIdentity("bounds: []\n");
   expect(loadIdentityFromDirectory(identity.dir, { actorId }).id).toBe(identity.row.id);
   writeIdentityYaml(identity.dir, { name: "renamed-fixture" });
   expect(findIdentityDirectoryById(identity.row.id)).toBe(identity.dir);

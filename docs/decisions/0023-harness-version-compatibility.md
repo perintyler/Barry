@@ -1,43 +1,36 @@
 # ADR 0023: harness version compatibility
 
-Status: accepted
+Status: accepted; replaces the previous version-family refusal rule
 
 ## Context
 
-A major-only guard groups all pre-1.0 minor releases together and all monthly calendar releases within a year. The review identified both as wider than the adapter compatibility claim. Stable semantic major releases retain their existing minor/patch tolerance.
+A tested build is useful installation guidance and reproducible evidence. It does not establish that every other build is incompatible. Refusing Codex after any pre-1.0 minor update, or Cursor after a calendar month change, turned an untested update into an outage without evidence of a failure.
 
 ## Decision
 
-Compare major/minor for a verified pre-1.0 or four-digit calendar build. Compare major for other semantic builds. Refusal reports the observed build, verified build and applicable version boundary. Preserve the exported function name for existing consumers. Bundled modes, explicit operator override, executable resolution and version caching retain their behavior.
+Each mode may declare a `versions` policy:
+
+- `recommendedVersion`: advisory installation guidance.
+- `testedVersions`: exact runtime builds with evidence for that mode's guarantees.
+- `supportedVersions`: explicit ranges; `min` and `max` are inclusive, `before` is exclusive. Multiple ranges form a union.
+- `incompatibleVersions`: ranges with a specific reason for refusal. Exclusions take precedence over supported ranges and test history.
+
+Semantic versions and calendar versions are compared explicitly. Calendar dates order releases; a vendor build suffix is retained for exact test evidence, not interpreted as a semantic prerelease. No compatibility boundary is inferred from a major, minor, or month number.
+
+Supported builds start normally. Builds outside established support warn and run. Unreadable versions are reported as unknown and unverified. Only documented incompatible versions are refused by the version policy. Credential checks, mandatory tool restrictions, platform limitations, and ordinary executable/protocol failures remain independent requirements. The former `BARRY_HARNESS_VERSION_CHECK=off` does not bypass a documented incompatibility.
+
+Executable resolution honors an adapter's explicit executable environment override, otherwise its declared current paths and session PATH. An invalid explicit override is an error, not permission to select another executable. Shipped adapters do not prefer historic version directories. Update suppression keeps an executable stable during a session; it is not an installation pin.
+
+Bundled modes describe the SDK/runtime they actually run, independently of a PATH CLI used by interactive modes or model discovery. Exact package dependencies remain reproducible build inputs.
+
+Startup, doctor, setup, and local schedule forecasts share the same version assessment. Session metadata retains the observed executable/build and assessment. Supported compatibility does not establish that every build in a range passed the guarantee checks. Updating a recommendation does not discard previously tested builds.
+
+## Migration and evidence
+
+Older `binary.pin` registrations are normalized to `binary.recommendedVersion`. Older `verifiedOn` declarations establish only that exact tested build, not a major-wide support range. Setup refreshes shipped registrations at the same package path; explicit package selections elsewhere retain ownership. Re-register other updated packages through adapter registration when their declarations change. Persist bundled-mode metadata in new records; older records that omitted it require re-registration rather than guessing which runtime they use.
+
+Initially preserve existing evidence conservatively. Broaden a mode's range or update its recommendation only after relevant checks. Local protocol/fake-provider checks, real-provider authentication checks, and interactive UI checks are distinct evidence; passing one does not establish the others. Known OpenCode v1 CLI incompatibility remains an explicit exclusion because the adapter drives the v2 server/standalone interface.
 
 ## Consequences
 
-A new Codex minor or Cursor month requires an updated verified build before launch. Patch/day differences remain accepted within the family, but do not establish newly verified guarantees. Missing or unreadable versions remain reported by doctor/preflight; this check does not invent an observed version. Live checks still must establish adapter guarantees on the pinned builds.
-
-## Historical source rationale
-
-The original major-only reasoning is preserved as context; the decision above replaces its compatibility rule.
-
-```text
-/**
- * Refuse to start a harness whose installed major version is not the one its
- * modes were verified on.
- *
- * `verifiedOn` used to be read only by `barry adapter` and the conformance
- * check, so nothing stopped a launch on a build the adapter cannot drive: an
- * interactive shell that put `~/.opencode/bin` (1.18.34, no `--standalone`)
- * ahead of Homebrew's 2.0.24 started a binary the opencode adapter could not
- * talk to. The check runs the same `versionArgs` and `versionPattern` doctor
- * does, on the binary the session would start, and compares major versions:
- * a patch or minor drift is doctor's to report, not a reason to refuse.
- *
- * It refuses only on a version it actually read. A binary that is missing, or
- * whose output names no version, starts as before, because doctor and the
- * launch preflight already report both and a check that guessed would refuse
- * harnesses that work.
- *
- * A version is read once per build: it is cached by the binary's real path,
- * modification time and size, so a launch on an unchanged binary costs a stat.
- * Running `--version` takes from 0.1s (claude) to 3s (cursor-agent).
- */
-```
+Vendor updates no longer fail solely because their version differs from Barry's recommendation. Untested builds remain visible in diagnostics and session records. An exact known-good installation can still be selected explicitly for recovery or reproducible deployment.

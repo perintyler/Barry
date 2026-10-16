@@ -49,7 +49,7 @@ describe("checkRequirements", () => {
     expect(checks.map((check) => [check.name, check.status])).toEqual([
       ["binary", "failed"],
       ["version", "unknown"],
-      ["pin", "unknown"],
+      ["compatibility", "unknown"],
     ]);
   });
 });
@@ -62,4 +62,11 @@ it.each([true, false])("checks a declared binary path when available: %s", avail
   expect(checks[0]).toMatchObject({ status: "ok", observed: expected });
   expect(run).toHaveBeenCalledWith(expected, ["--version"]);
   expect(which.mock.calls.map(([command]) => command)).toEqual(available ? ["/installed/codex"] : ["/installed/codex", "codex"]);
+});
+
+it("reports recommendations as advisory while retaining explicit incompatibilities", () => {
+  const mode = { verifiedOn: "0.115.0", versions: { recommendedVersion: "0.115.0", testedVersions: ["0.115.0"], supportedVersions: [{ min: "0.115.0", max: "0.116.0" }], incompatibleVersions: [{ range: { min: "0.116.2", max: "0.116.2" }, reason: "known tool regression" }] } };
+  expect(checkRequirements(requirements, probes({ version: "0.116.0" }), mode).at(-1)).toMatchObject({ status: "ok", observed: expect.stringContaining("guarantees unverified") });
+  expect(checkRequirements(requirements, probes({ version: "0.117.0" }), mode).at(-1)).toMatchObject({ status: "warning" });
+  expect(checkRequirements(requirements, probes({ version: "0.116.2" }), mode).at(-1)).toMatchObject({ status: "failed", observed: expect.stringContaining("known tool regression") });
 });

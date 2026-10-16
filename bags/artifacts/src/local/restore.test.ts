@@ -12,7 +12,7 @@ import { openLocalArtifactStore } from "./store.js";
 import { activateLocalArtifactRestore, prepareLocalArtifactRestore } from "./restore.js";
 import { createArtifactCreator } from "../create.js";
 import { createArtifactCore } from "../core.js";
-import { sealArtifactGeneration } from "./catalog.js";
+import { sealArtifactGeneration } from "./index-store.js";
 
 const directories: string[] = [];
 beforeAll(() => { execFileSync(process.execPath, [fileURLToPath(import.meta.resolve("typescript/bin/tsc")), "--build"], { cwd: fileURLToPath(new URL("../../", import.meta.url)), stdio: "pipe" }); });

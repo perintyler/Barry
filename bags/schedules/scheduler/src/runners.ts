@@ -1,12 +1,12 @@
-import { scheduleContext, oneOffContext } from "@barry-rocks/schedules-bag";
+import { resolveScheduleAccess, resolveAtScheduleAccess } from "@barry-rocks/schedules-bag";
 import { runMcpAction } from "@barry-rocks/schedules-bag";
-import { assertToolAllowed, boundHasContent } from "@barry-rocks/sdk/bounds";
+import { assertToolAllowed, boundHasProcessRestrictions } from "@barry-rocks/sdk/bounds";
 import { installationRegistry } from "@barry-rocks/sdk/internal/nodes";
 import { hostEnvironment, installationRoot, getServiceUrl } from "@barry-rocks/sdk/services";
 import { withStoreContext } from "@barry-rocks/sdk/internal/stores";
 /**
  * What the scheduler service plugs into the Scheduler: the real runners,
- * alerts, one-off recovery and housekeeping. Split from service.ts so a test
+ * alerts, schedule recovery and housekeeping. Split from service.ts so a test
  * can drive the real runners without starting the service loop.
  *
  * Script actions run here, as children of the scheduler, so maintenance keeps
@@ -18,11 +18,12 @@ import { ActionRuns } from "@barry-rocks/actions-bag";
 import { runScriptAction } from "@barry-rocks/actions-bag";
 import { isScriptAction, validateActionInputs, type ScriptAction } from "@barry-rocks/sdk/internal/actions";
 
-import { isActionJob, resolveOneOffAction, type ScheduleEntry } from "@barry-rocks/schedules-bag";
-import type { FireOutcome, OneOffResult, Transition } from "@barry-rocks/schedules-bag";
-import { pruneOneOffs, recordAttempt, recoverOrphans, type OneOff } from "@barry-rocks/schedules-bag";
+import { isActionJob, resolveAtScheduleAction, type ScheduleEntry } from "@barry-rocks/schedules-bag";
+import type { FireOutcome, AtScheduleResult, Transition } from "@barry-rocks/schedules-bag";
+import { pruneAtSchedules, recordAttempt, recoverOrphans, type AtSchedule } from "@barry-rocks/schedules-bag";
 import { killGroup, probeProcess } from "@barry-rocks/schedules-bag";
-import { runJobOneOff } from "./job-runner.js";
+import { runJobAtSchedule } from "./job-runner.js";
+import { acceptJobOccurrence, awaitAtSchedule, findJobOccurrenceAtSchedule, jobFireOutcome, resolveScheduleAction, type LegacyOccurrenceRunners } from "@barry-rocks/schedules-bag";
 import { getDb } from "@barry-rocks/schedules-bag";
 
 /** Scheduled runs kept this long; failures longer, since they are what gets read. */
@@ -50,25 +51,32 @@ export function baseEnv(): NodeJS.ProcessEnv {
 }
 
 export async function runScript(action: ScriptAction, entry: ScheduleEntry): Promise<FireOutcome> {
-  const context = await scheduleContext(entry);
+  const access = await resolveScheduleAccess(entry);
+  const metadataContext = {
+    identity: access.identity,
+    bags: access.bags,
+    traits: access.bags,
+    bound: access.bound,
+    allowedToolIds: access.allowedToolIds,
+  };
   if (action.run.command === "barry-mcp") {
     const reference = action.run.args[0]; if (!reference) throw new Error("MCP action requires a tool reference");
-    return withStoreContext({ identity: context.identity, execution: context }, async () => {
-      const run = await ActionRuns.create({ action: action.qualifiedName, bag: entry.bag, trigger: "schedule", schedule_id: entry.id, metadata: { execution_context: context } });
-      try { const output = await runMcpAction(reference, entry.schedule.inputs ?? {}, context); await ActionRuns.complete(run.id, "MCP action completed", null, { type: "json", value: JSON.stringify(output) }); return { status: "complete", runId: run.id, summary: "MCP action completed" }; }
+    return withStoreContext({ identity: access.identity, execution: access }, async () => {
+      const run = await ActionRuns.create({ action: action.qualifiedName, bag: entry.bag, trigger: "schedule", schedule_id: entry.id, metadata: { execution_context: metadataContext, schedule_access: metadataContext } });
+      try { const output = await runMcpAction(reference, entry.schedule.inputs ?? {}, access); await ActionRuns.complete(run.id, "MCP action completed", null, { type: "json", value: JSON.stringify(output) }); return { status: "complete", runId: run.id, summary: "MCP action completed" }; }
       catch (error) { await ActionRuns.fail(run.id, String(error)); throw error; }
     });
   }
-  assertToolAllowed(context, { namespace: "bash", toolName: "Bash" }, installationRegistry().id);
-  if (boundHasContent(context.bound ?? undefined)) throw new Error("raw scheduled processes cannot enforce selected bounds; use a barry-mcp action");
+  assertToolAllowed(access, { namespace: "bash", toolName: "Bash" }, installationRegistry().id);
+  if (boundHasProcessRestrictions(access.bound ?? undefined)) throw new Error("raw scheduled processes cannot enforce selected bounds; use a barry-mcp action");
 
-  const { run } = await withStoreContext({ identity: context.identity, execution: context }, () => runScriptAction(action, {
+  const { run } = await withStoreContext({ identity: access.identity, execution: access }, () => runScriptAction(action, {
     ...(entry.schedule.inputs ? { inputs: entry.schedule.inputs } : {}),
     trigger: "schedule",
     scheduleId: entry.id,
-    secretScope: context.identity ? { kind: "identity", uuid: context.identity } : { kind: "installation" },
+    secretScope: access.identity ? { kind: "identity", uuid: access.identity } : { kind: "installation" },
     baseEnv: baseEnv(),
-    metadata: { runner_pid: process.pid, execution_context: context },
+    metadata: { runner_pid: process.pid, execution_context: metadataContext, schedule_access: metadataContext },
   }));
   return { status: run.status === "complete" ? "complete" : "failed", runId: run.id, summary: run.summary ?? "" };
 }
@@ -91,33 +99,40 @@ export async function runAgent(entry: ScheduleEntry): Promise<FireOutcome> {
 }
 
 /**
- * One attempt of a one-off. A script runs here, recording its run and process
+ * One attempt of an at-schedule. A script runs here, recording its run and process
  * group on the attempt so a restarted scheduler can find it; an agent action
  * goes to the API. Everything that means "this cannot run" — the action is
  * gone, the inputs are refused — is `unavailable`, which is never retried.
  */
-export async function runOneOff(oneOff: OneOff, attemptId: string, attempt = 1): Promise<OneOffResult> {
-  const unavailable = (why: string): OneOffResult => ({ outcome: "unavailable", exitCode: null, runId: null, reason: `unavailable: ${why}` });
+export async function runAtSchedule(schedule: AtSchedule, attemptId: string, attempt = 1): Promise<AtScheduleResult> {
+  const unavailable = (why: string): AtScheduleResult => ({ outcome: "unavailable", exitCode: null, runId: null, reason: `unavailable: ${why}` });
   // A code job runs here; an action job resolves to its action below and,
   // like any agent action, runs in the API.
-  if (oneOff.job && !(await isActionJob(oneOff))) return runJobOneOff(oneOff, attemptId, attempt, { baseEnv: baseEnv() });
-  const resolved = await resolveOneOffAction(oneOff);
+  if (schedule.job && !(await isActionJob(schedule))) return runJobAtSchedule(schedule, attemptId, attempt, { baseEnv: baseEnv() });
+  const resolved = await resolveAtScheduleAction(schedule);
   if ("unavailable" in resolved) return unavailable(resolved.unavailable);
-  // The one-off's own bound, not the action's: the caller asked for it.
-  const action = { ...resolved.action, timeout: oneOff.timeoutS };
-  const inputErrors = validateActionInputs(action, oneOff.inputs);
+  // The schedule's own bound, not the action's: the caller asked for it.
+  const action = { ...resolved.action, timeout: schedule.timeoutS };
+  const inputErrors = validateActionInputs(action, schedule.inputs);
   if (inputErrors.length) return unavailable(inputErrors.join(" "));
 
   if (isScriptAction(action)) {
-    const context = await oneOffContext(oneOff);
+    const access = await resolveAtScheduleAccess(schedule);
+    const metadataContext = {
+      identity: access.identity,
+      bags: access.bags,
+      traits: access.bags,
+      bound: access.bound,
+      allowedToolIds: access.allowedToolIds,
+    };
     if (action.run.command === "barry-mcp") {
       const reference = action.run.args[0];
       if (!reference) return unavailable("MCP action requires a tool reference");
-      return withStoreContext({ identity: context.identity, execution: context }, async () => {
-        const run = await ActionRuns.create({ action: action.qualifiedName, bag: oneOff.bag, trigger: "schedule", schedule_id: oneOff.id, metadata: { execution_context: context, one_off_attempt: attemptId } });
+      return withStoreContext({ identity: access.identity, execution: access }, async () => {
+        const run = await ActionRuns.create({ action: action.qualifiedName, bag: schedule.bag, trigger: "schedule", schedule_id: schedule.id, metadata: { execution_context: metadataContext, schedule_access: metadataContext, one_off_attempt: attemptId } });
         recordAttempt(attemptId, { runId: run.id });
         try {
-          const output = await runMcpAction(reference, oneOff.inputs, context);
+          const output = await runMcpAction(reference, schedule.inputs, access);
           await ActionRuns.complete(run.id, "MCP action completed", null, { type: "json", value: JSON.stringify(output) });
           return { outcome: "succeeded", exitCode: null, runId: run.id };
         } catch (error) {
@@ -126,17 +141,17 @@ export async function runOneOff(oneOff: OneOff, attemptId: string, attempt = 1):
         }
       });
     }
-    assertToolAllowed(context, { namespace: "bash", toolName: "Bash" }, installationRegistry().id);
-    if (boundHasContent(context.bound ?? undefined)) return unavailable("raw scheduled processes cannot enforce selected bounds");
-    const { run, timedOut } = await withStoreContext({ identity: context.identity, execution: context }, () => runScriptAction(action, {
-      inputs: oneOff.inputs,
+    assertToolAllowed(access, { namespace: "bash", toolName: "Bash" }, installationRegistry().id);
+    if (boundHasProcessRestrictions(access.bound ?? undefined)) return unavailable("raw scheduled processes cannot enforce selected bounds");
+    const { run, timedOut } = await withStoreContext({ identity: access.identity, execution: access }, () => runScriptAction(action, {
+      inputs: schedule.inputs,
       trigger: "schedule",
-      scheduleId: oneOff.id,
-      secretScope: context.identity ? { kind: "identity", uuid: context.identity } : { kind: "installation" },
+      scheduleId: schedule.id,
+      secretScope: access.identity ? { kind: "identity", uuid: access.identity } : { kind: "installation" },
       baseEnv: baseEnv(),
-      metadata: { runner_pid: process.pid, one_off_attempt: attemptId },
+      metadata: { runner_pid: process.pid, one_off_attempt: attemptId, execution_context: metadataContext, schedule_access: metadataContext },
       // The stable id a handler dedupes on: at least once means it may run twice.
-      extraEnv: { BARRY_SCHEDULE_ID: oneOff.id, BARRY_ATTEMPT_ID: attemptId },
+      extraEnv: { BARRY_SCHEDULE_ID: schedule.id, BARRY_ATTEMPT_ID: attemptId },
       onStart: ({ runId, processGroup }) => recordAttempt(attemptId, { runId, processGroup }),
     }));
     return {
@@ -147,7 +162,7 @@ export async function runOneOff(oneOff: OneOff, attemptId: string, attempt = 1):
     };
   }
 
-  const response = await fetch(`${apiBase()}/schedules/once/${oneOff.id}/run`, {
+  const response = await fetch(`${apiBase()}/schedules/once/${schedule.id}/run`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ attempt_id: attemptId }),
@@ -167,19 +182,19 @@ export async function runOneOff(oneOff: OneOff, attemptId: string, attempt = 1):
   };
 }
 
-/** The action run an attempt produced: by id when recorded, else the newest for the one-off since it started. */
-async function attemptRun(oneOffId: string, attempt: { runId: string | null; startedAt: Date }) {
+/** The action run an attempt produced: by id when recorded, else the newest for the schedule since it started. */
+async function attemptRun(scheduleId: string, attempt: { runId: string | null; startedAt: Date }) {
   if (attempt.runId) return ActionRuns.get(attempt.runId);
-  const runs = await ActionRuns.list({ schedule_id: oneOffId, limit: 1 });
+  const runs = await ActionRuns.list({ schedule_id: scheduleId, limit: 1 });
   return runs[0] && runs[0].started_at.getTime() >= attempt.startedAt.getTime() - 1000 ? runs[0] : null;
 }
 
 /**
- * Settle one-offs a previous scheduler left running. Run lookups are async
+ * Settle schedules a previous scheduler left running. Run lookups are async
  * and recovery is synchronous (it is one transaction per row), so the runs
  * of every orphan are read first.
  */
-export async function recoverOneOffs(): Promise<void> {
+export async function recoverAtSchedules(): Promise<void> {
   const orphans = getDb()
     .prepare(
       `SELECT a.one_off_id, a.run_id, a.started_at FROM one_off_attempt a JOIN one_off o ON o.id = a.one_off_id
@@ -248,7 +263,7 @@ export async function sweepOrphans(): Promise<void> {
 
 export async function prune(): Promise<void> {
   const day = 86_400_000;
-  pruneOneOffs(new Date(Date.now() - KEEP_FAILED_RUNS_DAYS * day), new Date(Date.now() - KEEP_RUNS_DAYS * day));
+  pruneAtSchedules(new Date(Date.now() - KEEP_FAILED_RUNS_DAYS * day), new Date(Date.now() - KEEP_RUNS_DAYS * day));
   for (const trigger of ["schedule", "job"] as const) {
     await ActionRuns.pruneClosed({
       trigger,
@@ -258,3 +273,22 @@ export async function prune(): Promise<void> {
   }
 }
 
+
+/**
+ * The existing runners, shaped for a durable occurrence ledger (P4.3
+ * preparation). Not wired into the service: a scheduler composed with an
+ * occurrence ledger uses these for occurrences recorded on the legacy
+ * generation, so a job occurrence is keyed by its slot and a script or agent
+ * occurrence runs exactly as it does today.
+ */
+export function occurrenceLegacyRunners(): LegacyOccurrenceRunners {
+  return {
+    acceptJob: (entry, occurrence) => acceptJobOccurrence(entry, occurrence),
+    awaitJob: async (atSchedule) => jobFireOutcome(await awaitAtSchedule(atSchedule.id)),
+    findJobOneOff: (occurrence) => findJobOccurrenceAtSchedule(occurrence),
+    runAction: async (entry) => {
+      const action = await resolveScheduleAction(entry);
+      return isScriptAction(action) ? runScript(action, entry) : runAgent(entry);
+    },
+  };
+}

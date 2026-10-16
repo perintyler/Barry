@@ -22,7 +22,7 @@ export function installedAdapter(id: string, overrides: Partial<InstalledAdapter
       withoutKey: "unauthenticated",
       endpoint: "fixed",
     },
-    nativeTools: [],
+    tools: overrides.tools ?? [],
     defaultMode: "guest",
     modes: { hosted: null, instrumented: null, guest: null },
     path: `/adapters/${id}`,

@@ -65,3 +65,14 @@ it("forwards identity and session caller, then maps the stored action run", asyn
 it("refuses devices before running actions", async () => {
   await expect(actions.run("ops:task", {}, {}, { kind: "device" } as never)).rejects.toMatchObject({ reason: "forbidden" });
 });
+
+it("keeps stopping and stale workflow-owned runs distinct from healthy running legacy actions", async () => {
+  const base = { id: "arn_work", action: "fixture:report", session_id: null, status: "started", summary: null, started_at: new Date(), completed_at: null, output: null };
+  vi.mocked(ActionRuns.list).mockResolvedValue([
+    { ...base, workflow: { work_id: "work-one", workflow_id: "workflow-one", owner: "owner", revision: 2, state: "stopping", projection_current: true } },
+    { ...base, id: "arn_stale", workflow: { work_id: "work-stale", workflow_id: "workflow-stale", owner: "owner", revision: 5, state: "needs-attention", projection_current: false } },
+  ] as never);
+  const rows = await actions.runs({}, { kind: "owner" });
+  expect(rows[0]).toMatchObject({ status: "stopping", work: { workId: "work-one", current: true } });
+  expect(rows[1]).toMatchObject({ status: "needs-attention", work: { current: false } });
+});

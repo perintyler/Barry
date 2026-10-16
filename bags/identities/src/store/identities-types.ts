@@ -57,35 +57,6 @@ export interface IdentitiesStoreIdentitiesTable {
   last_used_at: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
-/** A trait: a named grant of tools, namespaces, skills and a bound. */
-export interface IdentitiesStoreTraitsTable {
-  id: Generated<number>;
-  token: string;
-  name: string;
-  description: string | null;
-  tools: JsonText;
-  namespaces: JsonText;
-  access: ColumnType<string, string | undefined, string>;
-  skills: JsonText;
-  instructions: JsonText;
-  bound: JsonText;
-  /** Merged on write, never replaced — see the migration and traits.ts. */
-  metadata: JsonText;
-  bag: ColumnType<string | null, string | null | undefined, string | null>;
-  created_at: TimestampText;
-}
-
-/** A bound: a named restriction a trait or identity can carry. */
-export interface IdentitiesStoreBoundsTable {
-  id: Generated<number>;
-  token: string;
-  name: string;
-  description: string | null;
-  bound: JsonText;
-  metadata: JsonText;
-  created_at: TimestampText;
-}
-
 export interface DeviceCredentialsTable {
   id: string; name: string; token_hash: string; token_prefix: string; actor_id: number;
   scopes: string; identity_ids: string; created_at: number; unused_expires_at: number;
@@ -105,8 +76,6 @@ export interface IdentitiesStoreDatabase {
   pairing_requests: PairingRequestsTable;
   actors: IdentitiesStoreActorsTable;
   identities: IdentitiesStoreIdentitiesTable;
-  traits: IdentitiesStoreTraitsTable;
-  bounds: IdentitiesStoreBoundsTable;
 }
 
 export type IdentitiesStoreTableName = keyof IdentitiesStoreDatabase;
@@ -117,7 +86,7 @@ export type IdentitiesStoreTableName = keyof IdentitiesStoreDatabase;
  * TypeScript types are erased, so nothing at runtime can compare the interfaces
  * to the live schema. This list is what makes the drift test possible, and it
  * only works if it is maintained in lockstep — which is why the test asserts
- * BOTH directions. A `traits.skills` column once went unmirrored for months.
+ * BOTH directions.
  *
  * Keep entries in the same order as the interface fields.
  */
@@ -131,10 +100,4 @@ export const IDENTITIES_TABLE_COLUMNS: Record<IdentitiesStoreTableName, readonly
     "metadata", "created_at",
   ],
   identities: ["id", "token", "actor_id", "name", "metadata", "created_at", "last_used_at"],
-  traits: [
-    "id", "token", "name", "description",
-    "tools", "namespaces", "access", "skills",
-    "metadata", "created_at", "bound", "bag", "instructions",
-  ],
-  bounds: ["id", "token", "name", "description", "bound", "metadata", "created_at"],
 };

@@ -20,7 +20,7 @@ function session(overrides: Partial<AdoptableSession> = {}): AdoptableSession {
     id: "sess-1",
     provider: "claude",
     mode: "guest",
-    providerSessionId: "conv-9",
+    harnessSessionId: "conv-9",
     driverAlive: false,
     ...overrides,
   };
@@ -70,14 +70,14 @@ describe("planAdoption — refusing rather than risking a conversation", () => {
   });
 
   it("refuses when there is no conversation id to continue", () => {
-    const result = planAdoption(session({ providerSessionId: null }), canAdopt);
+    const result = planAdoption(session({ harnessSessionId: null }), canAdopt);
     expect(isAdoptRefusal(result) && result.message).toContain("no recorded provider session id");
   });
 
   it("plans the move for a TUI session that has closed", () => {
     const result = planAdoption(session(), canAdopt);
     if (isAdoptRefusal(result)) throw new Error(result.message);
-    expect(result).toMatchObject({ providerSessionId: "conv-9", from: "guest" });
+    expect(result).toMatchObject({ harnessSessionId: "conv-9", from: "guest" });
   });
 
   it("treats a session with no recorded mode as a guest", () => {

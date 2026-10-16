@@ -209,3 +209,11 @@ describe("acpHosted", () => {
     await expect(broken.start(config(), () => Promise.reject(new Error()))).rejects.toThrow(/did not start an ACP session/);
   });
 });
+
+it("reports an unexpected transport failure before the turn's terminal done",async()=>{
+ const session=await start(fakeHarness().start(config(),()=>Promise.reject(Error("no engine"))));
+ const events=await ask(session,"crash");const kinds=events.map(event=>event.type);
+ expect(kinds.filter(kind=>kind==="done")).toHaveLength(1);
+ expect(kinds.indexOf("error")).toBeGreaterThanOrEqual(0);
+ expect(kinds.indexOf("error")).toBeLessThan(kinds.indexOf("done"));
+});

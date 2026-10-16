@@ -3,7 +3,7 @@
  * See docs/decisions/0011-sdk-runtime-invariants.md for the retained rationale.
  */
 
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, statSync } from "fs";
 import { join } from "path";
 import type { BagRegistry, BagSource, BagToolMeta } from "./types.js";
 import { getRegistrySnapshotPath } from "./paths.js";
@@ -78,8 +78,17 @@ export class RegistrySnapshotError extends Error {
  * all is never legitimate (the writer refuses to produce one), so it arrived
  * by truncation or a bad restore, and is an error rather than an empty machine.
  */
+let registryCache: { path: string; stamp: string | null; registry: BagRegistry } | null = null;
+export function snapshotStamp(): string | null {
+  try {
+    const stat = statSync(getRegistrySnapshotPath());
+    return `${stat.ino}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`;
+  } catch { return null; }
+}
 export function loadRegistry(): BagRegistry {
   const path = getRegistrySnapshotPath();
+  const stamp = snapshotStamp();
+  if (registryCache?.path === path && stamp !== null && registryCache.stamp === stamp) return registryCache.registry;
   const fix =
     "It is generated from config.db: run `barry bag doctor --fix`, or start `barry up`, which regenerates it.";
   if (!existsSync(path)) {
@@ -104,6 +113,7 @@ export function loadRegistry(): BagRegistry {
   if (Object.keys(registry).length === 0) {
     throw new RegistrySnapshotError(`the bag registry snapshot registers no bags (${path}). ${fix}`);
   }
+  registryCache = { path, stamp, registry };
   return registry;
 }
 

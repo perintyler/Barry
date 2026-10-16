@@ -45,3 +45,6 @@ while (built.size < adapters.size) {
   await Promise.all(wave.map(([, { dir }]) => build(dir)));
   for (const [name] of wave) built.add(name);
 }
+
+// Bundle the command after all of its compiled dependencies exist.
+await build(join(repoRoot, "cli"));

@@ -1,42 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { filterTools } from "./filter-tools.js";
-import type { AgentTrait, Bound, ToolMeta } from "./types.js";
+import { filterTools, filterToolsQualified } from "./filter-tools.js";
+import type { Bound, ToolDescriptor } from "./types.js";
 
-const traits: Record<string, AgentTrait> = {
-  core: {
-    name: "core",
-    namespaces: ["filesystem", "bash", "git", "task", "session"],
-    access: "readwrite",
-  },
-  debug: {
-    name: "debug",
-    namespaces: ["sentry", "datadog"],
-    access: "read",
-  },
-  "read-notion": {
-    name: "read-notion",
-    namespaces: ["notion"],
-    access: "read",
-  },
-  "write-notion": {
-    name: "write-notion",
-    namespaces: ["notion"],
-    access: "readwrite",
-  },
-  notion: {
-    name: "notion",
-    namespaces: [],
-    access: "read",
-    includes: ["read-notion", "write-notion"],
-  },
-  slack: {
-    name: "slack",
-    namespaces: ["slack"],
-    access: "readwrite",
-  },
-};
-
-const tools: ToolMeta[] = [
+const tools: ToolDescriptor[] = [
   { namespace: "filesystem", toolName: "read", access: "read" },
   { namespace: "filesystem", toolName: "write", access: "write" },
   { namespace: "filesystem", toolName: "edit", access: "write" },
@@ -51,126 +17,42 @@ const tools: ToolMeta[] = [
 ];
 
 describe("filterTools", () => {
-  it("only includes tools from enabled namespaces", () => {
-    const allowed = filterTools(tools, ["core"], traits);
+  it("returns all tools when bound is null or omitted", () => {
+    const allowed = filterTools(tools);
     expect(allowed).toContain("read");
     expect(allowed).toContain("write");
-    expect(allowed).toContain("status");
-    expect(allowed).not.toContain("search_issues");
-    expect(allowed).not.toContain("send_message");
-  });
-
-  it("read access excludes write tools", () => {
-    const allowed = filterTools(tools, ["debug"], traits);
-    expect(allowed).toContain("search_issues");
-    expect(allowed).not.toContain("create_issue");
-  });
-
-  it("readwrite access includes all tools", () => {
-    const allowed = filterTools(tools, ["core"], traits);
-    expect(allowed).toContain("read");
-    expect(allowed).toContain("write");
-    expect(allowed).toContain("edit");
     expect(allowed).toContain("status");
     expect(allowed).toContain("push");
+    expect(allowed).toContain("search_issues");
+    expect(allowed).toContain("send_message");
   });
 
-  it("bound.deniedTools excludes by namespace", () => {
-    const bound: Bound = { deniedTools: ["filesystem"] };
-    const allowed = filterTools(tools, ["core"], traits, bound);
+  it("tools.deny '<namespace>:*' excludes by namespace", () => {
+    const bound: Bound = { tools: { deny: ["filesystem:*"] } };
+    const allowed = filterTools(tools, bound);
     expect(allowed).not.toContain("read");
     expect(allowed).not.toContain("write");
     expect(allowed).toContain("status");
   });
 
-  it("bound.deniedTools excludes by toolName", () => {
-    const bound: Bound = { deniedTools: ["write"] };
-    const allowed = filterTools(tools, ["core"], traits, bound);
+  it("tools.deny excludes by toolName", () => {
+    const bound: Bound = { tools: { deny: ["write"] } };
+    const allowed = filterTools(tools, bound);
     expect(allowed).toContain("read");
     expect(allowed).not.toContain("write");
     expect(allowed).toContain("edit");
   });
 
-  it("bound.deniedAccess strips write tools by namespace", () => {
-    const bound: Bound = { deniedAccess: ["sentry"] };
-    const allowed = filterTools(tools, ["core", "debug"], traits, bound);
+  it("tools.deny '<namespace>:write' strips write tools by namespace", () => {
+    const bound: Bound = { tools: { deny: ["sentry:write"] } };
+    const allowed = filterTools(tools, bound);
     expect(allowed).toContain("search_issues");
     expect(allowed).not.toContain("create_issue");
   });
 
-  it("bound.deniedAccess strips write tools by toolName", () => {
-    const bound: Bound = { deniedAccess: ["push"] };
-    const allowed = filterTools(tools, ["core"], traits, bound);
-    expect(allowed).toContain("status");
-    expect(allowed).not.toContain("push");
-  });
-
-  it("composite traits expand correctly", () => {
-    const allowed = filterTools(tools, ["notion"], traits);
-    // notion includes read-notion (read) and write-notion (readwrite)
-    // most permissive wins → readwrite
-    expect(allowed).toContain("read_page");
-    expect(allowed).toContain("write_page");
-  });
-
-  it("multiple traits, most permissive wins", () => {
-    const allowed = filterTools(tools, ["read-notion", "write-notion"], traits);
-    expect(allowed).toContain("read_page");
-    expect(allowed).toContain("write_page");
-  });
-
-  it("returns empty list when no traits match", () => {
-    const allowed = filterTools(tools, [], traits);
-    expect(allowed).toHaveLength(0);
-  });
-
-  it("ignores unknown traits", () => {
-    const allowed = filterTools(tools, ["nonexistent"], traits);
-    expect(allowed).toHaveLength(0);
-  });
-
-  it("explicit tool grant enables individual tool without namespace", () => {
-    const specificTrait: Record<string, AgentTrait> = {
-      "sentry-read": {
-        name: "sentry-read",
-        namespaces: [],
-        tools: ["search_issues"],
-        access: "read",
-      },
-    };
-    const allowed = filterTools(tools, ["sentry-read"], specificTrait);
-    expect(allowed).toContain("search_issues");
-    expect(allowed).not.toContain("create_issue"); // write tool, read-only grant
-    expect(allowed).not.toContain("read"); // different namespace, not granted
-  });
-
-  it("explicit tool grant with readwrite enables write tool", () => {
-    const specificTrait: Record<string, AgentTrait> = {
-      "sentry-write": {
-        name: "sentry-write",
-        namespaces: [],
-        tools: ["create_issue"],
-        access: "readwrite",
-      },
-    };
-    const allowed = filterTools(tools, ["sentry-write"], specificTrait);
-    expect(allowed).toContain("create_issue");
-  });
-
-  it("explicit tool grant takes precedence over namespace grant for access level", () => {
-    // namespace 'sentry' granted at read, but search_issues explicitly at readwrite
-    const mixed: Record<string, AgentTrait> = {
-      "debug-read": { name: "debug-read", namespaces: ["sentry"], access: "read" },
-      "sentry-rw": { name: "sentry-rw", namespaces: [], tools: ["create_issue"], access: "readwrite" },
-    };
-    const allowed = filterTools(tools, ["debug-read", "sentry-rw"], mixed);
-    expect(allowed).toContain("search_issues"); // from namespace grant
-    expect(allowed).toContain("create_issue");  // from explicit tool grant at readwrite
-  });
-
-  it("bound.deniedAccess 'write' blocks all write tools globally", () => {
-    const bound: Bound = { deniedAccess: ["write"] };
-    const allowed = filterTools(tools, ["core", "debug", "slack"], traits, bound);
+  it("tools.deny '*:write' blocks all write tools globally", () => {
+    const bound: Bound = { tools: { deny: ["*:write"] } };
+    const allowed = filterTools(tools, bound);
     expect(allowed).toContain("read");
     expect(allowed).toContain("status");
     expect(allowed).toContain("search_issues");
@@ -181,82 +63,67 @@ describe("filterTools", () => {
     expect(allowed).not.toContain("send_message");
   });
 
-  it("handles full pipeline: multiple traits, bound restrictions", () => {
+  it("tools.allow restricts to matching patterns and tools.deny wins on conflict", () => {
     const bound: Bound = {
-      deniedTools: ["send_message"],
-      deniedAccess: ["filesystem"],
+      tools: {
+        allow: ["filesystem:*", "git:*", "slack:*"],
+        deny: ["send_message", "filesystem:write"],
+      },
     };
-
-    const allowed = filterTools(tools, ["core", "debug", "slack"], traits, bound);
-
-    // filesystem: write access denied, so write/edit excluded
+    const allowed = filterTools(tools, bound);
     expect(allowed).toContain("read");
     expect(allowed).not.toContain("write");
     expect(allowed).not.toContain("edit");
-    // git: readwrite, included
     expect(allowed).toContain("status");
     expect(allowed).toContain("push");
-    // sentry: read trait, write tool excluded
-    expect(allowed).toContain("search_issues");
-    expect(allowed).not.toContain("create_issue");
-    // slack: send_message forbidden entirely
     expect(allowed).toContain("list_channels");
     expect(allowed).not.toContain("send_message");
+    expect(allowed).not.toContain("search_issues");
   });
 
-  /**
-   * The filter-tools -> network-classifier crossing, asserted through
-   * filterTools rather than against getImpliedDeniedTools directly.
-   *
-   * `network.actions` does not name a tool; it names an ACTION, and the
-   * classifier is what turns that into tool denials inside the single
-   * authorization pass (filter-tools.ts imports getImpliedDeniedTools and
-   * calls it in allowedToolMeta). Until this test existed the classifier's
-   * own suite covered the mapping and nothing covered the call: stubbing
-   * getImpliedDeniedTools to [] reddened network-classifier.test.ts and left
-   * every filterTools case green, so a bound restricting the network would
-   * have silently authorized the tools it was written to deny.
-   *
-   * This is also the evidence for keeping the schema and the classifier in one
-   * package: the meaning of `network.actions` is only observable here.
-   */
-  it("network.actions implies tool denials through the authorization pass", () => {
-    const bound: Bound = { network: { actions: ["write"] } };
-
-    const allowed = filterTools(tools, ["core"], traits, bound);
-
-    // `write` implies denying push even though the core trait grants git
-    // readwrite and the bound names no deniedTools at all.
+  it("network.deny implies tool denials through the authorization pass", () => {
+    const bound: Bound = { network: { deny: ["write"] } };
+    const allowed = filterTools(tools, bound);
     expect(allowed).not.toContain("push");
-    // Read-side git is untouched: the denial is action-derived, not blanket.
     expect(allowed).toContain("status");
+    expect(filterTools(tools)).toContain("push");
+  });
 
-    // Control: the same traits with no network restriction do allow push, so
-    // the assertion above cannot pass because push was unreachable anyway.
-    expect(filterTools(tools, ["core"], traits)).toContain("push");
+  it("filterToolsQualified returns namespace:toolName", () => {
+    const qualified = filterToolsQualified(
+      [
+        { namespace: "git", toolName: "status", access: "read" },
+        { namespace: "git", toolName: "push", access: "write" },
+      ],
+      { tools: { deny: ["*:write"] } },
+    );
+    expect(qualified).toEqual(["git:status"]);
   });
 });
-
 
 describe("file-bound shell withdrawal", () => {
-  const tools: ToolMeta[] = [{ toolName: "Bash", namespace: "bash", access: "write" }, { toolName: "Read", namespace: "filesystem", access: "read" }];
-  it.each([{ files: { deny: ["*.env"] } }, { files: { allowOnly: [] } }])("withdraws Bash from the advertised inventory", bound => {
-    expect(filterTools(tools, ["core"], traits, bound)).toEqual(["Read"]);
-  });
-  it("keeps Bash when no file restriction applies", () => expect(filterTools(tools, ["core"], traits, {})).toEqual(["Bash", "Read"]));
+  const shellTools: ToolDescriptor[] = [
+    { toolName: "Bash", namespace: "bash", access: "write" },
+    { toolName: "Read", namespace: "filesystem", access: "read" },
+  ];
+  it.each([{ files: { deny: ["*.env"] } }, { files: { allow: [] } }])(
+    "withdraws Bash from the advertised inventory",
+    (bound) => {
+      expect(filterTools(shellTools, bound)).toEqual(["Read"]);
+    },
+  );
+  it("keeps Bash when no file restriction applies", () =>
+    expect(filterTools(shellTools, {})).toEqual(["Bash", "Read"]));
 });
 
-describe("deniedTools casing (step 17)", () => {
-  // A bound written as deniedTools: ["bash"] must take back both the native
-  // Bash tool and a capitalised MCP "Bash", not leave the MCP one reachable
-  // because its catalog name differs in case from the bound entry.
+describe("tools.deny casing", () => {
   it("denies a capitalised MCP tool named by lower-case in the bound", () => {
-    const mixedCaseTools: ToolMeta[] = [
+    const mixedCaseTools: ToolDescriptor[] = [
       { namespace: "bash", toolName: "Bash", access: "write" },
       { namespace: "git", toolName: "status", access: "read" },
     ];
-    const bound: Bound = { deniedTools: ["bash"] };
-    const names = filterTools(mixedCaseTools, ["core"], traits, bound);
+    const bound: Bound = { tools: { deny: ["bash"] } };
+    const names = filterTools(mixedCaseTools, bound);
     expect(names).not.toContain("Bash");
     expect(names).toContain("status");
   });

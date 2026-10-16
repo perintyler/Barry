@@ -1,4 +1,4 @@
-import { getHostingConfig, barryAppSupportDir, barryCacheDir, barryConfigDir, barryEnvPath, barryLogsDir, instanceEnvValue, serviceRegistryPath, hostingPolicyPath } from "@barry-rocks/sdk/services";
+import { getHostingConfig, barryAppSupportDir, barryCacheDir, barryConfigDir, barryEnvPath, barryLogsDir, instanceEnvValue, serviceRegistryPath, hostingConfigPath } from "@barry-rocks/sdk/services";
 
 
 
@@ -16,7 +16,7 @@ export function configCommand(): void {
   console.log(`  Settings you edit: ${barryConfigDir()}`);
   console.log(`  Secrets file:      ${barryEnvPath()}`);
   console.log(`  Service registry:  ${serviceRegistryPath()}`);
-  console.log(`  Hosting policy:    ${hostingPolicyPath()}`);
+  console.log(`  Hosting policy:    ${hostingConfigPath()}`);
   console.log();
 
   console.log("Security");

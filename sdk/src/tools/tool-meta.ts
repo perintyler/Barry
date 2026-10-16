@@ -9,8 +9,8 @@
 import { clearBagRegistrySnapshot, loadBagRegistrySnapshot } from "../bags/loader.js";
 import type { BagRegistrySnapshot } from "../bags/types.js";
 
-/** Tool metadata for trait-based access control — matches @barry-rocks/sdk/bounds ToolMeta */
-export interface ToolMetaEntry {
+/** Tool descriptor entry for bound-based access control — matches @barry-rocks/sdk/bounds ToolDescriptor */
+export interface ToolDescriptorEntry {
   toolName: string;
   namespace: string;
   access: "read" | "write";
@@ -23,39 +23,38 @@ export interface ToolMetaEntry {
 }
 
 /** Cached result — metadata is static for the process lifetime */
-let cached: ToolMetaEntry[] | null = null;
+let cached: ToolDescriptorEntry[] | null = null;
 
 /**
  * Collapse a tool's declared access to the two levels `filterTools` understands.
  *
- * `ToolMeta.access` is `"read" | "write"`, but the three places a level is
- * authored do not agree on that vocabulary: `ToolMetaSchema` accepts
+ * `ToolDescriptor.access` is `"read" | "write"`, but the three places a level is
+ * authored do not agree on that vocabulary: manifest schemas accept
  * `read | readwrite | write`, and a tool module is free to export any string.
- * `filterTools` then withholds a tool from a read-only trait on exactly one
+ * `filterTools` then withholds a tool from a read-only bound on exactly one
  * test — `tool.access === "write"` — so ANY other spelling is treated as
  * readable.
  *
  * That makes the mapping fail-open, which is the wrong direction: a tool
- * stamped `"readwrite"` (the spelling the manifest schema explicitly allows,
- * and the one every trait and bag uses) would be handed to a `access: read`
- * trait. Only the literal `"read"` is read; everything else, including an
- * unrecognized value, is write.
+ * stamped `"readwrite"` (the spelling the manifest schema explicitly allows)
+ * would be handed to a `*:read` bound. Only the literal `"read"` is read;
+ * everything else, including an unrecognized value, is write.
  */
 export function normalizeAccess(access: string): "read" | "write" {
   return access === "read" ? "read" : "write";
 }
 
 /**
- * Collect tool metadata from all registered bags.
+ * Collect tool descriptors from all registered bags.
  *
- * Result is cached for the process lifetime. Call `clearToolMetaCache()`
+ * Result is cached for the process lifetime. Call `clearToolDefinitionsCache()`
  * to force a reload (e.g. after hot-reloading bags).
  */
-export async function collectToolMeta(snapshot?: BagRegistrySnapshot): Promise<ToolMetaEntry[]> {
+export async function collectToolDefinitions(snapshot?: BagRegistrySnapshot): Promise<ToolDescriptorEntry[]> {
   if (cached && !snapshot) return cached;
 
   const resolved = snapshot ?? await loadBagRegistrySnapshot();
-  const seen = new Map<string, ToolMetaEntry>();
+  const seen = new Map<string, ToolDescriptorEntry>();
 
   for (const bag of resolved.bags) {
     for (const tool of bag.tools ?? []) {
@@ -78,8 +77,8 @@ export async function collectToolMeta(snapshot?: BagRegistrySnapshot): Promise<T
   return result;
 }
 
-/** Clear the cached tool metadata (for hot-reload scenarios) */
-export function clearToolMetaCache(): void {
+/** Clear the cached tool descriptors (for hot-reload scenarios) */
+export function clearToolDefinitionsCache(): void {
   cached = null;
   clearBagRegistrySnapshot();
 }

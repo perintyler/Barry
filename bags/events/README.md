@@ -94,6 +94,30 @@ events created *there* — not for every row that reaches `events.db`.
 
 → [hook schema](../../sdk/src/tools/hooks-schema.ts) for the manifest shape.
 
+## Durable event work (prepared, off by default)
+
+The live hook path above is at most once, and nothing in the API uses this yet.
+`work-producer-events.ts` is the durable shape a composition root can opt into:
+
+- **Deduplicated emits.** `createEventOnce(input, sourceKey)` writes the event and
+  its source key together. A producer re-emitting after a crash gets the original
+  row back and fires nothing.
+- **Checkpointed consumers.** `recordEventOccurrences` reads `events.seq` from a
+  per-consumer checkpoint in bounded batches. It records one outbox occurrence per
+  `(consumer, event)` in the same transaction that advances the checkpoint, so a
+  restart neither skips nor repeats an event, and it sees events from every
+  process. A new consumer starts after the current log unless it asks to start
+  from the beginning.
+- **Bounded coalescing.** Opt-in per consumer. Same-key events with identical
+  inputs fold into an occurrence that is still pending, up to a limit. An
+  occurrence that may already be admitted never absorbs more.
+- **Delivery by generation.** `work.v2` occurrences go through an injected
+  admission port (the shared producer adapter in `bags/schedules`), keep their
+  key and request id, and are observed by key after a lost reply. Legacy hook
+  occurrences run through `runBarryHook` with an explicit environment, so they
+  never inherit the API's credentials. Once a legacy hook may have started, it
+  is not run again.
+
 ## Surfaces
 
 ```bash

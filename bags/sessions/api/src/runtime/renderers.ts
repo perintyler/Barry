@@ -2,6 +2,7 @@
 // Moved verbatim as free functions taking the runtime instance (`rt`);
 // the SessionRuntime class delegates to these. Pure move + rewire.
 import { SessionRuntime, log, typedMessagesApart } from "../session-runtime.js";
+import { assertInteractiveDestination } from "../workflow-session-ownership.js";
 import type { ActiveSession, RendererAttachment } from "../session-runtime.js";
 import { updateSessionRecord } from "../db.js";
 import { turnEventsOf } from "../turn-events.js";
@@ -18,6 +19,7 @@ import { randomUUID } from "node:crypto";
    * holds it, and an attachment lasts until it detaches or its launcher dies.
    */
 export async function rt_attachRenderer(rt: SessionRuntime, sessionId: string, launcherPid: number, principal?: AuthPrincipal): Promise<RendererAttachment> {
+    assertInteractiveDestination(sessionId);
     if (principal) await authorizeSessionExecution(principal, { sessionId });
     const activeSession = rt.activeSessions.get(sessionId);
     if (!activeSession) throw new Error(`Session ${sessionId} not found in active sessions`);
@@ -101,6 +103,7 @@ export function rt_checkLaunchers(rt: SessionRuntime): void {
    * attached TUI, as Barry's own turns are. Ends when the session closes.
    */
 export async function rt_recordExternalTurns(rt: SessionRuntime, activeSession: ActiveSession, session: Session): Promise<void> {
+    assertInteractiveDestination(activeSession.id);
     if (!session.externalTurns || rt.recordingExternalTurns.has(session)) return;
     rt.recordingExternalTurns.add(session);
     const typed = (content: string) => rt.broadcastToSession(activeSession.id, {

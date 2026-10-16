@@ -53,7 +53,9 @@ export function promptQueued(sessionId: string): void {
  */
 const REQUEST_TIMEOUT_MS = 5_000;
 
-async function ask<T>(path: string, body: unknown, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
+export function isDeliveryHost(): boolean {return host!==null;}
+
+export async function ask<T>(path: string, body: unknown, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (process.env.BARRY_SECRET) headers.Authorization = `Bearer ${process.env.BARRY_SECRET}`;
   let response: Response;

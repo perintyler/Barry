@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseAgUiEvent } from "@barry-rocks/sdk/apps";
 import type { CredentialAuthorization } from "@barry-rocks/sdk/internal/auth";
 
-const fixture = vi.hoisted(() => ({ records: [] as Array<{ sequence: number; turnId: string; runId: string; event: Record<string, unknown> }> }));
+const fixture = vi.hoisted(() => ({ listeners: new Set<()=>void>(), records: [] as Array<{ sequence: number; turnId: string; runId: string; event: Record<string, unknown> }> }));
+vi.mock("@barry-rocks/sessions-bag/store/turn-continuations",async importOriginal=>({
+  ...await importOriginal<typeof import("@barry-rocks/sessions-bag/store/turn-continuations")>(),
+  watchTurnEvents: (_id:string,fn:()=>void)=>{fixture.listeners.add(fn);return ()=>{fixture.listeners.delete(fn);};},
+}));
 vi.mock("./ag-ui-snapshot.js", () => ({ agUiSnapshot: async (id: string) => {
   if (id !== "session") throw new Error("Session not found");
   return { threadId: id, cursor: 3, messages: [] };
@@ -39,6 +43,7 @@ describe("AG-UI native subscription", () => {
     const first = socket(); first.request({ type: "subscribe", sessionId: "session" });
     await vi.waitFor(() => expect(first.sent[0]).toMatchObject({ type: "snapshot", snapshot: { cursor: 3 } }));
     fixture.records.push({ sequence: 4, turnId: "turn", runId: "run", event: { type: "tool_use", id: "original", tool: "write", input: { value: "exact" } } });
+    for (const notify of fixture.listeners) notify();
     await vi.waitFor(() => expect(first.sent).toHaveLength(4));
     const reconnect = socket(); reconnect.request({ type: "subscribe", sessionId: "session", after: "4:0" });
     await vi.waitFor(() => expect(reconnect.sent).toHaveLength(2));

@@ -1,0 +1,110 @@
+{
+  "date": "2026-10-14",
+  "baseline": {
+    "hosted_ui_spawn_ms": 14500,
+    "version_ms": 800
+  },
+  "startup_tuning": {
+    "before_hosted_ui_spawn_ms": [
+      804.2,
+      680.1,
+      659.6
+    ],
+    "after_hosted_ui_spawn_ms": [
+      409.6,
+      428,
+      538.2
+    ],
+    "median_ms": 428,
+    "changes": [
+      "Respond before resident preparation",
+      "Probe lightweight health endpoint with legacy fallback",
+      "Reuse ownership-validated identity binding",
+      "Initialize only identity and session subjects for hosted start",
+      "Read model declarations without constructing providers",
+      "Reuse hydrated vendor manifests, preserving fresh-install fallback"
+    ]
+  },
+  "version": {
+    "bundle_ms": [
+      44.365083,
+      46.124292,
+      49.39825,
+      58.177375,
+      62.798708
+    ],
+    "bundle_median_ms": 49.39825,
+    "source_median_ms": 150.330833
+  },
+  "guest": {
+    "launch_plan_ms": 1309.0,
+    "composition_ms": 2.7,
+    "load_bags_ms": 12.6,
+    "identity_sync_ms": 4.2,
+    "resolved_variables": 29,
+    "vault_variables": 19,
+    "model_reply": "hi"
+  },
+  "warm": {
+    "warm": 1,
+    "harness_start_stages": false,
+    "same_claude_pid_before_and_after": 83929,
+    "ttl_resident_removed": true,
+    "ttl_row_removed": true
+  },
+  "verification": {
+    "sdk": "2703 passed, 2 skipped",
+    "sessions_api": "754 passed",
+    "identities": "490 passed",
+    "mcp": "457 passed (456 full-suite tests plus the new startup/rollback regression); typecheck passed",
+    "claude": "125 passed, 7 skipped",
+    "vault": "54 passed",
+    "workspace_typecheck": "passed",
+    "contracts": "passed",
+    "goldens": "byte-identical to baseline",
+    "cli": "1475 passed and 6 skipped across the completed full run and isolated regression reruns. Full run: 1473 passed, stale-bundle check failed during commit/rebuild and WAL writer assertion failed under load. Both isolated reruns passed (13 tests). A duplicate full rerun was stopped under load averages above 30 after help timed out; it is not reported as green."
+  },
+  "measurement_context": "Hosted samples use an isolated real sessions API and actual bux identity/database, Claude SDK, MCP and vault. Shared checkout has concurrent SDK edits/builds; installed-service timings must be evaluated separately. One hosted sample exceeded 500 ms under overlapping warm jobs. Guest with concurrent heavy load measured 2442.1 ms; quiet repeat measured 1309.0 ms. Swift checks omitted because BARRY_KIT_DIR is unset. Later, the installed bux shim with the rebuilt normal managed API passed ui:spawn at 413.3 ms. Native UI, guest MCP (41 tools), instrumented reply and resume were subsequently checked against isolated real services to separate this branch from concurrent user SDK edits. Under load, timings exceed budgets; these are warm-run gates, not worst-case latency guarantees.",
+  "release": {
+    "code_commit": "56a5c9c9ccc32f1954b776247b6db84283a18879",
+    "artifact": "/tmp/barry-fast-session-release/barry-0.0.0-g56a5c9c9ccc3-darwin-arm64.tar.gz",
+    "sha256": "d966cc00dba008eae33b36295209caf19f5e4a01d8692195803827dd30e74d6b",
+    "build_and_check": "passed",
+    "bundle_version_median_ms": 175.4,
+    "hook_median_under_build_load_ms": 174.8,
+    "current_checkout_hook_median_ms": 96.9,
+    "swift": "not run; BARRY_KIT_DIR unset"
+  },
+  "installed_checkout_verification": {
+    "sdk_and_cli_generated_outputs_rebuilt": true,
+    "sessions_api_restarted": true,
+    "sessions_schema": 20,
+    "user_staged_and_unstaged_patches_preserved_byte_for_byte": true,
+    "shared_hosted_ui_spawn_ms": [
+      4958.6,
+      970.6,
+      1744.0
+    ],
+    "shared_hosted_health_timeouts": true,
+    "load_average_during_final_duplicate_run": "19\u201334",
+    "default_btui": "Real native PTY attached to an isolated real API using BARRY_API_URL, sent its first warm message, and detached cleanly.",
+    "instrumented": "Real instrumented launch against isolated API replied hi and exited successfully.",
+    "managed_sdk_notes": "Initial managed measurements used stale generated SDK catalog code; the SDK and CLI were rebuilt without changing user sources. Shared checkout also includes concurrent unstaged SDK/subject edits outside this branch.",
+    "warm_hosted_ui_spawn_ms": 413.3,
+    "preceding_quiet_hosted_ui_spawn_ms": 535.5,
+    "current_version_median_ms": 101.6,
+    "current_hook_median_ms": 96.9,
+    "warm_message": "Normal managed API / raw PTY replied hi, warm_hit=1, no harness_create/harness_ready; first event 120.0 ms.",
+    "resume": "Existing session WsFt9C3tqaAdFHTWrvRsz reopened its prompt and retained its ID.",
+    "guest_tui": "Real Claude TUI showed Barry MCP connected with 41 tools against isolated real MCP; actual bux identity/database/vault used."
+  },
+  "mcp_startup": {
+    "before": "Managed MCP readiness blocked for over seven minutes in inline stale rebuilds",
+    "after_isolated_ready_ms": 15147.559583,
+    "tools": 557,
+    "startup_inline_rebuilds": false,
+    "rollback": "BARRY_BAGS_REBUILD=1",
+    "missing_bundle_behavior": "Existing source fallback retained",
+    "maintenance": "Long-lived MCP server starts the existing background worker; stops it on shutdown"
+  }
+}

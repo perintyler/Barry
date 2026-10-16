@@ -24,6 +24,7 @@ import { classifyBashCommand, type BashClassification } from "./bash-classifier.
 const NETWORK_ACTION_HIERARCHY: Record<string, string[]> = Object.assign(
   Object.create(null) as Record<string, string[]>,
   {
+    "*": ["all"],
     all: ["write", "read"],
     // `ssh:read` must hang off `read`, not float free: otherwise
     // `actions: ["all"]` — which every caller reads as "deny all network" —
@@ -523,6 +524,7 @@ export function isDomainDenied(domain: string, domains: string[]): string | null
   const lower = domain.toLowerCase().replace(/\.+$/, "");
   for (const pattern of domains) {
     const p = pattern.toLowerCase().replace(/\.+$/, "");
+    if (p === "*") return pattern;
     if (p.startsWith("*.")) {
       const bare = p.slice(2);
       // `*.foo.com` matches foo.com and any depth of subdomain.
@@ -654,3 +656,543 @@ function normalizeHost(authority: string): string | null {
   host = host.replace(/\.+$/, "").toLowerCase();
   return host || null;
 }
+
+/** All recognized network action tags. */
+export const KNOWN_NETWORK_ACTIONS: ReadonlySet<string> = expandActions(["*", "all"]);
+
+export type ParsedNetworkRule =
+  | { kind: "action"; action: string; raw: string }
+  | {
+      kind: "url";
+      method?: string;
+      scheme: string;
+      hostPattern: string;
+      pathPattern: string;
+      raw: string;
+    }
+  | { kind: "domain"; domain: string; raw: string };
+
+/**
+ * Parse a single network rule entry from `network.allow` or `network.deny`.
+ * Distinguishes action tags (`write`, `http:read`), `[METHOD ]https://...` URL
+ * globs, and domain globs (`*.internal.co`, `api.github.com`).
+ */
+export function parseNetworkRule(entry: string): ParsedNetworkRule {
+  const trimmed = entry.trim();
+  if (KNOWN_NETWORK_ACTIONS.has(trimmed)) {
+    return { kind: "action", action: trimmed, raw: entry };
+  }
+  const urlMatch = trimmed.match(/^(?:([A-Za-z]+|\*)\s+)?([a-z][a-z0-9+.-]*):\/\/([^/?#]+)(\/[^#]*)?$/i);
+  if (urlMatch) {
+    const method = urlMatch[1] ? urlMatch[1].toUpperCase() : undefined;
+    const scheme = urlMatch[2].toLowerCase();
+    const hostPattern = urlMatch[3].toLowerCase().replace(/\.+$/, "");
+    const pathPattern = urlMatch[4] || "/**";
+    return {
+      kind: "url",
+      ...(method && method !== "*" ? { method } : {}),
+      scheme,
+      hostPattern,
+      pathPattern,
+      raw: entry,
+    };
+  }
+  return { kind: "domain", domain: trimmed, raw: entry };
+}
+
+/**
+ * Canonicalize a candidate URL using `new URL(...)` so path traversal
+ * (`/repos/a/b/issues/../pulls`) and percent-encoding are normalized before
+ * matching against URL globs.
+ */
+export function canonicalizeNetworkUrl(rawUrl: string): {
+  scheme: string;
+  host: string;
+  pathname: string;
+  search: string;
+  href: string;
+} | null {
+  try {
+    const parsed = new URL(rawUrl);
+    const scheme = parsed.protocol.replace(/:$/, "").toLowerCase();
+    const host = normalizeHost(parsed.host);
+    if (!host) return null;
+    const pathname = decodeURIComponent(parsed.pathname) || "/";
+    return {
+      scheme,
+      host,
+      pathname,
+      search: parsed.search,
+      href: parsed.href,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function pathGlobToRegExp(pattern: string): RegExp {
+  let regex = "^";
+  let i = 0;
+  while (i < pattern.length) {
+    if (pattern.slice(i, i + 3) === "/**" && i + 3 === pattern.length) {
+      regex += "(?:/.*)?";
+      i += 3;
+      continue;
+    }
+    if (pattern.slice(i, i + 3) === "/**") {
+      regex += "(?:/.*)?";
+      i += 3;
+      continue;
+    }
+    if (pattern.slice(i, i + 2) === "**") {
+      regex += ".*";
+      i += 2;
+      continue;
+    }
+    if (pattern[i] === "*") {
+      regex += "[^/]*";
+      i += 1;
+      continue;
+    }
+    if (pattern[i] === "?") {
+      regex += "[^/]";
+      i += 1;
+      continue;
+    }
+    regex += pattern[i].replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    i += 1;
+  }
+  regex += "$";
+  return new RegExp(regex);
+}
+
+/**
+ * Match a candidate `{ method, url }` against a parsed URL pattern rule.
+ */
+export function matchesUrlPattern(
+  candidate: { method?: string; url: string },
+  rule: Extract<ParsedNetworkRule, { kind: "url" }>,
+): boolean {
+  if (rule.method && rule.method !== "*") {
+    if (!candidate.method || candidate.method.toUpperCase() !== rule.method) {
+      return false;
+    }
+  }
+  const canonical = canonicalizeNetworkUrl(candidate.url);
+  if (!canonical) return false;
+  if (canonical.scheme !== rule.scheme) return false;
+  if (isDomainDenied(canonical.host, [rule.hostPattern]) === null) return false;
+
+  const targetPath = rule.pathPattern.includes("?")
+    ? `${canonical.pathname}${canonical.search}`
+    : canonical.pathname;
+  return pathGlobToRegExp(rule.pathPattern).test(targetPath);
+}
+
+export interface ExtractedHttpRequest {
+  method: string;
+  url: string;
+  host: string;
+  action: "http:read" | "http:write";
+}
+
+function extractCurlMethod(argv: string[]): string {
+  let explicitMethod: string | undefined;
+  let hasBody = false;
+  let hasUpload = false;
+  let hasHead = false;
+  for (let k = 1; k < argv.length; k++) {
+    const a = argv[k];
+    if (a === "--") break;
+    if (!a.startsWith("-") || a === "-") continue;
+    if (a.startsWith("--")) {
+      const eq = a.indexOf("=");
+      const name = (eq === -1 ? a : a.slice(0, eq)).slice(2);
+      if (name === "upload-file") hasUpload = true;
+      else if (CURL_BODY_LONG_FLAGS.has(name)) hasBody = true;
+      else if (name === "head") hasHead = true;
+      else if (name === "request") {
+        const value = eq === -1 ? argv[k + 1] : a.slice(eq + 1);
+        if (value) explicitMethod = value.toUpperCase();
+      }
+      continue;
+    }
+    const cluster = splitCurlShortCluster(a);
+    if (!cluster) return "POST";
+    if (cluster.flags.includes("T")) hasUpload = true;
+    if (cluster.flags.includes("d") || cluster.flags.includes("F")) hasBody = true;
+    if (cluster.flags.includes("I")) hasHead = true;
+    const last = cluster.flags[cluster.flags.length - 1];
+    if (last === "X") {
+      const value = cluster.consumedValue ? a.slice(a.indexOf("X") + 1) : argv[k + 1];
+      if (value) explicitMethod = value.toUpperCase();
+    }
+    if (last !== undefined && CURL_SHORT_FLAGS_WITH_VALUE.has(last) && !cluster.consumedValue) {
+      k++;
+    }
+  }
+  if (explicitMethod) return explicitMethod;
+  if (hasUpload) return "PUT";
+  if (hasBody) return "POST";
+  if (hasHead) return "HEAD";
+  return "GET";
+}
+
+function extractWgetMethod(argv: string[]): string {
+  for (const a of argv) {
+    const m = a.match(/^--method=(.+)$/);
+    if (m) return m[1].toUpperCase();
+    if (a === "--method") return "POST";
+    if (/^--(?:post|body)-(?:data|file)(?:=|$)/.test(a)) return "POST";
+  }
+  return "GET";
+}
+
+function extractHttpieMethod(argv: string[]): string {
+  for (let k = 1; k < argv.length; k++) {
+    const a = argv[k];
+    if (a.startsWith("-")) continue;
+    if (/^[A-Za-z]+$/.test(a)) return a.toUpperCase();
+    break;
+  }
+  if (argv.slice(1).some((a) => !a.startsWith("-") && /^[\w.-]+(?:=|:=|@)/.test(a))) {
+    return "POST";
+  }
+  return "GET";
+}
+
+const GH_API_VALUE_OPTIONS = new Set([
+  "-X", "--method", "-H", "--header", "-f", "--raw-field", "-F", "--field",
+  "--input", "-q", "--jq", "-t", "--template", "--hostname", "--cache",
+]);
+
+function extractGhApiRequests(argv: string[]): { requests: ExtractedHttpRequest[]; unknown: boolean } {
+  let method: string | undefined;
+  let hasField = false;
+  let hostname = "api.github.com";
+  const endpoints: string[] = [];
+  let seenApi = false;
+
+  for (let i = 1; i < argv.length; i++) {
+    const arg = argv[i];
+    if (!seenApi) {
+      if (arg === "api") {
+        seenApi = true;
+        continue;
+      }
+      if (arg === "-R" || arg === "--repo" || arg === "--hostname") {
+        if (arg === "--hostname" && argv[i + 1]) hostname = argv[i + 1];
+        i++;
+      }
+      continue;
+    }
+    if (arg === "-X" || arg === "--method") {
+      if (argv[i + 1]) method = argv[++i].toUpperCase();
+      continue;
+    }
+    const methodMatch = arg.match(/^(?:-X|--method=)(.+)$/);
+    if (methodMatch) {
+      method = methodMatch[1].toUpperCase();
+      continue;
+    }
+    if (arg === "--hostname") {
+      if (argv[i + 1]) hostname = argv[++i];
+      continue;
+    }
+    const hostMatch = arg.match(/^--hostname=(.+)$/);
+    if (hostMatch) {
+      hostname = hostMatch[1];
+      continue;
+    }
+    if (/^-(?:f|F)(?:.+)?$|^--(?:raw-)?field(?:=|$)|^--input(?:=|$)/.test(arg)) {
+      hasField = true;
+      if ((arg === "-f" || arg === "-F" || arg === "--field" || arg === "--raw-field" || arg === "--input") && argv[i + 1]) {
+        i++;
+      }
+      continue;
+    }
+    if (GH_API_VALUE_OPTIONS.has(arg)) {
+      i++;
+      continue;
+    }
+    if (arg.startsWith("-")) continue;
+    endpoints.push(arg);
+  }
+
+  if (!seenApi) return { requests: [], unknown: false };
+  if (endpoints.length === 0) return { requests: [], unknown: true };
+
+  const effectiveMethod = method ?? (hasField ? "POST" : "GET");
+  const action: "http:read" | "http:write" = isMutatingMethod(effectiveMethod) ? "http:write" : "http:read";
+  const requests: ExtractedHttpRequest[] = [];
+  let unknown = false;
+
+  for (const endpoint of endpoints) {
+    if (/\$|`/.test(endpoint)) {
+      unknown = true;
+      continue;
+    }
+    const fullUrl = /^[a-z][a-z0-9+.-]*:\/\//i.test(endpoint)
+      ? endpoint
+      : `https://${hostname}/${endpoint.replace(/^\/+/, "")}`;
+    const canonical = canonicalizeNetworkUrl(fullUrl);
+    if (!canonical) {
+      unknown = true;
+      continue;
+    }
+    requests.push({
+      method: effectiveMethod,
+      url: canonical.href,
+      host: canonical.host,
+      action,
+    });
+  }
+
+  return { requests, unknown };
+}
+
+/**
+ * Extract structured HTTP requests (`{ method, url, host, action }`) from a
+ * bash command across `curl`, `wget`, `httpie`, and `gh api`.
+ */
+export function extractHttpRequestsFromCommand(command: string): {
+  requests: ExtractedHttpRequest[];
+  unknown: boolean;
+} {
+  const classification = classifyBashCommand(command);
+  if (classification.unparseable) return { requests: [], unknown: true };
+
+  const requests: ExtractedHttpRequest[] = [];
+  let unknown = false;
+
+  for (const argv of classification.argvs) {
+    const program = argv[0]?.split("/").at(-1)?.toLowerCase();
+    if (!program) continue;
+
+    if (program === "gh") {
+      const ghRes = extractGhApiRequests(argv);
+      if (ghRes.unknown) unknown = true;
+      requests.push(...ghRes.requests);
+      continue;
+    }
+
+    if (!HTTP_PROGRAMS.has(program)) continue;
+    const domArgs = domainArguments(argv);
+    if (domArgs.unknown || domArgs.targets.length === 0) {
+      unknown = true;
+      continue;
+    }
+
+    const method =
+      program === "curl"
+        ? extractCurlMethod(argv)
+        : program === "wget"
+          ? extractWgetMethod(argv)
+          : extractHttpieMethod(argv);
+    const action: "http:read" | "http:write" = isMutatingMethod(method) ? "http:write" : "http:read";
+
+    for (const target of domArgs.targets) {
+      const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(target)
+        ? target
+        : program === "https"
+          ? `https://${target}`
+          : `http://${target}`;
+      const canonical = canonicalizeNetworkUrl(withScheme);
+      if (!canonical) {
+        unknown = true;
+        continue;
+      }
+      requests.push({
+        method,
+        url: canonical.href,
+        host: canonical.host,
+        action,
+      });
+    }
+  }
+
+  return { requests, unknown };
+}
+
+/**
+ * Extract the allowed hostnames for the sandbox egress proxy (`enforce: "sandbox"`)
+ * from `network.allow`, excluding hosts denied by domain rules in `network.deny`.
+ */
+export function extractSandboxAllowedDomains(network: {
+  allow?: readonly string[];
+  deny?: readonly string[];
+} | null | undefined): string[] {
+  if (!network) return [];
+  const rawAllow = network.allow ?? [];
+  const denyRules = (network.deny ?? []).map(parseNetworkRule);
+  const denyDomains = denyRules.filter((r): r is Extract<ParsedNetworkRule, { kind: "domain" }> => r.kind === "domain").map((r) => r.domain);
+
+  const hosts = new Set<string>();
+  for (const entry of rawAllow) {
+    const parsed = parseNetworkRule(entry);
+    if (parsed.kind === "domain") {
+      if (!denyDomains.length || isDomainDenied(parsed.domain, denyDomains) === null) {
+        hosts.add(parsed.domain);
+      }
+    } else if (parsed.kind === "url") {
+      if (!denyDomains.length || isDomainDenied(parsed.hostPattern, denyDomains) === null) {
+        hosts.add(parsed.hostPattern);
+      }
+    }
+  }
+  return [...hosts];
+}
+
+function doesClauseAllowCommand(
+  clause: readonly string[],
+  commandActions: readonly string[],
+  domains: readonly string[],
+  httpResult: { requests: ExtractedHttpRequest[]; unknown: boolean },
+  unknownDomainTarget: boolean,
+): boolean {
+  if (clause.length === 0) return false;
+  const parsed = clause.map(parseNetworkRule);
+  const allowedActions = expandActions(
+    parsed.filter((r): r is Extract<ParsedNetworkRule, { kind: "action" }> => r.kind === "action").map((r) => r.action),
+  );
+  const allowedDomains = parsed
+    .filter((r): r is Extract<ParsedNetworkRule, { kind: "domain" }> => r.kind === "domain")
+    .map((r) => r.domain);
+  const allowedUrls = parsed.filter(
+    (r): r is Extract<ParsedNetworkRule, { kind: "url" }> => r.kind === "url",
+  );
+
+  // Domain-only allowlist (e.g. `allow: ["api.github.com"]`): every network
+  // target must have a known domain matching `allowedDomains`.
+  if (allowedActions.size === 0 && allowedUrls.length === 0 && allowedDomains.length > 0) {
+    if (unknownDomainTarget || domains.length === 0) return false;
+    return domains.every((d) => isDomainDenied(d, allowedDomains) !== null);
+  }
+
+  for (const action of commandActions) {
+    if (allowedActions.has(action)) continue;
+
+    // Action is not broadly allowed by tag; check if it's an HTTP action whose
+    // requests are all covered by URL patterns or domain patterns in this clause.
+    if (action === "http:read" || action === "http:write") {
+      const matchingActionReqs = httpResult.requests.filter((r) => r.action === action);
+      if (httpResult.unknown || matchingActionReqs.length === 0) return false;
+      const allReqsCovered = matchingActionReqs.every(
+        (req) =>
+          allowedUrls.some((u) => matchesUrlPattern(req, u)) ||
+          (allowedDomains.length > 0 && isDomainDenied(req.host, allowedDomains) !== null),
+      );
+      if (allReqsCovered) continue;
+    }
+
+    return false;
+  }
+
+  // If the command extracted domains (e.g. curl/wget/git clone) and no actions matched
+  if (commandActions.length === 0 && domains.length > 0) {
+    if (allowedDomains.length === 0 && allowedUrls.length === 0) return false;
+    return domains.every(
+      (d) =>
+        (allowedDomains.length > 0 && isDomainDenied(d, allowedDomains) !== null) ||
+        httpResult.requests.some((req) => req.host === d && allowedUrls.some((u) => matchesUrlPattern(req, u))),
+    );
+  }
+
+  return true;
+}
+
+/**
+ * Evaluate a bash command against a unified `Bound["network"]` specification
+ * (`allow`, `allowClauses`, `deny`).
+ *
+ * Returns an error message string when the command is blocked, or `null` when allowed.
+ */
+export function checkNetworkBound(
+  command: string,
+  network: {
+    allow?: readonly string[];
+    allowClauses?: readonly (readonly string[])[];
+    deny?: readonly string[];
+  } | null | undefined,
+): string | null {
+  if (!network) return null;
+
+  const denyList = network.deny ?? [];
+  const allowClauses: readonly (readonly string[])[] =
+    network.allowClauses ?? (network.allow !== undefined ? [network.allow] : []);
+
+  if (denyList.length === 0 && allowClauses.length === 0) return null;
+
+  const classification = classifyBashCommand(command);
+  if (classification.unparseable) {
+    return "Access denied: network action '<unparseable-command>' is restricted in this session.";
+  }
+
+  const commandActions = classifyNetworkActions(classification, command);
+  const domains = extractDomainsFromCommand(command);
+  const httpResult = extractHttpRequestsFromCommand(command);
+  const unknownDomain = hasUnknownDomainTarget(command);
+
+  // Merge domains discovered from `gh api` (which resolves relative paths to api.github.com)
+  const allDomains = [...new Set([...domains, ...httpResult.requests.map((r) => r.host)])];
+
+  // 1. Evaluate `deny` rules
+  if (denyList.length > 0) {
+    const parsedDeny = denyList.map(parseNetworkRule);
+    const denyActions = parsedDeny
+      .filter((r): r is Extract<ParsedNetworkRule, { kind: "action" }> => r.kind === "action")
+      .map((r) => r.action);
+    const denyDomains = parsedDeny
+      .filter((r): r is Extract<ParsedNetworkRule, { kind: "domain" }> => r.kind === "domain")
+      .map((r) => r.domain);
+    const denyUrls = parsedDeny.filter(
+      (r): r is Extract<ParsedNetworkRule, { kind: "url" }> => r.kind === "url",
+    );
+
+    if (denyActions.length > 0) {
+      const expandedDeny = expandActions(denyActions);
+      for (const action of commandActions) {
+        if (expandedDeny.has(action)) {
+          return `Access denied: network action '${action}' is restricted in this session.`;
+        }
+      }
+    }
+
+    if (denyDomains.length > 0) {
+      if (unknownDomain) {
+        return "Access denied: cannot determine the network target under this domain bound.";
+      }
+      for (const domain of allDomains) {
+        const match = isDomainDenied(domain, denyDomains);
+        if (match) {
+          return `Access denied: network requests to '${domain}' are restricted in this session (matches pattern '${match}').`;
+        }
+      }
+    }
+
+    if (denyUrls.length > 0) {
+      if (httpResult.unknown && commandActions.some((a) => a === "http:read" || a === "http:write")) {
+        return "Access denied: cannot determine the HTTP request target under this network URL bound.";
+      }
+      for (const req of httpResult.requests) {
+        const matchedRule = denyUrls.find((u) => matchesUrlPattern(req, u));
+        if (matchedRule) {
+          return `Access denied: HTTP request '${req.method} ${req.url}' is restricted in this session (matches pattern '${matchedRule.raw}').`;
+        }
+      }
+    }
+  }
+
+  // 2. Evaluate `allow` clauses (only applies when the command performs network activity)
+  if (allowClauses.length > 0 && (commandActions.length > 0 || allDomains.length > 0)) {
+    for (const clause of allowClauses) {
+      if (!doesClauseAllowCommand(clause, commandActions, allDomains, httpResult, unknownDomain)) {
+        const actionDesc = commandActions[0] ?? allDomains[0] ?? "network";
+        return `Access denied: network operation '${actionDesc}' is not in this session's network.allow list.`;
+      }
+    }
+  }
+
+  return null;
+}
+

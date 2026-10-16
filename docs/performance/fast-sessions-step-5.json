@@ -1,0 +1,35 @@
+{
+  "step": 5,
+  "date": "2026-10-14",
+  "entry": "bundle",
+  "before": {
+    "pre_create_timeout_ms": null,
+    "health_probe": false,
+    "offline_error_had_endpoint_and_status_hint": false
+  },
+  "after": {
+    "pre_create_timeout_ms": 5000,
+    "health_timeout_ms": 1500,
+    "traits_timeout_ms": 3000,
+    "record_and_attach_timeout_ms": 5000,
+    "message_timeout_ms": 10000,
+    "real_stopped_api_launch_wall_ms": 580.1,
+    "healthy_ui_spawn_ms": 543.6,
+    "health_probe_ms": 246.3,
+    "health_overlapped_identity_and_model_selection": true
+  },
+  "gates": {
+    "stopped_api_fails_under_5000_ms": true,
+    "error_has_port_and_status_hint": true,
+    "legacy_http_refusal_restarts_once_and_retries_create": true,
+    "newer_api_not_restarted": true,
+    "option_and_environment_opt_outs": true,
+    "goldens_unchanged": true
+  },
+  "verification": {
+    "focused_tests": "78 tests passed across API skew, launch-context, launch, UI dispatch and launch-parity; CLI typecheck passed",
+    "http_checks": "Real installed API was stopped, launch failed in 580.1 ms, then API was restarted and healthy. Private HTTP server exercises legacy migration-error refusal followed by restart and a second successful create. Another TCP server accepts requests without answering; early health deadline fails within 1.5 seconds. A fetch that ignores AbortSignal is bounded by a 20 ms injected deadline.",
+    "build_ordering": "Schema and release version provide ordering; unequal commits at equal release version are unknown. Development builds compare schema. A store newer than the CLI is never treated as a restartable old API.",
+    "limitation": "The HTTP downgrade check simulates an old migration response rather than running an actual obsolete binary. Real service restoration is verified separately. Healthy timing remains sensitive to host load and API warm-up; final gate audit follows guest-path work."
+  }
+}

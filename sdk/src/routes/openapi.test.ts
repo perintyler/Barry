@@ -27,7 +27,37 @@ describe("OpenAPI from routes", () => {
     const document = openApiDocument(apiRoutes);
     expect(document.openapi).toBe("3.1.0");
     expect(document.servers).toEqual([{ url: "/api/v1" }]);
-    expect(apiRoutes).toHaveLength(86);
+    expect(apiRoutes).toHaveLength(92);
+    expect(document.paths["/actions/work-items/{id}"]?.get).toMatchObject({ operationId: "getSessionWorkflowWork",
+      parameters: expect.arrayContaining([{ name: "session_id", in: "query", required: true, schema: { type: "string", minLength: 1, maxLength: 200 } }]),
+      responses: { 200: { content: { "application/json": { schema: { $ref: "#/components/schemas/ActionWorkItem" } } } } },
+    });
+    expect(document.paths["/actions/work-items/{id}/result"]?.get).toMatchObject({ operationId: "getSessionWorkflowWorkResult" });
+    expect(document.paths["/actions/work-items/{id}/stop"]?.post).toMatchObject({ operationId: "stopSessionWorkflowWork",
+      responses: { 202: { content: { "application/json": { schema: { $ref: "#/components/schemas/ActionWorkStopAck" } } } } },
+    });
+    expect(document.paths["/actions/{name}/work-start"]?.post).toMatchObject({ operationId: "startSessionWorkflowAction",
+      parameters: expect.arrayContaining([{ name: "session_id", in: "query", required: true, schema: { type: "string", minLength: 1, maxLength: 200 } }]),
+      requestBody: { content: { "application/json": { schema: { $ref: "#/components/schemas/ActionWorkflowStartRequest" } } } },
+    });
+    expect(document.paths["/actions/{name}/work-start-agent"]?.post).toMatchObject({ operationId: "startSessionWorkflowAgentAction",
+      parameters: expect.arrayContaining([{ name: "session_id", in: "query", required: true, schema: { type: "string", minLength: 1, maxLength: 200 } }]),
+      requestBody: { content: { "application/json": { schema: { $ref: "#/components/schemas/ActionWorkflowStartRequest" } } } },
+    });
+    expect(document.paths["/actions/work-operations/{key}"]?.get).toMatchObject({ operationId: "lookupSessionWorkflowAction" });
+    expect(document.paths["/actions/runs/{id}/work-stop"]?.post).toMatchObject({ operationId: "stopSessionWorkflowAction",
+      parameters: expect.arrayContaining([{ name: "session_id", in: "query", required: true, schema: { type: "string", minLength: 1, maxLength: 500 } }]),
+      requestBody: { content: { "application/json": { schema: { $ref: "#/components/schemas/ActionWorkflowStopRequest" } } } },
+      responses: { 202: { content: { "application/json": { schema: { $ref: "#/components/schemas/ActionWorkflowStopAck" } } } } },
+    });
+    expect(document.paths["/actions/runs/{id}/cancel"]).toMatchObject({
+      post: {
+        operationId: "stopWorkflowAction",
+        requestBody: { content: { "application/json": { schema: { $ref: "#/components/schemas/ActionWorkflowStopRequest" } } } },
+        responses: { 202: { content: { "application/json": { schema: { $ref: "#/components/schemas/ActionWorkflowStopAck" } } } } },
+      },
+    });
+    expect(document.paths["/sessions/{sessionId}/prepare"]).toMatchObject({ post: { operationId: "prepareSession", responses: { 202: { content: { "application/json": { schema: { $ref: "#/components/schemas/ActionAck" } } } } } } });
     expect(document.paths["/sessions/{sessionId}/backfill"]).toMatchObject({
       post: {
         operationId: "backfillSession",

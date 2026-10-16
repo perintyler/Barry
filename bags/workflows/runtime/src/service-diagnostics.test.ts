@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,4 +26,19 @@ it.each(["info", "silent"])("startup failure uses structured stderr and respects
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+it("does not log invalid dedicated delegation key material on startup failure", () => {
+  const root = mkdtempSync(join(tmpdir(), "workflow-secret-diagnostic-"));
+  const keyPath = join(root, "delegation.json");
+  writeFileSync(keyPath, "SYNTHETIC_PRIVATE_KEY_MUST_NOT_APPEAR");
+  try {
+    const child = spawnSync(process.execPath, ["--import", "tsx", fileURLToPath(new URL("./service.ts", import.meta.url))], {
+      env: { PATH: process.env.PATH, BARRY_HOME: join(root, "instance"), BARRY_SECRET: "fixture-service-secret", BARRY_WORKFLOW_DELEGATION_KEYS: keyPath, NODE_NO_WARNINGS: "1" },
+      encoding: "utf8", timeout: 15000,
+    });
+    expect(child.error).toBeUndefined(); expect(child.status).toBe(1);
+    expect(child.stderr).toContain("Dedicated work delegation key configuration is unreadable or invalid.");
+    expect(child.stderr).not.toContain("SYNTHETIC");
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

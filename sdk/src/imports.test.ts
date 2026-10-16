@@ -15,9 +15,9 @@ it("imports and uses concepts without an installation, listener, or child proces
       syncBuiltinESMExports();
       await import("@barry-rocks/sdk");
       await import("@barry-rocks/sdk/openapi.json", { with: { type: "json" } });
-      for (const name of ["testing", "tools", "bags", "services", "services/http", "stores", "logging", "logging/edge", "auth", "apps", "events", "transcripts", "ids", "http", "acp", "mcp", "bounds", "sessions", "adapters/harnesses", "adapters/models", "internal/traits", "internal/identities", "internal/instructions"]) await import("@barry-rocks/sdk/" + name);
-      const { Traits } = await import("@barry-rocks/sdk/internal/traits");
-      if (Traits.select({identity:{bags:["unselected"],traits:["reader"]}}).join() !== "reader") throw new Error("unexpected selection");
+      for (const name of ["testing", "tools", "bags", "services", "services/http", "stores", "logging", "logging/edge", "auth", "apps", "events", "transcripts", "ids", "http", "acp", "mcp", "bounds", "sessions", "adapters/harnesses", "adapters/models", "internal/identities", "internal/instructions"]) await import("@barry-rocks/sdk/" + name);
+      const { parseBounds } = await import("@barry-rocks/sdk/internal/identities");
+      if (parseBounds(["readonly"]).map((b) => b.name).join() !== "readonly") throw new Error("unexpected selection");
     `;
     const env = { ...process.env, HOME: home, BARRY_HOME: home, TSX_DISABLE_CACHE: "1" };
     for (const key of Object.keys(env)) if (key.startsWith("BARRY_") && key !== "BARRY_HOME") delete (env as Record<string, string | undefined>)[key];

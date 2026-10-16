@@ -22,7 +22,8 @@
   "scripts": {
     "build": "node ../../scripts/build-package.mjs",
     "prepack": "node ../../../.github/ci/prepare-package-license.mjs && node ../../scripts/build-package.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "engines": {
     "node": "26.x"

@@ -2,7 +2,7 @@
 
 The two tools that read standing guidance: `search_instructions` lists what a
 session can pull in, and `get_instructions` returns one in full. Every session
-has them (`instructions` is a default trait), deferred behind `tool_search`:
+has them (`instructions` is a base bag), deferred behind `tool_search`:
 guidance is looked up when a task calls for it, not on every turn.
 
 The bag owns the tools, not the prose. An instruction is a markdown file in any
@@ -15,7 +15,7 @@ start; `on-demand`, the default, costs one index line until it is fetched here.
 - `src/tools.ts`: both tools. They list the session's own bags when the engine
   names them, and `get_instructions` then falls back to every bag, so a pointer
   in the session's own prompt stays fetchable.
-- `sdk/src/instructions/instruction-catalog.ts`: discovery and precedence. An
+- `sdk/src/instructions/instruction-index.ts`: discovery and precedence. An
   identity's instruction overrides a bag's of the same name; `source:name`
   still reaches the overridden one.
 - `sdk/src/instructions/instruction-manifest.ts`: the file format, validated

@@ -28,6 +28,16 @@ describe("migrating a store", () => {
     expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 2 });
   });
 
+  it("validates a current store while another connection holds the write lock", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "migrate-readonly-")), "s.db");
+    const writer = open(path);
+    migrateStore(writer, MIGRATIONS, "s.db");
+    const reader = open(path);
+    reader.exec("PRAGMA busy_timeout = 0");
+    writer.exec("BEGIN IMMEDIATE");
+    try { expect(migrateStore(reader, MIGRATIONS, "s.db")).toEqual({ from: 2, to: 2 }); }
+    finally { writer.exec("ROLLBACK"); reader.close(); writer.close(); }
+  });
   it("refuses a store newer than this build knows", () => {
     const db = open(join(mkdtempSync(join(tmpdir(), "migrate-")), "s.db"));
     migrateStore(db, MIGRATIONS, "s.db");

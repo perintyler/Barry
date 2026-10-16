@@ -1,3 +1,4 @@
+import {stopProcess as stopOwnedChild} from "@barry-rocks/sdk/sessions";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import type { Guarantees } from "@barry-rocks/sdk/adapters/harnesses";
@@ -116,6 +117,7 @@ export class AntigravityStreamSession implements Session {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    if(this.turnOpen){this.turnOpen=false;this.eventQueue.push({type:"done"});}
     this.pendingQueue = [];
     this.clearReleaseTimer();
     if (this.process_) {
@@ -156,7 +158,7 @@ export class AntigravityStreamSession implements Session {
 
     this.workspace = writeAntigravityWorkspace(this.config, Boolean(jsonSchema));
 
-    const bin = resolveAntigravityBin();
+    const bin = resolveAntigravityBin(this.config.env);
     const args = [
       "--input-format", "stream-json",
       "--output-format", "stream-json",
@@ -280,13 +282,7 @@ export class AntigravityStreamSession implements Session {
   }
 
   private stopProcess(child: ChildProcess, signal: NodeJS.Signals): Promise<void> {
-    if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
-    return new Promise(resolve => {
-      const finished = () => { clearTimeout(force); child.removeListener("exit", finished); resolve(); };
-      const force = setTimeout(() => { child.kill("SIGKILL"); }, 1000);
-      child.once("exit", finished);
-      child.kill(signal);
-    });
+    return stopOwnedChild(child,1000,signal);
   }
 
   private clearReleaseTimer(): void {

@@ -162,10 +162,6 @@
       "types": "./dist/tools/internal.d.ts",
       "import": "./dist/tools/internal.js"
     },
-    "./internal/traits": {
-      "types": "./dist/traits/index.d.ts",
-      "import": "./dist/traits/index.js"
-    },
     "./internal/vault": {
       "types": "./dist/vault/index.d.ts",
       "import": "./dist/vault/index.js"
@@ -182,6 +178,7 @@
     "generate": "tsx scripts/generate-ag-ui-fixtures.ts",
     "check:generated": "tsx scripts/generate-ag-ui-fixtures.ts --check",
     "maintenance": "tsx src/workflows/maintenance-cli.ts",
+    "work-host": "tsx src/workflows/work-process-host-cli.ts",
     "prepack": "node ../.github/ci/prepare-package-license.mjs && node scripts/build.mjs"
   },
   "engines": {

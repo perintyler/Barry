@@ -1,9 +1,10 @@
 import { installationRoot } from "@barry-rocks/sdk/services";
-import { installationSecrets } from "@barry-rocks/sdk/internal/services";
+
 
 // The selected instance owns its credential; an unrelated shell value cannot replace it.
 export async function useInstanceSecret(): Promise<void> {
   delete process.env.BARRY_SECRET;
+  const { installationSecrets } = await import("@barry-rocks/sdk/internal/services");
   const { BARRY_SECRET: secret } = await installationSecrets(["BARRY_SECRET"], { allowUnconfiguredInstance: true });
   if (secret) process.env.BARRY_SECRET = secret;
   else delete process.env.BARRY_SECRET;

@@ -1,0 +1,34 @@
+{
+  "step": 4,
+  "date": "2026-10-14",
+  "entry": "bundle",
+  "before": {
+    "identity_version_parse_ms": 1175.8,
+    "hosted_ui_spawn_ms": 932.6
+  },
+  "after": {
+    "identity_version_wall_median_ms": 42.166333,
+    "identity_version_source_wall_median_ms": 84.991417,
+    "hook_dispatch_wall_median_ms": 70.443375,
+    "hook_dispatch_process_ms": 44.6,
+    "hosted_ui_spawn_ms": 493.6,
+    "composition_ms": 2.3,
+    "models_ms": 104.2
+  },
+  "gates": {
+    "version_bundle_under_300_ms": true,
+    "hook_under_120_ms": true,
+    "hosted_sample_under_500_ms": true,
+    "source_override_works": true,
+    "goldens_unchanged": true
+  },
+  "measurement_notes": "Five version and hook runs. Hook timing uses an unregistered bag and exercises safe resolution failure, not a TypeScript hook body. Hosted launch used the real installed bux binding and restarted API; btui rejects a noninteractive terminal after the measured spawn. Later samples under substantial concurrent machine load are not comparable (bin:start alone reached 240 ms). Final interactive and guest checks remain.",
+  "verification": {
+    "cli_full": "1431 passed, 6 skipped; four failures followed up below",
+    "failed_test_followup": "Identity rename/help regression fixed; two load-related timeouts pass with maxWorkers=4; existing macOS real-path assertion corrected. All six follow-up files passed (10 tests).",
+    "focused": "52 entry/import/release/parity tests, 99 help/boundary tests, 28 additional launch tests and 39 final boundary/release/parity tests passed; one existing skip",
+    "relocated_bundle": "Both version entries run with no node_modules or TS sources",
+    "typecheck": "CLI passed",
+    "release_build": "build:packages now bundles before production prune; full tarball build/check deferred to final verification"
+  }
+}

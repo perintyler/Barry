@@ -1,3 +1,8 @@
+import {recordSessionStateInThread} from "@barry-rocks/sessions-bag/store/threaded-persist";
+import {getSessionsSqlite} from "@barry-rocks/sessions-bag/store/sessions-db";
+import {PersistQueue} from "./runtime/persist-queue.js";
+import { randomUUID } from "node:crypto";
+import { sessionRuntime } from "./session-runtime.js";
 /** Adapt the single session vocabulary over the session and configuration stores; see docs/decisions/0014-discovery-vault-and-session-budgets.md. */
 import {
   getSession as _getSession,
@@ -7,7 +12,7 @@ import {
   issueWorkflowCredential,
   type SessionRecord,
   shouldPersist,
-  appendMessage,
+  appendMessage as storeAppendMessage,
   forgetSession,
   formatSessionHistory,
   buildSessionHistoryContext,
@@ -72,9 +77,38 @@ export async function lastMessageSequence(sessionId: string): Promise<number> {
   return typeof sequence === "number" ? sequence : -1;
 }
 
+/** Frequent turn-state writes share the recording worker, not the socket loop. */
+export async function updateSessionRecord(id:Parameters<typeof _updateSession>[0],updates:Parameters<typeof _updateSession>[1],options:{defer?:boolean}={}):ReturnType<typeof _updateSession> {
+  const active=sessionRuntime?.getActiveSession?.(id);
+  if (options.defer && active && updates.status && Object.keys(updates).every(key=>key==="status"||key==="started_at")) {
+    const path=getSessionsSqlite().name;
+    active.statePersistence??=new PersistQueue<null>((lagging)=>sessionRuntime.publishPersistenceHealth(id,"state",lagging));
+    active.statePersistence.enqueue(null,64,()=>recordSessionStateInThread(path,id,updates.status!,updates.started_at));
+    return undefined;
+  }
+  return _updateSession(id,updates);
+}
+
+/** Hook/control writers share the resident allocator too. Keeping their origin
+ * on the event preserves attribution while the worker isolates SQLite waits. */
+export const appendMessage: typeof storeAppendMessage = (id, input, harnessSessionId, origin) => {
+  const active=sessionRuntime?.getActiveSession?.(id);
+  if (active && !input.dedupeKey?.startsWith("engine:") && shouldPersist(input.type)) {
+    const message={...input,
+      ...(input.type!=="tool_result" ? {sequence:++active.lastSequence} : {}),
+      dedupeKey:`engine:${randomUUID()}`,
+      ...(origin?.channel ? {channel:origin.channel} : {}),
+    };
+    active.persistence??=new PersistQueue((lagging)=>sessionRuntime.publishPersistenceHealth(id,"messages",lagging));
+    (active.turnFrames??=[]).push(message);
+    active.persistence.enqueue(message,Buffer.byteLength(JSON.stringify(message)),()=>storeAppendMessage(id,message,harnessSessionId,{...origin,channel:"engine"}));
+    return Promise.resolve(message.sequence??null);
+  }
+  return storeAppendMessage(id,input,harnessSessionId,origin);
+};
+
 export {
   shouldPersist,
-  appendMessage,
   forgetSession,
   formatSessionHistory,
   buildSessionHistoryContext,
@@ -84,7 +118,6 @@ export {
   createNamedSession,
   _getSession as getSessionRecord,
   _listSessions as listSessionRecords,
-  _updateSession as updateSessionRecord,
   updateSessionMetadata,
   issueWorkflowCredential,
 };

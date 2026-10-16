@@ -218,7 +218,7 @@ Original rationale:
  * imported once, an unchanged one never. A bag run from source (no build) is
  * imported every time, as before.
  *
- * The contract hash is here so access checks (`collectToolMeta`) need no
+ * The contract hash is here so access checks (`collectToolDefinitions`) need no
  * import either: hashing every bag's tools by importing them cost the same 7s
  * in each service that checks a grant. It is stamped with the code that
  * derives it as well as the bundle, since either changing moves the hash.

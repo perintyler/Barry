@@ -17,7 +17,7 @@ tunnels:
       "8451": workflows.runtime
 ```
 
-The worker endpoint must be callable without an interactive sign-in gate. A public route also exposes the operator console and its sign-in page. See the [hosting policy schema](../sdk/src/services/hosting/policy.ts) and the [tested private-route example](../cli/src/commands/workers-url.test.ts) for the configuration shape; provider installation and credentials follow that provider's instructions.
+The worker endpoint must be callable without an interactive sign-in gate. A public route also exposes the operator console and its sign-in page. See the [hosting config schema](../sdk/src/services/hosting/config.ts) and the [tested private-route example](../cli/src/commands/workers-url.test.ts) for the configuration shape; provider installation and credentials follow that provider's instructions.
 
 On the owner:
 
@@ -28,7 +28,7 @@ barry workers invite second-mac --jobs sessions:summarize-session@1
 barry workers list --json
 ```
 
-`barry up` applies the hosting policy. Before inviting the worker, check that hosting status shows the intended private HTTPS address and applied target with no interactive gate. Doctor does not establish tunnel reachability before enrollment.
+`barry up` applies the hosting configuration. Before inviting the worker, check that hosting status shows the intended private HTTPS address and applied target with no interactive gate. Doctor does not establish tunnel reachability before enrollment.
 
 The invite prints a `barry workers join` command once. Transfer that exact command privately and run it on the worker, then:
 

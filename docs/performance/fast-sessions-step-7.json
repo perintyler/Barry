@@ -1,0 +1,35 @@
+{
+  "step": 7,
+  "date": "2026-10-14",
+  "before": {
+    "new_start_picker_prechecked_traits": [],
+    "picker_required_for_repeated_selection": true
+  },
+  "after": {
+    "last_selection_prepare_ms": 0.648625,
+    "last_skipped_picker": true,
+    "plain_start_prechecked_traits": [
+      "git"
+    ],
+    "saved_traits": [
+      "git"
+    ],
+    "memory_key": "identityId plus canonical installed harness id",
+    "path": "barryConfigDir()/trait-selections.json"
+  },
+  "gates": {
+    "TTY_select_then_last_reuses_same_traits": true,
+    "plain_start_prechecks_memory": true,
+    "resume_prechecks_its_own_traits": true,
+    "explicit_flags_override_memory": true,
+    "all_and_none_do_not_overwrite_memory": true,
+    "environment_alias_supported": true,
+    "goldens_unchanged": true
+  },
+  "verification": {
+    "focused": "60 memory/selection/resume/help/parity tests passed with one existing skip; 48 bundle/import/boundary/selection tests passed; CLI typecheck passed",
+    "TTY_probe": "Actual inquirer picker plus shared prepareSession in a scratch BARRY_HOME; row creation was injected. First space+Enter selected git; --last did not call the picker and completed preparation in 0.65 ms; next plain start displayed git checked and Enter retained it. Actual user preferences were untouched, and the scratch preference directory was trashed.",
+    "storage": "Atomic mode-600 writes with the instance mutation lock. Missing or corrupt preferences read empty; failure to save warns and never prevents a launch. Empty, all and none choices preserve the previous nonempty selection.",
+    "compatibility_deviation": "Resume already defines --last as a conversation flag, with tests requiring the recorded conversation to remain authoritative. It is preserved. --last-traits selects remembered capabilities on resume; fresh session start uses --last. BARRY_TRAITS=last applies to new starts; plain resume retains its session traits as pre-checks."
+  }
+}

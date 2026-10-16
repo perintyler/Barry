@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { mergeVendorFactories, type VendorFactories } from "./catalog.js";
+import { mergeVendorFactories, type VendorFactories } from "./models.js";
 
 it("combines separate providers and retains each kind for a shared vendor", () => {
   const completion = () => { throw new Error("fixture completion"); };

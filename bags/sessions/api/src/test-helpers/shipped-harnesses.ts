@@ -18,6 +18,8 @@ import { setAgentRuntime } from "../agent-runtime.js";
 import type { CreateSessionFn, RunStructuredFn } from "../agent-runtime-types.js";
 import { installedAdapter } from "./installed-adapter.js";
 
+import { nativeToolDenials } from "@barry-rocks/sdk/bounds";
+
 function hosted(egressSandbox: boolean, gating: Mode["guarantees"]["gating"] = "static"): Mode {
   return {
     guarantees: { capture: "total", delivery: "wake", steer: false, interrupt: true, gating, keepsVendorUi: false, identity: "inherent" },
@@ -37,10 +39,16 @@ function harness(
   const base = installedAdapter(id);
   const directory = new URL(`../../../../../adapters/sessions/${id === "claude-code" ? "claude" : id}`, import.meta.url).pathname;
   const manifest = parseManifest(directory)!;
-  const nativeTools = [...new Set(Object.values(manifest.bounds ?? {}).flatMap((entry) => entry.bound.nativeTools?.[id] ?? []))];
+  const tools = [
+    ...new Set(
+      Object.values(manifest.bounds ?? {}).flatMap((entry) =>
+        nativeToolDenials(entry.bound, id, undefined, aliases),
+      ),
+    ),
+  ];
   return installedAdapter(id, {
     bag: { path: directory, manifest },
-    nativeTools,
+    tools,
     ...(aliases.length ? { aliases } : {}),
     ...(vendor ? { vendor } : {}),
     capabilities: { ...base.capabilities, ...capabilities },

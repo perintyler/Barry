@@ -15,12 +15,13 @@ import type { Mode, Requirements } from "@barry-rocks/sdk/adapters/harnesses";
 
 // The supported v2 CLI and the older package share a binary name; inspect the resolved build.
 // Rationale: docs/decisions/0010-adapter-and-session-regression-invariants.md#note-008
-const VERIFIED_ON = "2.0.24";
+const VERIFIED_ON = "2.0.26";
 
 const LIVE_CHECK = "adapters/sessions/opencode/src/live/opencode-live.test.ts";
 
 export const OPENCODE_HOSTED: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: ["2.0.24", VERIFIED_ON], supportedVersions: [{ min: "2.0.24", max: VERIFIED_ON }], incompatibleVersions: [{ range: { min: "0.0.0", before: "2.0.0" }, reason: "The v1 CLI does not provide the v2 standalone/server interface this adapter drives" }] },
   guarantees: {
     capture: "total",
     delivery: "wake",
@@ -36,13 +37,14 @@ export const OPENCODE_HOSTED: Mode = {
   evidence: {
     check: LIVE_CHECK,
     proves:
-      "a hosted session on the real server puts each call of a Barry tool to Barry under Barry's name for it and runs it once allowed, offers the model no native tool, has Barry's tools on its first turn, steers a running turn, interrupts one, and authenticates with the identity's key. the live 2.0.24 server loads its private per-process config file. hosted/serve-session.test.ts retains the 2.0.14 recorded stream for turn/permission mapping; current live checks establish these operations on 2.0.24 without claiming a newly recorded replay",
+      "a hosted session on the real server puts each call of a Barry tool to Barry under Barry's name for it and runs it once allowed, offers the model no native tool, has Barry's tools on its first turn, steers a running turn, interrupts one, and authenticates with the identity's key. the live 2.0.24 and 2.0.26 servers loads its private per-process config file. hosted/serve-session.test.ts retains the 2.0.14 recorded stream for turn/permission mapping; current live checks establish these operations on 2.0.24 and 2.0.26 without claiming a newly recorded replay",
   },
   egressSandbox: false,
 };
 
 export const OPENCODE_GUEST: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: ["2.0.24", VERIFIED_ON], supportedVersions: [{ min: "2.0.24", max: VERIFIED_ON }], incompatibleVersions: [{ range: { min: "0.0.0", before: "2.0.0" }, reason: "The v1 CLI does not provide the v2 standalone/server interface this adapter drives" }] },
   guarantees: {
     // The conversation is opencode's own, in the session's data dir; Barry
     // does not read it while it runs.
@@ -66,19 +68,20 @@ export const OPENCODE_GUEST: Mode = {
 };
 
 /** The version in `--version` output: its first capture group. Shared by doctor and the adapter. */
-export const VERSION_PATTERN = "(\\d+\\.\\d+\\.\\d+)";
+export const VERSION_PATTERN = "(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?)";
 
 export const OPENCODE_REQUIREMENTS: Requirements = {
   binary: {
     command: "opencode",
+    overrideEnv: "OPENCODE_BIN",
     versionArgs: ["--version"],
     versionPattern: VERSION_PATTERN,
     install: {
-      // Pinned: the guarantees above hold for this build. Homebrew's formula
+      // Recommended: the guarantees above were tested on this build. Homebrew's formula
       // trails npm.
       darwin: `npm install -g @opencode/cli@${VERIFIED_ON}`,
       fallback: `npm install -g @opencode/cli@${VERIFIED_ON}`,
     },
-    pin: { version: VERIFIED_ON, enforcedBy: "OPENCODE_DISABLE_AUTOUPDATE=1 in the launch env" },
+    recommendedVersion: VERIFIED_ON,
   },
 };

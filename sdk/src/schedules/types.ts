@@ -9,14 +9,14 @@ import { z } from "zod";
  * caller's own values, which must come back exactly as they were given.
  */
 
-export const OneOffStatusSchema = z.enum(["pending", "running", "succeeded", "failed", "cancelled", "uncertain"]);
-export const OneOffAttemptOutcomeSchema = z.enum(["running", "succeeded", "failed", "timed_out", "abandoned"]);
+export const AtScheduleStatusSchema = z.enum(["pending", "running", "succeeded", "failed", "cancelled", "uncertain"]);
+export const AtScheduleAttemptOutcomeSchema = z.enum(["running", "succeeded", "failed", "timed_out", "abandoned"]);
 
-export const OneOffRequestSchema = z.strictObject({
+export const AtScheduleRequestSchema = z.strictObject({
   /** A declared action, `bag:name`. */
   action: z.string().regex(/^[^:]+:.+$/, "a declared action, bag:name"),
   identity: z.string().optional(),
-  traits: z.array(z.string()).optional(),
+  bags: z.array(z.string()).optional(),
   bounds: z.array(z.string()).optional(),
   dueAt: z.iso.datetime(),
   /** Checked against the action's input_schema now and again when it runs. */
@@ -28,44 +28,60 @@ export const OneOffRequestSchema = z.strictObject({
   retry: z.strictObject({ attempts: z.int().min(1).max(5) }).optional(),
 });
 
-export const OneOffAttemptSchema = z.object({
+export const AtScheduleAttemptSchema = z.object({
   id: z.string(),
   number: z.int().positive(),
   /** The action run this attempt produced. */
   runId: z.string().nullable(),
   startedAt: z.iso.datetime(),
   finishedAt: z.iso.datetime().nullable(),
-  outcome: OneOffAttemptOutcomeSchema,
+  outcome: AtScheduleAttemptOutcomeSchema,
   exitCode: z.int().nullable(),
 }).strict();
 
-export const OneOffSchema = z.object({
+export const AtScheduleSchema = z.object({
   id: z.string(),
   bag: z.string(),
   action: z.string().nullable(),
   job: z.string().nullable().optional(),
-  permissions: z.object({ identity: z.string().optional(), traits: z.array(z.string()).optional(), bounds: z.array(z.string()).optional() }).optional(),
+  permissions: z.object({
+    identity: z.string().optional(),
+    bags: z.array(z.string()).optional(),
+    bounds: z.array(z.string()).optional(),
+  }).optional(),
   inputs: z.record(z.string(), z.unknown()),
   dueAt: z.iso.datetime(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  status: OneOffStatusSchema,
+  status: AtScheduleStatusSchema,
   reason: z.string().nullable(),
   idempotencyKey: z.string().nullable(),
   timeoutS: z.int(),
   retryAttempts: z.int(),
   failures: z.int().nonnegative(),
   recoveries: z.int().nonnegative(),
-  attempts: z.array(OneOffAttemptSchema).optional(),
+  attempts: z.array(AtScheduleAttemptSchema).optional(),
 }).strict();
 
-export const OneOffResponseSchema = z.object({ schedule: OneOffSchema }).strict();
-export const OneOffListResponseSchema = z.object({ schedules: z.array(OneOffSchema) }).strict();
+export const AtScheduleResponseSchema = z.object({ schedule: AtScheduleSchema }).strict();
+export const AtScheduleListResponseSchema = z.object({ schedules: z.array(AtScheduleSchema) }).strict();
 /** `cancelRequested`: it was running, so it was asked to stop and will end `cancelled`. */
-export const OneOffCancelResponseSchema = z.object({ cancelled: z.boolean(), status: OneOffStatusSchema, cancelRequested: z.boolean().optional() }).strict();
+export const AtScheduleCancelResponseSchema = z.object({ cancelled: z.boolean(), status: AtScheduleStatusSchema, cancelRequested: z.boolean().optional() }).strict();
 
-export type OneOffRequest = z.infer<typeof OneOffRequestSchema>;
-export type OneOffRecord = z.infer<typeof OneOffSchema>;
+export type AtScheduleRequest = z.infer<typeof AtScheduleRequestSchema>;
+export type AtScheduleRecord = z.infer<typeof AtScheduleSchema>;
+export type Schedule = AtScheduleRecord;
+
+export const OneOffStatusSchema = AtScheduleStatusSchema;
+export const OneOffAttemptOutcomeSchema = AtScheduleAttemptOutcomeSchema;
+export const OneOffRequestSchema = AtScheduleRequestSchema;
+export const OneOffAttemptSchema = AtScheduleAttemptSchema;
+export const OneOffSchema = AtScheduleSchema;
+export const OneOffResponseSchema = AtScheduleResponseSchema;
+export const OneOffListResponseSchema = AtScheduleListResponseSchema;
+export const OneOffCancelResponseSchema = AtScheduleCancelResponseSchema;
+export type OneOffRequest = AtScheduleRequest;
+export type OneOffRecord = AtScheduleRecord;
 
 /** The recurring schedules route still answers in snake_case. */
 export const ScheduleSummarySchema = z.object({

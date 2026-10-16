@@ -12,7 +12,7 @@ vi.mock("@barry-rocks/identities-bag", () => ({
 }));
 vi.mock("@barry-rocks/sdk/internal/env", async (importOriginal) => ({
   ...await importOriginal<typeof import("@barry-rocks/sdk/internal/env")>(),
-  identityEnvironment: (resolved: unknown) => environment(resolved),
+  identityEnvironmentForId: (id: number, options: unknown) => environment(id, options),
 }));
 
 const { IdentityEnvironmentError, resolveEnvForBarry } = await import("./identity-env.js");
@@ -31,6 +31,7 @@ describe("resolveEnvForBarry", () => {
     get.mockResolvedValue({ id: 7 });
     environment.mockResolvedValue({ vars: { KEY: "v" }, sources: { KEY: "keychain" } });
     expect((await resolveEnvForBarry(7)).environment?.vars).toEqual({ KEY: "v" });
+    expect(environment).toHaveBeenCalledWith(7, expect.objectContaining({ cacheTtlMs: 300_000, touch: false }));
   });
 
   it("refuses when the environment fails to build, instead of running without it", async () => {
@@ -42,7 +43,8 @@ describe("resolveEnvForBarry", () => {
   });
 
   it("refuses when the identity no longer exists", async () => {
-    get.mockResolvedValue(undefined);
-    await expect(resolveEnvForBarry(7)).rejects.toThrow(/no longer exists/);
+    environment.mockRejectedValue(new Error("identity 7 not found"));
+    await expect(resolveEnvForBarry(7)).rejects.toThrow(/not found/);
+    expect(get).not.toHaveBeenCalled();
   });
 });

@@ -36,7 +36,7 @@ describe.runIf(LIVE)("opencode, live", () => {
 
   beforeAll(async () => {
     const version = execFileSync("opencode", ["--version"], { encoding: "utf8" });
-    expect(version, "the opencode on PATH is not the build the guarantees were verified on").toContain(OPENCODE_REQUIREMENTS.binary.pin?.version);
+    expect(version, "the opencode on PATH is not the build the guarantees were verified on").toContain(process.env.BARRY_OPENCODE_LIVE_VERSION ?? OPENCODE_REQUIREMENTS.binary.recommendedVersion);
     probe = await startProbe();
     // The sessions' opencode homes go under a throwaway instance.
     process.env.BARRY_HOME = made();
@@ -192,7 +192,7 @@ describe.runIf(LIVE)("opencode, live", () => {
       expect(probe.chats.every((chat) => chat.auth === IDENTITY_KEY)).toBe(true);
       expect(probe.mcp.filter((request) => request.method === "tools/call").map((request) => request.sessionId)).toEqual(["live-hosted"]);
       expect(events).toContainEqual(expect.objectContaining({ type: "tool_result", result: expect.stringContaining("probe-tool-ran") }));
-      expect(versions).toContain(OPENCODE_REQUIREMENTS.binary.pin?.version);
+      expect(versions).toContain(process.env.BARRY_OPENCODE_LIVE_VERSION ?? OPENCODE_REQUIREMENTS.binary.recommendedVersion);
 
       // A message delivered mid-turn with steer joins the running turn.
       probe.script([{ text: "first", delayMs: 3000 }, { text: "after-steer" }]);

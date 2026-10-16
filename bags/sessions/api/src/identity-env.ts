@@ -1,9 +1,10 @@
 // Keep tool credentials separate from the environment an adapter receives.
-import { identityEnvironment, type Environment } from "@barry-rocks/sdk/internal/env";
+import { identityEnvironmentForId, setIdentityStore, type Environment } from "@barry-rocks/sdk/internal/env";
 import { identityRecords } from "@barry-rocks/identities-bag";
 import { createLogger } from "@barry-rocks/sdk/logging";
 
 const log = createLogger("session-runtime");
+setIdentityStore({ get: identityRecords.row, resolveConfig: identityRecords.config, touchLastUsed: identityRecords.touch });
 
 export interface IdentityEnv {
   /** PATH and HOME, bare. */
@@ -13,6 +14,8 @@ export interface IdentityEnv {
   /** OS essentials; callers add only the selected adapter/provider credentials. */
   vars: Record<string, string>;
 }
+
+const lastTouched = new Map<number, number>();
 
 export async function resolveEnvForBarry(identityId: number | null | undefined): Promise<IdentityEnv> {
   const base: Record<string, string> = {
@@ -27,9 +30,7 @@ export async function resolveEnvForBarry(identityId: number | null | undefined):
   // misleading missing-credential refusal, or as a turn missing its secrets.
   let environment: Environment;
   try {
-    const barry = await identityRecords.row(identityId);
-    if (!barry) throw new Error("the identity no longer exists");
-    environment = await identityEnvironment(identityRecords.config(barry), { log });
+    environment = await identityEnvironmentForId(identityId, { log, touch: false, cacheTtlMs: Math.max(0, Number(process.env.BARRY_IDENTITY_ENV_TTL_MS ?? 300_000)) });
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     log.warn("identity.environment_build_failed", { identityId, error: reason });
@@ -37,10 +38,13 @@ export async function resolveEnvForBarry(identityId: number | null | undefined):
   }
 
   // Update last_used_at on the leaf identity only (fire-and-forget)
+  if (Date.now() - (lastTouched.get(identityId) ?? 0) >= 60_000) {
+  lastTouched.set(identityId, Date.now());
   identityRecords.touch(identityId).catch((err: unknown) => {
     log.warn("identity.last_used_update_failed", { identityId, error: err instanceof Error ? err.message : String(err) });
   });
 
+  }
   return { base, environment, vars: { ...base } };
 }
 

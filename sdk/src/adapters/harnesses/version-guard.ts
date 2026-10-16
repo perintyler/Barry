@@ -1,18 +1,12 @@
-/**
- * Refuse observed builds outside the verified compatibility family: major.minor
- * for pre-1.0 and calendar builds, major for stable semantic builds.
- * Missing or unreadable versions remain the doctor's responsibility. Bundled
- * modes do not probe an unrelated PATH binary; unchanged binaries reuse cache.
- * Rationale: docs/decisions/0023-harness-version-compatibility.md.
- */
 import { execFileSync } from "node:child_process";
 import { accessSync, constants, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, isAbsolute, join } from "node:path";
 import { barryCacheDir } from "../../services/home.mjs";
 import { parseVersion } from "../../services/checks.js";
+import { assessVersion, modeVersions, type VersionAssessment } from "./versions.js";
 import type { Adapter, Mode } from "./index.js";
 
-/** A launch refused because its build is outside the verified compatibility family. */
+/** A launch refused because the adapter documents this build as incompatible. */
 export class HarnessVersionMismatch extends Error {
   constructor(
     message: string,
@@ -38,71 +32,39 @@ export interface VersionGuardOptions {
    * no `NodeJS` global: a browser consumer of the SDK compiles with no Node types.
    */
   platform?: string;
+  onWarning?: (message: string) => void;
 }
 
 type GuardedAdapter = Pick<Adapter, "id" | "requirements">;
 
-/**
- * Throws `HarnessVersionMismatch` when the binary this mode runs is outside
- * its verified compatibility family.
- *
- * The first executable declared path wins, then command on the session’s
- * PATH, just as doctor and preflight resolve it. resolveBinary can name an
- * executable for a different purpose, so it is not used here.
- */
-export function requireVerifiedMajor(
-  adapter: GuardedAdapter,
-  mode: Pick<Mode, "verifiedOn" | "build">,
+/** Read the same executable that doctor/preflight resolve. Bundled modes use their own build. */
+export function inspectHarnessVersion(
+  adapter: GuardedAdapter, mode: Pick<Mode, "verifiedOn" | "build" | "versions">,
+  options: VersionGuardOptions = {},
+): VersionAssessment & { binary?: string } {
+  if (mode.build === "bundled") return assessVersion(modeVersions(mode), mode.verifiedOn);
+  const binary = resolveHarnessBinary(adapter.requirements, options.env ?? process.env);
+  return { ...assessVersion(modeVersions(mode), binary ? versionOf(adapter, binary, options) ?? undefined : undefined), ...(binary ? { binary } : {}) };
+}
+const warned = new Set<string>();
+/** Compatibility notices are advisory; only demonstrated incompatibilities refuse launch. */
+export function requireCompatibleVersion(
+  adapter: GuardedAdapter, mode: Pick<Mode, "verifiedOn" | "build" | "versions">,
   options: VersionGuardOptions = {},
 ): void {
-  const env = options.env ?? process.env;
-  if ((env.BARRY_HARNESS_VERSION_CHECK ?? process.env.BARRY_HARNESS_VERSION_CHECK) === "off") return;
-  // A bundled build is not the binary on PATH, which says nothing about it.
-  if (mode.build === "bundled") return;
-  if (compatibilityFamily(mode.verifiedOn) === null) return;
-  compare(adapter, mode, locate(adapter.requirements.binary.command, env, adapter.requirements.binary.paths), options);
+  const result = inspectHarnessVersion(adapter, mode, options);
+  if (result.status === "incompatible") {
+    throw new HarnessVersionMismatch(`${adapter.id} will not start: ${result.observedVersion} is incompatible: ${result.reason}. Recommended version: ${result.recommendedVersion}.`, adapter.id, result.binary ?? "bundled", result.observedVersion!, result.recommendedVersion);
+  }
+  if (result.status === "supported") return;
+  const message = `${adapter.id}: ${result.observedVersion ?? "unknown version"} is outside established support; recommended ${result.recommendedVersion}. ${result.reason ?? "Compatibility and guarantees have not been verified on this build."}`;
+  if (options.onWarning) options.onWarning(message);
+  else if (!warned.has(message)) { warned.add(message); process.emitWarning(message, { code: "BARRY_HARNESS_VERSION" }); }
 }
-
-function compare(
-  adapter: GuardedAdapter,
-  mode: Pick<Mode, "verifiedOn">,
-  binary: string | null,
-  options: VersionGuardOptions,
-): void {
-  if (!binary) return;
-  const observed = versionOf(adapter, binary, options);
-  if (!observed || compatibilityFamily(observed) === compatibilityFamily(mode.verifiedOn)) return;
-
-  const install = installCommand(adapter, options.platform ?? process.platform);
-  throw new HarnessVersionMismatch(
-    `${adapter.id} will not start: ${binary} is ${observed}, but this adapter was verified on ` +
-      `${mode.verifiedOn}, and a different ${narrowFamily(mode.verifiedOn) ? "major.minor" : "major"} version is not one it can drive. ` +
-      `Install the verified build${install ? ` (${install})` : ""} and make sure it comes first on PATH, ` +
-      "or set BARRY_HARNESS_VERSION_CHECK=off to start it anyway.",
-    adapter.id,
-    binary,
-    observed,
-    mode.verifiedOn,
-  );
-}
-
-/** Pre-1.0 and calendar builds pin the minor; stable semantic builds pin the major. */
-function narrowFamily(version: string): boolean {
-  return majorOf(version) === 0 || /^\D*\d{4}\./.test(version);
-}
-
-function compatibilityFamily(version: string): string | null {
-  const match = /^\D*(\d+)(?:\.(\d+))?/.exec(version);
-  if (!match) return null;
-  const major = Number(match[1]);
-  if (!narrowFamily(version)) return String(major);
-  return match[2] === undefined ? null : `${major}.${Number(match[2])}`;
-}
-
-/** The leading number of a version: 2 for 2.0.24, 2026 for 2026.09.23. */
-export function majorOf(version: string): number | null {
-  const match = /^\D*(\d+)/.exec(version);
-  return match ? Number(match[1]) : null;
+/** First declared executable, otherwise the session PATH. Explicit commands may be absolute. */
+export function resolveHarnessBinary(requirements: Adapter["requirements"], env: Readonly<Record<string, string | undefined>> = process.env): string | null {
+  const override = requirements.binary.overrideEnv && (env[requirements.binary.overrideEnv] ?? process.env[requirements.binary.overrideEnv]);
+  return locate(override || requirements.binary.command, env, override ? [] : requirements.binary.paths);
 }
 
 /** The absolute path the session would start, or null when there is none. */
@@ -132,7 +94,7 @@ function versionOf(adapter: GuardedAdapter, binary: string, options: VersionGuar
   try {
     const real = realpathSync(binary);
     const stat = statSync(real);
-    key = [real, stat.mtimeMs, stat.size, ...versionArgs].join("\0");
+    key = [real, stat.ino, stat.ctimeMs, stat.mtimeMs, stat.size, adapter.requirements.binary.versionPattern, ...versionArgs].join("\0");
   } catch {
     return null;
   }
@@ -186,9 +148,14 @@ function writeCache(file: string, cache: Record<string, string>): void {
   }
 }
 
-function installCommand(adapter: GuardedAdapter, platform: string): string | undefined {
-  const { install } = adapter.requirements.binary;
-  if (platform === "darwin" && install.darwin) return install.darwin;
-  if (platform === "linux" && install.linux) return install.linux;
-  return install.fallback;
+/** Resolve once before replacing HOME or constructing a private engine environment. */
+export function resolveHarnessCommand(requirements: Adapter["requirements"], env: Readonly<Record<string, string | undefined>> = process.env): string {
+  const command = resolveHarnessBinary(requirements, env);
+  if (command) return command;
+  const override = requirements.binary.overrideEnv && (env[requirements.binary.overrideEnv] ?? process.env[requirements.binary.overrideEnv]);
+  if (override) throw new Error(`Configured ${requirements.binary.overrideEnv} executable is unavailable: ${override}`);
+  return requirements.binary.command;
 }
+
+/** @deprecated Compatibility no longer follows major-version families. */
+export const requireVerifiedMajor = requireCompatibleVersion;

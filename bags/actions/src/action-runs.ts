@@ -6,10 +6,11 @@
 
 import { nanoid } from "nanoid";
 import { getDb } from "./db.js";
+import { projectWorkState, type WorkAdmission, type WorkResult } from "@barry-rocks/sdk/internal/workflows";
 
 /**
- * `arn_` + 16 default-alphabet nanoid chars, the shape every existing run id
- * has. `id` is TEXT, never an integer.
+ * Legacy local runs use `arn_` + 16 default-alphabet nanoid chars. Workflow
+ * projections retain the owner-allocated alias verbatim. IDs are always TEXT.
  */
 function generateActionRunId(): string {
   return `arn_${nanoid(16)}`;
@@ -20,7 +21,7 @@ function generateActionRunId(): string {
  * work was done and reported, the check disagreed. It must not be confused
  * with `started`, which means nobody ever closed the run at all.
  */
-/** Session ids are soft cross-store references; an absent session means unknown, never proof that its action run ended; see docs/decisions/0012-credentials-action-runs-and-traits.md. */
+/** Session ids are soft cross-store references; an absent session means unknown, never proof that its action run ended; see docs/decisions/0012-credentials-action-runs-and-identity-bags.md. */
 
 /**
  * `cancelled` is terminal but is NOT a failure: the run was stopped
@@ -67,6 +68,9 @@ export interface ActionRunProcess {
 
 export interface ActionRunRecord {
   id: string;
+  /** Authoritative workflow ownership; legacy mutation and orphan recovery refuse these rows. */
+  workflow?: { work_id: string; workflow_id: string; owner: string; revision: number;
+    projection_current: boolean; state: ReturnType<typeof projectWorkState>["state"]; facts: WorkAdmission["facts"] | null; receipt_ref: string | null; result: WorkResult | null };
   action: string;
   /** null = the action came from no bag: a session defined it for itself. */
   bag: string | null;
@@ -175,7 +179,12 @@ function toDate(value: string | null): Date | null {
 }
 
 function rowToActionRun(row: ActionRunRow): ActionRunRecord {
+  const projection = getDb().prepare("SELECT p.record,p.result,p.generation,o.generation expected FROM action_work_projections p JOIN action_work_projection_owner o ON o.id=1 WHERE p.action_id=?").get(row.id) as { record: string; result: string | null; generation: string; expected: string } | undefined;
+  const work = projection ? JSON.parse(projection.record) as WorkAdmission : null;
+  const current = !projection || projection.generation === projection.expected;
   return {
+    ...(work && projection ? { workflow: { work_id: work.work_id, workflow_id: work.workflow_id, owner: work.namespace.installation, revision: work.revision,
+      projection_current: current, state: current ? projectWorkState(work.facts).state : "needs-attention", facts: current ? work.facts : null, receipt_ref: current ? work.receipt_ref : null, result: current && projection.result ? JSON.parse(projection.result) as WorkResult : null } } : {}),
     id: row.id,
     action: row.action,
     bag: row.bag,
@@ -205,6 +214,8 @@ function rowToActionRun(row: ActionRunRow): ActionRunRecord {
       row.duration_ms == null
         ? null
         : { exit_code: row.exit_code ?? null, duration_ms: row.duration_ms, log_path: row.log_path ?? null },
+    ...(!current ? { status: "started" as const, summary: "Workflow history awaits recovery from its current owner.", completed_at: null, validated_at: null,
+      validation_failures: null, output: null, output_type: null, process: null } : {}),
   };
 }
 
@@ -243,8 +254,10 @@ export async function createActionRun(input: CreateActionRunInput): Promise<Acti
 }
 
 export async function getActionRun(id: string): Promise<ActionRunRecord | null> {
-  const row = getRow(id);
-  return row ? rowToActionRun(row) : null;
+  return getDb().transaction(() => {
+    const row = getRow(id);
+    return row ? rowToActionRun(row) : null;
+  })();
 }
 
 export async function listActionRuns(
@@ -261,12 +274,13 @@ export async function listActionRuns(
     where.push("action = ?");
     params.push(options.action);
   }
+  const stale = "EXISTS (SELECT 1 FROM action_work_projections p JOIN action_work_projection_owner o ON o.id=1 WHERE p.action_id=action_runs.id AND p.generation!=o.generation)";
   if (options.status) {
-    where.push("status = ?");
+    where.push(options.status === "started" ? `(status = ? OR ${stale})` : `(status = ? AND NOT ${stale})`);
     params.push(options.status);
   }
   if (options.active !== undefined) {
-    where.push(options.active ? "status = 'started'" : "status != 'started'");
+    where.push(options.active ? `(status = 'started' OR ${stale})` : `(status != 'started' AND NOT ${stale})`);
   }
   if (options.schedule_id) {
     where.push("schedule_id = ?");
@@ -282,11 +296,11 @@ export async function listActionRuns(
     + (where.length ? ` WHERE ${where.join(" AND ")}` : "")
     + " ORDER BY started_at DESC LIMIT ?";
 
-  const rows = getDb()
-    .prepare(sql)
-    .all(...params, options.limit ?? 50) as ActionRunRow[];
-
-  return rows.map(rowToActionRun);
+  const db = getDb();
+  return db.transaction(() => {
+    const rows = db.prepare(sql).all(...params, options.limit ?? 50) as ActionRunRow[];
+    return rows.map(rowToActionRun);
+  })();
 }
 
 /**
@@ -329,7 +343,7 @@ export async function completeActionRun(
   }
 
   const result = getDb()
-    .prepare(`UPDATE action_runs SET ${sets.join(", ")} WHERE id = @id`)
+    .prepare(`UPDATE action_runs SET ${sets.join(", ")} WHERE id = @id AND NOT EXISTS (SELECT 1 FROM action_work_projections p WHERE p.action_id = action_runs.id)`)
     .run(params);
 
   if (result.changes === 0) return null;
@@ -366,7 +380,7 @@ export async function finishExecutedRun(
               exit_code = @exit_code, duration_ms = @duration_ms, log_path = @log_path,
               validated_at = @validated_at, validation_failures = @validation_failures,
               output = @output, output_type = @output_type
-        WHERE id = @id AND status = 'started'`,
+        WHERE id = @id AND status = 'started' AND NOT EXISTS (SELECT 1 FROM action_work_projections p WHERE p.action_id = action_runs.id)`,
     )
     .run({
       id,
@@ -410,7 +424,7 @@ export async function cancelActionRun(
               summary = @summary,
               completed_at = @completed_at
         WHERE id = @id
-          AND status = 'started'`,
+          AND status = 'started' AND NOT EXISTS (SELECT 1 FROM action_work_projections p WHERE p.action_id = action_runs.id)`,
     )
     .run({ id, summary: reason, completed_at: nowIso() });
 
@@ -418,7 +432,7 @@ export async function cancelActionRun(
   return rowToActionRun(getRow(id) as ActionRunRow);
 }
 
-/** Record the actual agent failure without process columns, updating only started runs so earlier cancellation or completion wins; see docs/decisions/0012-credentials-action-runs-and-traits.md. */
+/** Record the actual agent failure without process columns, updating only started runs so earlier cancellation or completion wins; see docs/decisions/0012-credentials-action-runs-and-identity-bags.md. */
 export async function failAgentRun(id: string, reason: string): Promise<ActionRunRecord | null> {
   const result = getDb()
     .prepare(
@@ -427,7 +441,7 @@ export async function failAgentRun(id: string, reason: string): Promise<ActionRu
               summary = @summary,
               completed_at = @completed_at
         WHERE id = @id
-          AND status = 'started'`,
+          AND status = 'started' AND NOT EXISTS (SELECT 1 FROM action_work_projections p WHERE p.action_id = action_runs.id)`,
     )
     .run({ id, summary: reason, completed_at: nowIso() });
 
@@ -453,7 +467,7 @@ export async function listStartedActionRunsWithSession(): Promise<
 > {
   const rows = getDb()
     .prepare(
-      "SELECT id, session_id FROM action_runs WHERE status = 'started' AND session_id IS NOT NULL",
+      "SELECT id, session_id FROM action_runs WHERE status = 'started' AND session_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM action_work_projections p WHERE p.action_id = action_runs.id)",
     )
     .all() as Array<{ id: string; session_id: string | null }>;
 
@@ -492,7 +506,7 @@ export async function abandonActionRuns(ids: string[]): Promise<ActionRunRecord[
             validated_at = ?,
             validation_failures = ?
       WHERE id IN (${placeholders})
-        AND status = 'started'`,
+        AND status = 'started' AND NOT EXISTS (SELECT 1 FROM action_work_projections p WHERE p.action_id = action_runs.id)`,
   );
 
   const select = db.prepare(
@@ -513,7 +527,7 @@ export async function abandonActionRuns(ids: string[]): Promise<ActionRunRecord[
 /** Open runs a given trigger started — for a runner to find the ones it orphaned. */
 export async function listStartedActionRunsByTrigger(trigger: ActionRunTrigger): Promise<ActionRunRecord[]> {
   const rows = getDb()
-    .prepare("SELECT * FROM action_runs WHERE status = 'started' AND trigger = ?")
+    .prepare("SELECT * FROM action_runs WHERE status = 'started' AND trigger = ? AND NOT EXISTS (SELECT 1 FROM action_work_projections p WHERE p.action_id = action_runs.id)")
     .all(trigger) as ActionRunRow[];
   return rows.map(rowToActionRun);
 }
@@ -534,7 +548,7 @@ export async function pruneClosedActionRuns(options: {
   const result = getDb()
     .prepare(
       `DELETE FROM action_runs
-        WHERE trigger = @trigger AND status != 'started'
+        WHERE trigger = @trigger AND status != 'started' AND NOT EXISTS (SELECT 1 FROM action_work_projections p WHERE p.action_id = action_runs.id)
           -- A subagent is a job run a session asked for, not one the
           -- scheduler accumulates, so it keeps the retention of every other
           -- run someone asked for. (CASE, because json_extract throws on a

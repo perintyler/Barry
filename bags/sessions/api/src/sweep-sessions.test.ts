@@ -34,7 +34,7 @@ describe("what the sweep needs to find a transcript", () => {
 
     const swept = await toSweepSession(claudeSession, rows);
 
-    expect(swept.providerSessionId).toBe("right");
+    expect(swept.harnessSessionId).toBe("right");
     expect(rows).toHaveBeenCalledWith("ses_1");
   });
 
@@ -43,8 +43,8 @@ describe("what the sweep needs to find a transcript", () => {
     // that cannot be located look like one that was.
     const swept = await toSweepSession(claudeSession, async () => []);
 
-    expect(swept.providerSessionId).toBeUndefined();
-    expect("providerSessionId" in swept).toBe(false);
+    expect(swept.harnessSessionId).toBeUndefined();
+    expect("harnessSessionId" in swept).toBe(false);
   });
 
   it("skips a row whose provider matches but whose id is null", async () => {
@@ -52,7 +52,7 @@ describe("what the sweep needs to find a transcript", () => {
       { provider: "claude", provider_session_id: null },
     ]);
 
-    expect(swept.providerSessionId).toBeUndefined();
+    expect(swept.harnessSessionId).toBeUndefined();
   });
 
   it("carries the working directory the reader needs to locate a file", async () => {

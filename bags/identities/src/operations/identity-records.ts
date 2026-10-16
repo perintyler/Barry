@@ -16,13 +16,11 @@ import { parse as yamlParse } from "yaml";
 import { dirname, join, resolve } from "node:path";
 import { BarryError, type Caller, type IdentityReference, type Warning } from "@barry-rocks/sdk";
 import { installationRegistry } from "@barry-rocks/sdk/internal/nodes";
-import { parseTraits, parseBounds, serializeEntries, type BoundEntry, defaultHarness, IdentityChangesSchema, RETIRED_IDENTITY_KEYS, type RetiredIdentityKeys, type IdentityAdapters, type IdentityChanges } from "@barry-rocks/sdk/internal/identities";
+import { parseBounds, serializeEntries, type BoundEntry, defaultHarness, IdentityChangesSchema, RETIRED_IDENTITY_KEYS, type RetiredIdentityKeys, type IdentityAdapters, type IdentityChanges } from "@barry-rocks/sdk/internal/identities";
 import { Identities, resolveIdentityConfig, type IdentityMetadata, type IdentityRecord } from "../store/identities.js";
 import { Users, type UserRecord } from "../store/users.js";
 import { bounds } from "./bounds.js";
-import { resolveHarnessNames } from "@barry-rocks/sdk/internal/traits";
 import { baseIdentityConfig, loadIdentityFromDirectory } from "../store/identity-files.js";
-import { Traits } from "../config/traits.js";
 import {
   findIdentityYamlPath,
   findIdentityDirectoryById,
@@ -33,10 +31,11 @@ import {
   findIdentityDrift,
   resolveForeignKeyId,
   syncIdentityToDb,
+  syncIdentityToDbIfChanged,
   syntheticIdFromName,
   writeIdentityYaml,
 } from "../store/identity-files.js";
-import { resolveAndSyncBags, UnregisteredBagError, type BagSyncWarning } from "../store/identity-bags.js";
+import { resolveBags, UnregisteredBagError, type BagSyncWarning } from "../store/identity-bags.js";
 import {
   describeIdentitySource,
   findGitRoot,
@@ -45,7 +44,7 @@ import {
   type ResolvedSessionIdentity,
 } from "../store/identity-resolution.js";
 import { getBuiltinIdentityDir, getIdentitiesDir, getIdentityDir } from "../paths.js";
-import { isKnownModelFor, knownHarness } from "../model-catalog.js";
+import { isKnownModelFor, knownHarness } from "../models.js";
 import { hasIdentityGrant } from "@barry-rocks/sdk/internal/auth";
 
 /** Which identity: its row id (or a directory's synthetic id), or its name. */
@@ -172,8 +171,8 @@ export function parseChanges(changes: unknown): IdentityChanges {
 
 /**
  * Check what a change names against what exists, and turn it into the
- * metadata `updateIdentity` writes (`undefined` deletes a key). Unknown traits,
- * newly added unregistered bags and missing named bounds are refused; an
+ * metadata `updateIdentity` writes (`undefined` deletes a key). Newly added
+ * unregistered bags and missing named bounds are refused; an
  * unknown model or model provider is a warning, since sessions are where an
  * unroutable one is refused with the harness in hand.
  */
@@ -185,25 +184,33 @@ export async function prepareChanges(
   const warnings: Warning[] = [];
   for (const [key, value] of Object.entries(parsed)) metadata[key] = value === null ? undefined : value;
 
-  for (const kind of ["trait", "bound"] as const) {
-    const names = kind === "trait" ? parsed.traits : parsed.bounds;
-    if (!names) continue;
+  if (parsed.bounds) {
     const base = baseIdentityConfig();
-    const entries = kind === "trait" ? [...parseTraits(current.traits), ...(base?.traits ?? [])] : [...parseBounds(current.bounds), ...(base?.bounds ?? [])];
-    const stored = kind === "trait" ? await Traits.list() : await bounds.list();
-    const known = new Set([...stored.map(entry => entry.name!), ...entries.map(entry => entry.name)]);
-    try {
-      const installed = loadAdapters({ file: barryAdaptersPath() }).installed();
-      resolveHarnessNames(names, known, { bags: installed.flatMap(record => record.bag ? [record.bag.manifest.name] : []) }, kind);
-    } catch (error) { throw new BarryError("invalid", error instanceof Error ? error.message : String(error)); }
+    const entries = [...parseBounds(current.bounds), ...(base?.bounds ?? [])];
+    const stored = await bounds.list();
+    const installed = loadAdapters({ file: barryAdaptersPath() }).installed();
+    const knownBags = new Set([
+      ...(current.bags ?? []),
+      ...(parsed.bags ?? []),
+      ...installed.flatMap((record) => (record.bag ? [record.bag.manifest.name] : [])),
+    ]);
+    const known = new Set([...stored.map((entry) => entry.name!), ...entries.map((entry) => entry.name)]);
+    const unknown = parsed.bounds.filter((name) => {
+      if (known.has(name)) return false;
+      if (name.endsWith(":read") && knownBags.has(name.slice(0, -5))) return false;
+      return true;
+    });
+    if (unknown.length > 0) {
+      throw new BarryError("invalid", `unknown selected bound ${unknown[0]}`);
+    }
   }
   if (parsed.bags) {
     // Only newly added names must be registered: an identity carrying one
     // stale bag name stays editable, and the stale name becomes a warning.
     const added = parsed.bags.filter((name) => !(current.bags ?? []).includes(name));
     try {
-      if (added.length > 0) await resolveAndSyncBags(added, { strict: true, skipTraitSync: true });
-      const result = await resolveAndSyncBags(parsed.bags);
+      if (added.length > 0) await resolveBags(added, { strict: true });
+      const result = await resolveBags(parsed.bags);
       metadata.bags = result.bags;
       warnings.push(...bagWarnings(result.warnings));
     } catch (error) {
@@ -220,7 +227,7 @@ export async function prepareChanges(
       if (Object.hasOwn(adapters, id)) throw new BarryError("invalid", `Two adapter keys name the same harness: ${id}`);
       adapters[id] = settings;
       if (!record) warnings.push({ kind: "unknown-harness", message: `Unknown harness '${key}' — install it before starting a session` });
-      if (settings.model && !isKnownModelFor(key, settings.model)) warnings.push({ kind: "unknown-model", message: `Unknown model id '${settings.model}' for ${key} — not in the curated catalog` });
+      if (settings.model && !isKnownModelFor(key, settings.model)) warnings.push({ kind: "unknown-model", message: `Unknown model id '${settings.model}' for ${key} — not in the curated models` });
       if (settings.mode && record?.modes && !record.modes[settings.mode]) warnings.push({ kind: "unknown-mode", message: `${key} does not declare mode '${settings.mode}'` });
     }
     metadata.adapters = adapters;
@@ -255,7 +262,7 @@ export const identityRecords = {
     return Object.fromEntries(RETIRED_IDENTITY_KEYS.filter(key => Object.hasOwn(yaml, key)).map(key => [key, yaml[key]]));
   },
 
-  inlineBound(name: string) {
+  unqualifiedBound(name: string) {
     const dir = findIdentityDirectoryByName(name);
     if (!dir) return undefined;
     const yaml = yamlParse(readFileSync(findIdentityYamlPath(dir)!, "utf8")) as Record<string, unknown>;
@@ -263,7 +270,7 @@ export const identityRecords = {
   },
   async nameInlineBound(name: string): Promise<string | undefined> {
     const dir = findIdentityDirectoryByName(name);
-    const bound = identityRecords.inlineBound(name);
+    const bound = identityRecords.unqualifiedBound(name);
     if (!dir || !bound) return undefined;
     // Only the metadata's bounds are read here, but the record carries an
     // actor_id and the reader now requires one (POL-19), so name the owner.
@@ -350,6 +357,7 @@ export const identityRecords = {
   builtinDirectory: getBuiltinIdentityDir,
   /** Refresh a directory identity's row from its file now, rather than at the next session start. */
   sync: syncIdentityToDb,
+  syncIfChanged: syncIdentityToDbIfChanged,
   /** The fields where a row disagrees with its identity.yaml. */
   drift: findIdentityDrift,
   /** The identity a repository names in its `.barry`, and the repository's root. */

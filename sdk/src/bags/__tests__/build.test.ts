@@ -78,20 +78,20 @@ describe("bag build", () => {
   // fixes nothing. Loading a built bundle must first hand it the running
   // checkout's builtin directory, so the bundle's own pinned path (stale after
   // a move) never applies in-process.
-  it("builds only the registered extension and prunes with one directory segment", () => {
-    const dir = writeBag(tmpDir, "search");
-    writeFileSync(join(dir, "bag.yaml"), "name: search\nextends: sessions\ndescription: Search\n");
+  it("builds only the standalone bag and prunes retired slash-registered extension builds", () => {
+    const dir = writeBag(tmpDir, "session-vector-search");
+    writeFileSync(join(dir, "bag.yaml"), "name: session-vector-search\ndescription: Search\n");
     writeFileSync(process.env.BARRY_BAGS_SNAPSHOT!, JSON.stringify({ bags: {
+      "session-vector-search": { type: "local", path: dir },
       "sessions/search": { type: "local", path: dir },
-      "sessions-search": { type: "local", path: dir },
     } }));
     const bags = discoverBuildableBags();
-    expect(bags.map((bag) => bag.name)).toEqual(["sessions/search"]);
-    const live = getBagBuildDir("sessions/search", dir);
-    expect(live).toMatch(/\/sessions\+search-[a-f0-9]{8}$/);
+    expect(bags.map((bag) => bag.name)).toEqual(["session-vector-search"]);
+    const live = getBagBuildDir("session-vector-search", dir);
+    expect(live).toMatch(/\/session-vector-search-[a-f0-9]{8}$/);
     mkdirSync(live, { recursive: true });
     writeFileSync(join(live, "tools.js"), "export {};\n");
-    const stale = getBagBuildDir("sessions-search", dir);
+    const stale = getBagBuildDir("sessions/search", dir);
     mkdirSync(stale, { recursive: true });
     writeFileSync(join(stale, "tools.js"), "export {};\n");
     expect(pruneOrphanedBagBuilds(bags)).toEqual([stale.split("/").at(-1)]);
@@ -185,6 +185,49 @@ export class Widget {
     };
     expect(mod.Mode.Fast).toBe("fast");
     expect(new mod.Widget("x").label).toBe("x");
+  });
+
+  it("loads a bundle that reads shipped model catalog assets and mixes static and dynamic zod imports", async () => {
+    const sdkDir = fileURLToPath(new URL("../../..", import.meta.url));
+    const dir = writeBag(
+      tmpDir,
+      "catalog-and-zod",
+      `import { SHIPPED_VENDORS } from "@barry-rocks/sdk/adapters/models";
+import { defineTool } from "@barry-rocks/sdk/tools";
+import "unrelated-pure-package";
+export const vendorCount = SHIPPED_VENDORS.length;
+export const lazyZod = () => import("zod");
+export const defined = defineTool({
+  name: "catalog_and_zod_check",
+  namespace: "catalog-and-zod",
+  access: "read",
+  description: "check",
+  schema: {},
+  handler: async () => "ok",
+});
+`,
+    );
+    mkdirSync(join(dir, "node_modules", "@barry-rocks"), { recursive: true });
+    symlinkSync(sdkDir, join(dir, "node_modules", "@barry-rocks", "sdk"), "dir");
+    symlinkSync(join(sdkDir, "node_modules", "zod"), join(dir, "node_modules", "zod"), "dir");
+    const purePackage = join(dir, "node_modules", "unrelated-pure-package");
+    mkdirSync(purePackage);
+    writeFileSync(join(purePackage, "package.json"), JSON.stringify({ name: "unrelated-pure-package", type: "module", main: "index.js", sideEffects: false }));
+    writeFileSync(join(purePackage, "index.js"), 'throw new Error("unrelated package annotations were ignored");');
+    registerBags({ "catalog-and-zod": dir });
+
+    const [result] = await buildBags({ force: true });
+    expect(result.ok, result.error).toBe(true);
+
+    const mod = (await import(result.outFile!)) as {
+      vendorCount: number;
+      defined: { name: string };
+      lazyZod: () => Promise<typeof import("zod")>;
+    };
+    const zod = await mod.lazyZod();
+    expect(zod.z.custom<string>(value => typeof value === "string").parse("ok")).toBe("ok");
+    expect(mod.vendorCount).toBeGreaterThan(0);
+    expect(mod.defined.name).toBe("catalog_and_zod_check");
   });
 
   /**

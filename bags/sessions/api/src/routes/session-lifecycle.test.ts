@@ -131,10 +131,10 @@ vi.mock("@barry-rocks/identities-bag", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@barry-rocks/identities-bag")>();
   return {
     ...actual,
-    bounds: { ...actual.bounds, get: vi.fn(), stored: vi.fn(async () => []) },
+    bounds: { ...actual.bounds, get: vi.fn(), list: vi.fn(async () => []) },
     owner: { ...actual.owner, current: vi.fn() },
     identityRecords: { ...actual.identityRecords, resolve: vi.fn(), rowId: vi.fn() },
-    traits: { ...actual.traits, list: vi.fn(), selectable: vi.fn() },
+    resolve: { ...actual.resolve, selectable: vi.fn(async () => ({ bags: [], bounds: [] })) },
   };
 });
 
@@ -147,12 +147,20 @@ vi.mock("@barry-rocks/sessions-bag/process-liveness", () => ({
 
 vi.mock("../session-runtime.js", () => ({
   sessionRuntime: {
+    broadcastToSession: vi.fn(),
+    sendInTurn:vi.fn(),
+    assertPersistenceAdmission: vi.fn(),
+    flushPersistence: vi.fn(async()=>true),
+    pendingPersistence: vi.fn(()=>[]),
     getActiveSession: vi.fn(),
     removeSession: vi.fn(),
     startSession: vi.fn(),
     stopSession: vi.fn(),
+    interruptTurn:vi.fn(),
     sendMessage: vi.fn(),
     publishDeliveryUpdate: vi.fn(),
+    warmHarness: vi.fn().mockResolvedValue(undefined),
+    dropResident: vi.fn(),
     attachRenderer: vi.fn(),
     detachRenderer: vi.fn(),
   },
@@ -166,7 +174,7 @@ vi.mock("../turn-execution.js", () => ({ residentSession: vi.fn() }));
 vi.mock("@barry-rocks/sdk/internal/tools", async (importOriginal) => ({
   ...await importOriginal<typeof import("@barry-rocks/sdk/internal/tools")>(),
 
-  collectToolMeta: vi.fn(async () => []),
+  collectToolDefinitions: vi.fn(async () => []),
 }));
 
 vi.mock("../worktree.js", () => ({
@@ -185,11 +193,11 @@ vi.mock("@barry-rocks/sdk/logging", async (importOriginal) => ({
   }),
 }));
 
-import { sessionLifecycleRouter } from "./session-lifecycle.js";
+import { sessionLifecycleRouter, parseIdentityIdParam } from "./session-lifecycle.js";
 import { endSession } from "@barry-rocks/sessions-bag/lifecycle";
-import { bounds, identityRecords, owner, traits, type TraitInfo } from "@barry-rocks/identities-bag";
-import { collectToolMeta } from "@barry-rocks/sdk/internal/tools";
-import { Barry, type Grants } from "@barry-rocks/sdk";
+import { identityRecords, owner } from "@barry-rocks/identities-bag";
+import { collectToolDefinitions } from "@barry-rocks/sdk/internal/tools";
+import { Barry, type Tool } from "@barry-rocks/sdk";
 import { fakeIdentities } from "@barry-rocks/sdk/testing";
 import { createInertSession as dbCreateInertSession } from "@barry-rocks/sessions-bag/client";
 import { classify as classifyProcessLiveness } from "@barry-rocks/sessions-bag/process-liveness";
@@ -203,7 +211,7 @@ import {
   claimFailedPromptRetry,
   getListeners,
 } from "@barry-rocks/sessions-bag/client";
-import { getSessionRecord, updateSessionRecord } from "../db.js";
+import { buildSessionHistoryContext, getSessionMessages, getSessionRecord, updateSessionRecord } from "../db.js";
 import { sessionRuntime } from "../session-runtime.js";
 import { residentSession } from "../turn-execution.js";
 import { ExecutionConflict } from "@barry-rocks/sessions-bag/store/turn-continuations";
@@ -248,14 +256,11 @@ afterAll(() => {
 
 afterEach(() => Barry.reset());
 
-// What every session here is granted, as the identities subject answers it:
-// nothing, so a start's MCP servers are the always-on ones.
-const CREATED_ROW = { system_prompt: "Assist", summary: null, identity_id: 1, status: "pending", bound: null, created_at: "2026-10-03T00:00:00.000Z", started_at: null };
-const NO_GRANTS: Grants = { traits: [], bound: null, namespaces: [], tools: [], skills: [], instructions: [] };
+const CREATED_ROW = { system_prompt: "Assist", summary: null, identity_id: 1, status: "pending", bags: [], bounds: [], bound: null, created_at: "2026-10-03T00:00:00.000Z", started_at: null };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  Barry.use(fakeIdentities({ grants: async () => NO_GRANTS }));
+  Barry.use(fakeIdentities({ bound: async () => null, tools: async () => [] }));
   mockSdkGetActiveSession.mockReset();
   mockSdkStartSession.mockReset();
   mockSdkSendMessage.mockReset();
@@ -275,7 +280,9 @@ describe("DELETE /sessions/:id", () => {
     id: "session-abc",
     prompt: "test",
     status: "running",
-    traits: [],
+    bags: [],
+    bounds: [],
+    bound: null,
     metadata: { working_directory: "/tmp/test", name: "test" },
     identity_id: null,
     created_at: new Date(),
@@ -311,7 +318,7 @@ describe("DELETE /sessions/:id", () => {
 
   it("calls sessionRuntime.removeSession when session is active", async () => {
     mockGetSessionRecord.mockResolvedValue(fakeSession as never);
-    mockSdkGetActiveSession.mockReturnValue({} as never); // truthy = active
+    mockSdkGetActiveSession.mockReturnValue({ timings: { prepare_total_ms: 12.5, warm_hit: 0 },} as never); // truthy = active
     mockSdkRemoveSession.mockResolvedValue(undefined);
     mockUpdateSessionRecord.mockResolvedValue(undefined);
 
@@ -369,7 +376,7 @@ describe("POST /sessions", () => {
     vi.mocked(Sessions.createInert).mockResolvedValue({ ...CREATED_ROW,
       id: "sess_created_1",
       metadata: {},
-      traits: [],
+      bags: [],
     } as never);
 
     const res = await fetch(`${baseUrl}/sessions`, {
@@ -397,7 +404,7 @@ describe("POST /sessions", () => {
     vi.mocked(identityRecords.rowId).mockResolvedValue(1);
     const row = {
       id: "created-via-client", system_prompt: "Assist", summary: null, identity_id: 1,
-      status: "pending", traits: [], bound: null,
+      status: "pending", bags: [], bounds: [], bound: null,
       metadata: { working_directory: REAL_REPO_ROOT },
       created_at: "2026-10-03T00:00:00.000Z", started_at: null,
     };
@@ -417,15 +424,15 @@ describe("POST /sessions", () => {
     }
   });
 
-  it("persists the explicitly selected review policy", async () => {
+  it("persists the explicitly selected review rules", async () => {
     vi.mocked(owner.current).mockResolvedValue({ id: 1, settings: {} } as never);
     vi.mocked(identityRecords.resolve).mockResolvedValue({ barry: { id: 1, name: "test" }, source: "db" } as never);
     vi.mocked(identityRecords.rowId).mockResolvedValue(1);
-    vi.mocked(Sessions.createInert).mockResolvedValue({ ...CREATED_ROW, id: "sess_policy_1", metadata: {}, traits: [] } as never);
+    vi.mocked(Sessions.createInert).mockResolvedValue({ ...CREATED_ROW, id: "sess_rules_1", metadata: {}, bags: [] } as never);
     const res = await fetch(`${baseUrl}/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ systemPrompt: "policy test", reviewPolicy: { mode: "automatic" } }),
+      body: JSON.stringify({ systemPrompt: "rules test", reviewRules: { mode: "automatic" } }),
     });
     expect(res.status).toBe(201);
     expect(vi.mocked(Sessions.createInert)).toHaveBeenCalledWith(
@@ -458,7 +465,7 @@ describe("POST /sessions", () => {
   it("rejects an unknown bound instead of storing it", async () => {
     // Bound resolution treats a missing bound as "no restrictions", so a bad
     // name must fail loudly — otherwise the session looks scoped and is not.
-    Barry.use(fakeIdentities({ grants: async () => { throw new Error("unknown selected bound unknown-bound"); } }));
+    Barry.use(fakeIdentities({ bound: async () => { throw new Error("unknown selected bound unknown-bound"); } }));
     vi.mocked(owner.current).mockResolvedValue({ id: 1, settings: {} } as never);
     vi.mocked(identityRecords.resolve).mockResolvedValue({ barry: { id: 1, name: "test" }, source: "db" } as never);
     const res = await fetch(`${baseUrl}/sessions`, {
@@ -488,7 +495,7 @@ describe("POST /sessions", () => {
     vi.mocked(Sessions.createInert).mockResolvedValue({ ...CREATED_ROW,
       id: "sess_tmp_1",
       metadata: {},
-      traits: [],
+      bags: [],
     } as never);
 
     const res = await fetch(`${baseUrl}/sessions`, {
@@ -511,7 +518,9 @@ describe("PATCH /sessions/:id", () => {
     id: "session-abc",
     prompt: "test",
     status: "draft",
-    traits: [],
+    bags: [],
+    bounds: [],
+    bound: null,
     metadata: { working_directory: "/tmp/test", name: "test" },
     identity_id: null,
     created_at: new Date(),
@@ -594,9 +603,17 @@ describe("POST /sessions/:id/messages/persist — tool results", () => {
 });
 
 describe("POST /sessions/:id/message", () => {
+  it("reports a warm admission without harness startup stages before turn execution", async () => {
+    mockGetSessionRecord.mockResolvedValue({ id: "warm", metadata: {}, bags: [] } as never);
+    mockSdkGetActiveSession.mockReturnValue({ id: "warm", status: "waiting", timings: { harness_create_ms: 10, harness_ready_ms: 100 }, session:{isWarm:()=>true}, warm: { preparedAt: Date.now() } } as never);
+    mockSdkSendMessage.mockResolvedValue(undefined);
+    const response = await fetch(`${baseUrl}/sessions/warm/message`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: "hello" }) });
+    expect(response.status).toBe(202);
+    expect(response.headers.get("X-Barry-Timing")).toMatch(/ingress=.*admit=.*warm=1/);
+  });
   it("retries a failed admission with the same row and marks it accepted", async () => {
-    mockGetSessionRecord.mockResolvedValue({ id: "retry", metadata: { working_directory: REAL_REPO_ROOT }, traits: [] } as never);
-    mockSdkGetActiveSession.mockReturnValue({ id: "retry", status: "waiting" } as never);
+    mockGetSessionRecord.mockResolvedValue({ id: "retry", metadata: { working_directory: REAL_REPO_ROOT }, bags: [] } as never);
+    mockSdkGetActiveSession.mockReturnValue({ timings: { prepare_total_ms: 12.5, warm_hit: 0 }, id: "retry", status: "waiting" } as never);
     mockGetMessageByClientMessageId.mockResolvedValue({ id: "m-retry", sequence: 4, state: "failed", content: "hello" });
     mockClaimFailedPromptRetry.mockResolvedValue({ id: "m-retry", sequence: 4, state: "uncertain", content: "hello" });
     mockUpdatePromptDeliveryByClientMessageId.mockResolvedValue({ id: "m-retry", sequence: 4, state: "accepted", content: "hello" });
@@ -606,16 +623,16 @@ describe("POST /sessions/:id/message", () => {
       body: JSON.stringify({ content: "hello", clientMessageId: "cid-retry" }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
     expect((await res.json()).deliveryState).toBe("accepted");
     expect(mockClaimFailedPromptRetry).toHaveBeenCalledWith("retry", "cid-retry", "hello");
-    expect(mockSdkSendMessage).toHaveBeenCalledWith("retry", "hello", { clientMessageId: "cid-retry", reuseClientMessageRow: true }, undefined);
+    expect(mockSdkSendMessage).toHaveBeenCalledWith("retry", "hello", { ingressAt: expect.any(Number), clientMessageId: "cid-retry", reuseClientMessageRow: true, userMessageSequence:4 }, undefined);
     expect(mockUpdatePromptDeliveryByClientMessageId).toHaveBeenCalledWith("retry", "cid-retry", "accepted");
     expect(mockRecordPromptDelivery).not.toHaveBeenCalled();
   });
 
   it("does not resend an uncertain delivery", async () => {
-    mockGetSessionRecord.mockResolvedValue({ id: "uncertain", metadata: {}, traits: [] } as never);
+    mockGetSessionRecord.mockResolvedValue({ id: "uncertain", metadata: {}, bags: [] } as never);
     mockGetMessageByClientMessageId.mockResolvedValue({ id: "m-uncertain", sequence: 2, state: "uncertain", content: "hello" });
     const res = await fetch(baseUrl + "/sessions/uncertain/message", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -627,7 +644,7 @@ describe("POST /sessions/:id/message", () => {
   });
 
   it("moves a failed retry to the external prompt queue", async () => {
-    mockGetSessionRecord.mockResolvedValue({ id: "external", status: "running", metadata: { pid: 99 }, traits: [] } as never);
+    mockGetSessionRecord.mockResolvedValue({ id: "external", status: "running", metadata: { pid: 99 }, bags: [] } as never);
     mockClassifyProcessLiveness.mockReturnValue({ state: "alive" });
     mockGetMessageByClientMessageId.mockResolvedValue({ id: "m-external", sequence: 2, state: "failed", content: "hello" });
     mockClaimFailedPromptRetry.mockResolvedValue({ id: "m-external", sequence: 2, state: "uncertain", content: "hello" });
@@ -645,7 +662,7 @@ describe("POST /sessions/:id/message", () => {
 
   it("reports capacity pressure as retryable when every resident session is busy", async () => {
     mockGetSessionRecord.mockResolvedValue({
-      id: "busy", metadata: { working_directory: REAL_REPO_ROOT }, traits: [],
+      id: "busy", metadata: { working_directory: REAL_REPO_ROOT }, bags: [],
     } as never);
     mockClassifyProcessLiveness.mockReturnValue({ state: "unknown", reason: "no-pid" });
     mockSdkStartSession.mockRejectedValueOnce(new AdmissionError("resident session budget exhausted", "resident_budget"));
@@ -665,7 +682,7 @@ describe("POST /sessions/:id/message", () => {
     mockGetSessionRecord.mockResolvedValue({
       id: "fail1",
       metadata: { working_directory: REAL_REPO_ROOT },
-      traits: [],
+      bags: [],
     } as never);
     mockSdkGetActiveSession.mockReturnValue(undefined);
     mockClassifyProcessLiveness.mockReturnValue({ state: "unknown", reason: "no-pid" });
@@ -708,9 +725,9 @@ describe("POST /sessions/:id/message", () => {
     mockGetSessionRecord.mockResolvedValue({
       id: "uncertain1",
       metadata: { working_directory: "/tmp/repo" },
-      traits: [],
+      bags: [],
     } as never);
-    mockSdkGetActiveSession.mockReturnValue({ id: "uncertain1", status: "streaming" } as never);
+    mockSdkGetActiveSession.mockReturnValue({ timings: { prepare_total_ms: 12.5, warm_hit: 0 }, id: "uncertain1", status: "streaming" } as never);
     mockSdkSendMessage.mockRejectedValueOnce(new Error("upstream timeout"));
     mockGetMessageByClientMessageId
       .mockResolvedValueOnce(null)
@@ -747,7 +764,7 @@ describe("POST /sessions/:id/message", () => {
         deliveryError: "upstream timeout",
       }),
     );
-    expect(mockRecordPromptDelivery).toHaveBeenCalledWith("uncertain1", "hello", { clientMessageId: "cid-uncertain", delivery: "uncertain" });
+    expect(mockRecordPromptDelivery).not.toHaveBeenCalled();
   });
 
   it("queues the message instead of starting a session when the process is genuinely alive elsewhere", async () => {
@@ -755,7 +772,7 @@ describe("POST /sessions/:id/message", () => {
       id: "s1",
       status: "running",
       metadata: { working_directory: "/tmp/repo", pid: 4242, pid_started_at: 1700000000 },
-      traits: [],
+      bags: [],
     } as never);
     mockSdkGetActiveSession.mockReturnValue(undefined);
     mockClassifyProcessLiveness.mockReturnValue({ state: "alive" });
@@ -786,7 +803,7 @@ describe("POST /sessions/:id/message", () => {
       id: "s1",
       status: "running",
       metadata: { working_directory: "/tmp/repo", pid: 4242, pid_started_at: 1700000000 },
-      traits: [],
+      bags: [],
     } as never);
     mockSdkGetActiveSession.mockReturnValue(undefined);
     mockClassifyProcessLiveness.mockReturnValue({ state: "alive" });
@@ -807,11 +824,11 @@ describe("POST /sessions/:id/message", () => {
       id: "draft",
       status: "pending",
       metadata: { working_directory: REAL_REPO_ROOT, pid: process.pid, pid_started_at: 1700000000 },
-      traits: [],
+      bags: [],
     } as never);
     mockSdkGetActiveSession.mockReturnValue(undefined);
     mockClassifyProcessLiveness.mockReturnValue({ state: "alive" });
-    mockSdkStartSession.mockResolvedValue({ id: "draft", status: "running" } as never);
+    mockSdkStartSession.mockResolvedValue({ timings: { prepare_total_ms: 12.5, warm_hit: 0 }, id: "draft", status: "running" } as never);
 
     const res = await fetch(baseUrl + "/sessions/draft/message", {
       method: "POST",
@@ -819,7 +836,7 @@ describe("POST /sessions/:id/message", () => {
       body: JSON.stringify({ content: "run the action" }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
     expect((await res.json()).deliveryState).toBe("accepted");
     expect(mockSdkStartSession).toHaveBeenCalledOnce();
     expect(mockQueuePrompt).not.toHaveBeenCalled();
@@ -829,7 +846,7 @@ describe("POST /sessions/:id/message", () => {
     mockGetSessionRecord.mockResolvedValue({
       id: "s1",
       metadata: { working_directory: "/tmp/repo", pid: 4242, pid_started_at: 1700000000 },
-      traits: [],
+      bags: [],
     } as never);
     mockGetMessageByClientMessageId.mockResolvedValue({ id: "m-existing", sequence: 4, state: "accepted" });
 
@@ -854,11 +871,11 @@ describe("POST /sessions/:id/message", () => {
       id: "draft",
       status: "pending",
       metadata: { working_directory: REAL_REPO_ROOT, pid: process.pid, pid_started_at: 1700000000 },
-      traits: [],
+      bags: [],
     } as never);
     mockSdkGetActiveSession.mockReturnValue(undefined);
     mockClassifyProcessLiveness.mockReturnValue({ state: "alive" });
-    mockSdkStartSession.mockResolvedValue({ id: "draft", status: "running" } as never);
+    mockSdkStartSession.mockResolvedValue({ timings: { prepare_total_ms: 12.5, warm_hit: 0 }, id: "draft", status: "running" } as never);
 
     const res = await fetch(baseUrl + "/sessions/draft/message", {
       method: "POST",
@@ -866,8 +883,9 @@ describe("POST /sessions/:id/message", () => {
       body: JSON.stringify({ content: "run the action" }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
     expect((await res.json()).status).toBe("running");
+    expect(res.headers.get("X-Barry-Timing")).toMatch(/ingress=.*admit=.*warm=0/);
     expect(mockSdkStartSession).toHaveBeenCalledOnce();
     expect(mockQueuePrompt).not.toHaveBeenCalled();
   });
@@ -879,11 +897,11 @@ describe("POST /sessions/:id/message", () => {
       // rather than mocking it, since the point of these two tests is that
       // the dead/unknown branches still reach startSession unchanged.
       metadata: { working_directory: REAL_REPO_ROOT, pid: 4242, pid_started_at: 1700000000 },
-      traits: [],
+      bags: [],
     } as never);
     mockSdkGetActiveSession.mockReturnValue(undefined);
     mockClassifyProcessLiveness.mockReturnValue({ state: "dead", reason: "no-process" });
-    mockSdkStartSession.mockResolvedValue({ id: "s2", status: "starting" } as never);
+    mockSdkStartSession.mockResolvedValue({ timings: { prepare_total_ms: 12.5, warm_hit: 0 }, id: "s2", status: "starting" } as never);
 
     const res = await fetch(baseUrl + "/sessions/s2/message", {
       method: "POST",
@@ -891,7 +909,7 @@ describe("POST /sessions/:id/message", () => {
       body: JSON.stringify({ content: "hello" }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
     expect(mockQueuePrompt).not.toHaveBeenCalled();
     expect(mockSdkStartSession).toHaveBeenCalled();
   });
@@ -900,11 +918,11 @@ describe("POST /sessions/:id/message", () => {
     mockGetSessionRecord.mockResolvedValue({
       id: "s3",
       metadata: { working_directory: REAL_REPO_ROOT },
-      traits: [],
+      bags: [],
     } as never);
     mockSdkGetActiveSession.mockReturnValue(undefined);
     mockClassifyProcessLiveness.mockReturnValue({ state: "unknown", reason: "no-pid" });
-    mockSdkStartSession.mockResolvedValue({ id: "s3", status: "starting" } as never);
+    mockSdkStartSession.mockResolvedValue({ timings: { prepare_total_ms: 12.5, warm_hit: 0 }, id: "s3", status: "starting" } as never);
 
     const res = await fetch(baseUrl + "/sessions/s3/message", {
       method: "POST",
@@ -912,7 +930,7 @@ describe("POST /sessions/:id/message", () => {
       body: JSON.stringify({ content: "hello" }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
     expect(mockQueuePrompt).not.toHaveBeenCalled();
     expect(mockSdkStartSession).toHaveBeenCalled();
   });
@@ -921,9 +939,9 @@ describe("POST /sessions/:id/message", () => {
     mockGetSessionRecord.mockResolvedValue({
       id: "s4",
       metadata: { working_directory: "/tmp/repo" },
-      traits: [],
+      bags: [],
     } as never);
-    mockSdkGetActiveSession.mockReturnValue({ id: "s4", status: "streaming" } as never);
+    mockSdkGetActiveSession.mockReturnValue({ timings: { prepare_total_ms: 12.5, warm_hit: 0 }, id: "s4", status: "streaming" } as never);
 
     const res = await fetch(baseUrl + "/sessions/s4/message", {
       method: "POST",
@@ -931,8 +949,8 @@ describe("POST /sessions/:id/message", () => {
       body: JSON.stringify({ content: "hello" }),
     });
 
-    expect(res.status).toBe(200);
-    expect(mockSdkSendMessage).toHaveBeenCalledWith("s4", "hello", { clientMessageId: undefined, reuseClientMessageRow: false }, undefined);
+    expect(res.status).toBe(202);
+    expect(mockSdkSendMessage).toHaveBeenCalledWith("s4", "hello", { ingressAt: expect.any(Number), clientMessageId: undefined, reuseClientMessageRow: false }, undefined);
     expect(mockClassifyProcessLiveness).not.toHaveBeenCalled();
     expect(mockQueuePrompt).not.toHaveBeenCalled();
   });
@@ -965,7 +983,7 @@ describe("POST /sessions/:id/attach and /detach", () => {
   });
 
   it("holds the session in this process, then hands back what the TUI needs", async () => {
-    mockGetSessionRecord.mockResolvedValue({ id: "tui", metadata: {}, traits: [] } as never);
+    mockGetSessionRecord.mockResolvedValue({ id: "tui", metadata: {}, bags: [] } as never);
     vi.mocked(sessionRuntime.attachRenderer).mockResolvedValue({ attachmentId: "a-1", address: "/tmp/e.sock", harnessSessionId: "thread-1" });
     const res = await attach("tui", { launcherPid: 4242 });
     expect(res.status).toBe(200);
@@ -975,7 +993,7 @@ describe("POST /sessions/:id/attach and /detach", () => {
   });
 
   it("refuses a session driven by another process, a missing one, and a body without the launcher", async () => {
-    mockGetSessionRecord.mockResolvedValue({ id: "tui", metadata: {}, traits: [] } as never);
+    mockGetSessionRecord.mockResolvedValue({ id: "tui", metadata: {}, bags: [] } as never);
     vi.mocked(residentSession).mockRejectedValueOnce(new ExecutionConflict("Another session process is live"));
     expect((await attach("tui", { launcherPid: 4242 })).status).toBe(409);
     expect((await attach("tui", {})).status).toBe(400);
@@ -995,57 +1013,172 @@ describe("POST /sessions/:id/attach and /detach", () => {
 });
 
 describe("GET /sessions/:id/tools", () => {
-  // A session of identity 4 holding `coding`, with one tool picked directly.
-  const row = { id: "sess-tools", identity_id: 4, traits: ["coding"], bound: null, bound_id: null, metadata: { selected_tools: ["fetch"] } };
-  const trait = (name: string, namespaces: string[]): TraitInfo => ({
-    name, description: null, tools: [], namespaces, access: "readwrite", skills: [], instructions: [], bound: {}, boundNames: [], bag: null,
-  });
+  const row = { id: "sess-tools", identity_id: 4, bags: ["git"], bounds: [], bound: null, metadata: { selected_tools: ["fetch"] } };
 
   beforeEach(() => {
     mockGetSessionRecord.mockResolvedValue(row as never);
     vi.mocked(getSession).mockResolvedValue(row as never);
-    vi.mocked(traits.list).mockResolvedValue([trait("coding", ["git"]), trait("web", ["web"])]);
-    vi.mocked(traits.selectable).mockResolvedValue([trait("coding", ["git"]), trait("web", ["web"])]);
-    vi.mocked(collectToolMeta).mockResolvedValue([
+    vi.mocked(collectToolDefinitions).mockResolvedValue([
       { namespace: "git", toolName: "status", access: "read" },
       { namespace: "git", toolName: "commit", access: "write" },
       { namespace: "web", toolName: "fetch", access: "read" },
     ]);
   });
 
-  it("marks what the session's grants reach, and what granted each", async () => {
-    const grants = vi.fn(async (): Promise<Grants> => ({
-      ...NO_GRANTS,
-      traits: ["coding"],
-      namespaces: ["git"],
-      tools: [{ name: "status", namespace: "git", bag: "git", access: "read" }, { name: "fetch", namespace: "web", bag: "web", access: "read" }],
-    }));
-    Barry.use(fakeIdentities({ grants }));
+  it("marks what the session's bags and bound reach, and what enabled each", async () => {
+    const tools = vi.fn(async (): Promise<Tool[]> => [
+      { name: "status", namespace: "git", bag: "git", access: "read" },
+    ]);
+    Barry.use(fakeIdentities({ bound: async () => null, tools }));
 
     const body = await (await fetch(`${baseUrl}/sessions/sess-tools/tools/resolved`)).json();
 
-    // Asked once, of the session's identity, with what its row selected.
-    expect(grants).toHaveBeenCalledWith(4, expect.objectContaining({ traits: ["coding"], tools: ["fetch"] }), { kind: "owner" });
+    expect(tools).toHaveBeenCalledWith(4, expect.objectContaining({ bags: ["git"] }), { kind: "owner" });
     expect(body.namespaces).toEqual([
-      { name: "git", enabled: true, grantedBy: ["coding"], toolCount: 2 },
+      { name: "git", enabled: true, grantedBy: ["git"], toolCount: 2 },
       { name: "web", enabled: false, grantedBy: [], toolCount: 1 },
     ]);
     expect(body.tools).toEqual([
       { toolName: "commit", namespace: "git", access: "write", enabled: false, grantedBy: null },
       { toolName: "fetch", namespace: "web", access: "read", enabled: true, grantedBy: "(direct tool)" },
-      { toolName: "status", namespace: "git", access: "read", enabled: true, grantedBy: "coding" },
+      { toolName: "status", namespace: "git", access: "read", enabled: true, grantedBy: "git" },
     ]);
     expect(body.selectedTools).toEqual(["fetch"]);
   });
 
-  it("previews traits in place of the session's own, keeping the rest of its selection", async () => {
-    const grants = vi.fn(async (): Promise<Grants> => NO_GRANTS);
-    Barry.use(fakeIdentities({ grants }));
+  it("previews bags in place of the session's own", async () => {
+    const tools = vi.fn(async (): Promise<Tool[]> => []);
+    Barry.use(fakeIdentities({ bound: async () => null, tools }));
 
-    const res = await fetch(`${baseUrl}/sessions/sess-tools/tools/preview?traits=web`);
+    const res = await fetch(`${baseUrl}/sessions/sess-tools/tools/preview?bags=web`);
 
     expect(res.status).toBe(200);
-    expect(grants).toHaveBeenCalledWith(4, expect.objectContaining({ traits: ["web"], namespaces: [], tools: [], defaults: true }), { kind: "owner" });
-    expect((await res.json()).traits.active).toEqual(["web"]);
+    expect(tools).toHaveBeenCalledWith(4, expect.objectContaining({ bags: ["web"] }), { kind: "owner" });
+    expect((await res.json()).bags.active).toEqual(["web"]);
   });
 });
+
+
+describe("POST /sessions/:id/prepare", () => {
+  it("returns 202 and timing metadata while warming the exact session", async () => {
+    mockGetSessionRecord.mockResolvedValue({ id: "prepared", metadata: { working_directory: REAL_REPO_ROOT }, bags: [] } as never);
+    const active = { id: "prepared", timings: { prepare_total_ms: 12, warm_hit: 0 }, session:{isWarm:()=>true}, warm: { preparedAt: Date.now() }, status: "waiting" };
+    mockSdkGetActiveSession.mockReturnValue(active as never);
+    vi.mocked(residentSession).mockResolvedValue(active as never);
+    const response = await fetch(`${baseUrl}/sessions/prepared/prepare`, { method: "POST", headers: { "Content-Type": "application/json" } });
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(response.headers.get("X-Barry-Timing")).toContain("warm=1");
+    expect(sessionRuntime.warmHarness).toHaveBeenCalledWith("prepared");
+  });
+  it("reports a live external driver as a conflict without warming", async () => {
+    mockGetSessionRecord.mockResolvedValue({ id: "external" } as never);
+    vi.mocked(residentSession).mockRejectedValueOnce(new ExecutionConflict("Another process is live"));
+    const response = await fetch(`${baseUrl}/sessions/external/prepare`, { method: "POST", headers: { "Content-Type": "application/json" } });
+    expect(response.status).toBe(409);
+    expect(sessionRuntime.warmHarness).not.toHaveBeenCalled();
+  });
+  it("refuses a missing row without preparing anything", async () => {
+    mockGetSessionRecord.mockResolvedValue(undefined);
+    const response = await fetch(`${baseUrl}/sessions/missing/prepare`, { method: "POST", headers: { "Content-Type": "application/json" } });
+    expect(response.status).toBe(404);
+    expect(sessionRuntime.warmHarness).not.toHaveBeenCalled();
+  });
+});
+
+it("responds before warm completes and reports ingress warm=0", async () => {
+  mockGetSessionRecord.mockResolvedValue({ id: "race-warm", metadata: { working_directory: REAL_REPO_ROOT }, bags: [] } as never);
+  const active = { id: "race-warm", timings: { warm_hit: 0, harness_create_ms: 3 }, warm: null as { preparedAt: number } | null, status: "waiting", warming: Promise.resolve() };
+  let finish!: () => void;
+  active.warming = new Promise<void>(resolve => { finish = resolve; }).then(() => { active.warm = { preparedAt: Date.now() }; });
+  mockSdkSendMessage.mockImplementationOnce(async () => { setTimeout(finish, 30); });
+  mockSdkGetActiveSession.mockReturnValue(active as never);
+  const response = await fetch(`${baseUrl}/sessions/race-warm/message`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: "hello" }) });
+  expect(response.status).toBe(202);
+  expect(active.warm).toBeNull();
+  expect(response.headers.get("X-Barry-Timing")).toContain("warm=0");
+  expect(response.headers.get("X-Barry-Timing")).not.toContain("harness_create");
+});
+
+it("serves committed plus queued transcript rows when recording misses the read deadline",async()=>{
+ mockGetSessionRecord.mockResolvedValue({id:"lag",metadata:{}} as never);
+ vi.mocked(sessionRuntime.flushPersistence).mockResolvedValueOnce(false);
+ vi.mocked(sessionRuntime.pendingPersistence).mockReturnValueOnce([{type:"text",sessionId:"lag",sequence:2,role:"assistant",content:"queued"}]);
+ vi.mocked(getSessionMessages).mockResolvedValueOnce({messages:[{type:"text",sessionId:"lag",createdAt:new Date().toISOString(),sequence:1,role:"user",content:"stored"}],hasMore:false});
+ const response=await fetch(`${baseUrl}/sessions/lag/messages`);expect(response.status).toBe(200);
+ expect(response.headers.get("X-Barry-Durability")).toBe("pending");
+ const body=await response.json();expect(body.durable).toBe(false);expect(body.messages.map((m:{sequence:number})=>m.sequence)).toEqual([1,2]);
+});
+it("refuses a new turn with retryable 503 before any side effects when recording is full",async()=>{
+ const {PersistenceBacklogError}=await import("../runtime/persist-queue.js");
+ vi.mocked(sessionRuntime.assertPersistenceAdmission).mockImplementationOnce(()=>{throw new PersistenceBacklogError("recording delayed");});
+ const response=await fetch(`${baseUrl}/sessions/lag/message`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:"later"})});
+ expect(response.status).toBe(503);expect(await response.json()).toMatchObject({code:"persistence_lagging",retryable:true});expect(mockSdkSendMessage).not.toHaveBeenCalled();
+});
+
+it("snapshots cold history before pre-recording the prompt and forwards its sequence",async()=>{
+ mockGetSessionRecord.mockResolvedValue({id:"cold-echo",status:"pending",metadata:{working_directory:REAL_REPO_ROOT},bags:[]} as never);
+ vi.mocked(buildSessionHistoryContext).mockResolvedValueOnce("prior history");
+ mockSdkStartSession.mockResolvedValueOnce({id:"cold-echo",status:"starting",timings:{}} as never);
+ mockUpdatePromptDeliveryByClientMessageId.mockResolvedValueOnce({id:"m-failure",sequence:10,state:"accepted"});
+ const response=await fetch(`${baseUrl}/sessions/cold-echo/message`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:"new prompt",clientMessageId:"echo"})});
+ expect(response.status).toBe(202);
+ expect(mockSdkStartSession).toHaveBeenCalledWith(expect.objectContaining({userMessageSequence:10,initialHistoryContext:"prior history",reuseClientMessageRow:true}),undefined);
+ expect(vi.mocked(buildSessionHistoryContext).mock.invocationCallOrder[0]).toBeLessThan(mockRecordPromptDelivery.mock.invocationCallOrder[0]);
+});
+it("does not call an old prepare stamp a warm process at ingress",async()=>{
+ mockGetSessionRecord.mockResolvedValue({id:"released",metadata:{},bags:[]} as never);
+ mockSdkGetActiveSession.mockReturnValue({id:"released",status:"waiting",timings:{},warm:{preparedAt:Date.now()},session:{isWarm:()=>false}} as never);
+ mockSdkSendMessage.mockResolvedValue(undefined);
+ const response=await fetch(`${baseUrl}/sessions/released/message`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:"hello"})});
+ expect(response.status).toBe(202);expect(response.headers.get("X-Barry-Timing")).toContain("warm=0");
+});
+
+it.each(["interrupted","forced","none"] as const)("reports the %s interrupt outcome",async(status)=>{
+ mockGetSessionRecord.mockResolvedValue({id:"outcome",metadata:{},bags:[]} as never);
+ mockSdkGetActiveSession.mockReturnValue((status==="forced"?{turnControl:{force:{signal:{aborted:true}}}}:undefined) as never);
+ vi.mocked(sessionRuntime.interruptTurn).mockResolvedValue(status!=="none");
+ const response=await fetch(`${baseUrl}/sessions/outcome/interrupt`,{method:"POST"});
+ expect(response.status).toBe(200);expect(await response.json()).toMatchObject({status,message:expect.any(String)});
+});
+it("returns a recording warning after removing a resident with pending rows",async()=>{
+ mockGetSessionRecord.mockResolvedValue({id:"lagging-remove",metadata:{},bags:[]} as never);
+ mockSdkGetActiveSession.mockReturnValue({id:"lagging-remove"} as never);
+ vi.mocked(sessionRuntime.pendingPersistence).mockReturnValueOnce([{type:"text",content:"queued"}]);
+ const response=await fetch(`${baseUrl}/sessions/lagging-remove`,{method:"DELETE"});
+ expect(response.status).toBe(200);expect(await response.json()).toMatchObject({recordingPending:true});
+});
+
+it("refuses backlog admission without adding its error to the recording queue",async()=>{
+ const {PersistenceBacklogError}=await import("../runtime/persist-queue.js");
+ mockGetSessionRecord.mockResolvedValue({id:"backlog",metadata:{},bags:[]} as never);
+ const active={id:"backlog",status:"waiting",timings:{}};mockSdkGetActiveSession.mockReturnValue(active as never);
+ vi.mocked(sessionRuntime.assertPersistenceAdmission).mockImplementationOnce(()=>{throw new PersistenceBacklogError("Recording delayed");});
+ const response=await fetch(`${baseUrl}/sessions/backlog/message`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:"hello"})});
+ expect(response.status).toBe(503);expect(sessionRuntime.sendInTurn).toHaveBeenCalledWith(active,expect.objectContaining({type:"error",metadata:{code:"persistence_lagging",retryable:true}}));expect(sessionRuntime.broadcastToSession).not.toHaveBeenCalled();
+});
+
+describe("parseIdentityIdParam", () => {
+  it("treats an absent param as no barry", () => {
+    expect(parseIdentityIdParam(undefined)).toEqual({ ok: true, identityId: null });
+  });
+
+  it("treats an empty or blank param as no barry", () => {
+    expect(parseIdentityIdParam("")).toEqual({ ok: true, identityId: null });
+    expect(parseIdentityIdParam("   ")).toEqual({ ok: true, identityId: null });
+  });
+
+  it("accepts an integer", () => {
+    expect(parseIdentityIdParam("3")).toEqual({ ok: true, identityId: 3 });
+  });
+
+  it("rejects a present but unparseable value", () => {
+    expect(parseIdentityIdParam("abc")).toEqual({ ok: false });
+    expect(parseIdentityIdParam("3.5")).toEqual({ ok: false });
+  });
+
+  it("rejects a repeated param, which arrives as an array", () => {
+    expect(parseIdentityIdParam(["3", "4"])).toEqual({ ok: false });
+  });
+});
+

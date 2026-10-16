@@ -29,9 +29,10 @@
         "<TMP_DIR>"
       ],
       "warnings": [
-        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff",
+        "cursor: unknown version; recommended 2026.10.01-14929f9; could not establish the runtime version"
       ],
-      "providerSessionId": "<RESERVED_ID>"
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -77,9 +78,10 @@
       ],
       "warnings": [
         "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff",
-        "The recorded conversation ran hosted, which cursor's TUI cannot open; this launch starts a new chat, and Barry's transcript keeps the earlier turns."
+        "The recorded conversation ran hosted, which cursor's TUI cannot open; this launch starts a new chat, and Barry's transcript keeps the earlier turns.",
+        "cursor: unknown version; recommended 2026.10.01-14929f9; could not establish the runtime version"
       ],
-      "providerSessionId": "<RESERVED_ID>"
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -132,9 +134,10 @@
         "<TMP_DIR>"
       ],
       "warnings": [
-        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff",
+        "cursor: unknown version; recommended 2026.10.01-14929f9; could not establish the runtime version"
       ],
-      "providerSessionId": "<RESERVED_ID>"
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -183,9 +186,10 @@
         "<TMP_DIR>"
       ],
       "warnings": [
-        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff",
+        "cursor: unknown version; recommended 2026.10.01-14929f9; could not establish the runtime version"
       ],
-      "providerSessionId": "<RESERVED_ID>"
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -234,9 +238,10 @@
         "<TMP_DIR>"
       ],
       "warnings": [
-        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff",
+        "cursor: unknown version; recommended 2026.10.01-14929f9; could not establish the runtime version"
       ],
-      "providerSessionId": "<RESERVED_ID>"
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -285,9 +290,10 @@
         "<TMP_DIR>"
       ],
       "warnings": [
-        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff",
+        "cursor: unknown version; recommended 2026.10.01-14929f9; could not establish the runtime version"
       ],
-      "providerSessionId": "<RESERVED_ID>"
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -342,9 +348,10 @@
         "<TMP_DIR>"
       ],
       "warnings": [
-        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff"
+        "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff",
+        "cursor: unknown version; recommended 2026.10.01-14929f9; could not establish the runtime version"
       ],
-      "providerSessionId": "<RESERVED_ID>"
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -389,7 +396,8 @@
       ],
       "warnings": [
         "cursor cannot enforce these denials in-session, so they are not applied: Glob, Grep, Task, WebSearch, List, Fetch, SemanticSearch, ReadLints, GenerateImage, ComputerUse, RecordScreen, ListMcpResources, FetchMcpResource, AskQuestion, CreatePlan, SwitchMode, UpdateTodos, ReadTodos, ApplyAgentDiff",
-        "Cursor gave no chat id, so `barry resume` cannot reopen this conversation."
+        "Cursor gave no chat id, so `barry resume` cannot reopen this conversation.",
+        "cursor: unknown version; recommended 2026.10.01-14929f9; could not establish the runtime version"
       ]
     },
     "written": {

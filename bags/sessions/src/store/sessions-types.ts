@@ -25,10 +25,9 @@ export interface SessionsStoreSessionsTable {
   status: Generated<string>;
   system_prompt: string | null;
   summary: string | null;
-  traits: Generated<string>;
+  bags: Generated<string>;
   bounds: Generated<string>;
   bound: string | null;
-  bound_id: number | null;
   metadata: Generated<string>;
   created_at: Generated<string>;
   started_at: string | null;
@@ -157,7 +156,7 @@ export interface SessionsStoreDatabase {
 export const SESSIONS_STORE_COLUMNS: Record<keyof SessionsStoreDatabase, readonly string[]> = {
   sessions: [
     "id", "user_id", "agent_token", "identity_id", "workflow_credential_id", "active", "state", "status",
-    "system_prompt", "summary", "traits", "bounds", "bound", "bound_id", "metadata",
+    "system_prompt", "summary", "bags", "bounds", "bound", "metadata",
     "created_at", "started_at", "completed_at", "ended_at", "last_message_at",
     "message_count",
   ],

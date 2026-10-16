@@ -27,6 +27,7 @@ export const VERIFIED_ON = "0.99.2";
 
 export const PI_HOSTED: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: [VERIFIED_ON], supportedVersions: [{ min: VERIFIED_ON, max: VERIFIED_ON }] },
   build: "bundled",
   guarantees: {
     capture: "total",
@@ -47,11 +48,12 @@ export const PI_HOSTED: Mode = {
 };
 
 /** The version in `--version` output: its first capture group. Shared by doctor and the adapter. */
-export const VERSION_PATTERN = "(\\d+\\.\\d+\\.\\d+)";
+export const VERSION_PATTERN = "(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?)";
 
 export const PI_REQUIREMENTS: Requirements = {
   binary: {
     command: "pi",
+    overrideEnv: "PI_BIN",
     versionArgs: ["--version"],
     versionPattern: VERSION_PATTERN,
     install: {
@@ -62,6 +64,6 @@ export const PI_REQUIREMENTS: Requirements = {
     // not the binary — the dependency in this package's package.json is the
     // mechanism that holds the pin, and the binary cannot replace it. The
     // binary itself only updates when someone runs the manual `pi update`.
-    pin: { version: VERIFIED_ON, enforcedBy: "the pinned @earendil-works/pi-coding-agent dependency the hosted mode runs in-process" },
+    recommendedVersion: VERIFIED_ON,
   },
 };

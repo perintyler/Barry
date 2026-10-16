@@ -17,11 +17,11 @@ describe("Pi Modes and Requirements", () => {
     expect(PI_HOSTED.egressSandbox).toBe(false);
   });
 
-  it("declares binary requirements with pin on verified SDK version", () => {
+  it("declares binary requirements with recommended SDK version", () => {
     const bin = PI_REQUIREMENTS.binary;
     expect(bin.command).toBe("pi");
     expect(bin.versionArgs).toEqual(["--version"]);
-    expect(bin.pin.version).toBe(VERIFIED_ON);
+    expect(bin.recommendedVersion).toBe(VERIFIED_ON);
     expect(new RegExp(VERSION_PATTERN).test(`0.99.2`)).toBe(true);
     expect(new RegExp(VERSION_PATTERN).test(`pi version 0.99.2`)).toBe(true);
   });

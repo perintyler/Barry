@@ -1,41 +1,25 @@
-// Resolved/preview tool routes for the sessions lifecycle router, plus the
-// trait-merge helper. Extracted verbatim from session-lifecycle.ts for file
-// size; no behavior change.
-import { traits, type TraitInfo } from "@barry-rocks/identities-bag";
-import { Barry, requestCaller, type Grants } from "@barry-rocks/sdk";
+import { Barry, requestCaller, type Bound, type Tool } from "@barry-rocks/sdk";
 import { createLogger } from "@barry-rocks/sdk/logging";
 import { sessionsRoutes } from "@barry-rocks/sdk/internal/routes";
 import type { serve } from "@barry-rocks/sdk/services/http";
-import { selectionOf, sessionGrants } from "@barry-rocks/sessions-bag";
-import { qualifyToolId } from "@barry-rocks/sdk/bounds";
-import { collectToolMeta, type ToolMetaEntry } from "@barry-rocks/sdk/internal/tools";
+import { filterToolsQualified, qualifyToolId } from "@barry-rocks/sdk/bounds";
+import { collectToolDefinitions, type ToolDescriptorEntry } from "@barry-rocks/sdk/internal/tools";
 import { getSessionRecord } from "../db.js";
 
 const log = createLogger("barry-server");
 
-export function mergeActiveIntoSelectable(
-  selectable: TraitInfo[],
-  all: TraitInfo[],
-  activeNames: string[],
-): TraitInfo[] {
-  if (activeNames.length === 0) return selectable;
-  const present = new Set(selectable.map((t) => t.name));
-  const missing = activeNames
-    .filter((name) => !present.has(name))
-    .map((name) => all.find((t) => t.name === name))
-    .filter((t): t is NonNullable<typeof t> => t !== undefined);
-  return missing.length > 0 ? [...selectable, ...missing] : selectable;
-}
-
 interface ResolvedToolsResponse {
   ok: true;
-  traits: {
+  bags: {
     active: string[];
-    available: Array<{ name: string; description: string | null; access: string; namespaces: string[] }>;
+    available: string[];
   };
-  /** Namespaces directly selected (additive, independent of traits) */
+  bounds: Array<Bound | string>;
+  availableBounds: string[];
+  bound: Record<string, unknown> | null;
+  /** Namespaces directly selected (additive, independent of bags) */
   selectedNamespaces: string[];
-  /** Tools directly selected (additive, independent of traits) */
+  /** Tools directly selected (additive, independent of bags) */
   selectedTools: string[];
   namespaces: Array<{
     name: string;
@@ -53,39 +37,52 @@ interface ResolvedToolsResponse {
 }
 
 /**
- * Every tool a bag declares, marked with whether `grants` reaches it and what
- * granted it: the first of the granted traits naming its namespace, else a
- * direct pick.
+ * Every tool a bag declares, marked with whether the session's bags and bound
+ * reach it and what enabled it: the bag naming its namespace, else a direct pick.
  */
 function annotateTools(
-  grants: Grants,
-  universe: readonly ToolMetaEntry[],
-  allTraits: readonly TraitInfo[],
+  resolvedTools: readonly Tool[],
+  activeBags: readonly string[],
+  activeBound: Bound | null,
+  universe: readonly ToolDescriptorEntry[],
   direct: { namespaces: readonly string[]; tools: readonly string[] },
 ): Pick<ResolvedToolsResponse, "namespaces" | "tools"> {
-  const traitsByName = new Map(allTraits.map((trait) => [trait.name, trait]));
-  const granting = grants.traits.flatMap((name) => traitsByName.get(name) ?? []);
-  const grantersOf = (namespace: string) => granting.filter((trait) => trait.namespaces.includes(namespace)).map((trait) => trait.name);
-  const enabledNamespaces = new Set(grants.namespaces);
-  const enabledTools = new Set(grants.tools.map((tool) => qualifyToolId(tool.namespace, tool.name)));
+  const activeBagSet = new Set(activeBags);
+  const enabledToolIds = new Set(resolvedTools.map((tool) => qualifyToolId(tool.namespace, tool.name)));
+
+  if (direct.namespaces.length > 0 || direct.tools.length > 0) {
+    const directCandidates = universe.filter(
+      (t) => direct.namespaces.includes(t.namespace) || direct.tools.includes(t.toolName),
+    );
+    const allowedDirect = new Set(filterToolsQualified(directCandidates, activeBound));
+    for (const id of allowedDirect) enabledToolIds.add(id);
+  }
+
+  const enabledNamespaces = new Set<string>([
+    ...activeBags,
+    ...direct.namespaces,
+  ]);
 
   const toolCounts = new Map<string, number>();
   for (const tool of universe) toolCounts.set(tool.namespace, (toolCounts.get(tool.namespace) ?? 0) + 1);
   const namespaces = [...toolCounts.entries()]
     .map(([name, toolCount]) => {
       const enabled = enabledNamespaces.has(name);
-      return { name, enabled, grantedBy: enabled ? grantersOf(name) : [], toolCount };
+      const grantedBy = activeBagSet.has(name) ? [name] : [];
+      return { name, enabled, grantedBy, toolCount };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const tools = universe.map((tool) => {
-    const enabled = enabledTools.has(qualifyToolId(tool.namespace, tool.toolName));
+    const enabled = enabledToolIds.has(qualifyToolId(tool.namespace, tool.toolName));
     let grantedBy: string | null = null;
     if (enabled) {
-      grantedBy = grantersOf(tool.namespace)[0] ?? null;
-      if (!grantedBy) {
-        if (direct.namespaces.includes(tool.namespace)) grantedBy = "(direct namespace)";
-        if (direct.tools.includes(tool.toolName)) grantedBy = "(direct tool)";
+      if (activeBagSet.has(tool.namespace)) {
+        grantedBy = tool.namespace;
+      } else if (direct.namespaces.includes(tool.namespace)) {
+        grantedBy = "(direct namespace)";
+      } else if (direct.tools.includes(tool.toolName)) {
+        grantedBy = "(direct tool)";
       }
     }
     return { toolName: tool.toolName, namespace: tool.namespace, access: tool.access, enabled, grantedBy };
@@ -95,122 +92,125 @@ function annotateTools(
 }
 
 export function registerToolRoutes(routes: ReturnType<typeof serve>): void {
-// GET /sessions/:id/tools/resolved — full tool universe annotated with enabled/disabled
-routes.route(sessionsRoutes.getResolvedSessionTools, async (req, res) => {
-  try {
-    const ps = await getSessionRecord(req.params.sessionId);
-    if (!ps) {
-      return res.status(404).json({ ok: false, error: "Session not found" });
+  // GET /sessions/:id/tools/resolved — full tool universe annotated with enabled/disabled
+  routes.route(sessionsRoutes.getResolvedSessionTools, async (req, res) => {
+    try {
+      const ps = await getSessionRecord(req.params.sessionId);
+      if (!ps) {
+        return res.status(404).json({ ok: false, error: "Session not found" });
+      }
+
+      const caller = requestCaller(req.authPrincipal);
+      const asked = Barry.as(caller);
+      const activeBags = ps.bags ?? [];
+      const activeBounds = ps.bounds ?? [];
+      const [universe, resolvedBound, resolvedTools, availableBoundsList] = await Promise.all([
+        collectToolDefinitions(),
+        ps.bound ? Promise.resolve(ps.bound as Bound) : Promise.resolve().then(() => asked.bound(ps.identity_id ?? null, activeBounds)),
+        Promise.resolve().then(() => asked.tools(ps.identity_id ?? null, activeBags, (ps.bound as Bound | null) ?? activeBounds)),
+        Promise.resolve().then(() => asked.bounds(ps.identity_id ?? undefined)).catch(() => []),
+      ]);
+
+      const directNamespaces = Array.isArray(ps.metadata?.selected_namespaces)
+        ? ps.metadata.selected_namespaces
+        : [];
+      const directTools = Array.isArray(ps.metadata?.selected_tools)
+        ? ps.metadata.selected_tools
+        : [];
+      const { namespaces, tools } = annotateTools(
+        resolvedTools,
+        activeBags,
+        resolvedBound,
+        universe,
+        { namespaces: directNamespaces, tools: directTools },
+      );
+
+      const availableBags = [...new Set([...universe.map((t) => t.namespace), ...activeBags])].sort();
+      const availableBounds = availableBoundsList
+        .map((b) => (typeof b.name === "string" ? b.name : ""))
+        .filter(Boolean);
+
+      const response: ResolvedToolsResponse = {
+        ok: true,
+        bags: {
+          active: activeBags,
+          available: availableBags,
+        },
+        bounds: activeBounds,
+        availableBounds,
+        bound: (resolvedBound as Record<string, unknown>) ?? null,
+        selectedNamespaces: directNamespaces,
+        selectedTools: directTools,
+        namespaces,
+        tools,
+      };
+
+      res.json(response);
+    } catch (err) {
+      log.error("sessions.tools_resolved_failed", { sessionId: req.params.sessionId, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ ok: false, error: "Failed to resolve tools" });
     }
+  });
 
-    // `allTraitsList` stays unfiltered so an active trait from a since-removed
-    // bag still resolves; `selectableTraits` is the narrowed menu (see
-    // traits.selectable).
-    const [allTraitsList, selectableTraits, universe, granted] = await Promise.all([
-      traits.list(),
-      traits.selectable(ps.identity_id),
-      collectToolMeta(),
-      sessionGrants(ps.id, requestCaller(req.authPrincipal)),
-    ]);
+  // GET /sessions/:id/tools/preview?bags=git,web&bounds=readonly — preview tools for hypothetical bag/bound set
+  routes.route(sessionsRoutes.previewSessionTools, async (req, res) => {
+    try {
+      const ps = await getSessionRecord(req.params.sessionId);
+      if (!ps) {
+        return res.status(404).json({ ok: false, error: "Session not found" });
+      }
 
-    const activeTraits = ps.traits || [];
-    // Direct picks from session metadata, which its grants already include.
-    const directNamespaces = Array.isArray(ps.metadata?.selected_namespaces)
-      ? ps.metadata.selected_namespaces
-      : [];
-    const directTools = Array.isArray(ps.metadata?.selected_tools)
-      ? ps.metadata.selected_tools
-      : [];
-    const { namespaces, tools } = annotateTools(granted, universe, allTraitsList, { namespaces: directNamespaces, tools: directTools });
+      const bagsParam = req.query.bags as string | undefined;
+      const boundsParam = req.query.bounds as string | undefined;
+      const namespacesParam = req.query.namespaces as string | undefined;
+      const toolsParam = req.query.tools as string | undefined;
 
-    const response: ResolvedToolsResponse = {
-      ok: true,
-      traits: {
-        active: activeTraits,
-        // Selectable traits, plus any the session already has. A trait can go
-        // stale while a session holds it; it stays listed so the UI can render
-        // it as checked and let the user turn it off, instead of showing an
-        // active trait that appears nowhere in the list.
-        available: mergeActiveIntoSelectable(selectableTraits, allTraitsList, activeTraits).map((t) => ({
-          name: t.name,
-          description: t.description,
-          access: t.access,
-      includes: t.includes,
-      harnessTraits: t.harnessTraits,
-      bound: t.bound,
-      boundNames: t.boundNames,
-          namespaces: t.namespaces,
-        })),
-      },
-      selectedNamespaces: directNamespaces,
-      selectedTools: directTools,
-      namespaces,
-      tools,
-    };
+      const previewBags = bagsParam ? bagsParam.split(",").map((t) => t.trim()).filter(Boolean) : [];
+      const previewBounds = boundsParam ? boundsParam.split(",").map((b) => b.trim()).filter(Boolean) : (ps.bounds ?? []);
+      const previewNamespaces = namespacesParam ? namespacesParam.split(",").map((t) => t.trim()).filter(Boolean) : [];
+      const previewTools = toolsParam ? toolsParam.split(",").map((t) => t.trim()).filter(Boolean) : [];
 
-    res.json(response);
-  } catch (err) {
-    log.error("sessions.tools_resolved_failed", { sessionId: req.params.sessionId, error: err instanceof Error ? err.message : String(err) });
-    res.status(500).json({ ok: false, error: "Failed to resolve tools" });
-  }
-});
+      if (previewBags.length === 0 && boundsParam === undefined && previewNamespaces.length === 0 && previewTools.length === 0) {
+        return res.status(400).json({ ok: false, error: "At least one of bags, bounds, namespaces, or tools query parameter is required" });
+      }
 
-// GET /sessions/:id/tools/preview?traits=core,web — preview tools for hypothetical trait set
-routes.route(sessionsRoutes.previewSessionTools, async (req, res) => {
-  try {
-    const ps = await getSessionRecord(req.params.sessionId);
-    if (!ps) {
-      return res.status(404).json({ ok: false, error: "Session not found" });
+      const caller = requestCaller(req.authPrincipal);
+      const asked = Barry.as(caller);
+      const [universe, resolvedBound, resolvedTools, availableBoundsList] = await Promise.all([
+        collectToolDefinitions(),
+        Promise.resolve().then(() => asked.bound(ps.identity_id ?? null, previewBounds)),
+        Promise.resolve().then(() => asked.tools(ps.identity_id ?? null, previewBags, previewBounds)),
+        Promise.resolve().then(() => asked.bounds(ps.identity_id ?? undefined)).catch(() => []),
+      ]);
+      const { namespaces, tools } = annotateTools(
+        resolvedTools,
+        previewBags,
+        resolvedBound,
+        universe,
+        { namespaces: previewNamespaces, tools: previewTools },
+      );
+      const availableBags = [...new Set([...universe.map((t) => t.namespace), ...previewBags])].sort();
+      const availableBounds = availableBoundsList
+        .map((b) => (typeof b.name === "string" ? b.name : ""))
+        .filter(Boolean);
+
+      res.json({
+        ok: true,
+        bags: {
+          active: previewBags,
+          available: availableBags,
+        },
+        bounds: previewBounds,
+        availableBounds,
+        bound: (resolvedBound as Record<string, unknown>) ?? null,
+        selectedNamespaces: previewNamespaces,
+        selectedTools: previewTools,
+        namespaces,
+        tools,
+      });
+    } catch (err) {
+      log.error("sessions.tools_preview_failed", { sessionId: req.params.sessionId, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ ok: false, error: "Failed to preview tools" });
     }
-
-    const traitsParam = req.query.traits as string | undefined;
-    const namespacesParam = req.query.namespaces as string | undefined;
-    const toolsParam = req.query.tools as string | undefined;
-
-    const previewTraits = traitsParam ? traitsParam.split(",").map((t) => t.trim()).filter(Boolean) : [];
-    const previewNamespaces = namespacesParam ? namespacesParam.split(",").map((t) => t.trim()).filter(Boolean) : [];
-    const previewTools = toolsParam ? toolsParam.split(",").map((t) => t.trim()).filter(Boolean) : [];
-
-    if (previewTraits.length === 0 && previewNamespaces.length === 0 && previewTools.length === 0) {
-      return res.status(400).json({ ok: false, error: "At least one of traits, namespaces, or tools query parameter is required" });
-    }
-
-    // The session as it is, with the previewed selection in place of its own.
-    const selection = { ...selectionOf(ps), traits: previewTraits, namespaces: previewNamespaces, tools: previewTools };
-    const asked = Barry.as(requestCaller(req.authPrincipal));
-    // Unfiltered list so a previewed trait always resolves; narrowed list for
-    // the menu (see traits.selectable).
-    const [allTraitsList, selectableTraits, universe, granted] = await Promise.all([
-      traits.list(),
-      traits.selectable(ps.identity_id),
-      collectToolMeta(),
-      ps.identity_id === null ? asked.grants(selection) : asked.identity(ps.identity_id).grants(selection),
-    ]);
-    const { namespaces, tools } = annotateTools(granted, universe, allTraitsList, { namespaces: previewNamespaces, tools: previewTools });
-
-    res.json({
-      ok: true,
-      traits: {
-        active: previewTraits,
-        available: mergeActiveIntoSelectable(selectableTraits, allTraitsList, previewTraits).map((t) => ({
-          name: t.name,
-          description: t.description,
-          access: t.access,
-      includes: t.includes,
-      harnessTraits: t.harnessTraits,
-      bound: t.bound,
-      boundNames: t.boundNames,
-          namespaces: t.namespaces,
-        })),
-      },
-      selectedNamespaces: previewNamespaces,
-      selectedTools: previewTools,
-      namespaces,
-      tools,
-    });
-  } catch (err) {
-    log.error("sessions.tools_preview_failed", { sessionId: req.params.sessionId, error: err instanceof Error ? err.message : String(err) });
-    res.status(500).json({ ok: false, error: "Failed to preview tools" });
-  }
-});
+  });
 }

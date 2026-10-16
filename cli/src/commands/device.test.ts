@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { Command } from "commander";
 import { pairDevice, listDevices, revokeDevice, registerDevices, type DeviceCommandDeps } from "./device.js";
-import { applyCommandScope } from "../scope.js";
+import { applyCommandTarget } from "../target.js";
 
 const id = "device_12345678-1234-1234-1234-123456789abc";
 const now = 1_000_000;
@@ -161,11 +161,11 @@ describe("system device commands", () => {
     registerDevices(root, deps);
     await root.parseAsync(["device", "pair", "123-456", "--yes", "--scopes", "sessions:read", "--identities", "1"], { from: "user" });
     expect(api.authorize).toHaveBeenCalledExactlyOnceWith("123-456", { scopes: ["sessions:read"], identityIds: [1] });
-    applyCommandScope(root, { kind: "identity", name: "fixture", binding: { id: 1, home: null } });
+    applyCommandTarget(root, { kind: "identity", name: "fixture", binding: { id: 1, home: null } });
     expect(root.commands).toEqual([]);
     const system = new Command();
     registerDevices(system, deps);
-    applyCommandScope(system, { kind: "system" });
+    applyCommandTarget(system, { kind: "system" });
     expect(system.commands.map(command => command.name())).toEqual(["device"]);
   });
 });

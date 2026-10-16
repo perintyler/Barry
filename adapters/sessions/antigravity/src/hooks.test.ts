@@ -1,4 +1,4 @@
-import { mkdirSync, symlinkSync } from "node:fs";
+import { mkdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { stableNodePath } from "@barry-rocks/sdk/services";
 import { vi } from "vitest";
 import { execSync } from "node:child_process";
@@ -8,6 +8,44 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createInstrumentedHooks, setupGating } from "./hooks.js";
 import { NATIVE_TOOLS } from "./native-tools.js";
+
+it("reads only runtime MCP results and authorized schemas when native reads are denied", () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "agy-runtime-read-")));
+  try {
+    const cli = join(dir, ".gemini/antigravity-cli");
+    const result = join(cli, "brain/41c636e1-4bbe-49e1-b99d-d7d2e3af76df/.system_generated/steps/5/output.txt");
+    const make = (file: string) => { mkdirSync(join(file, ".."), { recursive: true }); writeFileSync(file, "{}"); return file; };
+    make(result);
+    const schema = make(join(cli, "mcp/barry/read_page.json"));
+    const forbidden = [
+      make(join(dir, "repo.txt")),
+      make(join(cli, "antigravity-oauth-token")),
+      make(join(cli, "settings.json")),
+      make(join(cli, "mcp/ambient/read_page.json")),
+      make(join(cli, "mcp/barry/write.json")),
+      make(join(cli, "brain/not-a-conversation/.system_generated/steps/5/output.txt")),
+      make(join(cli, "brain/41c636e1-4bbe-49e1-b99d-d7d2e3af76df/.system_generated/logs/transcript_full.jsonl")),
+    ];
+    setupGating(dir, [...NATIVE_TOOLS, "mcp__barry__write"], ["barry"]);
+    const config = JSON.parse(readFileSync(join(dir, ".agents/hooks.json"), "utf8"));
+    const command = config["barry-gating"].PreToolUse[0].hooks[0].command;
+    const run = (file: unknown, name = "view_file") => JSON.parse(execSync(command, {
+      input: JSON.stringify({ toolCall: { name, args: { AbsolutePath: file } } }), encoding: "utf8",
+    })).decision;
+    expect(run(result)).toBe("allow");
+    expect(run(schema)).toBe("allow");
+    for (const file of [...forbidden, "relative/output.txt", null, result + ".missing"]) expect(run(file)).toBe("deny");
+    for (const name of ["write_to_file", "run_command", "grep_search"]) expect(run(result, name)).toBe("deny");
+    const link = join(cli, "mcp/barry/link.json");
+    symlinkSync(forbidden[0], link);
+    expect(run(link)).toBe("deny");
+    const linkedDir = join(cli, "mcp/linked");
+    symlinkSync(join(cli, "mcp/barry"), linkedDir);
+    setupGating(dir, [...NATIVE_TOOLS], ["barry", "linked"]);
+    expect(run(join(linkedDir, "read_page.json"))).toBe("deny");
+    expect(run(join(cli, "mcp/barry/../../antigravity-oauth-token"))).toBe("deny");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 describe("Antigravity hooks", () => {
   it("persists messages delivered after setup, preserves sender and consumes each once", async () => {

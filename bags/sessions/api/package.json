@@ -23,7 +23,6 @@
     "@barry-rocks/schedules-bag": "workspace:*",
     "@barry-rocks/sdk": "workspace:*",
     "@barry-rocks/sessions-bag": "workspace:*",
-    "@barry-rocks/search-bag": "workspace:*",
     "@barry-rocks/tracker-bag": "workspace:*",
     "better-sqlite3": "12.10.0",
     "express": "4.22.1",
@@ -45,7 +44,8 @@
     "@barry-rocks/decision-typesafe": "workspace:*",
     "@barry-rocks/decision-von": "workspace:*",
     "@barry-rocks/decision-anthropic": "workspace:*",
-    "@barry-rocks/decision-ollama": "workspace:*"
+    "@barry-rocks/decision-ollama": "workspace:*",
+    "@barry-rocks/workflows-bag": "workspace:*"
   },
   "private": true
 }

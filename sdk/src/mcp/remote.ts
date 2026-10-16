@@ -8,10 +8,8 @@ import { noSseFetch } from "./transport.js";
 import type {
   RemoteBagSource,
   Bag,
-  BagTrait,
   BagMcpServer,
   BagToolMeta,
-  BagAccess,
   BagManifest,
 } from "../bags/types.js";
 
@@ -21,16 +19,8 @@ const log = createLogger("sdk-mcp", { transport: "stderr" });
  * Remote bag resource discovery via MCP barry:// URIs.
  *
  * Connects to a remote bag's MCP server, discovers barry:// resources,
- * and builds a Bag with cached skills, traits, and MCP servers.
+ * and builds a Bag with cached skills and MCP servers.
  */
-
-
-
-
-
-
-
-
 
 interface BarrySkillResource {
   name: string;
@@ -38,24 +28,23 @@ interface BarrySkillResource {
   prompt: string;
 }
 
-interface BarryTraitResource {
-  name: string;
-  description: string;
-  access: BagAccess;
-  namespaces: string[];
-  /** Skill names this trait grants; only skills the bag published are honored. */
-  skills?: string[];
-  /**
-   * Named bounds restricting this trait. Deny-only, so honored as published.
-   *
-   * Both spellings are read, permanently. This is a WIRE type: the publisher
-   * is a remote registry on someone else's schedule, and a bag published
-   * before the rename keeps saying `scopes:` forever. Reading only `bounds:`
-   * would publish a trait its author marked read-only as an unrestricted
-   * grant — failing open, which is exactly what the note below refuses to do.
-   */
-  bounds?: string[];
-  scopes?: string[];
+/**
+ * Classify a remote MCP tool's access level fail-closed from MCP `ToolAnnotations`.
+ *
+ * Only tools explicitly annotated with `annotations.readOnlyHint === true` (or an
+ * explicit `access: "read"` manifest entry) are classified as `"read"`. Unannotated
+ * remote tools default to `"write"` so `<bag>:read` (`tools.deny: ["<bag>:write"]`)
+ * and `readonly` never allow unannotated remote write tools to execute.
+ */
+export function classifyRemoteToolAccess(tool: {
+  access?: unknown;
+  annotations?: { readOnlyHint?: boolean } | null;
+}): "read" | "write" {
+  if (tool.annotations && typeof tool.annotations === "object") {
+    return tool.annotations.readOnlyHint === true ? "read" : "write";
+  }
+  if (tool.access === "read") return "read";
+  return "write";
 }
 
 function createTransport(source: RemoteBagSource) {
@@ -121,13 +110,6 @@ export async function discoverFromClient(
 
   clearBagCache(name);
 
-  // Read manifest.
-  //
-  // A conforming server sends its whole bag.yaml as JSON, which validates
-  // against the same strict schema used on disk and lights up instructions,
-  // verbs and nouns for the bag. Servers predating that send only
-  // {name, description, tools}; those fail validation, so fall back to the old
-  // shape rather than losing the bag entirely.
   let description = "";
   let manifest: BagManifest | null = null;
   let manifestError: string | null = null;
@@ -145,19 +127,23 @@ export async function discoverFromClient(
         description = manifest.description;
         for (const t of manifest.tools) tools.push(t);
       } else {
-        // The schema already rejected this payload, so trust nothing about its
-        // shape: read each field defensively and skip tool entries that are not
-        // well-formed rather than pushing undefined names into the registry.
         description = typeof raw.description === "string" ? raw.description : "";
         if (Array.isArray(raw.tools)) {
           for (const entry of raw.tools) {
             if (!entry || typeof entry !== "object") continue;
-            const { toolName, namespace, access } = entry as Record<string, unknown>;
+            const { toolName, namespace, access, annotations } = entry as Record<string, unknown>;
             if (typeof toolName !== "string" || typeof namespace !== "string") continue;
+            const resolvedAccess = classifyRemoteToolAccess({
+              access,
+              annotations:
+                annotations && typeof annotations === "object"
+                  ? (annotations as { readOnlyHint?: boolean })
+                  : null,
+            });
             tools.push({
               toolName,
               namespace,
-              access: access === "readwrite" ? "readwrite" : "read",
+              access: resolvedAccess === "read" ? "read" : "readwrite",
             });
           }
         }
@@ -165,45 +151,32 @@ export async function discoverFromClient(
     }
   }
 
+  if (tools.length === 0 && typeof (client as { listTools?: unknown }).listTools === "function") {
+    try {
+      const listed = await client.listTools();
+      for (const remoteTool of listed.tools ?? []) {
+        if (!remoteTool || typeof remoteTool.name !== "string") continue;
+        const resolvedAccess = classifyRemoteToolAccess({
+          annotations: remoteTool.annotations ?? null,
+        });
+        tools.push({
+          toolName: remoteTool.name,
+          namespace: name,
+          access: resolvedAccess === "read" ? "read" : "readwrite",
+        });
+      }
+    } catch {
+      // Optional MCP tools listing not supported by this server
+    }
+  }
+
   // Read skills. cacheSkill rejects unsafe names and returns null, so a remote
   // server cannot write outside its own cache directory.
-  const cachedSkills = new Set<string>();
   const skillResources = barryResources.filter((r) => r.uri.startsWith("barry://skills/"));
   for (const sr of skillResources) {
     const skill = await readResourceJson<BarrySkillResource>(client, sr.uri);
     if (skill?.prompt) {
-      if (cacheSkill(name, skill.name, skill.prompt)) cachedSkills.add(skill.name);
-    }
-  }
-
-  // Read traits. A trait may only grant skills this bag actually published —
-  // otherwise a remote bag could name a skill belonging to another bag.
-  const traits: BagTrait[] = [];
-  const traitResources = barryResources.filter((r) => r.uri.startsWith("barry://traits/"));
-  for (const tr of traitResources) {
-    const trait = await readResourceJson<BarryTraitResource>(client, tr.uri);
-    if (trait) {
-      traits.push({
-        name: trait.name,
-        description: trait.description,
-        access: trait.access ?? "read",
-        bags: trait.namespaces ?? [],
-        skills: (trait.skills ?? []).filter((s) => cachedSkills.has(s)),
-        // Deliberately empty. A trait's instructions become prompt text, and
-        // unlike skills there is no per-name published set to filter against
-        // here — so a remote trait naming an instruction could point a session
-        // at prose belonging to another bag. Same containment reasoning as the
-        // skills filter above, resolved the only way currently safe.
-        instructions: [],
-        // Carried through, unlike instructions, because a scope can only
-        // DENY. The containment risk above is a remote widening what a
-        // session reaches; naming a scope can only narrow it, and the worst a
-        // hostile remote achieves is over-restricting its own trait. Dropping
-        // these would instead publish a trait its author marked read-only as
-        // an unrestricted grant — failing open, which is never the safe
-        // default. An unknown name is caught by seed/doctor validation.
-        boundNames: trait.bounds ?? trait.scopes ?? [],
-      });
+      cacheSkill(name, skill.name, skill.prompt);
     }
   }
 
@@ -263,7 +236,6 @@ export async function discoverFromClient(
     skillsDirs: getCachedSkillsDirs(name),
     actionsDirs: getCachedActionsDirs(name),
     instructionsDirs: getCachedInstructionsDirs(name),
-    traits,
     mcpServers,
     tools,
     dependencies: manifest?.dependencies?.length

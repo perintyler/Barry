@@ -1,3 +1,4 @@
+import { lazy } from "./lib/lazy.js";
 /**
  * The commands that run and install a Barry instance: `up`, `setup`,
  * `service`, `hosting`, `env` and `db`.
@@ -7,19 +8,18 @@
  * sit at the root rather than under `devops`, which is contributor tooling.
  */
 import type { Command } from "commander";
-import {
-  stopCommand,
-  startCommand as serviceStartCommand,
-  serviceRestartCommand,
-  servicePortCommand,
-  statusCommand,
-  serviceUrlCommand,
-} from "./commands/service.js";
-import { logsCommand } from "./commands/logs.js";
-import { dbBackupCommand } from "./commands/db.js";
-import { envAuditCommand } from "./commands/env.js";
-import { statusOverviewCommand } from "./commands/status.js";
-import { storeListCommand, storeVerifyCommand } from "./commands/store.js";
+const stopCommand = lazy(() => import("./commands/service.js"), module => module.stopCommand);
+const serviceStartCommand = lazy(() => import("./commands/service.js"), module => module.startCommand);
+const serviceRestartCommand = lazy(() => import("./commands/service.js"), module => module.serviceRestartCommand);
+const servicePortCommand = lazy(() => import("./commands/service.js"), module => module.servicePortCommand);
+const statusCommand = lazy(() => import("./commands/service.js"), module => module.statusCommand);
+const serviceUrlCommand = lazy(() => import("./commands/service.js"), module => module.serviceUrlCommand);
+const logsCommand = lazy(() => import("./commands/logs.js"), module => module.logsCommand);
+const dbBackupCommand = lazy(() => import("./commands/db.js"), module => module.dbBackupCommand);
+const envAuditCommand = lazy(() => import("./commands/env.js"), module => module.envAuditCommand);
+const statusOverviewCommand = lazy(() => import("./commands/status.js"), module => module.statusOverviewCommand);
+const storeListCommand = lazy(() => import("./commands/store.js"), module => module.storeListCommand);
+const storeVerifyCommand = lazy(() => import("./commands/store.js"), module => module.storeVerifyCommand);
 
 export function registerInstanceCommands(program: Command): void {
   program

@@ -1,11 +1,11 @@
 import { schedulesRoutes } from "../routes/schedules.js";
-import { type OneOffRecord, type OneOffRequest } from "../schedules/types.js";
+import { type AtScheduleRecord, type AtScheduleRequest } from "../schedules/types.js";
 import { BarryApiError } from "./errors.js";
 import type { ApiTransport, RequestOptions } from "./http.js";
 
-export type OneOffSchedule = OneOffRecord;
+export type AtSchedule = AtScheduleRecord;
 
-export interface ScheduleOptions extends Pick<OneOffRequest, "identity" | "traits" | "bounds"> {
+export interface ScheduleOptions extends Pick<AtScheduleRequest, "identity" | "bags" | "bounds"> {
   /** A declared action, `bag:name` — a `run:` action for a script, or an agent's. */
   action: string;
   /** The action's inputs. At most 64 KB of JSON; a script gets them on stdin. */
@@ -39,7 +39,7 @@ export class Schedules {
     return (await this.http.call(schedulesRoutes.listSchedules, {}, request))!;
   }
 
-  async schedule(when: Date | string | number, options: ScheduleOptions, request: RequestOptions = {}): Promise<OneOffSchedule> {
+  async schedule(when: Date | string | number, options: ScheduleOptions, request: RequestOptions = {}): Promise<AtSchedule> {
     const due = when instanceof Date ? when : new Date(when);
     if (Number.isNaN(due.getTime())) {
       throw new BarryApiError(`Invalid time: ${String(when)}`, { status: null, code: "invalid_request" });
@@ -48,7 +48,7 @@ export class Schedules {
         action: options.action,
         dueAt: due.toISOString(),
         ...(options.identity === undefined ? {} : { identity: options.identity }),
-        ...(options.traits === undefined ? {} : { traits: options.traits }),
+        ...(options.bags === undefined ? {} : { bags: options.bags }),
         ...(options.bounds === undefined ? {} : { bounds: options.bounds }),
         ...(options.inputs === undefined ? {} : { inputs: options.inputs }),
         ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
@@ -59,12 +59,12 @@ export class Schedules {
   }
 
   /** The schedule with every attempt, or null when no schedule has this id. */
-  async get(id: string, request: RequestOptions = {}): Promise<OneOffSchedule | null> {
+  async get(id: string, request: RequestOptions = {}): Promise<AtSchedule | null> {
     const found = await this.http.call(schedulesRoutes.getOneOffSchedule, { params: { id: id } }, { ...request, notFound: "null" });
     return found?.schedule ?? null;
   }
 
-  async list(options: { bag?: string; status?: OneOffSchedule["status"]; limit?: number } = {}, request: RequestOptions = {}): Promise<OneOffSchedule[]> {
+  async list(options: { bag?: string; status?: AtSchedule["status"]; limit?: number } = {}, request: RequestOptions = {}): Promise<AtSchedule[]> {
     const page = await this.http.call(schedulesRoutes.listOneOffSchedules, { query: { ...options } }, { ...request });
     return page!.schedules;
   }
@@ -74,7 +74,7 @@ export class Schedules {
    * asked to stop (`cancelRequested`) — its script is killed — and ends
    * `cancelled`. Otherwise `status` says what it is instead.
    */
-  async cancel(id: string, request: RequestOptions = {}): Promise<{ cancelled: boolean; status: OneOffSchedule["status"]; cancelRequested?: boolean }> {
+  async cancel(id: string, request: RequestOptions = {}): Promise<{ cancelled: boolean; status: AtSchedule["status"]; cancelRequested?: boolean }> {
     const result = await this.http.call(schedulesRoutes.cancelOneOffSchedule, { params: { id: id } }, request);
     return result!;
   }

@@ -100,18 +100,18 @@ describe("identities registry", () => {
   });
 });
 
-describe("syncMetadataPayload — disk→DB mirror can clear grants", () => {
-  it("pins absent bags/traits to explicit empty arrays so the JSON merge clears them", () => {
+describe("syncMetadataPayload — disk→DB mirror can clear bags and bounds", () => {
+  it("pins absent bags/bounds to explicit empty arrays so the JSON merge clears them", () => {
     // The loader omits empty arrays entirely; a merge-update with the key
     // absent would keep the stale row value forever.
     const payload = syncMetadataPayload({});
     expect(payload.bags).toEqual([]);
-    expect(payload.traits).toEqual([]);
+    expect(payload.bounds).toEqual([]);
   });
 
-  it("passes populated grants through untouched", () => {
-    const payload = syncMetadataPayload({ bags: ["bdiff"], traits: ["kdenlive"] });
+  it("passes populated bags and bounds through untouched", () => {
+    const payload = syncMetadataPayload({ bags: ["bdiff"], bounds: ["readonly"] });
     expect(payload.bags).toEqual(["bdiff"]);
-    expect(payload.traits).toEqual(["kdenlive"]);
+    expect(payload.bounds).toEqual(["readonly"]);
   });
 });

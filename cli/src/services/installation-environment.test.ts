@@ -29,3 +29,7 @@ it("refuses to override a credential even when a prepared definition also declar
   const path = config('services:\n  app.api:\n    env: [MODE=override]\n');
   expect(() => installationEnvironment("app.api", defaults, ["MODE"], path)).toThrow("not a declared nonsecret value");
 });
+it("keeps the hosted namespace manifest value despite a legacy installation override",()=>{
+ const path=config('services:\n  sessions.api:\n    env: [BARRY_NAMESPACE_SPLIT=1]\n');
+ expect(installationEnvironment("sessions.api",[{name:"BARRY_NAMESPACE_SPLIT",source:"value",value:"false"}],[],path)[0].value).toBe("false");
+});

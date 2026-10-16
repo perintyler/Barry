@@ -7,13 +7,15 @@ import type { InstalledAdapter } from "@barry-rocks/sdk/adapters/harnesses";
  * and a command that needs adapters reports the error itself. Not
  * `adapterStore()`, which registers bags.
  */
+let adapters: Promise<ReturnType<typeof import("@barry-rocks/sdk/internal/adapters")["loadAdapters"]>> | undefined;
+export function installedAdapterStore() {
+  return adapters ??= Promise.all([
+    import("@barry-rocks/sdk/internal/adapters"), import("@barry-rocks/sdk/services"),
+  ]).then(([{ loadAdapters }, { barryAdaptersPath }]) => loadAdapters({ file: barryAdaptersPath() })).catch(error => { adapters = undefined; throw error; });
+}
 export async function installedHarnesses(): Promise<InstalledAdapter[]> {
-  try {
-    const [{ loadAdapters }, { barryAdaptersPath }] = await Promise.all([
-      import("@barry-rocks/sdk/internal/adapters"), import("@barry-rocks/sdk/services"),
-    ]);
-    return loadAdapters({ file: barryAdaptersPath() }).installed();
-  } catch { return []; }
+  try { return (await installedAdapterStore()).installed(); }
+  catch { return []; }
 }
 
 /**

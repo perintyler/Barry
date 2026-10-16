@@ -71,7 +71,7 @@ it("refuses HTTP session mutations before delivery or session side effects, igno
   const url = await listen();
   const db = getSessionsSqlite();
   const changes = db.prepare("SELECT total_changes() AS n").get();
-  for (const [method, path] of [["POST", "foreign/message"], ["POST", "foreign/stop"], ["POST", "foreign/interrupt"], ["POST", "foreign/attach"], ["POST", "foreign/detach"], ["PATCH", "foreign"], ["DELETE", "foreign"]]) {
+  for (const [method, path] of [["POST", "foreign/message"], ["POST", "foreign/stop"], ["POST", "foreign/interrupt"], ["POST", "foreign/attach"], ["POST", "foreign/prepare"], ["POST", "foreign/detach"], ["PATCH", "foreign"], ["DELETE", "foreign"]]) {
     const response = await fetch(`${url}/${path}`, { method, headers: { Authorization: "Bearer fixture", "Content-Type": "application/json" }, body: JSON.stringify({ content: "spoof", clientMessageId: "spoof", authPrincipal: { actorId: 1 }, actorId: 1 }) });
     expect(response.status).toBe(403);
     expect(await response.text()).not.toContain("two");
@@ -82,11 +82,11 @@ it("refuses HTTP session mutations before delivery or session side effects, igno
 
 it("forwards the middleware's verified principal separately to live session delivery", async () => {
   const url = await listen();
-  vi.spyOn(sessionRuntime, "getActiveSession").mockReturnValue({ id: "owned", sessionId: "hosted", status: "waiting" } as never);
+  vi.spyOn(sessionRuntime, "getActiveSession").mockReturnValue({ id: "owned", sessionId: "hosted", status: "waiting", timings: { warm_hit: 1 } } as never);
   const send = vi.spyOn(sessionRuntime, "sendMessage").mockResolvedValue(undefined);
   const response = await fetch(`${url}/owned/message`, { method: "POST", headers: { Authorization: "Bearer fixture", "Content-Type": "application/json" }, body: JSON.stringify({ content: "hello" }) });
-  expect(response.status).toBe(200);
-  expect(send).toHaveBeenCalledWith("owned", "hello", { clientMessageId: undefined, reuseClientMessageRow: false }, principal);
+  expect(response.status).toBe(202);
+  expect(send).toHaveBeenCalledWith("owned", "hello", { ingressAt: expect.any(Number), clientMessageId: undefined, reuseClientMessageRow: false }, principal);
 });
 
 it("denies hook and archive mutations of foreign sessions before any durable writes", async () => {
@@ -187,4 +187,16 @@ it("classifies a missing session as unavailable rather than another user's resou
   const response = await fetch(`${url}/missing/message`, { method: "POST", headers: { Authorization: "Bearer fixture", "Content-Type": "application/json" }, body: JSON.stringify({ content: "hello" }) });
   expect(response.status).toBe(404);
   expect(await response.text()).not.toContain("cannot control");
+});
+
+
+it("persists hosted pre-create bags and provenance through the authenticated route", async () => {
+  const url = await listen();
+  const response = await fetch(`${url}/start`, { method: "POST", headers: { Authorization: "Bearer fixture", "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "owned", bags: [], model: "fixture-model", model_provider: "fixture-vendor", mode: "hosted" }) });
+  expect(response.status).toBe(200);
+  const row = getSessionsSqlite().prepare("SELECT bags, metadata FROM sessions WHERE id='owned'").get() as { bags: string; metadata: string };
+  expect(JSON.parse(row.bags)).toEqual([]);
+  expect(JSON.parse(row.metadata)).toMatchObject({ model: "fixture-model", model_provider: "fixture-vendor", mode: "hosted" });
+  const invalid = await fetch(`${url}/start`, { method: "POST", headers: { Authorization: "Bearer fixture", "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "owned", bags: [""] }) });
+  expect(invalid.status).toBe(400);
 });

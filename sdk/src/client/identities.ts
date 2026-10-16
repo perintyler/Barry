@@ -1,7 +1,7 @@
 import { identitiesRoutes } from "../routes/identities.js";
 import { z } from "zod";
-import { CreateIdentityRequestSchema, UpdateIdentityRequestSchema, IdentityResponseSchema, EffectiveIdentityResponseSchema, TraitListResponseSchema, AvailableBagsResponseSchema } from "../identities/types.js";
-import { BoundListResponseSchema, UpdateBoundRequestSchema } from "../bounds/types.js";
+import { CreateIdentityRequestSchema, UpdateIdentityRequestSchema, IdentityResponseSchema, EffectiveIdentityResponseSchema, AvailableBagsResponseSchema } from "../identities/types.js";
+import { BoundListResponseSchema } from "../bounds/types.js";
 import { BarryApiError } from "./errors.js";
 import type { ApiTransport, RequestOptions } from "./http.js";
 
@@ -59,24 +59,10 @@ export class Identities {
     await this.http.call(identitiesRoutes.setActiveIdentity, { params: { identity: this.reference(id) } }, request);
   }
 
-  /** Every trait this installation has. */
-  async traits(request: RequestOptions = {}): Promise<z.infer<typeof TraitListResponseSchema>["traits"]> {
-    const result = await this.http.call(identitiesRoutes.listTraits, {}, request);
-    return result!.traits;
-  }
-
   /** Every named bound this installation has. */
   async bounds(request: RequestOptions = {}): Promise<z.infer<typeof BoundListResponseSchema>["bounds"]> {
     const result = await this.http.call(identitiesRoutes.listBounds, {}, request);
     return result!.bounds;
-  }
-
-  async traitsOf(identity: string | number, request: RequestOptions = {}) {
-    return (await this.http.call(identitiesRoutes.listIdentityTraits, { params: { identity: this.reference(identity) } }, request))!.traits;
-  }
-
-  async updateBound(name: string, changes: z.input<typeof UpdateBoundRequestSchema>, request: RequestOptions = {}) {
-    return (await this.http.call(identitiesRoutes.updateBound, { params: { name }, body: changes }, request))!.bound;
   }
 
   /** Every bag the registry knows. */

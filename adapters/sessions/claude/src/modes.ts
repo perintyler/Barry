@@ -22,6 +22,7 @@ export const SDK_BUNDLED_BUILD = "2.1.282";
 /** Hosted, live: one streaming query across turns, on a key or the barry's opt-in. */
 export const CLAUDE_LIVE: Mode = {
   verifiedOn: SDK_BUNDLED_BUILD,
+  versions: { recommendedVersion: SDK_BUNDLED_BUILD, testedVersions: [SDK_BUNDLED_BUILD], supportedVersions: [{ min: SDK_BUNDLED_BUILD, max: SDK_BUNDLED_BUILD }] },
   build: "bundled",
   guarantees: {
     capture: "total",
@@ -48,6 +49,7 @@ const PINNED_TO_KEY =
 /** The guest TUI plus an inbox socket for delivery and OpenTelemetry for capture. */
 export const CLAUDE_INSTRUMENTED: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: [VERIFIED_ON], supportedVersions: [{ min: VERIFIED_ON, max: VERIFIED_ON }] },
   guarantees: {
     // Not total: telemetry truncates bodies at 60 KB and redacts thinking.
     capture: "near-total",
@@ -69,6 +71,7 @@ export const CLAUDE_INSTRUMENTED: Mode = {
 /** The unmodified TUI. Barry learns what happened from its transcript afterwards. */
 export const CLAUDE_GUEST: Mode = {
   verifiedOn: VERIFIED_ON,
+  versions: { recommendedVersion: VERIFIED_ON, testedVersions: [VERIFIED_ON], supportedVersions: [{ min: VERIFIED_ON, max: VERIFIED_ON }] },
   guarantees: {
     capture: "post-hoc",
     delivery: "tool-call",
@@ -95,6 +98,7 @@ export const CLAUDE_GUEST: Mode = {
  */
 export const CLAUDE_PER_TURN: Mode = {
   verifiedOn: SDK_BUNDLED_BUILD,
+  versions: { recommendedVersion: SDK_BUNDLED_BUILD, testedVersions: [SDK_BUNDLED_BUILD], supportedVersions: [{ min: SDK_BUNDLED_BUILD, max: SDK_BUNDLED_BUILD }] },
   build: "bundled",
   guarantees: {
     capture: "total",
@@ -114,11 +118,12 @@ export const CLAUDE_PER_TURN: Mode = {
 };
 
 /** The version in `--version` output: its first capture group. Shared by doctor and the new adapter. */
-export const VERSION_PATTERN = "(\\d+\\.\\d+\\.\\d+)";
+export const VERSION_PATTERN = "(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?)";
 
 export const CLAUDE_REQUIREMENTS: Requirements = {
   binary: {
     command: "claude",
+    overrideEnv: "CLAUDE_CODE_BIN",
     versionArgs: ["--version"],
     // Parse the vendor version within the full CLI output rather than anchoring to a bare version string.
     // Rationale: docs/decisions/0010-adapter-and-session-regression-invariants.md#note-003
@@ -127,6 +132,6 @@ export const CLAUDE_REQUIREMENTS: Requirements = {
       darwin: "brew install --cask claude-code",
       fallback: "see https://code.claude.com/docs for your platform",
     },
-    pin: { version: VERIFIED_ON, enforcedBy: "DISABLE_AUTOUPDATER=1 in the launch env" },
+    recommendedVersion: VERIFIED_ON,
   },
 };

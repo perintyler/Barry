@@ -32,9 +32,9 @@ async function control(key: string, caller: Caller, op: "start" | "stop" | "rest
   return translated(async () => {
     const current = (await serviceRequest({ op: "status", service: key }, { management })).services[0];
     if (caller.kind === "session" && caller.bag !== current.bag) {
-      const grants = await Barry.as(caller).identity(caller.identity).session(caller.sessionId).grants();
-      if (!grants.tools.some(tool => tool.namespace === "mcp" && tool.name === "services_restart" && tool.access === "write"))
-        throw new BarryError("forbidden", `this session is not granted service control`, "select the mcp:services trait with readwrite access");
+      const tools = await Barry.as(caller).identity(caller.identity).session(caller.sessionId).tools();
+      if (!tools.some(tool => tool.namespace === "mcp" && tool.name === "services_restart" && tool.access === "write"))
+        throw new BarryError("forbidden", "this session cannot control services", "pack the mcp bag without a read-only bound");
     }
     if (op !== "start" && key === process.env.BARRY_SERVICE)
       throw new BarryError("conflict", `a service cannot ${op} itself`, `barry service restart ${key}`);

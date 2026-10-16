@@ -51,7 +51,7 @@ export interface SnapshotDriftInput {
  *                  side. Readers load the snapshot's, so they load the wrong
  *                  tree: it exists, it parses, and it hands out the wrong code.
  *   dangling     — a path both sides agree on that is not on disk at all. The
- *                  bag contributes no tools and no traits, and the only symptom
+ *                  bag contributes no tools and no bounds, and the only symptom
  *                  is a loader warning nobody reads.
  */
 export function findSnapshotDrift(input: SnapshotDriftInput): string[] {

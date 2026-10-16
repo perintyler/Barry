@@ -1,4 +1,4 @@
-import { loadModelProviders } from "@barry-rocks/sdk/adapters/models";
+import { loadModelVendors } from "@barry-rocks/sdk/adapters/models";
 /**
  * `barry adapter list`, `check` and `add <path>`, over real adapter packages
  * on disk and a record file in a temp home.
@@ -46,7 +46,7 @@ export default {
   requirements: { binary: { command: "fake", versionArgs: ["--version"], versionPattern: "${broken ? "v(\\\\d+)" : "(\\\\d+\\\\.\\\\d+\\\\.\\\\d+)"}",
     install: { fallback: "nothing to install" }, pin: { version: "2.0.1", enforcedBy: "a test" } } },
   capabilities: { mcpTransports: ["stdio"], toolDenial: "none", systemPromptFormat: "raw", skillsMount: "none", withoutKey: "unauthenticated", endpoint: "fixed" },
-  nativeTools: [], defaultMode: "guest",
+  tools: [], defaultMode: "guest",
   modes: { hosted: null, instrumented: null, guest: { guarantees, verifiedOn: "2.0.1", platforms: ["darwin"],
     evidence: { check: "a test", proves: "nothing" }, egressSandbox: false,
     plan: async (config) => ({ command: "fake", args: [], env: config.env, tmpDirs: [], guarantees, warnings: [] }) } },
@@ -135,7 +135,7 @@ describe("adding an adapter by path", () => {
 describe("model adapter refusals", () => {
   function modelDeps() {
     const lines: string[] = [];
-    const providers = loadModelProviders({ file: join(root, "model-providers.json") });
+    const providers = loadModelVendors({ file: join(root, "model-providers.json") });
     return { providers, shipped: [{ packageName: "shipped" }], lines, write: (line: string) => lines.push(line) };
   }
   function modelPackage(name: string) {
@@ -198,5 +198,5 @@ it("prints the experimental reason after verified", async () => {
   const d = deps();
   const record = await d.adapters.add(writePackage("experimental"));
   const lines = formatAdapter({ ...record, experimental: "real API evidence missing" });
-  expect(lines[lines.findIndex(line => line.startsWith("  verified")) + 1]).toBe("  experimental real API evidence missing");
+  expect(lines.find(line => line.startsWith("  experimental"))).toBe("  experimental real API evidence missing");
 });

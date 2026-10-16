@@ -1,4 +1,4 @@
-import { chmodSync, constants, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -14,12 +14,17 @@ function fixture() {
     mkdirSync(join(root, file, ".."), { recursive: true });
     writeFileSync(join(root, file), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   }
-  cpSync(process.execPath, join(root, "runtime/bin/node"), { mode: constants.COPYFILE_FICLONE });
+  // A Homebrew interpreter depends on dylibs beside it; copying just its
+  // executable breaks this fixture. A wrapper preserves that installation.
+  writeFileSync(join(root, "runtime/bin/node"), `#!/bin/sh\nexec '${process.execPath.replaceAll("'", "'\\''")}' "$@"\n`, { mode: 0o755 });
+  mkdirSync(join(root, "cli/dist"), { recursive: true });
+  for (const file of ["barry.js", "identity.js", "barry-hook.js", "build.json"]) writeFileSync(join(root, "cli/dist", file), "{}");
   mkdirSync(join(root, "cli/bin"), { recursive: true });
-  writeFileSync(join(root, "cli/bin/barry.js"), 'console.log("1.0.0");\n');
+  writeFileSync(join(root, "cli/bin/barry.js"), 'console.log("1.0.0"); if (process.env.BARRY_TIMING === "1") console.error("entry: bundle");\n');
   writeFileSync(join(root, "bin/barry"), '#!/bin/sh\nexec "$(dirname "$0")/../runtime/bin/node" "$(dirname "$0")/../cli/bin/barry.js" "$@"\n', { mode: 0o755 });
   const release = { version: "1.0.0", commit: "b".repeat(40), platform: "darwin-arm64", node: probe.node, stores: probe.stores, built: "2026-10-09T00:00:00.000Z" };
   const save = () => writeFileSync(join(root, "release.json"), JSON.stringify(release));
+  writeFileSync(join(root, "cli/dist/build.json"), JSON.stringify({ commit: release.commit }));
   save(); return { root, release, save };
 }
 afterEach(() => { vi.restoreAllMocks(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -75,4 +80,10 @@ describe("release directory verdict", () => {
     });
     await expect(checkRelease(join(root, "fixture.tar.gz"))).rejects.toThrow("barry --version differs from release.json");
   });
+});
+
+it("rejects a bundle from another commit", () => {
+  const { root } = fixture();
+  writeFileSync(join(root, "cli/dist/build.json"), JSON.stringify({ commit: "c".repeat(40) }));
+  expect(checkReleaseDirectory(root, probe).join(" ")).toContain("CLI bundle commit differs");
 });

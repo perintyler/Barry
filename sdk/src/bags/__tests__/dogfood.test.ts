@@ -29,7 +29,7 @@ describe("dogfood: local bag served over MCP", () => {
       const localSkillCount = getSkillsDirs(FIXTURE_BAG_DIR).length;
       expect(bag.skillsDirs.length).toBeGreaterThanOrEqual(localSkillCount);
 
-      expect(Object.keys(bag.manifest?.traits ?? {})).toEqual(Object.keys(local?.traits ?? {}));
+      expect(Object.keys(bag.manifest?.bounds ?? {})).toEqual(Object.keys(local?.bounds ?? {}));
     } finally {
       await close();
     }

@@ -3,7 +3,7 @@
  * what a turn emits, and what a tool call is asked — against a fake query
  * speaking the SDK's message shapes through the real event mapper.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { SessionEvent } from "@barry-rocks/sdk/sessions";
 import { processSDKMessage } from "../anthropic-compatible/event-mapping.js";
 import {
@@ -278,4 +278,70 @@ describe("claude's live hosted session", () => {
     expect(live.closed).toBe(true);
     await expect(session.deliver("more")).rejects.toThrow(/closed/);
   });
+});
+
+
+it("warms before delivery and reuses that process, including concurrent warm calls", async () => {
+  const { session, processes } = harness();
+  await Promise.all([session.warm(), session.warm()]);
+  expect(processes).toHaveLength(1);
+  expect(processes[0].received).toEqual([]);
+  await session.deliver("hello");
+  await until(() => processes[0].received.length === 1);
+  expect(processes).toHaveLength(1);
+  expect(processes[0].received).toEqual(["hello"]);
+  await session.close();
+});
+it("refuses warm after closing without opening a process", async () => {
+  const { session, processes } = harness();
+  await session.close();
+  await expect(session.warm()).rejects.toThrow("closed");
+  expect(processes).toHaveLength(0);
+});
+
+it("can deliver cold after a failed warm without keeping a failed opening", async () => {
+  let opens = 0;
+  let process: FakeProcess | undefined;
+  const { session } = harness({ open: async (prompt, resume) => {
+    if (++opens === 1) throw new Error("initialize failed");
+    return process = new FakeProcess(prompt, resume);
+  } });
+  await expect(session.warm()).rejects.toThrow("initialize failed");
+  await session.deliver("hello");
+  await until(() => process?.received.length === 1);
+  expect(opens).toBe(2);
+  await session.close();
+});
+
+it("retries initialization once before handing the prompt to a fresh process",async()=>{
+ let opens=0;let live:FakeProcess|undefined;
+ const {session,turn}=harness({open:async(prompt,resume)=>{if(++opens===1)throw Error("initialization timed out");live=new FakeProcess(prompt,resume);return live;}});
+ await session.deliver("retry once");await until(()=>live?.received.length===1);
+ live!.say(init(),finished("recovered"));const events=await turn();
+ expect(opens).toBe(2);expect(events).toContainEqual({type:"status",status:"retrying"});expect(events.some(e=>e.type==="error")).toBe(false);await session.close();
+});
+it("ends a turn after the second initialization failure instead of retrying indefinitely",async()=>{
+ let opens=0;const {session,turn}=harness({open:async()=>{opens++;throw Error("initialization timed out");}});
+ await session.deliver("fail");const events=await turn();expect(opens).toBe(2);expect(types(events)).toEqual(["status","error","done"]);await session.close();
+});
+
+it("renews a warmed process lease on client activity",async()=>{
+ vi.useFakeTimers();const {session,processes}=harness({releaseAfterMs:100});
+ try {
+  await session.warm();expect(session.isWarm()).toBe(true);
+  await vi.advanceTimersByTimeAsync(90);session.touch();await vi.advanceTimersByTimeAsync(90);expect(processes[0].closed).toBe(false);
+  await vi.advanceTimersByTimeAsync(11);expect(processes[0].closed).toBe(true);expect(session.isWarm()).toBe(false);
+ } finally {await session.close();vi.useRealTimers();}
+});
+
+import {describeSessionContract} from "@barry-rocks/sdk/testing";
+describeSessionContract("Claude live",()=>{
+ const h=harness();let live:FakeProcess;
+ return {session:h.session,ready:async()=>{live=await h.process();},complete:()=>{live.say(said("answer"),finished("answer"));},resourcesReleased:()=>h.processes.every(p=>p.closed)};
+},{describe,it});
+it("close aborts an initialization retry and cannot retry again afterward",async()=>{
+ let reject!: (error:Error)=>void;let attempts=0;
+ const h=harness({open:async()=>{attempts++;if(attempts===1)throw Error("Subprocess initialization did not complete");return new Promise((_resolve,no)=>{reject=no;});},abortOpen:()=>reject?.(Error("closed"))});
+ await h.session.deliver("hello");await until(()=>attempts===2);await h.session.close();
+ const events=await h.turn();expect(events.filter(e=>e.type==="done")).toHaveLength(1);expect(attempts).toBe(2);expect(h.session.isWarm()).toBe(false);
 });

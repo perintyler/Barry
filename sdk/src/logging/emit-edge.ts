@@ -17,7 +17,7 @@ interface CloudflareExecutionContext {
 export interface WorkerLoggerOptions {
   /** Worker env bindings. */
   env?: WorkerLoggerEnv;
-  /** ExecutionContext — a remote sink would flush through waitUntil. */
+  /** Worker context — a remote sink would flush through waitUntil. */
   ctx?: CloudflareExecutionContext;
 }
 
@@ -29,7 +29,7 @@ export interface WorkerLoggerOptions {
  * import { createWorkerLogger } from "./emit-edge.js";
  *
  * export default {
- *   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+ *   async fetch(request: Request, env: Env, ctx: CloudflareExecutionContext) {
  *     const log = createWorkerLogger("artifacts", { env, ctx });
  *     log.info("request.start", { path: new URL(request.url).pathname });
  *     await log.flush();

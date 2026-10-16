@@ -12,6 +12,6 @@ it.each([0, -1, NaN, Infinity, 1.5])("refuses an invalid stdio identity key %s",
   expect(() => generateMcpConfig("stdio", identityId)).toThrow("positive local identity key");
 });
 
-it("passes the active harness so stdio can enforce harness-specific traits", () => {
+it("passes the active harness so stdio can enforce harness-specific bounds", () => {
   expect(generateMcpConfig("stdio", 17, "acceptance").mcpServers.barry.args?.slice(-2)).toEqual(["--harness", "acceptance"]);
 });

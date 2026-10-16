@@ -109,8 +109,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -228,8 +230,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "prior-conversation"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "prior-conversation"
     },
     "written": {
       "<TMP_DIR>": {
@@ -355,8 +359,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -478,8 +484,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -603,8 +611,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -726,8 +736,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -847,8 +859,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -968,8 +982,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -1095,8 +1111,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -1217,8 +1235,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -1339,8 +1359,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -1461,8 +1483,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {
@@ -1578,8 +1602,10 @@
         "CLAUDE_CODE_FORCE_SESSION_PERSISTENCE": "1"
       },
       "tmpDirs": [],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {}
   },
@@ -1703,8 +1729,10 @@
       "tmpDirs": [
         "<TMP_DIR>"
       ],
-      "warnings": [],
-      "providerSessionId": "<RESERVED_ID>"
+      "warnings": [
+        "claude-code: unknown version; recommended 2.1.282; could not establish the runtime version"
+      ],
+      "harnessSessionId": "<RESERVED_ID>"
     },
     "written": {
       "<TMP_DIR>": {

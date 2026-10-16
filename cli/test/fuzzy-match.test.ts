@@ -2,12 +2,12 @@ import { describe, it, expect } from "vitest";
 import { fuzzyMatch, filterAndRank } from "../src/prompts/fuzzy-match.js";
 
 /**
- * What the capability picker shows when you type.
+ * What the session picker shows when you type.
  *
  * The picker filtered on `includes` before this, so the risk these tests guard
  * is a silent regression back toward it — or past it. Two failures matter to
- * the user and neither surfaces as an error: a trait they can see becomes
- * unreachable by typing, or the trait they meant stops being the top row and
+ * the user and neither surfaces as an error: an item they can see becomes
+ * unreachable by typing, or the item they meant stops being the top row and
  * they select the wrong one off muscle memory.
  *
  * These drive `filterAndRank`, the same function the picker calls, so the
@@ -17,43 +17,43 @@ import { fuzzyMatch, filterAndRank } from "../src/prompts/fuzzy-match.js";
  * proving nothing about what the user sees.
  */
 
-const trait = (name: string, description = "") => ({ name, description });
+const item = (name: string, description = "") => ({ name, description });
 
 /** Names of what the picker would show, in the order it would show them. */
-const shown = (query: string, traits: Array<{ name: string; description?: string }>) =>
+const shown = (query: string, items: Array<{ name: string; description?: string }>) =>
   filterAndRank(
     query,
-    traits.map((t) => trait(t.name, t.description)),
+    items.map((t) => item(t.name, t.description)),
   ).map((t) => t.name);
 
 describe("filterAndRank", () => {
-  it("finds a trait from initials, which substring filtering could not", () => {
-    expect(shown("atd", [trait("amazon-trade-desk"), trait("linear")])).toEqual([
+  it("finds an item from initials, which substring filtering could not", () => {
+    expect(shown("atd", [item("amazon-trade-desk"), item("linear")])).toEqual([
       "amazon-trade-desk",
     ]);
   });
 
   it("still finds the plain substrings that used to work", () => {
-    expect(shown("trade", [trait("amazon-trade-desk"), trait("linear")])).toEqual([
+    expect(shown("trade", [item("amazon-trade-desk"), item("linear")])).toEqual([
       "amazon-trade-desk",
     ]);
   });
 
   it("ignores case in both directions", () => {
-    expect(shown("ATD", [trait("amazon-trade-desk")])).toEqual(["amazon-trade-desk"]);
-    expect(shown("linear", [trait("LINEAR")])).toEqual(["LINEAR"]);
+    expect(shown("ATD", [item("amazon-trade-desk")])).toEqual(["amazon-trade-desk"]);
+    expect(shown("linear", [item("LINEAR")])).toEqual(["LINEAR"]);
   });
 
-  it("drops traits whose letters are absent or out of order", () => {
-    const traits = [trait("amazon-trade-desk"), trait("linear")];
-    expect(shown("xyzq", traits)).toEqual([]);
+  it("drops items whose letters are absent or out of order", () => {
+    const items = [item("amazon-trade-desk"), item("linear")];
+    expect(shown("xyzq", items)).toEqual([]);
     // Right letters, wrong order — a subsequence must be in sequence.
-    expect(shown("dta", [trait("amazon-trade-desk")])).toEqual([]);
+    expect(shown("dta", [item("amazon-trade-desk")])).toEqual([]);
   });
 
-  it("shows every trait, in the given order, when nothing is typed", () => {
-    const traits = [trait("scout"), trait("git"), trait("linear")];
-    expect(shown("", traits)).toEqual(["scout", "git", "linear"]);
+  it("shows every item, in the given order, when nothing is typed", () => {
+    const items = [item("scout"), item("git"), item("linear")];
+    expect(shown("", items)).toEqual(["scout", "git", "linear"]);
   });
 
   /**
@@ -67,7 +67,7 @@ describe("filterAndRank", () => {
    * turns these red.
    */
   it("ranks a prefix match above a match buried mid-word", () => {
-    expect(shown("git", [trait("legit-toolkit"), trait("git-tool-kits")])[0]).toBe(
+    expect(shown("git", [item("legit-toolkit"), item("git-tool-kits")])[0]).toBe(
       "git-tool-kits",
     );
   });
@@ -76,16 +76,16 @@ describe("filterAndRank", () => {
     // Both names have EQUAL LENGTH and the query matches at the SAME indices in
     // each, so the gap penalty and length term cancel exactly. The only thing
     // left that can decide is the word-boundary bonus — which is what makes
-    // typing initials find the hyphenated trait you meant.
+    // typing initials find the hyphenated item you meant.
     const winner = "zz-t-d-k-zz";
     const loser = "zzztzdzkzzz";
-    expect(shown("tdk", [trait(loser), trait(winner)])[0]).toBe(winner);
+    expect(shown("tdk", [item(loser), item(winner)])[0]).toBe(winner);
   });
 
   it("ranks a contiguous run above the same letters spread apart", () => {
     // Equal length, and neither has a prefix or word-boundary hit, so the
     // consecutive-run bonus is what separates them.
-    expect(shown("lin", [trait("zlzizn-zzzzz"), trait("zzlin-zzzzzz")])[0]).toBe(
+    expect(shown("lin", [item("zlzizn-zzzzz"), item("zzlin-zzzzzz")])[0]).toBe(
       "zzlin-zzzzzz",
     );
   });
@@ -94,34 +94,34 @@ describe("filterAndRank", () => {
     // Length is the intended tiebreak — asserted on its own, with structure
     // held equal (both are prefix matches), so it cannot stand in for the
     // structural bonuses above.
-    expect(shown("git", [trait("git-extended-toolkit"), trait("git")])[0]).toBe("git");
+    expect(shown("git", [item("git-extended-toolkit"), item("git")])[0]).toBe("git");
   });
 
-  it("matches descriptions, so a trait is reachable by what it does", () => {
-    const traits = [
-      trait("scout", "search past conversations"),
-      trait("git", "version control"),
+  it("matches descriptions, so an item is reachable by what it does", () => {
+    const items = [
+      item("scout", "search past conversations"),
+      item("git", "version control"),
     ];
-    expect(shown("conversations", traits)).toEqual(["scout"]);
+    expect(shown("conversations", items)).toEqual(["scout"]);
   });
 
   it("ranks every name match above any description match", () => {
-    // "git" matches the scout row's description, but the trait actually named
-    // git must come first — otherwise typing a trait's exact name selects
+    // "git" matches the scout row's description, but the item actually named
+    // git must come first — otherwise typing an item's exact name selects
     // something else.
-    const traits = [
-      trait("scout", "search git history and conversations"),
-      trait("git", "version control"),
+    const items = [
+      item("scout", "search git history and conversations"),
+      item("git", "version control"),
     ];
-    expect(shown("git", traits)).toEqual(["git", "scout"]);
+    expect(shown("git", items)).toEqual(["git", "scout"]);
   });
 
   it("highlights only names the query actually touched", () => {
-    const traits = [
-      trait("scout", "search git history"),
-      trait("git", "version control"),
+    const items = [
+      item("scout", "search git history"),
+      item("git", "version control"),
     ];
-    const results = filterAndRank("git", traits);
+    const results = filterAndRank("git", items);
 
     const byName = results.find((r) => r.name === "git");
     expect(byName?.matchIndices).toEqual([0, 1, 2]);

@@ -49,19 +49,19 @@ test("finding no call at all fails rather than passing on nothing", () => {
 });
 
 
-function extension(source) {
-  const file = plant("sessions/extensions/search", source);
-  writeFileSync(join(root, "sessions/extensions/search/bag.yaml"), "name: search\nextends: sessions\n");
+function vectorSearchBag(source) {
+  const file = plant("session-vector-search", source);
+  writeFileSync(join(root, "session-vector-search/bag.yaml"), "name: session-vector-search\nrequires:\n  - sessions\nnamespace: sessions\n");
   return file;
 }
 
-test("an extension opening its own data directory passes", () => {
-  const r = run(extension('const dir = bagDataDir("sessions/search");\n'));
+test("a dependent bag opening its own data directory passes", () => {
+  const r = run(vectorSearchBag('const dir = bagDataDir("session-vector-search");\n'));
   assert.equal(r.status, 0, r.stderr);
 });
 
-test("an extension opening its parent's data directory fails", () => {
-  const r = run(extension('const dir = bagDataDir("sessions");\n'));
+test("a dependent bag opening its required bag's data directory fails", () => {
+  const r = run(vectorSearchBag('const dir = bagDataDir("sessions");\n'));
   assert.equal(r.status, 1, r.stdout);
-  assert.match(r.stderr, /from bag "sessions\/search"/);
+  assert.match(r.stderr, /from bag "session-vector-search"/);
 });

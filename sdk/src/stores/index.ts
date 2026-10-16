@@ -1,6 +1,6 @@
 export { openBagStore, openStoreFile, type BagStore, type BagStoreOptions, type StoreHandle } from "./open-bag-store.js";
 export { migrateStore, type Migration, type MigrationResult, type MigratableDatabase } from "./migrate.js";
-export { migratedStorePath, identityStorePaths, sessionIdentity, AmbiguousSessionLocation } from "./paths.js";
+export { migratedStorePath, identityStorePaths, sessionIdentity, forgetSessionIdentity, AmbiguousSessionLocation } from "./paths.js";
 export type { StoreContext, StoreBagConfiguration } from "./context.js";
 export { resolveStoreBinding, mergeStoreOptions, type StoreBinding, type StoreResolution, type StoreOptions } from "./bindings.js";
 export { assertScratchStoreUnderTest } from "./scratch-guard.js";
